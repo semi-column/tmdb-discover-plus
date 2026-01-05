@@ -834,22 +834,48 @@ router.delete('/config/:userId', async (req, res) => {
       return res.status(400).json({ error: 'Invalid user ID format' });
     }
     
-    log.info('Delete config request', { userId });
-    
-    const config = await getUserConfig(userId);
-    if (!config) {
-      return res.status(404).json({ error: 'Configuration not found' });
-    }
-    
-    // Verify the requester owns this config (API key must match)
-    if (apiKey && config.tmdbApiKey !== apiKey) {
-      return res.status(403).json({ error: 'Not authorized to delete this configuration' });
-    }
+    log.info('Delete config request', { userId, hasApiKey: !!apiKey });
     
     if (isConnected()) {
+      // Try to find the config first
+      let config = await UserConfig.findOne({ userId }).lean();
+      
+      // If not found by userId but we have an API key, try to find by both
+      if (!config && apiKey) {
+        config = await UserConfig.findOne({ userId, tmdbApiKey: apiKey }).lean();
+      }
+      
+      if (!config) {
+        // Last resort: if we have an API key, try to delete directly
+        // This handles cases where the config exists but findOne fails
+        if (apiKey) {
+          const deleteResult = await UserConfig.deleteOne({ userId, tmdbApiKey: apiKey });
+          if (deleteResult.deletedCount > 0) {
+            log.info('Config deleted from MongoDB (direct delete)', { userId });
+            return res.json({ success: true, message: 'Configuration deleted' });
+          }
+        }
+        return res.status(404).json({ error: 'Configuration not found' });
+      }
+      
+      // Verify the requester owns this config (API key must match)
+      if (apiKey && config.tmdbApiKey !== apiKey) {
+        return res.status(403).json({ error: 'Not authorized to delete this configuration' });
+      }
+      
       await UserConfig.deleteOne({ userId });
       log.info('Config deleted from MongoDB', { userId });
     } else {
+      const config = memoryStore.get(userId);
+      if (!config) {
+        return res.status(404).json({ error: 'Configuration not found' });
+      }
+      
+      // Verify the requester owns this config
+      if (apiKey && config.tmdbApiKey !== apiKey) {
+        return res.status(403).json({ error: 'Not authorized to delete this configuration' });
+      }
+      
       memoryStore.delete(userId);
       log.info('Config deleted from memory store', { userId });
     }

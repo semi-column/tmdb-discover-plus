@@ -328,8 +328,16 @@ function App() {
 
   // Handle deleting a config from the dropdown
   const handleDeleteConfigFromDropdown = async (userId) => {
+    // Use config.apiKey or fallback to localStorage
+    const apiKey = config.apiKey || localStorage.getItem('tmdb-stremio-apikey');
+    
+    if (!apiKey) {
+      addToast('API key not found. Please re-enter your API key.', 'error');
+      return;
+    }
+    
     try {
-      await api.deleteConfig(userId, config.apiKey);
+      await api.deleteConfig(userId, apiKey);
       
       // Remove from local list
       const remaining = userConfigs.filter(c => c.userId !== userId);
