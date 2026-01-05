@@ -56,7 +56,7 @@ export function ConfigDropdown({
   };
 
   const currentConfig = configs.find(c => c.userId === currentUserId);
-  const hasMultipleConfigs = configs.length > 1;
+  const _hasMultipleConfigs = configs.length > 1;
 
   if (loading) {
     return (

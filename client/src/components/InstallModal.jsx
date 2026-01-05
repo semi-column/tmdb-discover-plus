@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Copy, Check, ExternalLink, Download } from 'lucide-react';
 
+// eslint-disable-next-line no-unused-vars
 export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId }) {
   const [copied, setCopied] = useState(false);
 

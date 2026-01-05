@@ -370,6 +370,7 @@ function App() {
   };
 
   // Handle deleting the current config (for the delete button in header)
+  // eslint-disable-next-line no-unused-vars
   const handleDeleteCurrentConfig = async () => {
     if (!config.userId) return;
     
