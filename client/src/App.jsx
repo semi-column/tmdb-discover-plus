@@ -6,6 +6,7 @@ import { CatalogEditor } from './components/CatalogEditor';
 import { InstallModal } from './components/InstallModal';
 import { NewCatalogModal } from './components/NewCatalogModal';
 import { ToastContainer } from './components/Toast';
+import { ConfigDropdown } from './components/ConfigDropdown';
 import { useConfig } from './hooks/useConfig';
 import { useTMDB } from './hooks/useTMDB';
 import { api } from './services/api';
@@ -49,6 +50,8 @@ function App() {
   const [installData, setInstallData] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [userConfigs, setUserConfigs] = useState([]);
+  const [configsLoading, setConfigsLoading] = useState(false);
 
   // Load existing config if userId in URL
   useEffect(() => {
@@ -118,6 +121,31 @@ function App() {
   const removeToast = useCallback((id) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
+
+  // Load all configs for the current API key
+  const loadUserConfigs = useCallback(async (apiKey) => {
+    if (!apiKey) return [];
+    setConfigsLoading(true);
+    try {
+      const configs = await api.getConfigsByApiKey(apiKey);
+      // Sort by updatedAt descending (latest first)
+      configs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      setUserConfigs(configs);
+      return configs;
+    } catch (err) {
+      console.error('Failed to load user configs:', err);
+      return [];
+    } finally {
+      setConfigsLoading(false);
+    }
+  }, []);
+
+  // Reload configs after saving
+  useEffect(() => {
+    if (config.apiKey && config.userId && !isSetup) {
+      loadUserConfigs(config.apiKey);
+    }
+  }, [config.apiKey, config.userId, isSetup, loadUserConfigs]);
 
   const handleValidApiKey = async (apiKey) => {
     setIsSetup(false);
@@ -250,6 +278,9 @@ function App() {
         window.history.pushState({}, '', `/configure/${result.userId}`);
       }
 
+      // Refresh the user configs list
+      await loadUserConfigs(config.apiKey);
+
       setInstallData({
         installUrl: result.installUrl,
         configureUrl: result.configureUrl,
@@ -262,6 +293,69 @@ function App() {
       addToast(err.message || 'Failed to save configuration', 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Handle switching to a different config
+  const handleSwitchConfig = (userId) => {
+    window.location.href = `/configure/${userId}`;
+  };
+
+  // Handle deleting a config from the dropdown
+  const handleDeleteConfigFromDropdown = async (userId) => {
+    try {
+      await api.deleteConfig(userId, config.apiKey);
+      
+      // Remove from local list
+      const remaining = userConfigs.filter(c => c.userId !== userId);
+      setUserConfigs(remaining);
+      
+      addToast('Configuration deleted');
+      
+      // If we deleted the current config, switch to the next one
+      if (userId === config.userId) {
+        if (remaining.length > 0) {
+          // Get the latest remaining config
+          const nextConfig = remaining[0];
+          window.location.href = `/configure/${nextConfig.userId}`;
+        } else {
+          // No more configs, go back to setup
+          localStorage.removeItem('tmdb-stremio-apikey');
+          window.location.href = '/configure';
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete config:', err);
+      addToast('Failed to delete configuration', 'error');
+      throw err;
+    }
+  };
+
+  // Handle deleting the current config (for the delete button in header)
+  const handleDeleteCurrentConfig = async () => {
+    if (!config.userId) return;
+    
+    try {
+      await api.deleteConfig(config.userId, config.apiKey);
+      
+      // Remove from local list
+      const remaining = userConfigs.filter(c => c.userId !== config.userId);
+      setUserConfigs(remaining);
+      
+      addToast('Configuration deleted');
+      
+      if (remaining.length > 0) {
+        // Get the latest remaining config
+        const nextConfig = remaining[0];
+        window.location.href = `/configure/${nextConfig.userId}`;
+      } else {
+        // No more configs, go back to setup
+        localStorage.removeItem('tmdb-stremio-apikey');
+        window.location.href = '/configure';
+      }
+    } catch (err) {
+      console.error('Failed to delete config:', err);
+      addToast('Failed to delete configuration', 'error');
     }
   };
 
@@ -287,32 +381,10 @@ function App() {
         <ApiKeySetup 
           onValidKey={handleValidApiKey} 
           onSelectExistingConfig={(apiKey, userId) => {
-            // User selected an existing config from the list
+            // User selected an existing config - redirect directly
             config.setApiKey(apiKey);
             window.location.href = `/configure/${userId}`;
           }}
-          onDeleteConfig={(userId) => {
-            addToast('Configuration deleted');
-          }}
-          onInstallConfig={(userId) => {
-            // Generate install URL and show modal
-            const baseUrl = window.location.origin;
-            const host = baseUrl.replace(/^https?:\/\//, '');
-            setInstallData({
-              installUrl: `stremio://${host}/${userId}/manifest.json`,
-              configureUrl: `${baseUrl}/configure/${userId}`,
-              userId: userId,
-            });
-            setShowInstallModal(true);
-          }}
-        />
-        {/* Install Modal for quick install from selector */}
-        <InstallModal
-          isOpen={showInstallModal}
-          onClose={() => setShowInstallModal(false)}
-          installUrl={installData?.installUrl}
-          configureUrl={installData?.configureUrl}
-          userId={installData?.userId}
         />
       </div>
     );
@@ -352,7 +424,17 @@ function App() {
                 Create and customize your Stremio catalogs with TMDB filters
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              {/* Config Dropdown */}
+              {userConfigs.length > 0 && (
+                <ConfigDropdown
+                  configs={userConfigs}
+                  currentUserId={config.userId}
+                  loading={configsLoading}
+                  onSelectConfig={handleSwitchConfig}
+                  onDeleteConfig={handleDeleteConfigFromDropdown}
+                />
+              )}
               <button 
                 className="btn btn-secondary"
                 onClick={() => setIsSetup(true)}
