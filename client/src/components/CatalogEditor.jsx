@@ -536,13 +536,25 @@ export function CatalogEditor({
   }
 
   // Unified handler for long-press actions (triggered by timer or contextmenu)
-  // Must be stable (useCallback with no changing deps) to avoid re-attaching listeners
+  // Toggles exclude state: if already excluded, removes it; otherwise adds to exclude
   const handleLongPressAction = useCallback((genreId) => {
     setLocalCatalog(prev => {
       const current = prev || DEFAULT_CATALOG;
       const excluded = current.filters?.excludeGenres || [];
       const included = current.filters?.genres || [];
-      if (excluded.includes(genreId)) return current;
+      
+      // Toggle: if already excluded, remove from exclude list
+      if (excluded.includes(genreId)) {
+        return {
+          ...current,
+          filters: {
+            ...current.filters,
+            excludeGenres: excluded.filter(id => id !== genreId),
+          }
+        };
+      }
+      
+      // Otherwise, add to exclude list (and remove from include list if present)
       return {
         ...current,
         filters: {
