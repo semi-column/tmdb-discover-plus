@@ -712,7 +712,12 @@ export function CatalogEditor({
       };
 
       // Decide which set of listeners to attach
-      const supportsPointer = typeof window !== 'undefined' && window.PointerEvent;
+      // Force touch events on iOS because PointerEvents can be flaky with long-press
+      // (often firing pointercancel unexpectedly when system gestures interfere)
+      const isIOS = typeof navigator !== 'undefined' && 
+        (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+      const supportsPointer = typeof window !== 'undefined' && window.PointerEvent && !isIOS;
 
       if (supportsPointer) {
         timersRef.current.set(el, {
