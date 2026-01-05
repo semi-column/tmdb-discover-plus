@@ -338,29 +338,34 @@ function App() {
     
     try {
       await api.deleteConfig(userId, apiKey);
-      
-      // Remove from local list
-      const remaining = userConfigs.filter(c => c.userId !== userId);
-      setUserConfigs(remaining);
-      
-      addToast('Configuration deleted');
-      
-      // If we deleted the current config, switch to the next one
-      if (userId === config.userId) {
-        if (remaining.length > 0) {
-          // Get the latest remaining config
-          const nextConfig = remaining[0];
-          window.location.href = `/configure/${nextConfig.userId}`;
-        } else {
-          // No more configs, go back to setup
-          localStorage.removeItem('tmdb-stremio-apikey');
-          window.location.href = '/configure';
-        }
-      }
     } catch (err) {
-      console.error('Failed to delete config:', err);
-      addToast('Failed to delete configuration', 'error');
-      throw err;
+      // If 404, the config doesn't exist on server - that's fine, just remove from UI
+      // This handles "ghost" configs from stale memory stores
+      if (!err.message?.includes('not found')) {
+        console.error('Failed to delete config:', err);
+        addToast('Failed to delete configuration', 'error');
+        throw err;
+      }
+      console.log('Config not found on server, removing from local list:', userId);
+    }
+    
+    // Always remove from local list
+    const remaining = userConfigs.filter(c => c.userId !== userId);
+    setUserConfigs(remaining);
+    
+    addToast('Configuration deleted');
+    
+    // If we deleted the current config, switch to the next one
+    if (userId === config.userId) {
+      if (remaining.length > 0) {
+        // Get the latest remaining config
+        const nextConfig = remaining[0];
+        window.location.href = `/configure/${nextConfig.userId}`;
+      } else {
+        // No more configs, go back to setup
+        localStorage.removeItem('tmdb-stremio-apikey');
+        window.location.href = '/configure';
+      }
     }
   };
 
