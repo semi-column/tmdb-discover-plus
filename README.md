@@ -10,9 +10,15 @@ A powerful Stremio addon that lets you create custom movie and TV show catalogs 
 ## ✨ Features
 
 - 🎬 **Custom Catalogs** - Create multiple personalized movie and TV show catalogs
+- � **Configuration Manager** - Save, switch between, and manage multiple addon configurations
 - 🔥 **Preset Lists** - Quick access to Trending, Popular, Top Rated, Upcoming, and more
-- 🔍 **Advanced Filters** - Filter by genre, year, rating, language, streaming service, and more
-- 📊 **Sorting Options** - Sort by popularity, rating, release date, or revenue
+- 🔍 **Advanced Filters** - Filter by genre, year, rating, runtime, language, streaming service, and more
+- ⏱️ **Runtime Filtering** - Filter by duration with interactive slider and presets (Short, Standard, Long, Epic)
+- 🚫 **Exclusion Filters** - Exclude genres, keywords, and production companies from results
+- 👆 **Long-Press Genre Exclusion** - Long-press genre chips to quickly toggle exclusion (works on mobile & desktop)
+- 🌍 **Region & First Air Date** - Filter by regional releases and TV premiere dates
+- 📅 **Dynamic Date Presets** - "Last 30 days" always means 30 days from today, not when you created the catalog
+- 📊 **Sorting Options** - Sort by popularity, rating, release date, revenue, or random
 - 👀 **Live Preview** - See catalog results before installing
 - 🔄 **Easy Updates** - Edit your catalogs anytime via the configuration URL
 - 🆔 **IMDB Integration** - Full IMDB ID support for best Stremio compatibility
@@ -171,17 +177,23 @@ CORS_ORIGIN=*
 | Filter | Description |
 |--------|-------------|
 | **Genres** | Filter by one or more genres |
-| **Exclude Genres** | Exclude specific genres |
+| **Exclude Genres** | Exclude specific genres from results |
 | **Year Range** | Release year from/to |
 | **Rating Range** | TMDB vote average (0-10) |
+| **Runtime** | Filter by duration in minutes (with presets: Short, Standard, Long, Epic) |
 | **Sort By** | Popularity, Rating, Release Date, Revenue, Random |
 | **Language** | Original language filter |
 | **Country** | Origin country filter |
+| **Region** | Regional release filter (for theatrical releases) |
+| **First Air Date** | TV show premiere date filter |
+| **Date Presets** | Quick filters: Last 30/90 days, Last 6 months, This/Last Year |
 | **Min Votes** | Minimum vote count for quality filtering |
 | **Streaming Service** | Filter by watch provider |
 | **People** | Filter by actors, directors |
 | **Companies** | Filter by production company |
+| **Exclude Companies** | Exclude specific production companies |
 | **Keywords** | Filter by content keywords |
+| **Exclude Keywords** | Exclude content with specific keywords |
 | **IMDB Only** | Only show items with IMDB IDs |
 
 ## 📖 Usage

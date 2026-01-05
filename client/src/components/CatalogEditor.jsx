@@ -39,11 +39,13 @@ const DEFAULT_CATALOG = {
 const CURRENT_YEAR = new Date().getFullYear();
 
 // Date presets for quick selection
+// These store a preset key that the backend resolves dynamically
 const DATE_PRESETS = [
-  { label: 'Last 30 days', days: 30 },
-  { label: 'Last 90 days', days: 90 },
-  { label: 'This year', year: true },
-  { label: 'Last year', lastYear: true },
+  { label: 'Last 30 days', value: 'last_30_days', days: 30 },
+  { label: 'Last 90 days', value: 'last_90_days', days: 90 },
+  { label: 'Last 6 months', value: 'last_180_days', days: 180 },
+  { label: 'This year', value: 'this_year', year: true },
+  { label: 'Last year', value: 'last_year', lastYear: true },
 ];
 
 export function CatalogEditor({ 
@@ -145,6 +147,14 @@ export function CatalogEditor({
   useEffect(() => {
     if (catalog) {
       setLocalCatalog(catalog);
+
+      // Initialize date preset from stored filter
+      if (catalog.filters?.datePreset) {
+        const presetMatch = DATE_PRESETS.find(p => p.value === catalog.filters.datePreset);
+        setSelectedDatePreset(presetMatch ? presetMatch.label : null);
+      } else {
+        setSelectedDatePreset(null);
+      }
 
       // Prefer server-resolved placeholder arrays when available
       const peopleResolved = catalog.filters?.withPeopleResolved || null;
@@ -803,17 +813,24 @@ export function CatalogEditor({
 
   const handleDatePreset = useCallback((preset) => {
     setSelectedDatePreset(preset.label);
+    
+    // Store the dynamic preset value - backend will calculate actual dates at request time
+    handleFiltersChange('datePreset', preset.value);
+    
+    // Also calculate dates for immediate preview display
     const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
     let fromDate, toDate;
     
-    toDate = today.toISOString().split('T')[0];
-    
     if (preset.days) {
-      fromDate = new Date(today.setDate(today.getDate() - preset.days)).toISOString().split('T')[0];
+      fromDate = new Date(Date.now() - preset.days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      toDate = todayStr;
     } else if (preset.year) {
+      // This year: from Jan 1 to today
       fromDate = `${CURRENT_YEAR}-01-01`;
-      toDate = `${CURRENT_YEAR}-12-31`;
+      toDate = todayStr;
     } else if (preset.lastYear) {
+      // Last year: full year
       fromDate = `${CURRENT_YEAR - 1}-01-01`;
       toDate = `${CURRENT_YEAR - 1}-12-31`;
     }
@@ -1169,6 +1186,7 @@ export function CatalogEditor({
                     value={localCatalog?.filters?.[isMovie ? 'releaseDateFrom' : 'airDateFrom'] || ''}
                     onChange={(e) => {
                       setSelectedDatePreset(null);
+                      handleFiltersChange('datePreset', undefined); // Clear dynamic preset when manually editing
                       handleFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', e.target.value);
                     }}
                   />
@@ -1183,6 +1201,7 @@ export function CatalogEditor({
                     value={localCatalog?.filters?.[isMovie ? 'releaseDateTo' : 'airDateTo'] || ''}
                     onChange={(e) => {
                       setSelectedDatePreset(null);
+                      handleFiltersChange('datePreset', undefined); // Clear dynamic preset when manually editing
                       handleFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', e.target.value);
                     }}
                   />

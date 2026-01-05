@@ -18,6 +18,88 @@ import {
 const router = Router();
 const log = createLogger('userConfig');
 
+/**
+ * Resolve dynamic date presets to actual dates.
+ * This allows "Last 30 days" to always mean 30 days from NOW, not from when the catalog was created.
+ * @param {Object} filters - The filters object containing datePreset
+ * @param {string} type - 'movie' or 'series'/'tv'
+ * @returns {Object} - Filters with resolved date values
+ */
+function resolveDynamicDatePreset(filters, type) {
+  if (!filters?.datePreset) {
+    return filters;
+  }
+
+  const resolved = { ...filters };
+  const today = new Date();
+  const formatDate = (d) => d.toISOString().split('T')[0]; // YYYY-MM-DD
+
+  // Determine which date fields to set based on content type
+  const isMovie = type === 'movie';
+  const fromField = isMovie ? 'releaseDateFrom' : 'airDateFrom';
+  const toField = isMovie ? 'releaseDateTo' : 'airDateTo';
+
+  switch (filters.datePreset) {
+    case 'last_30_days': {
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      resolved[fromField] = formatDate(thirtyDaysAgo);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'last_90_days': {
+      const ninetyDaysAgo = new Date(today);
+      ninetyDaysAgo.setDate(today.getDate() - 90);
+      resolved[fromField] = formatDate(ninetyDaysAgo);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'last_180_days': {
+      const sixMonthsAgo = new Date(today);
+      sixMonthsAgo.setDate(today.getDate() - 180);
+      resolved[fromField] = formatDate(sixMonthsAgo);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'this_year': {
+      const startOfYear = new Date(today.getFullYear(), 0, 1);
+      resolved[fromField] = formatDate(startOfYear);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'last_year': {
+      const lastYear = today.getFullYear() - 1;
+      resolved[fromField] = `${lastYear}-01-01`;
+      resolved[toField] = `${lastYear}-12-31`;
+      break;
+    }
+    case 'upcoming': {
+      // Only for movies - next 6 months
+      if (isMovie) {
+        const sixMonthsLater = new Date(today);
+        sixMonthsLater.setMonth(today.getMonth() + 6);
+        resolved[fromField] = formatDate(today);
+        resolved[toField] = formatDate(sixMonthsLater);
+      }
+      break;
+    }
+    default:
+      // Unknown preset, leave unchanged
+      log.debug('Unknown date preset', { preset: filters.datePreset });
+  }
+
+  // Remove datePreset from filters (not needed for TMDB API)
+  delete resolved.datePreset;
+
+  log.debug('Resolved dynamic date preset', { 
+    preset: filters.datePreset, 
+    from: resolved[fromField], 
+    to: resolved[toField] 
+  });
+
+  return resolved;
+}
+
 // In-memory fallback when MongoDB is not available
 const memoryStore = new Map();
 
@@ -463,24 +545,27 @@ router.post('/preview', async (req, res) => {
       return res.status(400).json({ error: 'API key required' });
     }
 
+    // Resolve dynamic date presets (e.g., "last_30_days" → actual dates from today)
+    const resolvedFilters = resolveDynamicDatePreset(filters, type);
+
     let results;
     
     // Check if using a special list type (trending, now playing, etc.)
-    const listType = filters?.listType;
-    const isRandomSort = filters?.sortBy === 'random';
+    const listType = resolvedFilters?.listType;
+    const isRandomSort = resolvedFilters?.sortBy === 'random';
     
     if (listType && listType !== 'discover') {
       // Use special list endpoint
       results = await tmdb.fetchSpecialList(apiKey, listType, type, {
         page,
-        language: filters?.language,
-        region: filters?.originCountry,
+        language: resolvedFilters?.language,
+        region: resolvedFilters?.originCountry,
       });
     } else if (isRandomSort) {
       // Random sort - fetch from random page and shuffle
       const discoverResult = await tmdb.discover(apiKey, {
         type,
-        ...filters,
+        ...resolvedFilters,
         sortBy: 'popularity.desc', // Use popularity for base query
         page: 1,
       });
@@ -488,7 +573,7 @@ router.post('/preview', async (req, res) => {
       const randomPage = Math.floor(Math.random() * maxPage) + 1;
       results = await tmdb.discover(apiKey, {
         type,
-        ...filters,
+        ...resolvedFilters,
         sortBy: 'popularity.desc',
         page: randomPage,
       });
@@ -498,7 +583,7 @@ router.post('/preview', async (req, res) => {
       // Use discover with all filters
       results = await tmdb.discover(apiKey, {
         type,
-        ...filters,
+        ...resolvedFilters,
         page,
       });
     }

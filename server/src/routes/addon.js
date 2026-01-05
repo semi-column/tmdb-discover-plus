@@ -15,7 +15,89 @@ const router = Router();
 const ADDON_ID = 'community.tmdb.discover.plus';
 const ADDON_NAME = 'TMDB Discover+';
 const ADDON_DESCRIPTION = 'Create custom movie and TV catalogs with powerful TMDB filters';
-const ADDON_VERSION = '1.5.0';
+const ADDON_VERSION = '2.0.0';
+
+/**
+ * Resolve dynamic date presets to actual dates.
+ * This allows "Last 30 days" to always mean 30 days from NOW, not from when the catalog was created.
+ * @param {Object} filters - The filters object containing datePreset
+ * @param {string} type - 'movie' or 'series'/'tv'
+ * @returns {Object} - Filters with resolved date values
+ */
+function resolveDynamicDatePreset(filters, type) {
+  if (!filters?.datePreset) {
+    return filters;
+  }
+
+  const resolved = { ...filters };
+  const today = new Date();
+  const formatDate = (d) => d.toISOString().split('T')[0]; // YYYY-MM-DD
+
+  // Determine which date fields to set based on content type
+  const isMovie = type === 'movie';
+  const fromField = isMovie ? 'releaseDateFrom' : 'airDateFrom';
+  const toField = isMovie ? 'releaseDateTo' : 'airDateTo';
+
+  switch (filters.datePreset) {
+    case 'last_30_days': {
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      resolved[fromField] = formatDate(thirtyDaysAgo);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'last_90_days': {
+      const ninetyDaysAgo = new Date(today);
+      ninetyDaysAgo.setDate(today.getDate() - 90);
+      resolved[fromField] = formatDate(ninetyDaysAgo);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'last_180_days': {
+      const sixMonthsAgo = new Date(today);
+      sixMonthsAgo.setDate(today.getDate() - 180);
+      resolved[fromField] = formatDate(sixMonthsAgo);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'this_year': {
+      const startOfYear = new Date(today.getFullYear(), 0, 1);
+      resolved[fromField] = formatDate(startOfYear);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'last_year': {
+      const lastYear = today.getFullYear() - 1;
+      resolved[fromField] = `${lastYear}-01-01`;
+      resolved[toField] = `${lastYear}-12-31`;
+      break;
+    }
+    case 'upcoming': {
+      // Only for movies - next 6 months
+      if (isMovie) {
+        const sixMonthsLater = new Date(today);
+        sixMonthsLater.setMonth(today.getMonth() + 6);
+        resolved[fromField] = formatDate(today);
+        resolved[toField] = formatDate(sixMonthsLater);
+      }
+      break;
+    }
+    default:
+      // Unknown preset, leave unchanged
+      log.debug('Unknown date preset', { preset: filters.datePreset });
+  }
+
+  // Remove datePreset from filters (not needed for TMDB API)
+  delete resolved.datePreset;
+
+  log.debug('Resolved dynamic date preset', { 
+    preset: filters.datePreset, 
+    from: resolved[fromField], 
+    to: resolved[toField] 
+  });
+
+  return resolved;
+}
 
 /**
  * TMDB returns 20 items per page.
@@ -363,26 +445,29 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       }
     }
 
+    // Resolve dynamic date presets (e.g., "last_30_days" → actual dates from today)
+    const resolvedFilters = resolveDynamicDatePreset(effectiveFilters, type);
+
     // If search query provided, use search instead of discover
     if (search) {
       result = await tmdb.search(config.tmdbApiKey, search, type, page);
     } else {
       // Check if using a special list type (trending, now playing, etc.)
-      const listType = effectiveFilters?.listType || catalogConfig.filters?.listType;
-      const isRandomSort = (effectiveFilters?.sortBy || catalogConfig.filters?.sortBy) === 'random';
+      const listType = resolvedFilters?.listType || catalogConfig.filters?.listType;
+      const isRandomSort = (resolvedFilters?.sortBy || catalogConfig.filters?.sortBy) === 'random';
       
       if (listType && listType !== 'discover') {
-        // Use special list endpoint (pass language/region from effectiveFilters falling back to stored filters)
+        // Use special list endpoint (pass language/region from resolvedFilters falling back to stored filters)
         result = await tmdb.fetchSpecialList(config.tmdbApiKey, listType, type, {
           page,
-          language: effectiveFilters?.language || catalogConfig.filters?.language,
-          region: effectiveFilters?.originCountry || catalogConfig.filters?.originCountry,
+          language: resolvedFilters?.language || catalogConfig.filters?.language,
+          region: resolvedFilters?.originCountry || catalogConfig.filters?.originCountry,
         });
       } else if (isRandomSort) {
         // Random sort - fetch from random starting page and shuffle
         const discoverResult = await tmdb.discover(config.tmdbApiKey, {
           type,
-          ...effectiveFilters,
+          ...resolvedFilters,
           sortBy: 'popularity.desc',
           page: 1,
         });
@@ -391,7 +476,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
         
         result = await tmdb.discover(config.tmdbApiKey, {
           type,
-          ...effectiveFilters,
+          ...resolvedFilters,
           sortBy: 'popularity.desc',
           page: randomPage,
         });
@@ -403,7 +488,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
         // Use discover with all filters
         result = await tmdb.discover(config.tmdbApiKey, {
           type,
-          ...effectiveFilters,
+          ...resolvedFilters,
           page,
         });
       }

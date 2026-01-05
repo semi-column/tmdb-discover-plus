@@ -5,7 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.0] - 2026-01-05
+## [2.0.0] - 2026-01-05
+
+### Added
+- **Configuration Manager** - New dropdown to list, switch between, edit, and delete saved configurations
+- **Multi-Config Support** - Easily manage multiple addon configurations with different API keys
+- **API Key Switching** - Seamlessly switch between different TMDB API keys with automatic config loading
+- **Long-Press Genre Exclusion** - Long-press (or right-click) on genre chips to toggle exclusion - works on desktop and mobile
+- **Runtime Filtering** - Filter movies/TV by runtime with interactive range slider and quick presets (Short, Standard, Long, Epic)
+- **Exclude Keywords Filter** - Exclude content containing specific keywords (e.g., "remake", "sequel")
+- **Exclude Companies Filter** - Exclude content from specific production companies
+- **Region Filter** - Filter movies by regional release dates (theatrical releases in specific countries)
+- **First Air Date Filter** - Filter TV shows by premiere date (when the show first aired vs episode air dates)
+- **Dynamic Date Presets** - Date presets (Last 30/90 days, This Year, etc.) now calculate dates at request time, ensuring catalogs always show fresh content relative to the current date
+
+### Changed
+- Date presets now store preset type instead of static dates, resolving dynamically when catalog is fetched
+- Improved date preset UI with active state indicator
+- Enhanced filter architecture for better extensibility
+- Improved config retrieval and deletion logic for better reliability
+- Added cache control headers to prevent stale config responses
+
+### Fixed
+- iOS/Safari compatibility for touch events on genre chips
+- Long-press detection on mobile devices with proper touch event handling
+- Config deletion now properly handles fallback scenarios
+
+### Technical
+- Added `ConfigDropdown` component for configuration management
+- Added `resolveDynamicDatePreset()` helper in addon routes and preview endpoint
+- Extended TMDB service with `region`, `firstAirDateFrom/To`, and `excludeCompanies` parameters
+- Runtime slider component with dual-handle range selection
+- Improved touch event management for cross-browser compatibility
+
+## [1.5.0] - 2026-01-04
 
 ### Added
 - Docker support with multi-stage build for easy self-hosting
