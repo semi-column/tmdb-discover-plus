@@ -132,9 +132,13 @@ export async function discover(apiKey, options = {}) {
     withCompanies,
     withKeywords,
     excludeKeywords,
+    excludeCompanies,
+    region, // For regional release date filtering (movies)
     // TV-specific
     airDateFrom,
     airDateTo,
+    firstAirDateFrom, // When show first premiered
+    firstAirDateTo,
     withNetworks,
     tvStatus,
     tvType,
@@ -189,6 +193,9 @@ export async function discover(apiKey, options = {}) {
 
   // Movie-specific filters
   if (mediaType === 'movie') {
+    // Region for regional release dates
+    if (region) params.region = region;
+    
     // Release date filters
     if (releaseDateFrom) params['primary_release_date.gte'] = releaseDateFrom;
     if (releaseDateTo) params['primary_release_date.lte'] = releaseDateTo;
@@ -212,9 +219,13 @@ export async function discover(apiKey, options = {}) {
 
   // TV-specific filters
   if (mediaType === 'tv') {
-    // Air date filters
+    // Air date filters (when episodes air)
     if (airDateFrom) params['air_date.gte'] = airDateFrom;
     if (airDateTo) params['air_date.lte'] = airDateTo;
+    
+    // First air date filters (when show premiered) - separate from episode air dates
+    if (firstAirDateFrom) params['first_air_date.gte'] = firstAirDateFrom;
+    if (firstAirDateTo) params['first_air_date.lte'] = firstAirDateTo;
     
     // Networks
     if (withNetworks) params.with_networks = withNetworks;
@@ -233,6 +244,7 @@ export async function discover(apiKey, options = {}) {
 
   // Company filter
   if (withCompanies) params.with_companies = withCompanies;
+  if (excludeCompanies) params.without_companies = excludeCompanies;
 
   // Keyword filters
   if (withKeywords) params.with_keywords = withKeywords;

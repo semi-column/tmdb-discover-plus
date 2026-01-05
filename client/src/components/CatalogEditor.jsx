@@ -98,6 +98,9 @@ export function CatalogEditor({
   const [selectedPeople, setSelectedPeople] = useState([]);
   const [selectedCompanies, setSelectedCompanies] = useState([]);
   const [selectedKeywords, setSelectedKeywords] = useState([]);
+  // Exclude filters
+  const [excludeKeywords, setExcludeKeywords] = useState([]);
+  const [excludeCompanies, setExcludeCompanies] = useState([]);
   const initialSyncRef = useRef(true);
   const syncTimeoutRef = useRef(null);
   const prevCatalogIdRef = useRef(null);
@@ -262,6 +265,44 @@ export function CatalogEditor({
         })();
       }
 
+      // Initialize exclude keywords
+      const excludeKwCsv = catalog.filters?.excludeKeywords || '';
+      const excludeKwInitial = toPlaceholdersFromCsv(excludeKwCsv);
+      if (excludeKwInitial.length > 0 && typeof getKeywordById === 'function') {
+        (async () => {
+          const resolved = await Promise.all(excludeKwInitial.map(async item => {
+            if (item.name && !/^\d+$/.test(item.name)) return item;
+            try {
+              const resp = await getKeywordById(item.id);
+              if (resp && resp.name) return { id: item.id, name: resp.name };
+            } catch (err) { /* ignore */ }
+            return item;
+          }));
+          setExcludeKeywords(resolved);
+        })();
+      } else {
+        setExcludeKeywords(excludeKwInitial);
+      }
+
+      // Initialize exclude companies
+      const excludeCompCsv = catalog.filters?.excludeCompanies || '';
+      const excludeCompInitial = toPlaceholdersFromCsv(excludeCompCsv);
+      if (excludeCompInitial.length > 0 && typeof getCompanyById === 'function') {
+        (async () => {
+          const resolved = await Promise.all(excludeCompInitial.map(async item => {
+            if (item.name && !/^\d+$/.test(item.name)) return item;
+            try {
+              const resp = await getCompanyById(item.id);
+              if (resp && resp.name) return { id: item.id, name: resp.name };
+            } catch (err) { /* ignore */ }
+            return item;
+          }));
+          setExcludeCompanies(resolved);
+        })();
+      } else {
+        setExcludeCompanies(excludeCompInitial);
+      }
+
       // Only clear preview when switching to a different catalog (by id).
       // Parent may re-create the same catalog object (new reference) which shouldn't clear preview.
       const prevId = prevCatalogIdRef.current;
@@ -275,6 +316,8 @@ export function CatalogEditor({
       setSelectedPeople([]);
       setSelectedCompanies([]);
       setSelectedKeywords([]);
+      setExcludeKeywords([]);
+      setExcludeCompanies([]);
       setPreviewData(null);
       prevCatalogIdRef.current = null;
     }
@@ -317,6 +360,8 @@ export function CatalogEditor({
             withPeople: selectedPeople.map(p => p.id).join(',') || undefined,
             withCompanies: selectedCompanies.map(c => c.id).join(',') || undefined,
             withKeywords: selectedKeywords.map(k => k.id).join(',') || undefined,
+            excludeKeywords: excludeKeywords.map(k => k.id).join(',') || undefined,
+            excludeCompanies: excludeCompanies.map(c => c.id).join(',') || undefined,
           }
         };
         onUpdate(catalog._id, merged);
@@ -329,7 +374,7 @@ export function CatalogEditor({
         syncTimeoutRef.current = null;
       }
     };
-  }, [localCatalog, selectedPeople, selectedCompanies, selectedKeywords, catalog, onUpdate]);
+  }, [localCatalog, selectedPeople, selectedCompanies, selectedKeywords, excludeKeywords, excludeCompanies, catalog, onUpdate]);
 
   // Load watch providers when region changes
   useEffect(() => {
@@ -745,6 +790,17 @@ export function CatalogEditor({
     }));
   }, []);
 
+  const handleRuntimeRangeChange = useCallback((range) => {
+    setLocalCatalog(prev => ({
+      ...prev,
+      filters: {
+        ...prev.filters,
+        runtimeMin: range[0] === 0 ? undefined : range[0],
+        runtimeMax: range[1] === 400 ? undefined : range[1]
+      }
+    }));
+  }, []);
+
   const handleDatePreset = useCallback((preset) => {
     setSelectedDatePreset(preset.label);
     const today = new Date();
@@ -794,6 +850,8 @@ export function CatalogEditor({
         withPeople: selectedPeople.map(p => p.id).join(',') || undefined,
         withCompanies: selectedCompanies.map(c => c.id).join(',') || undefined,
         withKeywords: selectedKeywords.map(k => k.id).join(',') || undefined,
+        excludeKeywords: excludeKeywords.map(k => k.id).join(',') || undefined,
+        excludeCompanies: excludeCompanies.map(c => c.id).join(',') || undefined,
       };
       const data = await onPreview(localCatalog.type || 'movie', filters);
       setPreviewData(data);
@@ -812,6 +870,8 @@ export function CatalogEditor({
         withPeople: selectedPeople.map(p => p.id).join(',') || undefined,
         withCompanies: selectedCompanies.map(c => c.id).join(',') || undefined,
         withKeywords: selectedKeywords.map(k => k.id).join(',') || undefined,
+        excludeKeywords: excludeKeywords.map(k => k.id).join(',') || undefined,
+        excludeCompanies: excludeCompanies.map(c => c.id).join(',') || undefined,
       }
     };
     if (catalog?._id) {
@@ -985,6 +1045,59 @@ export function CatalogEditor({
                       formatValue={(v) => v.toFixed(1)}
                     />
                   </div>
+
+                  {/* Runtime Range Slider */}
+                  <div style={{ marginTop: '20px' }}>
+                    <RangeSlider
+                      label="Runtime (minutes)"
+                      min={0}
+                      max={400}
+                      step={5}
+                      value={[
+                        localCatalog?.filters?.runtimeMin || 0,
+                        localCatalog?.filters?.runtimeMax || 400
+                      ]}
+                      onChange={handleRuntimeRangeChange}
+                      formatValue={(v) => v === 0 ? 'Any' : v === 400 ? '400+' : `${v}m`}
+                    />
+                    <div className="runtime-presets" style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className={`date-preset ${localCatalog?.filters?.runtimeMax === 60 && !localCatalog?.filters?.runtimeMin ? 'active' : ''}`}
+                        onClick={() => handleRuntimeRangeChange([0, 60])}
+                      >
+                        Short (&lt;60m)
+                      </button>
+                      <button
+                        type="button"
+                        className={`date-preset ${localCatalog?.filters?.runtimeMin === 90 && localCatalog?.filters?.runtimeMax === 120 ? 'active' : ''}`}
+                        onClick={() => handleRuntimeRangeChange([90, 120])}
+                      >
+                        Standard (90-120m)
+                      </button>
+                      <button
+                        type="button"
+                        className={`date-preset ${localCatalog?.filters?.runtimeMin === 150 && localCatalog?.filters?.runtimeMax === 400 ? 'active' : ''}`}
+                        onClick={() => handleRuntimeRangeChange([150, 400])}
+                      >
+                        Long (&gt;150m)
+                      </button>
+                      <button
+                        type="button"
+                        className={`date-preset ${localCatalog?.filters?.runtimeMin === 180 ? 'active' : ''}`}
+                        onClick={() => handleRuntimeRangeChange([180, 400])}
+                      >
+                        Epic (&gt;3h)
+                      </button>
+                      <button
+                        type="button"
+                        className="date-preset"
+                        onClick={() => handleRuntimeRangeChange([0, 400])}
+                      >
+                        Any
+                      </button>
+                    </div>
+                  </div>
                 </>
               )}
 
@@ -1046,7 +1159,10 @@ export function CatalogEditor({
 
               <div className="filter-two-col">
                 <div className="filter-group">
-                  <label className="filter-label">{isMovie ? 'Release' : 'Air'} Date From</label>
+                  <label className="filter-label">
+                    {isMovie ? 'Release' : 'Episode Air'} Date From
+                    {!isMovie && <span className="filter-label-hint">When episodes aired</span>}
+                  </label>
                   <input
                     type="date"
                     className="input"
@@ -1058,7 +1174,9 @@ export function CatalogEditor({
                   />
                 </div>
                 <div className="filter-group">
-                  <label className="filter-label">{isMovie ? 'Release' : 'Air'} Date To</label>
+                  <label className="filter-label">
+                    {isMovie ? 'Release' : 'Episode Air'} Date To
+                  </label>
                   <input
                     type="date"
                     className="input"
@@ -1070,6 +1188,33 @@ export function CatalogEditor({
                   />
                 </div>
               </div>
+
+              {/* First Air Date for TV - when show premiered */}
+              {!isMovie && (
+                <div className="filter-two-col" style={{ marginTop: '16px' }}>
+                  <div className="filter-group">
+                    <label className="filter-label">
+                      Show Premiered From
+                      <span className="filter-label-hint">When show first aired (premiere date)</span>
+                    </label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={localCatalog?.filters?.firstAirDateFrom || ''}
+                      onChange={(e) => handleFiltersChange('firstAirDateFrom', e.target.value)}
+                    />
+                  </div>
+                  <div className="filter-group">
+                    <label className="filter-label">Show Premiered To</label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={localCatalog?.filters?.firstAirDateTo || ''}
+                      onChange={(e) => handleFiltersChange('firstAirDateTo', e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
 
               {isMovie ? (
                 <>
@@ -1096,6 +1241,21 @@ export function CatalogEditor({
                         valueKey="value"
                       />
                     </div>
+                  </div>
+                  <div className="filter-group" style={{ marginTop: '16px' }}>
+                    <label className="filter-label">
+                      Release Region
+                      <span className="filter-label-hint">Use regional release dates instead of worldwide premiere</span>
+                    </label>
+                    <SearchableSelect
+                      options={[{ code: '', name: 'Worldwide (default)' }, ...countries]}
+                      value={localCatalog?.filters?.region || ''}
+                      onChange={(value) => handleFiltersChange('region', value)}
+                      placeholder="Worldwide"
+                      searchPlaceholder="Search countries..."
+                      labelKey="name"
+                      valueKey="code"
+                    />
                   </div>
                 </>
               ) : (
@@ -1339,11 +1499,39 @@ export function CatalogEditor({
                   <label className="filter-label">Keywords / Tags</label>
                   <SearchInput
                     type="keyword"
-                    placeholder="Search keywords..."
+                    placeholder="Search keywords to include..."
                     onSearch={searchKeyword}
                     selectedItems={selectedKeywords}
                     onSelect={setSelectedKeywords}
                     onRemove={setSelectedKeywords}
+                  />
+                </div>
+                <div className="filter-group">
+                  <label className="filter-label">
+                    <span style={{ color: 'var(--error)' }}>✕</span> Exclude Keywords
+                    <span className="filter-label-hint">Results will NOT contain these keywords</span>
+                  </label>
+                  <SearchInput
+                    type="keyword"
+                    placeholder="Search keywords to exclude..."
+                    onSearch={searchKeyword}
+                    selectedItems={excludeKeywords}
+                    onSelect={setExcludeKeywords}
+                    onRemove={setExcludeKeywords}
+                  />
+                </div>
+                <div className="filter-group">
+                  <label className="filter-label">
+                    <span style={{ color: 'var(--error)' }}>✕</span> Exclude Companies
+                    <span className="filter-label-hint">Filter out content from these studios</span>
+                  </label>
+                  <SearchInput
+                    type="company"
+                    placeholder="Search companies to exclude..."
+                    onSearch={searchCompany}
+                    selectedItems={excludeCompanies}
+                    onSelect={setExcludeCompanies}
+                    onRemove={setExcludeCompanies}
                   />
                 </div>
               </div>
