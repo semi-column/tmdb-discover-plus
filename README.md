@@ -19,7 +19,7 @@ A powerful Stremio addon that lets you create custom movie and TV show catalogs 
 - 🌍 **Region & First Air Date** - Filter by regional releases and TV premiere dates
 - 📅 **Dynamic Date Presets** - "Last 30 days" always means 30 days from today, not when you created the catalog
 - 📊 **Sorting Options** - Sort by popularity, rating, release date, revenue, or random
-- 👀 **Live Preview** - See catalog results before installing
+- 👀 **Live Preview** - See catalog results before installing with clickable links to TMDB
 - 🔄 **Easy Updates** - Edit your catalogs anytime via the configuration URL
 - 🆔 **IMDB Integration** - Full IMDB ID support for best Stremio compatibility
 - 🐳 **Self-Hostable** - Docker support for easy self-hosting

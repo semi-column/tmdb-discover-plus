@@ -71,7 +71,7 @@ export function useConfig(initialUserId = null) {
     } finally {
       setLoading(false);
     }
-  }, [userId, apiKey, catalogs, preferences]);
+  }, [userId, apiKey, catalogs, preferences, setApiKey]);
 
   const updateConfig = useCallback(async () => {
     if (!userId) return;

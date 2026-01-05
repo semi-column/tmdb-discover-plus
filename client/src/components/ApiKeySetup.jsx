@@ -18,6 +18,7 @@ export function ApiKeySetup({ onValidKey, onSelectExistingConfig, skipAutoRedire
         loadConfigsAndRedirect(storedKey);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skipAutoRedirect]);
 
   const loadConfigsAndRedirect = async (key) => {
