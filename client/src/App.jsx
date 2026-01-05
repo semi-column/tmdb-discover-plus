@@ -43,6 +43,8 @@ function App() {
       return !urlUserId;
     }
   });
+  // Track if user explicitly wants to change API key (to prevent auto-redirect)
+  const [wantsToChangeKey, setWantsToChangeKey] = useState(false);
   const [pageLoading, setPageLoading] = useState(!!urlUserId);
   const [activeCatalog, setActiveCatalog] = useState(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
@@ -52,6 +54,29 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [userConfigs, setUserConfigs] = useState([]);
   const [configsLoading, setConfigsLoading] = useState(false);
+
+  // If we have a stored API key but no userId in URL, load configs and redirect to latest
+  useEffect(() => {
+    const storedKey = localStorage.getItem('tmdb-stremio-apikey');
+    if (storedKey && !urlUserId && !wantsToChangeKey) {
+      setPageLoading(true);
+      api.getConfigsByApiKey(storedKey)
+        .then(configs => {
+          if (configs.length > 0) {
+            // Sort by updatedAt descending and redirect to latest
+            configs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+            window.location.href = `/configure/${configs[0].userId}`;
+          } else {
+            // No configs exist, show setup to create one
+            setPageLoading(false);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load configs for stored key:', err);
+          setPageLoading(false);
+        });
+    }
+  }, [urlUserId, wantsToChangeKey]);
 
   // Load existing config if userId in URL
   useEffect(() => {
@@ -379,12 +404,17 @@ function App() {
       <div className="app">
         <Header />
         <ApiKeySetup 
-          onValidKey={handleValidApiKey} 
+          onValidKey={(apiKey) => {
+            setWantsToChangeKey(false);
+            handleValidApiKey(apiKey);
+          }} 
           onSelectExistingConfig={(apiKey, userId) => {
             // User selected an existing config - redirect directly
+            setWantsToChangeKey(false);
             config.setApiKey(apiKey);
             window.location.href = `/configure/${userId}`;
           }}
+          skipAutoRedirect={wantsToChangeKey}
         />
       </div>
     );
@@ -437,7 +467,10 @@ function App() {
               )}
               <button 
                 className="btn btn-secondary"
-                onClick={() => setIsSetup(true)}
+                onClick={() => {
+                  setWantsToChangeKey(true);
+                  setIsSetup(true);
+                }}
               >
                 <Settings size={18} />
                 Change API Key

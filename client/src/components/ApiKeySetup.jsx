@@ -2,20 +2,23 @@ import { useState, useEffect } from 'react';
 import { Key, Loader, ArrowRight, ExternalLink } from 'lucide-react';
 import { api } from '../services/api';
 
-export function ApiKeySetup({ onValidKey, onSelectExistingConfig }) {
+export function ApiKeySetup({ onValidKey, onSelectExistingConfig, skipAutoRedirect = false }) {
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [configsLoading, setConfigsLoading] = useState(false);
 
-  // Check if there's a stored API key and load configs
+  // Check if there's a stored API key and load configs (only if not skipping auto-redirect)
   useEffect(() => {
     const storedKey = localStorage.getItem('tmdb-stremio-apikey');
     if (storedKey) {
       setApiKey(storedKey);
-      loadConfigsAndRedirect(storedKey);
+      // Only auto-redirect if not explicitly changing API key
+      if (!skipAutoRedirect) {
+        loadConfigsAndRedirect(storedKey);
+      }
     }
-  }, []);
+  }, [skipAutoRedirect]);
 
   const loadConfigsAndRedirect = async (key) => {
     setConfigsLoading(true);
