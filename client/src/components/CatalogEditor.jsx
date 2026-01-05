@@ -101,13 +101,12 @@ export function CatalogEditor({
   const initialSyncRef = useRef(true);
   const syncTimeoutRef = useRef(null);
   const prevCatalogIdRef = useRef(null);
-  const genreLongPressTimeoutRef = useRef(null);
-  // Genre toggle - move up so callbacks that reference it (long-press handlers)
-  // do not run into temporal-dead-zone when initialized.
   
-
+  // Track long-pressed genres to prevent click from toggling after long-press
   const longPressedRef = useRef(new Set());
-  const timersRef = useRef(new Map());
+  
+  // Track active long-press state per genre (for React event handlers)
+  const genrePressState = useRef(new Map());
 
   // Helper to idempotently add a genre to the exclude list
   function addGenreToExclude(genreId) {
@@ -281,15 +280,16 @@ export function CatalogEditor({
     }
   }, [catalog, getPersonById, getCompanyById, getKeywordById, searchPerson, searchCompany, searchKeyword]);
 
-  // Cleanup long-press timers when component unmounts
+  // Cleanup long-press state when component unmounts
   useEffect(() => {
     return () => {
-      if (genreLongPressTimeoutRef.current) {
-        clearTimeout(genreLongPressTimeoutRef.current);
-        genreLongPressTimeoutRef.current = null;
-      }
       // Clear any long-press markers on unmount.
       if (longPressedRef.current) longPressedRef.current.clear();
+      // Clear any active timers
+      genrePressState.current.forEach((state) => {
+        if (state.timer) clearTimeout(state.timer);
+      });
+      genrePressState.current.clear();
     };
   }, []);
 
@@ -535,35 +535,6 @@ export function CatalogEditor({
     });
   }
 
-  // Long-press helpers for touch devices: hold to exclude
-  const startGenreLongPress = useCallback((genreId) => {
-    // clear any existing timer for touch interactions
-    if (genreLongPressTimeoutRef.current) {
-      clearTimeout(genreLongPressTimeoutRef.current);
-    }
-
-    genreLongPressTimeoutRef.current = setTimeout(() => {
-      // Perform idempotent exclude (don't toggle off)
-      addGenreToExclude(genreId);
-      genreLongPressTimeoutRef.current = null;
-
-      // Mark this id as long-pressed so the subsequent click (fired on touchend)
-      // can be ignored — otherwise the click handler would toggle the include state.
-      // We purposely DO NOT auto-clear this marker here; it will be removed by
-      // the following click handler when the user explicitly clicks the chip.
-      longPressedRef.current.add(genreId);
-    }, 600); // 600ms long-press
-  }, [handleGenreToggle]);
-
-  const cancelGenreLongPress = useCallback(() => {
-    if (genreLongPressTimeoutRef.current) {
-      clearTimeout(genreLongPressTimeoutRef.current);
-      genreLongPressTimeoutRef.current = null;
-    }
-    // Do not clear longPressedRef here; allow the marker to persist briefly so
-    // the following click event can be consumed.
-  }, []);
-
   // Unified handler for long-press actions (triggered by timer or contextmenu)
   // Must be stable (useCallback with no changing deps) to avoid re-attaching listeners
   const handleLongPressAction = useCallback((genreId) => {
@@ -590,300 +561,155 @@ export function CatalogEditor({
     }, 1000);
   }, []);
 
-  // Attach per-button native listeners implementing the requested pattern.
-  // We add/remove listeners whenever the genre list changes.
-  //
-  // Safari/iOS Long-Press Fix:
-  // The key issue is that iOS Safari's scroll gesture recognition would fire
-  // pointercancel/touchcancel when it thinks the user might be scrolling.
-  // 
-  // Our solution:
-  // 1. CSS touch-action: none on .genre-chip prevents the browser from
-  //    recognizing scroll gestures on touches that START on the genre chip.
-  // 2. We use setPointerCapture() to keep receiving pointer events even if
-  //    the touch moves slightly outside the element.
-  // 3. For Safari specifically, we always use touch events (not pointer events)
-  //    since Safari's pointer event implementation has edge cases with long-press.
-  // 4. We prevent default on touchstart to ensure no scroll is initiated.
-  //
-  useEffect(() => {
-    // Cleanup previous listeners
-    const prev = timersRef.current;
-    prev.forEach((entry, el) => {
+  // ==================== REACT-BASED TOUCH/POINTER HANDLERS ====================
+  // These are used directly on the genre chip elements via React props.
+  // This approach is more reliable than DOM-based useEffect listeners because
+  // React properly manages the event lifecycle during renders.
+
+  const LONG_PRESS_DURATION = 500; // ms
+  const MOVE_THRESHOLD = 20; // px
+
+  // Helper to get or create press state for a genre
+  const getPressState = useCallback((genreId) => {
+    if (!genrePressState.current.has(genreId)) {
+      genrePressState.current.set(genreId, {
+        timer: null,
+        startX: 0,
+        startY: 0,
+        triggered: false,
+      });
+    }
+    return genrePressState.current.get(genreId);
+  }, []);
+
+  const clearPressTimer = useCallback((genreId) => {
+    const state = genrePressState.current.get(genreId);
+    if (state?.timer) {
+      clearTimeout(state.timer);
+      state.timer = null;
+    }
+  }, []);
+
+  // Touch event handlers for Safari/iOS (used via React props)
+  const handleGenreTouchStart = useCallback((e, genreId) => {
+    if (!e.touches || e.touches.length > 1) return;
+    
+    // Prevent default to stop scroll recognition
+    // This works with touch-action: none in CSS
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    const touch = e.touches[0];
+    const state = getPressState(genreId);
+    
+    state.startX = touch.clientX;
+    state.startY = touch.clientY;
+    state.triggered = false;
+
+    clearPressTimer(genreId);
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      state.triggered = true;
+      handleLongPressAction(genreId);
+    }, LONG_PRESS_DURATION);
+  }, [getPressState, clearPressTimer, handleLongPressAction]);
+
+  const handleGenreTouchMove = useCallback((e, genreId) => {
+    const state = genrePressState.current.get(genreId);
+    if (!state?.timer || !e.touches || e.touches.length === 0) return;
+
+    const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - state.startX);
+    const dy = Math.abs(touch.clientY - state.startY);
+    
+    if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
+      clearPressTimer(genreId);
+    }
+  }, [clearPressTimer]);
+
+  const handleGenreTouchEnd = useCallback((e, genreId) => {
+    const state = genrePressState.current.get(genreId);
+    clearPressTimer(genreId);
+    
+    // If long press was triggered, prevent the synthetic click
+    if (state?.triggered && e.cancelable) {
+      e.preventDefault();
+    }
+  }, [clearPressTimer]);
+
+  const handleGenreTouchCancel = useCallback((genreId) => {
+    clearPressTimer(genreId);
+  }, [clearPressTimer]);
+
+  // Pointer event handlers for non-Safari browsers (used via React props)
+  const handleGenrePointerDown = useCallback((e, genreId) => {
+    if (e.isPrimary === false) return;
+    
+    const state = getPressState(genreId);
+    state.startX = e.clientX;
+    state.startY = e.clientY;
+    state.triggered = false;
+    state.pointerId = e.pointerId;
+
+    // Try to capture the pointer
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // ignore
+    }
+
+    clearPressTimer(genreId);
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      state.triggered = true;
+      handleLongPressAction(genreId);
+    }, LONG_PRESS_DURATION);
+  }, [getPressState, clearPressTimer, handleLongPressAction]);
+
+  const handleGenrePointerMove = useCallback((e, genreId) => {
+    const state = genrePressState.current.get(genreId);
+    if (!state?.timer || e.pointerId !== state.pointerId) return;
+
+    const dx = Math.abs(e.clientX - state.startX);
+    const dy = Math.abs(e.clientY - state.startY);
+    
+    if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
+      clearPressTimer(genreId);
+    }
+  }, [clearPressTimer]);
+
+  const handleGenrePointerUp = useCallback((e, genreId) => {
+    const state = genrePressState.current.get(genreId);
+    clearPressTimer(genreId);
+    
+    if (state?.pointerId != null) {
       try {
-        // Pointer listeners
-        if (entry._pdown) el.removeEventListener('pointerdown', entry._pdown);
-        if (entry._pmove) el.removeEventListener('pointermove', entry._pmove);
-        if (entry._pup) el.removeEventListener('pointerup', entry._pup);
-        if (entry._pcancel) el.removeEventListener('pointercancel', entry._pcancel);
-        // Touch listeners
-        if (entry._tstart) el.removeEventListener('touchstart', entry._tstart);
-        if (entry._tmove) el.removeEventListener('touchmove', entry._tmove);
-        if (entry._tend) el.removeEventListener('touchend', entry._tend);
-        if (entry._tcancel) el.removeEventListener('touchcancel', entry._tcancel);
-        // Mouse listeners
-        if (entry._mdown) el.removeEventListener('mousedown', entry._mdown);
-        if (entry._mmove) el.removeEventListener('mousemove', entry._mmove);
-        if (entry._mup) el.removeEventListener('mouseup', entry._mup);
-        if (entry._mlv) el.removeEventListener('mouseleave', entry._mlv);
+        e.currentTarget.releasePointerCapture(state.pointerId);
       } catch (err) {
         // ignore
       }
-    });
-    timersRef.current = new Map();
+      state.pointerId = null;
+    }
+  }, [clearPressTimer]);
 
-    // Re-attach listeners for current buttons
-    const grid = document.querySelectorAll('.genre-chip');
+  const handleGenrePointerCancel = useCallback((genreId) => {
+    clearPressTimer(genreId);
+  }, [clearPressTimer]);
 
-    grid.forEach((el) => {
-      const id = el.getAttribute('data-genre-id') || el.dataset.genreId || null;
-      const genreId = id ? Number(id) : null;
-      if (!genreId) return;
+  // Detect Safari - we use touch events for Safari, pointer events for others
+  const isSafari = typeof navigator !== 'undefined' && (
+    /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
 
-      // Movement threshold (px) — if pointer/touch moves more than this, cancel
-      // Increased slightly for touch devices which have natural jitter
-      const MOVE_THRESHOLD = 20;
-      const LONG_PRESS_DURATION = 500; // ms
-      let pressTimer = null;
-      let startX = 0;
-      let startY = 0;
-      let longPressTriggered = false;
-      let activePointerId = null;
+  const isTouchDevice = typeof window !== 'undefined' && (
+    'ontouchstart' in window || navigator.maxTouchPoints > 0
+  );
 
-      const triggerLongPress = () => {
-        longPressTriggered = true;
-        handleLongPressAction(genreId);
-      };
-
-      const clearPress = () => {
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-          pressTimer = null;
-        }
-      };
-
-      // ================== POINTER EVENTS ==================
-      const onPointerDown = (ev) => {
-        if (ev.isPrimary === false) return;
-        longPressTriggered = false;
-        startX = ev.clientX;
-        startY = ev.clientY;
-        activePointerId = ev.pointerId;
-
-        // Capture the pointer to continue receiving events even if touch moves
-        // slightly outside the element bounds (important for iOS Safari)
-        try {
-          el.setPointerCapture(ev.pointerId);
-        } catch (e) {
-          // setPointerCapture may not be supported or allowed
-        }
-
-        clearPress();
-        pressTimer = setTimeout(() => {
-          pressTimer = null;
-          triggerLongPress();
-        }, LONG_PRESS_DURATION);
-      };
-
-      const onPointerMove = (ev) => {
-        if (!pressTimer || ev.pointerId !== activePointerId) return;
-        const dx = Math.abs(ev.clientX - startX);
-        const dy = Math.abs(ev.clientY - startY);
-        if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
-          clearPress();
-        }
-      };
-
-      const onPointerUp = (ev) => {
-        clearPress();
-        if (activePointerId !== null) {
-          try {
-            el.releasePointerCapture(activePointerId);
-          } catch (e) {
-            // ignore
-          }
-          activePointerId = null;
-        }
-      };
-
-      const onPointerCancel = (ev) => {
-        clearPress();
-        activePointerId = null;
-      };
-
-      // ================== TOUCH EVENTS (Safari fallback) ==================
-      const onTouchStart = (ev) => {
-        if (!ev.touches || ev.touches.length > 1) return;
-        const t = ev.touches[0];
-        longPressTriggered = false;
-        startX = t.clientX;
-        startY = t.clientY;
-
-        // Prevent default to stop any scroll recognition from starting.
-        // Because touch-action: none is set via CSS, this is a belt-and-suspenders
-        // approach that ensures Safari doesn't try to scroll.
-        if (ev.cancelable) {
-          ev.preventDefault();
-        }
-
-        clearPress();
-        pressTimer = setTimeout(() => {
-          pressTimer = null;
-          triggerLongPress();
-        }, LONG_PRESS_DURATION);
-      };
-
-      const onTouchMove = (ev) => {
-        if (!pressTimer || !ev.touches || ev.touches.length === 0) return;
-        const t = ev.touches[0];
-        const dx = Math.abs(t.clientX - startX);
-        const dy = Math.abs(t.clientY - startY);
-        if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
-          clearPress();
-        }
-      };
-
-      const onTouchEnd = (ev) => {
-        clearPress();
-        // If long press was triggered, prevent the synthetic click
-        if (longPressTriggered && ev.cancelable) {
-          ev.preventDefault();
-        }
-      };
-
-      const onTouchCancel = () => {
-        clearPress();
-      };
-
-      // ================== MOUSE EVENTS (desktop fallback) ==================
-      const onMouseDown = (ev) => {
-        if (ev.button !== 0) return;
-        longPressTriggered = false;
-        startX = ev.clientX;
-        startY = ev.clientY;
-        clearPress();
-        pressTimer = setTimeout(() => {
-          pressTimer = null;
-          triggerLongPress();
-        }, LONG_PRESS_DURATION);
-      };
-
-      const onMouseMove = (ev) => {
-        if (!pressTimer) return;
-        const dx = Math.abs(ev.clientX - startX);
-        const dy = Math.abs(ev.clientY - startY);
-        if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
-          clearPress();
-        }
-      };
-
-      const onMouseUp = () => {
-        clearPress();
-      };
-
-      const onMouseLeave = () => {
-        clearPress();
-      };
-
-      // ================== DETECT BROWSER & ATTACH LISTENERS ==================
-      // Detect Safari (both iOS and macOS) - Safari's pointer events have issues
-      // with long-press in scrollable containers, so we prefer touch events there.
-      const isSafari = typeof navigator !== 'undefined' && (
-        /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
-        // iOS devices (iPhone, iPad, iPod)
-        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        // iPad with desktop Safari UA (iPadOS 13+)
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-      );
-
-      const isTouchDevice = typeof window !== 'undefined' && (
-        'ontouchstart' in window ||
-        navigator.maxTouchPoints > 0
-      );
-
-      const supportsPointer = typeof window !== 'undefined' && window.PointerEvent;
-
-      // Store handlers for cleanup
-      const handlers = {};
-
-      // For Safari (iOS or macOS with touch), always use touch events
-      // For other touch devices, prefer pointer events if available
-      // For desktop non-touch, use mouse events
-      if (isSafari && isTouchDevice) {
-        // Safari touch: use touch events exclusively
-        handlers._tstart = onTouchStart;
-        handlers._tmove = onTouchMove;
-        handlers._tend = onTouchEnd;
-        handlers._tcancel = onTouchCancel;
-
-        // CRITICAL: passive: false allows preventDefault() to work
-        el.addEventListener('touchstart', onTouchStart, { passive: false });
-        el.addEventListener('touchmove', onTouchMove, { passive: true });
-        el.addEventListener('touchend', onTouchEnd, { passive: false });
-        el.addEventListener('touchcancel', onTouchCancel, { passive: true });
-      } else if (supportsPointer && isTouchDevice) {
-        // Non-Safari touch device with pointer events (Chrome, Firefox on mobile)
-        handlers._pdown = onPointerDown;
-        handlers._pmove = onPointerMove;
-        handlers._pup = onPointerUp;
-        handlers._pcancel = onPointerCancel;
-
-        el.addEventListener('pointerdown', onPointerDown);
-        el.addEventListener('pointermove', onPointerMove);
-        el.addEventListener('pointerup', onPointerUp);
-        el.addEventListener('pointercancel', onPointerCancel);
-      } else if (supportsPointer) {
-        // Desktop with pointer events (mouse/pen)
-        handlers._pdown = onPointerDown;
-        handlers._pmove = onPointerMove;
-        handlers._pup = onPointerUp;
-        handlers._pcancel = onPointerCancel;
-
-        el.addEventListener('pointerdown', onPointerDown);
-        el.addEventListener('pointermove', onPointerMove);
-        el.addEventListener('pointerup', onPointerUp);
-        el.addEventListener('pointercancel', onPointerCancel);
-      } else {
-        // Fallback: mouse events for older browsers
-        handlers._mdown = onMouseDown;
-        handlers._mmove = onMouseMove;
-        handlers._mup = onMouseUp;
-        handlers._mlv = onMouseLeave;
-
-        el.addEventListener('mousedown', onMouseDown);
-        el.addEventListener('mousemove', onMouseMove);
-        el.addEventListener('mouseup', onMouseUp);
-        el.addEventListener('mouseleave', onMouseLeave);
-      }
-
-      timersRef.current.set(el, handlers);
-    });
-
-    return () => {
-      timersRef.current.forEach((entry, el) => {
-        try {
-          // Pointer listeners
-          if (entry._pdown) el.removeEventListener('pointerdown', entry._pdown);
-          if (entry._pmove) el.removeEventListener('pointermove', entry._pmove);
-          if (entry._pup) el.removeEventListener('pointerup', entry._pup);
-          if (entry._pcancel) el.removeEventListener('pointercancel', entry._pcancel);
-          // Touch listeners
-          if (entry._tstart) el.removeEventListener('touchstart', entry._tstart);
-          if (entry._tmove) el.removeEventListener('touchmove', entry._tmove);
-          if (entry._tend) el.removeEventListener('touchend', entry._tend);
-          if (entry._tcancel) el.removeEventListener('touchcancel', entry._tcancel);
-          // Mouse listeners
-          if (entry._mdown) el.removeEventListener('mousedown', entry._mdown);
-          if (entry._mmove) el.removeEventListener('mousemove', entry._mmove);
-          if (entry._mup) el.removeEventListener('mouseup', entry._mup);
-          if (entry._mlv) el.removeEventListener('mouseleave', entry._mlv);
-        } catch (err) {
-          // ignore
-        }
-      });
-      timersRef.current = new Map();
-    };
-  }, [genres, localCatalog?.type, handleLongPressAction]);
+  // Use touch events for Safari touch devices, pointer events otherwise
+  const useTouchEvents = isSafari && isTouchDevice;
 
   const handleYearRangeChange = useCallback((range) => {
     setLocalCatalog(prev => ({
@@ -1431,6 +1257,19 @@ export function CatalogEditor({
                       e.preventDefault();
                       handleLongPressAction(genre.id);
                     }}
+                    // Touch events for Safari/iOS
+                    {...(useTouchEvents ? {
+                      onTouchStart: (e) => handleGenreTouchStart(e, genre.id),
+                      onTouchMove: (e) => handleGenreTouchMove(e, genre.id),
+                      onTouchEnd: (e) => handleGenreTouchEnd(e, genre.id),
+                      onTouchCancel: () => handleGenreTouchCancel(genre.id),
+                    } : {
+                      // Pointer events for non-Safari browsers
+                      onPointerDown: (e) => handleGenrePointerDown(e, genre.id),
+                      onPointerMove: (e) => handleGenrePointerMove(e, genre.id),
+                      onPointerUp: (e) => handleGenrePointerUp(e, genre.id),
+                      onPointerCancel: () => handleGenrePointerCancel(genre.id),
+                    })}
                     data-genre-id={genre.id}
                   >
                     <span className="genre-chip-label">{genre.name}</span>
