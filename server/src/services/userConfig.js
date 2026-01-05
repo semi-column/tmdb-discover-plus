@@ -769,6 +769,11 @@ router.delete('/config/:userId/catalog/:catalogId', async (req, res) => {
  */
 router.get('/configs', async (req, res) => {
   try {
+    // Prevent caching
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     const { apiKey } = req.query;
     
     if (!apiKey) {
@@ -788,12 +793,13 @@ router.get('/configs', async (req, res) => {
       try {
         // Find all configs with this API key
         configs = await UserConfig.find({ tmdbApiKey: apiKey }).lean();
-        log.debug('Found configs in MongoDB', { count: configs.length });
+        log.info('Found configs in MongoDB', { count: configs.length, dbName: UserConfig.db?.name || 'unknown' });
       } catch (err) {
         log.error('MongoDB error finding configs', { error: err.message });
         throw err;
       }
     } else {
+      log.warn('MongoDB not connected, using memory store');
       // Search in memory store
       for (const [userId, config] of memoryStore.entries()) {
         if (config.tmdbApiKey === apiKey) {
