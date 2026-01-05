@@ -32,7 +32,7 @@ This project adheres to a code of conduct. By participating, you are expected to
    ```
 3. **Add the upstream remote**:
    ```bash
-   git remote add upstream https://github.com/ORIGINAL_OWNER/tmdb-discover-plus.git
+   git remote add upstream https://github.com/semi-column/tmdb-discover-plus.git
    ```
 
 ## Development Setup

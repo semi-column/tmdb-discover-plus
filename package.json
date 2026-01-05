@@ -16,8 +16,17 @@
     "dev:client": "cd client && npm run dev",
     "install:all": "npm install && cd server && npm install && cd ../client && npm install"
   },
-  "keywords": ["stremio", "addon", "tmdb", "catalog"],
+  "keywords": ["stremio", "addon", "tmdb", "catalog", "discover", "movies", "tv-shows", "streaming"],
+  "author": "TMDB Discover+ Contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/semi-column/tmdb-discover-plus.git"
+  },
+  "homepage": "https://github.com/semi-column/tmdb-discover-plus#readme",
+  "bugs": {
+    "url": "https://github.com/semi-column/tmdb-discover-plus/issues"
+  },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

@@ -47,7 +47,7 @@ A powerful Stremio addon that lets you create custom movie and TV show catalogs 
 
 ### Use the Public Instance
 
-Visit the public instance at `your-deployed-url` and:
+Visit the public instance at `https://tmdb-discover-plus.beamup.dev` and:
 1. Enter your TMDB API key
 2. Create catalogs with your preferred filters
 3. Click "Install to Stremio"
@@ -60,7 +60,7 @@ The easiest way to self-host TMDB Discover+:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tmdb-discover-plus.git
+git clone https://github.com/semi-column/tmdb-discover-plus.git
 cd tmdb-discover-plus
 
 # Copy environment file
@@ -96,7 +96,7 @@ The addon will be available at `http://localhost:7000`
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tmdb-discover-plus.git
+git clone https://github.com/semi-column/tmdb-discover-plus.git
 cd tmdb-discover-plus
 
 # Install all dependencies
@@ -267,7 +267,7 @@ Returns server status, uptime, and database connection state.
 
 ```bash
 # Clone and install
-git clone https://github.com/yourusername/tmdb-discover-plus.git
+git clone https://github.com/semi-column/tmdb-discover-plus.git
 cd tmdb-discover-plus
 npm run install:all
 
