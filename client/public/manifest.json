@@ -1,0 +1,10 @@
+{
+  "id": "community.tmdb.discover.plus",
+  "version": "1.0.0",
+  "name": "TMDB Discover+",
+  "description": "Create custom movie and TV catalogs for Stremio with powerful TMDB filters",
+  "resources": ["catalog", "meta", "stream", "subtitles"],
+  "types": ["movie", "series"],
+  "idPrefixes": ["tmdb-"],
+  "logo": "https://tmdb-discover-plus.a.baby-beamup.club/logo.png"
+}

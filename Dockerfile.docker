@@ -1,0 +1,72 @@
+# TMDB Discover+ Stremio Addon
+# Multi-stage build for minimal production image
+
+# Stage 1: Build client
+FROM node:20-alpine AS client-builder
+
+WORKDIR /app/client
+
+# Copy client package files
+COPY client/package*.json ./
+
+# Install client dependencies
+RUN npm ci
+
+# Copy client source
+COPY client/ ./
+
+# Build client
+RUN npm run build
+
+# Stage 2: Production image
+FROM node:20-alpine AS production
+
+# Add labels for container identification
+LABEL org.opencontainers.image.title="TMDB Discover+"
+LABEL org.opencontainers.image.description="Custom Catalog Builder for Stremio"
+LABEL org.opencontainers.image.source="https://github.com/yourusername/tmdb-discover-plus"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 -G nodejs
+
+WORKDIR /app
+
+# Copy root package files
+COPY package*.json ./
+
+# Copy server package files
+COPY server/package*.json ./server/
+
+# Install production dependencies only (skip postinstall which builds client - already done)
+RUN npm ci --omit=dev --ignore-scripts && \
+    cd server && npm ci --omit=dev --ignore-scripts
+
+# Copy server source
+COPY server/src ./server/src
+
+# Copy built client from previous stage
+COPY --from=client-builder /app/client/dist ./client/dist
+
+# Copy public assets
+COPY client/public ./client/dist
+
+# Set ownership to non-root user
+RUN chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Environment variables with defaults
+# NOTE: Do NOT set PORT here - Dokku/BeamUp will inject PORT at runtime
+# The app must read process.env.PORT (defaults to 5000 on Dokku)
+ENV NODE_ENV=production
+ENV LOG_LEVEL=info
+
+# Health check - Dokku sets PORT to 5000 by default
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-5000}/health || exit 1
+
+# Start the server
+CMD ["node", "server/src/index.js"]
