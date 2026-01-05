@@ -395,6 +395,7 @@ export function toStremioMeta(item, type, imdbId = null) {
 
   return {
     id: imdbId || `tmdb:${item.id}`,
+    tmdbId: item.id,
     type: type === 'series' ? 'series' : 'movie',
     name: title,
     poster: item.poster_path 

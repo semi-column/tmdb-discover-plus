@@ -755,12 +755,16 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
 }
 
 .preview-card {
+  display: block;
   position: relative;
   aspect-ratio: 2/3;
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   overflow: hidden;
   transition: transform var(--transition-fast);
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
 }
 
 .preview-card:hover {
@@ -2341,11 +2345,14 @@ input[type="date"] {
 }
 
 .preview-card {
+  display: block;
   position: relative;
   aspect-ratio: 2/3;
   border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
+  text-decoration: none;
+  color: inherit;
 }
 
 .preview-card img {
