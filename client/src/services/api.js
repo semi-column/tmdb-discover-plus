@@ -163,6 +163,18 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  // Get all configurations for an API key
+  async getConfigsByApiKey(apiKey) {
+    return this.request(`/configs?apiKey=${encodeURIComponent(apiKey)}`);
+  }
+
+  // Delete entire configuration
+  async deleteConfig(userId, apiKey) {
+    return this.request(`/config/${userId}?apiKey=${encodeURIComponent(apiKey)}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const api = new ApiService();

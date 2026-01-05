@@ -2841,3 +2841,191 @@ input[type="date"] {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* ======================================
+   Config Selector Component
+   ====================================== */
+
+.config-selector {
+  text-align: left;
+}
+
+.config-selector-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--accent-primary);
+}
+
+.config-selector-header h3 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.config-selector-description {
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+
+.config-selector-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  gap: 16px;
+  color: var(--text-muted);
+}
+
+.config-selector-empty {
+  text-align: center;
+  padding: 32px 0;
+}
+
+.config-selector-empty p {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.config-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.config-card:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.config-card-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  gap: 16px;
+}
+
+.config-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.config-card-id {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--text-primary);
+}
+
+.config-card-id code {
+  background: var(--bg-secondary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.config-card-catalogs {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 4px;
+}
+
+.config-card-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.config-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.config-card-actions .btn-icon {
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.config-card-actions .btn-icon:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.config-card-actions .btn-danger {
+  border: none;
+}
+
+.config-card-actions .btn-danger:hover {
+  color: var(--error);
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.config-card-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(248, 81, 73, 0.1);
+  border-top: 1px solid rgba(248, 81, 73, 0.2);
+  color: var(--error);
+  font-size: 13px;
+}
+
+/* Wider setup card for config selector */
+.setup-card-wide {
+  max-width: 600px;
+  text-align: left;
+  position: relative;
+}
+
+.setup-back-btn {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.setup-back-btn:hover {
+  color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .config-card-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .config-card-actions {
+    align-self: flex-end;
+  }
+  
+  .setup-card-wide {
+    padding: 32px 20px;
+    padding-top: 56px;
+  }
+}
+

@@ -765,6 +765,103 @@ router.delete('/config/:userId/catalog/:catalogId', async (req, res) => {
 });
 
 /**
+ * Get all configurations for a given TMDB API key
+ */
+router.get('/configs', async (req, res) => {
+  try {
+    const { apiKey } = req.query;
+    
+    if (!apiKey) {
+      return res.status(400).json({ error: 'API key required' });
+    }
+    
+    // Validate API key format
+    if (!isValidApiKeyFormat(apiKey)) {
+      return res.status(400).json({ error: 'Invalid API key format' });
+    }
+    
+    log.debug('Get configs by API key request');
+    
+    let configs = [];
+    
+    if (isConnected()) {
+      try {
+        // Find all configs with this API key
+        configs = await UserConfig.find({ tmdbApiKey: apiKey }).lean();
+        log.debug('Found configs in MongoDB', { count: configs.length });
+      } catch (err) {
+        log.error('MongoDB error finding configs', { error: err.message });
+        throw err;
+      }
+    } else {
+      // Search in memory store
+      for (const [userId, config] of memoryStore.entries()) {
+        if (config.tmdbApiKey === apiKey) {
+          configs.push(config);
+        }
+      }
+    }
+    
+    // Return simplified config list (don't expose API key)
+    const response = configs.map(config => ({
+      userId: config.userId,
+      catalogCount: config.catalogs?.length || 0,
+      catalogs: (config.catalogs || []).map(c => ({
+        name: c.name,
+        type: c.type,
+      })),
+      createdAt: config.createdAt,
+      updatedAt: config.updatedAt,
+    }));
+    
+    res.json(response);
+  } catch (error) {
+    log.error('GET /configs error', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Delete entire user configuration
+ */
+router.delete('/config/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { apiKey } = req.query;
+    
+    // Validate userId format
+    if (!isValidUserId(userId)) {
+      return res.status(400).json({ error: 'Invalid user ID format' });
+    }
+    
+    log.info('Delete config request', { userId });
+    
+    const config = await getUserConfig(userId);
+    if (!config) {
+      return res.status(404).json({ error: 'Configuration not found' });
+    }
+    
+    // Verify the requester owns this config (API key must match)
+    if (apiKey && config.tmdbApiKey !== apiKey) {
+      return res.status(403).json({ error: 'Not authorized to delete this configuration' });
+    }
+    
+    if (isConnected()) {
+      await UserConfig.deleteOne({ userId });
+      log.info('Config deleted from MongoDB', { userId });
+    } else {
+      memoryStore.delete(userId);
+      log.info('Config deleted from memory store', { userId });
+    }
+    
+    res.json({ success: true, message: 'Configuration deleted' });
+  } catch (error) {
+    log.error('DELETE /config/:userId error', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Debug endpoint - get raw MongoDB document (for debugging)
  * NOTE: This endpoint should be disabled or protected in production
  */

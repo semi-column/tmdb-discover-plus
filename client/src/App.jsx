@@ -284,7 +284,36 @@ function App() {
     return (
       <div className="app">
         <Header />
-        <ApiKeySetup onValidKey={handleValidApiKey} />
+        <ApiKeySetup 
+          onValidKey={handleValidApiKey} 
+          onSelectExistingConfig={(apiKey, userId) => {
+            // User selected an existing config from the list
+            config.setApiKey(apiKey);
+            window.location.href = `/configure/${userId}`;
+          }}
+          onDeleteConfig={(userId) => {
+            addToast('Configuration deleted');
+          }}
+          onInstallConfig={(userId) => {
+            // Generate install URL and show modal
+            const baseUrl = window.location.origin;
+            const host = baseUrl.replace(/^https?:\/\//, '');
+            setInstallData({
+              installUrl: `stremio://${host}/${userId}/manifest.json`,
+              configureUrl: `${baseUrl}/configure/${userId}`,
+              userId: userId,
+            });
+            setShowInstallModal(true);
+          }}
+        />
+        {/* Install Modal for quick install from selector */}
+        <InstallModal
+          isOpen={showInstallModal}
+          onClose={() => setShowInstallModal(false)}
+          installUrl={installData?.installUrl}
+          configureUrl={installData?.configureUrl}
+          userId={installData?.userId}
+        />
       </div>
     );
   }
