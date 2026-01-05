@@ -1,0 +1,115 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '18.x'
+
+jobs:
+  # ============================================
+  # Lint and Test
+  # ============================================
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install server dependencies
+        run: cd server && npm ci
+
+      - name: Install client dependencies
+        run: cd client && npm ci
+
+      - name: Lint client
+        run: cd client && npm run lint
+
+      - name: Check server syntax
+        run: node --check server/src/index.js
+
+      - name: Build client
+        run: cd client && npm run build
+
+  # ============================================
+  # Deploy to BeamUp (only on main push)
+  # ============================================
+  deploy:
+    name: Deploy to BeamUp
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git push
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd server && npm ci
+          cd ../client && npm ci
+
+      - name: Build client
+        run: cd client && npm run build
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Add built files to deploy commit
+        run: |
+          git add -f client/dist/
+          git commit -m "Build for deployment [skip ci]" --allow-empty
+
+      - name: Setup SSH for BeamUp
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BEAMUP_SSH_KEY }}" > ~/.ssh/beamup_key
+          chmod 600 ~/.ssh/beamup_key
+          ssh-keyscan -H a.baby-beamup.club >> ~/.ssh/known_hosts 2>/dev/null || true
+          cat >> ~/.ssh/config << EOF
+          Host beamup
+            HostName a.baby-beamup.club
+            User dokku
+            IdentityFile ~/.ssh/beamup_key
+            StrictHostKeyChecking no
+          EOF
+
+      - name: Deploy to BeamUp
+        run: |
+          git remote add beamup dokku@a.baby-beamup.club:84f50d1c22e7-tmdb-discover-plus || true
+          git push beamup HEAD:main --force
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://tmdb-discover-plus.beamup.dev" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
