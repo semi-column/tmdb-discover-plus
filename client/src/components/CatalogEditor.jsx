@@ -564,6 +564,32 @@ export function CatalogEditor({
     // the following click event can be consumed.
   }, []);
 
+  // Unified handler for long-press actions (triggered by timer or contextmenu)
+  // Must be stable (useCallback with no changing deps) to avoid re-attaching listeners
+  const handleLongPressAction = useCallback((genreId) => {
+    setLocalCatalog(prev => {
+      const current = prev || DEFAULT_CATALOG;
+      const excluded = current.filters?.excludeGenres || [];
+      const included = current.filters?.genres || [];
+      if (excluded.includes(genreId)) return current;
+      return {
+        ...current,
+        filters: {
+          ...current.filters,
+          excludeGenres: [...excluded, genreId],
+          genres: included.filter(id => id !== genreId),
+        }
+      };
+    });
+    // Critical: Mark as long-pressed so the subsequent 'click' event is ignored
+    longPressedRef.current.add(genreId);
+    // Clear the ref after a short delay to allow for the ghost click to be consumed,
+    // but don't leave it there forever to block the next legitimate tap.
+    setTimeout(() => {
+      longPressedRef.current.delete(genreId);
+    }, 1000);
+  }, []);
+
   // Attach per-button native listeners implementing the requested pattern.
   // We add/remove listeners whenever the genre list changes.
   useEffect(() => {
@@ -592,15 +618,14 @@ export function CatalogEditor({
       if (!genreId) return;
 
       // Movement threshold (px) — if pointer/touch moves more than this, cancel
-      const MOVE_THRESHOLD = 10;
+      const MOVE_THRESHOLD = 15;
       let pressTimer = null;
       let startX = 0;
       let startY = 0;
       let moved = false;
 
       const triggerLongPress = () => {
-        addGenreToExclude(genreId);
-        longPressedRef.current.add(genreId);
+        handleLongPressAction(genreId);
       };
 
       // Pointer event handlers (preferred)
@@ -632,6 +657,11 @@ export function CatalogEditor({
         if (pressTimer) {
           clearTimeout(pressTimer);
           pressTimer = null;
+        }
+        // If long press triggered, prevent default to stop click generation
+        if (longPressedRef.current.has(genreId)) {
+           // We don't preventDefault here for PointerEvents usually, 
+           // but we can rely on the click handler check.
         }
       };
 
@@ -671,6 +701,10 @@ export function CatalogEditor({
         if (pressTimer) {
           clearTimeout(pressTimer);
           pressTimer = null;
+        }
+        // If long press triggered, prevent default to stop click generation
+        if (longPressedRef.current.has(genreId) && ev.cancelable) {
+          ev.preventDefault();
         }
       };
 
@@ -784,7 +818,7 @@ export function CatalogEditor({
       });
       timersRef.current = new Map();
     };
-  }, [genres, localCatalog?.type]);
+  }, [genres, localCatalog?.type, handleLongPressAction]);
 
   const handleYearRangeChange = useCallback((range) => {
     setLocalCatalog(prev => ({
@@ -1330,7 +1364,7 @@ export function CatalogEditor({
                     onClick={() => handleGenreClick(genre.id)}
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      handleGenreToggle(genre.id, true);
+                      handleLongPressAction(genre.id);
                     }}
                     data-genre-id={genre.id}
                   >
