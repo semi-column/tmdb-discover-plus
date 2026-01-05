@@ -25,12 +25,13 @@ const memoryStore = new Map();
  * Get user config (from DB or memory)
  */
 async function getUserConfig(userId, overrideApiKey = null) {
-  log.debug('Getting user config', { userId, dbConnected: isConnected() });
+  log.info('Getting user config', { userId, dbConnected: isConnected() });
   
   if (isConnected()) {
     try {
+      log.info('Querying MongoDB for userId', { userId, userIdType: typeof userId });
       const config = await UserConfig.findOne({ userId }).lean();
-      log.debug('MongoDB query result', config ? { userId: config.userId, catalogCount: config.catalogs?.length || 0 } : null);
+      log.info('MongoDB query result', { found: !!config, userId: config?.userId, catalogCount: config?.catalogs?.length || 0 });
       // Resolve stored IDs into display placeholders for UI
       try {
         // Allow caller to provide an apiKey (e.g. the user entered it on the Configure page)
@@ -639,8 +640,11 @@ router.get('/config/:userId', async (req, res) => {
     
     const { userId } = req.params;
     
+    log.info('GET /config/:userId called', { userId, rawParams: req.params });
+    
     // Validate userId format
     if (!isValidUserId(userId)) {
+      log.warn('Invalid userId format', { userId });
       return res.status(400).json({ error: 'Invalid user ID format' });
     }
     
@@ -651,12 +655,12 @@ router.get('/config/:userId', async (req, res) => {
       return res.status(400).json({ error: 'Invalid API key format' });
     }
     
-    log.debug('Get config request', { userId });
+    log.info('Calling getUserConfig', { userId });
     
     const config = await getUserConfig(userId, overrideApiKey);
     
     if (!config) {
-      log.debug('Config not found', { userId });
+      log.warn('Config not found after getUserConfig', { userId });
       return res.status(404).json({ error: 'Configuration not found' });
     }
 
