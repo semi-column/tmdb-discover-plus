@@ -7,8 +7,9 @@ A powerful Stremio addon that lets you create custom movie and TV show catalogs 
 ![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Docker](https://img.shields.io/badge/docker-ready-blue)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/semi-column?style=social)](https://github.com/sponsors/semi-column)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/semi.column)
 
-> 💖 **Like this project?** [Become a sponsor](https://github.com/sponsors/semi-column) to support development!
+> 💖 **Like this project?** [Become a sponsor](https://github.com/sponsors/semi-column) or [buy me a coffee](https://buymeacoffee.com/semi.column) to support development!
 
 ## ✨ Features
 
