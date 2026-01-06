@@ -7,7 +7,7 @@
   "types": ["movie", "series"],
   "catalogs": [],
   "idPrefixes": ["tmdb-"],
-  "logo": "https://tmdb-discover-plus.a.baby-beamup.club/logo.png",
+  "logo": "https://84f50d1c22e7-tmdb-discover-plus.baby-beamup.club/logo.png",
   "behaviorHints": {
     "configurable": true
   }
