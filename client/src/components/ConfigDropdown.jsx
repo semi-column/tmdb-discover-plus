@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Trash2, Loader, AlertTriangle, FolderOpen } from 'lucide-react';
+import { ChevronDown, Trash2, Loader, AlertTriangle, FolderOpen, Plus } from 'lucide-react';
 
 export function ConfigDropdown({ 
   configs, 
   currentUserId, 
   loading,
   onSelectConfig, 
-  onDeleteConfig 
+  onDeleteConfig,
+  onCreateNew,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -149,6 +150,20 @@ export function ConfigDropdown({
               </div>
             ))}
           </div>
+          {onCreateNew && (
+            <div className="config-dropdown-footer">
+              <button 
+                className="btn btn-secondary config-dropdown-new"
+                onClick={() => {
+                  setIsOpen(false);
+                  onCreateNew();
+                }}
+              >
+                <Plus size={16} />
+                <span>New Configuration</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
