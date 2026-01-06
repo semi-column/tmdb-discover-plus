@@ -56,19 +56,30 @@ function App() {
   const [configsLoading, setConfigsLoading] = useState(false);
 
   // If we have a stored API key but no userId in URL, load configs and redirect to latest
+  // If no configs exist, create a new one automatically
   useEffect(() => {
     const storedKey = localStorage.getItem('tmdb-stremio-apikey');
     if (storedKey && !urlUserId && !wantsToChangeKey) {
       setPageLoading(true);
       api.getConfigsByApiKey(storedKey)
-        .then(configs => {
+        .then(async (configs) => {
           if (configs.length > 0) {
             // Sort by updatedAt descending and redirect to latest
             configs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-            window.location.href = `/configure/${configs[0].userId}`;
+            window.location.href = `/?userId=${configs[0].userId}`;
           } else {
-            // No configs exist, show setup to create one
-            setPageLoading(false);
+            // No configs exist - create a new empty one
+            try {
+              const newConfig = await api.saveConfig({
+                tmdbApiKey: storedKey,
+                catalogs: [],
+                preferences: {},
+              });
+              window.location.href = `/?userId=${newConfig.userId}`;
+            } catch (err) {
+              console.error('Failed to create new config:', err);
+              setPageLoading(false);
+            }
           }
         })
         .catch(err => {
@@ -199,7 +210,7 @@ function App() {
 
       // Update URL to the new configure userId without reload
       if (!urlUserId) {
-        window.history.pushState({}, '', `/configure/${result.userId}`);
+        window.history.pushState({}, '', `/?userId=${result.userId}`);
       }
 
       // Immediately re-fetch the persisted config from server using the saved API key
@@ -302,7 +313,7 @@ function App() {
       
       // Update URL without reload
       if (!urlUserId) {
-        window.history.pushState({}, '', `/configure/${result.userId}`);
+        window.history.pushState({}, '', `/?userId=${result.userId}`);
       }
 
       // Refresh the user configs list
@@ -325,7 +336,7 @@ function App() {
 
   // Handle switching to a different config
   const handleSwitchConfig = (userId) => {
-    window.location.href = `/configure/${userId}`;
+    window.location.href = `/?userId=${userId}`;
   };
 
   // Handle deleting a config from the dropdown
@@ -362,11 +373,11 @@ function App() {
       if (remaining.length > 0) {
         // Get the latest remaining config
         const nextConfig = remaining[0];
-        window.location.href = `/configure/${nextConfig.userId}`;
+        window.location.href = `/?userId=${nextConfig.userId}`;
       } else {
         // No more configs, go back to setup
         localStorage.removeItem('tmdb-stremio-apikey');
-        window.location.href = '/configure';
+        window.location.href = '/';
       }
     }
   };
@@ -388,11 +399,11 @@ function App() {
       if (remaining.length > 0) {
         // Get the latest remaining config
         const nextConfig = remaining[0];
-        window.location.href = `/configure/${nextConfig.userId}`;
+        window.location.href = `/?userId=${nextConfig.userId}`;
       } else {
         // No more configs, go back to setup
         localStorage.removeItem('tmdb-stremio-apikey');
-        window.location.href = '/configure';
+        window.location.href = '/';
       }
     } catch (err) {
       console.error('Failed to delete config:', err);
@@ -428,7 +439,7 @@ function App() {
             // User selected an existing config - redirect directly
             setWantsToChangeKey(false);
             config.setApiKey(apiKey);
-            window.location.href = `/configure/${userId}`;
+            window.location.href = `/?userId=${userId}`;
           }}
           skipAutoRedirect={wantsToChangeKey}
         />
@@ -479,11 +490,20 @@ function App() {
                   loading={configsLoading}
                   onSelectConfig={handleSwitchConfig}
                   onDeleteConfig={handleDeleteConfigFromDropdown}
-                  onCreateNew={() => {
-                    // Create a fresh config with the same API key
-                    config.setUserId(null);
-                    config.setCatalogs([]);
-                    window.history.pushState({}, '', '/configure');
+                  onCreateNew={async () => {
+                    // Create a new empty config in MongoDB first
+                    try {
+                      const newConfig = await api.saveConfig({
+                        tmdbApiKey: config.apiKey,
+                        catalogs: [],
+                        preferences: {},
+                      });
+                      // Redirect to the new config's page
+                      window.location.href = `/?userId=${newConfig.userId}`;
+                    } catch (err) {
+                      console.error('Failed to create new config:', err);
+                      addToast('Failed to create new configuration', 'error');
+                    }
                   }}
                 />
               )}
