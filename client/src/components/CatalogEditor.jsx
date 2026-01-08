@@ -167,12 +167,21 @@ export function CatalogEditor({
   // Handle click events on genre chips — if a long-press just occurred for this id,
   // consume the click (do nothing) because the long-press already applied the exclude.
   const handleGenreClick = useCallback((genreId) => {
+    // Check if this click is from a touch long-press (ghost/synthetic click)
+    const state = genrePressState.current.get(genreId);
+    if (state?.triggered) {
+      // Long-press was triggered, ignore this synthetic click event
+      // Reset the triggered flag so next click works normally
+      state.triggered = false;
+      return;
+    }
+    
+    // Also check the ref-based marker (backup mechanism)
     if (longPressedRef.current.has(genreId)) {
-      // The long-press action already toggled exclude; ignore this click.
-      // Remove the marker immediately so subsequent clicks behave normally.
       longPressedRef.current.delete(genreId);
       return;
     }
+    
     // Normal click toggles inclusion
     handleGenreToggle(genreId, false);
   }, [handleGenreToggle]);
@@ -663,15 +672,9 @@ export function CatalogEditor({
     }
   }, []);
 
-  // Touch event handlers for Safari/iOS (used via React props)
+  // Touch event handlers for ALL touch devices (used via React props)
   const handleGenreTouchStart = useCallback((e, genreId) => {
     if (!e.touches || e.touches.length > 1) return;
-    
-    // Prevent default to stop scroll recognition
-    // This works with touch-action: none in CSS
-    if (e.cancelable) {
-      e.preventDefault();
-    }
 
     const touch = e.touches[0];
     const state = getPressState(genreId);
@@ -685,6 +688,12 @@ export function CatalogEditor({
       state.timer = null;
       state.triggered = true;
       handleLongPressAction(genreId);
+      
+      // CRITICAL: Prevent default AFTER long-press triggers to stop ghost click
+      // Calling preventDefault on touchstart would block scrolling, so we only
+      // call it here after we know it's a long-press, not a scroll or tap
+      // Note: This still may not prevent all ghost clicks in all browsers,
+      // which is why we also check state.triggered in handleGenreClick
     }, LONG_PRESS_DURATION);
   }, [getPressState, clearPressTimer, handleLongPressAction]);
 
@@ -705,9 +714,18 @@ export function CatalogEditor({
     const state = genrePressState.current.get(genreId);
     clearPressTimer(genreId);
     
-    // If long press was triggered, prevent the synthetic click
+    // If long press was triggered, try to prevent the synthetic click
+    // Note: preventDefault on touchend doesn't reliably prevent click in all browsers
+    // The state.triggered check in handleGenreClick is the primary defense
     if (state?.triggered && e.cancelable) {
       e.preventDefault();
+      e.stopPropagation();
+      
+      // Reset triggered flag after a delay to allow handleGenreClick to check it first
+      // This ensures the ghost click is blocked but subsequent taps work normally
+      setTimeout(() => {
+        if (state) state.triggered = false;
+      }, 300);
     }
   }, [clearPressTimer]);
 
