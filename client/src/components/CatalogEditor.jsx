@@ -770,19 +770,15 @@ export function CatalogEditor({
     clearPressTimer(genreId);
   }, [clearPressTimer]);
 
-  // Detect Safari - we use touch events for Safari, pointer events for others
-  const isSafari = typeof navigator !== 'undefined' && (
-    /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  );
-
+  // Detect touch device capability
   const isTouchDevice = typeof window !== 'undefined' && (
     'ontouchstart' in window || navigator.maxTouchPoints > 0
   );
 
-  // Use touch events for Safari touch devices, pointer events otherwise
-  const useTouchEvents = isSafari && isTouchDevice;
+  // Use touch events for ALL touch-capable devices (not just Safari)
+  // This ensures long-press works reliably on Android, Windows touch screens, etc.
+  // Pointer events have issues with touch long-press due to movement sensitivity
+  const useTouchEvents = isTouchDevice;
 
   const handleYearRangeChange = useCallback((range) => {
     setLocalCatalog(prev => ({
