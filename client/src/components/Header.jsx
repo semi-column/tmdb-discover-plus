@@ -1,4 +1,4 @@
-export function Header({ userId }) {
+export function Header() {
   return (
     <header className="header">
       <div className="container">
