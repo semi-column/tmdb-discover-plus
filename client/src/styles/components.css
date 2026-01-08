@@ -1709,36 +1709,27 @@ input[type="date"] {
   color: white;
 }
 
+/* Exclude genre chips styling */
+.genre-chip.exclude {
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.genre-chip.exclude:hover {
+  border-color: var(--error);
+}
+
 .genre-chip.exclude.selected {
   background: rgba(239, 68, 68, 0.2);
   border-color: var(--error);
   color: var(--error);
 }
 
-/* Prevent iOS Safari long-press text selection / callout on genre chips */
+/* User selection and touch handling */
 .genre-chip,
 .genre-chip * {
-  -webkit-user-select: none;   /* Safari, older WebKit */
-  -webkit-touch-callout: none; /* Disable iOS callout menu on long-press */
-  user-select: none;           /* Standard */
-  /*
-   * CRITICAL for Safari long-press:
-   * Using touch-action: none disables ALL browser touch gestures (including scroll)
-   * on the genre chip itself. This prevents iOS Safari from recognizing a scroll
-   * gesture and firing pointercancel/touchcancel during a long-press.
-   * The parent container (.editor-content) still scrolls normally because
-   * touch-action only affects touches that START on this element.
-   */
-  touch-action: none;
-  -webkit-user-drag: none;     /* Prevent image/element dragging on iOS */
-  -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
-}
-
-/* Wrapper for genre chip + explicit exclude button (used for touch devices) */
-.genre-chip-wrapper {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
  
 

@@ -108,83 +108,60 @@ export function CatalogEditor({
   const initialSyncRef = useRef(true);
   const syncTimeoutRef = useRef(null);
   const prevCatalogIdRef = useRef(null);
-  
-  // Track long-pressed genres to prevent click from toggling after long-press
-  const longPressedRef = useRef(new Set());
-  
-  // Track active long-press state per genre (for React event handlers)
-  const genrePressState = useRef(new Map());
 
-  // Genre toggle handler wrapped in useCallback - MUST be defined before handleGenreClick
-  const handleGenreToggle = useCallback((genreId, exclude = false) => {
-    const key = exclude ? 'excludeGenres' : 'genres';
-    const otherKey = exclude ? 'genres' : 'excludeGenres';
-
+  // Handle clicks on Include genre chips
+  const handleIncludeGenreClick = useCallback((genreId) => {
     setLocalCatalog(prev => {
       const current = prev || DEFAULT_CATALOG;
-      const currentGenres = current.filters?.[key] || [];
-      const otherGenres = current.filters?.[otherKey] || [];
-
-      // Toggle: if already in this list, remove it; otherwise add it
-      const isCurrentlyInList = currentGenres.includes(genreId);
-      const newGenres = isCurrentlyInList
-        ? currentGenres.filter(id => id !== genreId)
-        : [...currentGenres, genreId];
-
-      // Remove from the other list to ensure mutual exclusivity
-      const newOtherGenres = otherGenres.filter(id => id !== genreId);
-
+      const included = current.filters?.genres || [];
+      const excluded = current.filters?.excludeGenres || [];
+      
+      // Toggle: if already included, remove it; otherwise add it
+      const isIncluded = included.includes(genreId);
+      const newIncluded = isIncluded
+        ? included.filter(id => id !== genreId)
+        : [...included, genreId];
+      
+      // Remove from exclude list if present (mutual exclusivity)
+      const newExcluded = excluded.filter(id => id !== genreId);
+      
       return {
         ...current,
         filters: {
           ...current.filters,
-          [key]: newGenres,
-          [otherKey]: newOtherGenres
+          genres: newIncluded,
+          excludeGenres: newExcluded
         }
       };
     });
   }, []);
 
-  // Helper to idempotently add a genre to the exclude list
-  // eslint-disable-next-line no-unused-vars
-  function addGenreToExclude(genreId) {
+  // Handle clicks on Exclude genre chips
+  const handleExcludeGenreClick = useCallback((genreId) => {
     setLocalCatalog(prev => {
       const current = prev || DEFAULT_CATALOG;
-      const excluded = current.filters?.excludeGenres || [];
       const included = current.filters?.genres || [];
-      if (excluded.includes(genreId)) return current;
+      const excluded = current.filters?.excludeGenres || [];
+      
+      // Toggle: if already excluded, remove it; otherwise add it
+      const isExcluded = excluded.includes(genreId);
+      const newExcluded = isExcluded
+        ? excluded.filter(id => id !== genreId)
+        : [...excluded, genreId];
+      
+      // Remove from include list if present (mutual exclusivity)
+      const newIncluded = included.filter(id => id !== genreId);
+      
       return {
         ...current,
         filters: {
           ...current.filters,
-          excludeGenres: [...excluded, genreId],
-          genres: included.filter(id => id !== genreId),
+          genres: newIncluded,
+          excludeGenres: newExcluded
         }
       };
     });
-  }
-
-  // Handle click events on genre chips — if a long-press just occurred for this id,
-  // consume the click (do nothing) because the long-press already applied the exclude.
-  const handleGenreClick = useCallback((genreId) => {
-    // Check if this click is from a touch long-press (ghost/synthetic click)
-    const state = genrePressState.current.get(genreId);
-    if (state?.triggered) {
-      // Long-press was triggered, ignore this synthetic click event
-      // Reset the triggered flag so next click works normally
-      state.triggered = false;
-      return;
-    }
-    
-    // Also check the ref-based marker (backup mechanism)
-    if (longPressedRef.current.has(genreId)) {
-      longPressedRef.current.delete(genreId);
-      return;
-    }
-    
-    // Normal click toggles inclusion
-    handleGenreToggle(genreId, false);
-  }, [handleGenreToggle]);
+  }, []);
 
   useEffect(() => {
     if (catalog) {
@@ -374,24 +351,6 @@ export function CatalogEditor({
       prevCatalogIdRef.current = null;
     }
   }, [catalog, getPersonById, getCompanyById, getKeywordById, searchPerson, searchCompany, searchKeyword]);
-
-  // Cleanup long-press state when component unmounts
-  useEffect(() => {
-    // Capture refs for cleanup
-    const longPressedSet = longPressedRef.current;
-    const pressStateMap = genrePressState.current;
-    
-    return () => {
-      // Clear any long-press markers on unmount.
-      if (longPressedSet) longPressedSet.clear();
-      // Clear any active timers
-      pressStateMap.forEach((state) => {
-        if (state.timer) clearTimeout(state.timer);
-      });
-      pressStateMap.clear();
-    };
-  }, []);
-
 
   // Keep local changes synced back to parent so switching catalogs preserves state
   useEffect(() => {
@@ -604,199 +563,6 @@ export function CatalogEditor({
       return updated;
     });
   }, [catalog?._id, onUpdate]);
-
-  // Unified handler for long-press actions (triggered by timer or contextmenu)
-  // Toggles exclude state: if already excluded, removes it; otherwise adds to exclude
-  const handleLongPressAction = useCallback((genreId) => {
-    setLocalCatalog(prev => {
-      const current = prev || DEFAULT_CATALOG;
-      const excluded = current.filters?.excludeGenres || [];
-      const included = current.filters?.genres || [];
-      
-      // Toggle: if already excluded, remove from exclude list
-      if (excluded.includes(genreId)) {
-        return {
-          ...current,
-          filters: {
-            ...current.filters,
-            excludeGenres: excluded.filter(id => id !== genreId),
-          }
-        };
-      }
-      
-      // Otherwise, add to exclude list (and remove from include list if present)
-      return {
-        ...current,
-        filters: {
-          ...current.filters,
-          excludeGenres: [...excluded, genreId],
-          genres: included.filter(id => id !== genreId),
-        }
-      };
-    });
-    // Critical: Mark as long-pressed so the subsequent 'click' event is ignored
-    longPressedRef.current.add(genreId);
-    // Clear the ref after a short delay to allow for the ghost click to be consumed,
-    // but don't leave it there forever to block the next legitimate tap.
-    setTimeout(() => {
-      longPressedRef.current.delete(genreId);
-    }, 1000);
-  }, []);
-
-  // ==================== REACT-BASED TOUCH/POINTER HANDLERS ====================
-  // These are used directly on the genre chip elements via React props.
-  // This approach is more reliable than DOM-based useEffect listeners because
-  // React properly manages the event lifecycle during renders.
-
-  const LONG_PRESS_DURATION = 500; // ms
-  const MOVE_THRESHOLD = 20; // px
-
-  // Helper to get or create press state for a genre
-  const getPressState = useCallback((genreId) => {
-    if (!genrePressState.current.has(genreId)) {
-      genrePressState.current.set(genreId, {
-        timer: null,
-        startX: 0,
-        startY: 0,
-        triggered: false,
-      });
-    }
-    return genrePressState.current.get(genreId);
-  }, []);
-
-  const clearPressTimer = useCallback((genreId) => {
-    const state = genrePressState.current.get(genreId);
-    if (state?.timer) {
-      clearTimeout(state.timer);
-      state.timer = null;
-    }
-  }, []);
-
-  // Touch event handlers for ALL touch devices (used via React props)
-  const handleGenreTouchStart = useCallback((e, genreId) => {
-    if (!e.touches || e.touches.length > 1) return;
-
-    const touch = e.touches[0];
-    const state = getPressState(genreId);
-    
-    state.startX = touch.clientX;
-    state.startY = touch.clientY;
-    state.triggered = false;
-
-    clearPressTimer(genreId);
-    state.timer = setTimeout(() => {
-      state.timer = null;
-      state.triggered = true;
-      handleLongPressAction(genreId);
-      
-      // CRITICAL: Prevent default AFTER long-press triggers to stop ghost click
-      // Calling preventDefault on touchstart would block scrolling, so we only
-      // call it here after we know it's a long-press, not a scroll or tap
-      // Note: This still may not prevent all ghost clicks in all browsers,
-      // which is why we also check state.triggered in handleGenreClick
-    }, LONG_PRESS_DURATION);
-  }, [getPressState, clearPressTimer, handleLongPressAction]);
-
-  const handleGenreTouchMove = useCallback((e, genreId) => {
-    const state = genrePressState.current.get(genreId);
-    if (!state?.timer || !e.touches || e.touches.length === 0) return;
-
-    const touch = e.touches[0];
-    const dx = Math.abs(touch.clientX - state.startX);
-    const dy = Math.abs(touch.clientY - state.startY);
-    
-    if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
-      clearPressTimer(genreId);
-    }
-  }, [clearPressTimer]);
-
-  const handleGenreTouchEnd = useCallback((e, genreId) => {
-    const state = genrePressState.current.get(genreId);
-    clearPressTimer(genreId);
-    
-    // If long press was triggered, try to prevent the synthetic click
-    // Note: preventDefault on touchend doesn't reliably prevent click in all browsers
-    // The state.triggered check in handleGenreClick is the primary defense
-    if (state?.triggered && e.cancelable) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Reset triggered flag after a delay to allow handleGenreClick to check it first
-      // This ensures the ghost click is blocked but subsequent taps work normally
-      setTimeout(() => {
-        if (state) state.triggered = false;
-      }, 300);
-    }
-  }, [clearPressTimer]);
-
-  const handleGenreTouchCancel = useCallback((genreId) => {
-    clearPressTimer(genreId);
-  }, [clearPressTimer]);
-
-  // Pointer event handlers for non-Safari browsers (used via React props)
-  const handleGenrePointerDown = useCallback((e, genreId) => {
-    if (e.isPrimary === false) return;
-    
-    const state = getPressState(genreId);
-    state.startX = e.clientX;
-    state.startY = e.clientY;
-    state.triggered = false;
-    state.pointerId = e.pointerId;
-
-    // Try to capture the pointer
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // ignore
-    }
-
-    clearPressTimer(genreId);
-    state.timer = setTimeout(() => {
-      state.timer = null;
-      state.triggered = true;
-      handleLongPressAction(genreId);
-    }, LONG_PRESS_DURATION);
-  }, [getPressState, clearPressTimer, handleLongPressAction]);
-
-  const handleGenrePointerMove = useCallback((e, genreId) => {
-    const state = genrePressState.current.get(genreId);
-    if (!state?.timer || e.pointerId !== state.pointerId) return;
-
-    const dx = Math.abs(e.clientX - state.startX);
-    const dy = Math.abs(e.clientY - state.startY);
-    
-    if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
-      clearPressTimer(genreId);
-    }
-  }, [clearPressTimer]);
-
-  const handleGenrePointerUp = useCallback((e, genreId) => {
-    const state = genrePressState.current.get(genreId);
-    clearPressTimer(genreId);
-    
-    if (state?.pointerId != null) {
-      try {
-        e.currentTarget.releasePointerCapture(state.pointerId);
-      } catch {
-        // ignore
-      }
-      state.pointerId = null;
-    }
-  }, [clearPressTimer]);
-
-  const handleGenrePointerCancel = useCallback((genreId) => {
-    clearPressTimer(genreId);
-  }, [clearPressTimer]);
-
-  // Detect touch device capability
-  const isTouchDevice = typeof window !== 'undefined' && (
-    'ontouchstart' in window || navigator.maxTouchPoints > 0
-  );
-
-  // Use touch events for ALL touch-capable devices (not just Safari)
-  // This ensures long-press works reliably on Android, Windows touch screens, etc.
-  // Pointer events have issues with touch long-press due to movement sensitivity
-  const useTouchEvents = isTouchDevice;
 
   const handleYearRangeChange = useCallback((range) => {
     setLocalCatalog(prev => ({
@@ -1458,40 +1224,47 @@ export function CatalogEditor({
           </div>
         ) : (
           <>
-            <div className="genre-grid">
-              {currentGenres.map((genre) => (
-                <div key={genre.id} className="genre-chip-wrapper">
+            {/* Include Genres Section */}
+            <div style={{ marginBottom: '20px' }}>
+              <label className="filter-label" style={{ marginBottom: '8px', display: 'block' }}>
+                Include Genres
+                <span className="filter-label-hint"> Show content from these genres</span>
+              </label>
+              <div className="genre-grid">
+                {currentGenres.map((genre) => (
                   <button
+                    key={genre.id}
                     type="button"
-                    className={`genre-chip ${selectedGenres.includes(genre.id) ? 'selected' : ''} ${excludedGenres.includes(genre.id) ? 'excluded' : ''}`}
-                    onClick={() => handleGenreClick(genre.id)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      handleLongPressAction(genre.id);
-                    }}
-                    // Touch events for Safari/iOS
-                    {...(useTouchEvents ? {
-                      onTouchStart: (e) => handleGenreTouchStart(e, genre.id),
-                      onTouchMove: (e) => handleGenreTouchMove(e, genre.id),
-                      onTouchEnd: (e) => handleGenreTouchEnd(e, genre.id),
-                      onTouchCancel: () => handleGenreTouchCancel(genre.id),
-                    } : {
-                      // Pointer events for non-Safari browsers
-                      onPointerDown: (e) => handleGenrePointerDown(e, genre.id),
-                      onPointerMove: (e) => handleGenrePointerMove(e, genre.id),
-                      onPointerUp: (e) => handleGenrePointerUp(e, genre.id),
-                      onPointerCancel: () => handleGenrePointerCancel(genre.id),
-                    })}
-                    data-genre-id={genre.id}
+                    className={`genre-chip ${selectedGenres.includes(genre.id) ? 'selected' : ''}`}
+                    onClick={() => handleIncludeGenreClick(genre.id)}
                   >
                     <span className="genre-chip-label">{genre.name}</span>
                     {selectedGenres.includes(genre.id) && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Exclude Genres Section */}
+            <div>
+              <label className="filter-label" style={{ marginBottom: '8px', display: 'block' }}>
+                Exclude Genres
+                <span className="filter-label-hint"> Hide content from these genres</span>
+              </label>
+              <div className="genre-grid">
+                {currentGenres.map((genre) => (
+                  <button
+                    key={genre.id}
+                    type="button"
+                    className={`genre-chip exclude ${excludedGenres.includes(genre.id) ? 'selected' : ''}`}
+                    onClick={() => handleExcludeGenreClick(genre.id)}
+                  >
+                    <span className="genre-chip-label">{genre.name}</span>
                     {excludedGenres.includes(genre.id) && <X size={14} />}
                   </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-            <p className="filter-hint">Right-click or Hold a genre to exclude it</p>
           </>
         )}
       </div>
@@ -1548,7 +1321,7 @@ export function CatalogEditor({
                 </div>
                 <div className="filter-group">
                   <label className="filter-label">
-                    <span style={{ color: 'var(--error)' }}>✕</span> Exclude Keywords
+                    Exclude Keywords
                     <span className="filter-label-hint">Results will NOT contain these keywords</span>
                   </label>
                   <SearchInput
@@ -1562,7 +1335,7 @@ export function CatalogEditor({
                 </div>
                 <div className="filter-group">
                   <label className="filter-label">
-                    <span style={{ color: 'var(--error)' }}>✕</span> Exclude Companies
+                    Exclude Companies
                     <span className="filter-label-hint">Filter out content from these studios</span>
                   </label>
                   <SearchInput

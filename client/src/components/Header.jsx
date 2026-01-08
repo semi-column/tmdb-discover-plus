@@ -35,11 +35,6 @@ export function Header({ userId }) {
               </svg>
               <span>Sponsor</span>
             </a>
-            {userId && (
-              <div className="text-sm text-muted">
-                Config ID: <code style={{ color: 'var(--accent-light)' }}>{userId}</code>
-              </div>
-            )}
           </div>
         </div>
       </div>
