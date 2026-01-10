@@ -520,18 +520,46 @@ router.get('/monetization-types', (req, res) => {
  * Get TV networks list
  */
 router.get('/tv-networks', (req, res) => {
-  const { query } = req.query;
-  let networks = tmdb.TV_NETWORKS;
-  
-  // Filter by search query if provided
-  if (query) {
-    const searchLower = query.toLowerCase();
-    networks = networks.filter(n => 
-      n.name.toLowerCase().includes(searchLower)
-    );
+  const { query, apiKey } = req.query;
+
+  const normalizeNetwork = (n) => ({
+    id: n.id,
+    name: n.name,
+    // Keep logo field for curated list; remote search may return absolute logoPath
+    logo: n.logo || n.logoPath || null,
+  });
+
+  const curated = (tmdb.TV_NETWORKS || []).map(normalizeNetwork);
+
+  // If no query, return curated list (fast, no TMDB key needed)
+  if (!query) {
+    return res.json(curated);
   }
-  
-  res.json(networks);
+
+  const searchLower = String(query).toLowerCase();
+  const curatedMatches = curated.filter(n => n.name.toLowerCase().includes(searchLower));
+
+  // If apiKey provided, augment results with TMDB search
+  if (apiKey) {
+    tmdb.getNetworks(apiKey, String(query))
+      .then((remote) => {
+        const remoteNormalized = (remote || []).map(normalizeNetwork);
+        const byId = new Map();
+        [...curatedMatches, ...remoteNormalized].forEach(n => {
+          if (!n || !n.id) return;
+          if (!byId.has(n.id)) byId.set(n.id, n);
+        });
+        res.json(Array.from(byId.values()));
+      })
+      .catch(() => {
+        // Graceful fallback: if TMDB search fails, still return curated matches
+        res.json(curatedMatches);
+      });
+    return;
+  }
+
+  // No apiKey: best effort local match against curated list
+  return res.json(curatedMatches);
 });
 
 /**
@@ -558,6 +586,7 @@ router.post('/preview', async (req, res) => {
       // Use special list endpoint
       results = await tmdb.fetchSpecialList(apiKey, listType, type, {
         page,
+        displayLanguage: resolvedFilters?.displayLanguage,
         language: resolvedFilters?.language,
         region: resolvedFilters?.originCountry,
       });

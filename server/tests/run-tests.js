@@ -14,6 +14,7 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import http from 'http';
+import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const serverPath = path.join(__dirname, '..', 'src', 'index.js');
@@ -68,11 +69,18 @@ async function main() {
   console.log('║               Test Runner - Server + Tests                      ║');
   console.log('╚════════════════════════════════════════════════════════════════╝\n');
 
-  // Check for TMDB API key
+  // Integration tests require a real TMDB API key. If not provided, skip instead of failing.
   if (!process.env.TMDB_API_KEY) {
-    console.error('❌ TMDB_API_KEY environment variable is required');
-    console.log('   Set it with: $env:TMDB_API_KEY="your-api-key"');
-    process.exit(1);
+    console.warn('⚠️  TMDB_API_KEY not set; skipping integration tests');
+    console.warn('   To run them: $env:TMDB_API_KEY="your-api-key"');
+    process.exit(0);
+  }
+
+  // If the integration test file is not present (some deployments intentionally remove tests), skip.
+  if (!fs.existsSync(testPath)) {
+    console.warn(`⚠️  Integration test file not found: ${testPath}`);
+    console.warn('   Skipping tests. If you want to run them, restore server/tests/stremio-client.test.js');
+    process.exit(0);
   }
 
   let server = null;

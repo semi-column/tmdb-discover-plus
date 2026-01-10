@@ -543,6 +543,9 @@ function App() {
               onAddCatalog={() => setShowNewCatalogModal(true)}
               onAddPresetCatalog={handleAddPresetCatalog}
               onDeleteCatalog={handleDeleteCatalog}
+              onReorderCatalogs={(nextCatalogs) => {
+                config.setCatalogs(nextCatalogs);
+              }}
               presetCatalogs={tmdb.presetCatalogs}
             />
 
@@ -554,7 +557,6 @@ function App() {
               languages={tmdb.languages}
               countries={tmdb.countries}
               sortOptions={tmdb.sortOptions}
-              listTypes={tmdb.listTypes}
               releaseTypes={tmdb.releaseTypes}
               tvStatuses={tmdb.tvStatuses}
               tvTypes={tmdb.tvTypes}
@@ -567,11 +569,10 @@ function App() {
                 setActiveCatalog(data);
               }}
               onPreview={tmdb.preview}
-              onSave={handleSave}
-              isSaving={isSaving}
               searchPerson={tmdb.searchPerson}
               searchCompany={tmdb.searchCompany}
               searchKeyword={tmdb.searchKeyword}
+              searchTVNetworks={tmdb.searchTVNetworks}
               getPersonById={tmdb.getPersonById}
               getCompanyById={tmdb.getCompanyById}
               getKeywordById={tmdb.getKeywordById}

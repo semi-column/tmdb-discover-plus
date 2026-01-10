@@ -98,7 +98,7 @@ export function sanitizeFilters(filters) {
   
   const sanitized = {};
   const allowedKeys = [
-    'sortBy', 'listType', 'genres', 'excludeGenres', 'language', 
+    'sortBy', 'listType', 'genres', 'excludeGenres', 'language', 'displayLanguage',
     'originCountry', 'year', 'yearFrom', 'yearTo', 'voteAverage',
     'voteAverageFrom', 'voteAverageTo', 'voteCount', 'runtime',
     'runtimeFrom', 'runtimeTo', 'certifications', 'watchProviders',

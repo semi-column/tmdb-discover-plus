@@ -17,6 +17,29 @@ const LOG_LEVELS = {
 const currentLevel = LOG_LEVELS[process.env.LOG_LEVEL?.toLowerCase()] ?? LOG_LEVELS.info;
 const useJson = process.env.LOG_FORMAT === 'json';
 
+function redactSecretsInString(str) {
+  if (typeof str !== 'string') return str;
+  // Redact common credential query params (TMDB uses api_key, others often use apikey/key/token)
+  return str
+    .replace(/([?&]api_key=)[^&\s]+/gi, '$1[REDACTED]')
+    .replace(/([?&]apikey=)[^&\s]+/gi, '$1[REDACTED]')
+    .replace(/([?&]token=)[^&\s]+/gi, '$1[REDACTED]')
+    .replace(/([?&]key=)[^&\s]+/gi, '$1[REDACTED]');
+}
+
+function sanitizeAny(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') return redactSecretsInString(value);
+  if (Array.isArray(value)) return value.map(sanitizeAny);
+  if (typeof value !== 'object') return value;
+
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    out[k] = sanitizeAny(v);
+  }
+  return out;
+}
+
 /**
  * Format log message
  * @param {string} level - Log level
@@ -63,8 +86,9 @@ function sanitizeLogData(data) {
       sanitized[key] = '[REDACTED]';
     }
   }
-  
-  return sanitized;
+
+  // Also redact secrets that might appear inside string values (e.g., node-fetch error URLs).
+  return sanitizeAny(sanitized);
 }
 
 /**

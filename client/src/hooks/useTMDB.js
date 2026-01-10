@@ -58,7 +58,7 @@ export function useTMDB(apiKey) {
         api.getCertifications(apiKey, 'movie'),
         api.getCertifications(apiKey, 'series'),
         api.getWatchRegions(apiKey),
-        api.getTVNetworks(),
+        api.getTVNetworks(null, ''),
       ]);
       
       setGenres({ movie: movieGenres, series: tvGenres });
@@ -113,6 +113,12 @@ export function useTMDB(apiKey) {
     return api.getWatchProviders(apiKey, type, region);
   }, [apiKey]);
 
+  const searchTVNetworks = useCallback(async (query) => {
+    if (!apiKey) throw new Error('API key required');
+    if (!query) return [];
+    return api.getTVNetworks(apiKey, query);
+  }, [apiKey]);
+
   const getPersonById = useCallback(async (id) => {
     if (!apiKey) throw new Error('API key required');
     return api.getPersonById(apiKey, id);
@@ -149,6 +155,7 @@ export function useTMDB(apiKey) {
     searchCompany,
     searchKeyword,
     getWatchProviders,
+    searchTVNetworks,
     refresh: loadMetadata,
     getPersonById,
     getCompanyById,

@@ -108,9 +108,12 @@ class ApiService {
   }
 
   // Get TV networks
-  async getTVNetworks(query = '') {
-    const params = query ? `?query=${encodeURIComponent(query)}` : '';
-    return this.request(`/tv-networks${params}`);
+  async getTVNetworks(apiKey = null, query = '') {
+    const params = new URLSearchParams();
+    if (query) params.set('query', query);
+    if (apiKey) params.set('apiKey', apiKey);
+    const qs = params.toString();
+    return this.request(`/tv-networks${qs ? `?${qs}` : ''}`);
   }
 
   // Preview catalog with filters

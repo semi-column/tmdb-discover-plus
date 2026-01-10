@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-10
+
+### Added
+- Display language selection (localize titles/metadata via TMDB `language=`) while preserving original-language filtering
+- Improved filter UX: tooltips, active-filters summary chips, per-section filter-count badges
+- Genre improvements: tri-state include/exclude/neutral selection and optional match mode (ANY vs ALL)
+- Desktop split layout with a dedicated preview panel
+- Drag & drop catalog reordering is added
+
+### Changed
+- Filters accordion behavior improved (collapsed by default, single-section open)
+- Responsive layout improved across breakpoints
+
+### Fixed
+- Preview header alignment and padding consistency
+- Streaming providers list now shows all available services for the selected region (previously capped) and includes a quick search
+- TV network search improved to discover networks via TMDB TV results
+
 ## [2.0.0] - 2026-01-05
 
 ### Added

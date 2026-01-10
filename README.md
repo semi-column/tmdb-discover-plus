@@ -14,13 +14,14 @@ A powerful Stremio addon that lets you create custom movie and TV show catalogs 
 ## ✨ Features
 
 - 🎬 **Custom Catalogs** - Create multiple personalized movie and TV show catalogs
-- � **Configuration Manager** - Save, switch between, and manage multiple addon configurations
+- ⚙️ **Configuration Manager** - Save, switch between, and manage multiple addon configurations
 - 🔥 **Preset Lists** - Quick access to Trending, Popular, Top Rated, Upcoming, and more
 - 🔍 **Advanced Filters** - Filter by genre, year, rating, runtime, language, streaming service, and more
 - ⏱️ **Runtime Filtering** - Filter by duration with interactive slider and presets (Short, Standard, Long, Epic)
 - 🚫 **Exclusion Filters** - Exclude genres, keywords, and production companies from results
 - 🎯 **Separate Include/Exclude Sections** - Clear, touch-friendly genre selection with dedicated include and exclude sections
 - 🌍 **Region & First Air Date** - Filter by regional releases and TV premiere dates
+- 🗣️ **Display Language** - Localize titles/overviews while keeping original-language filtering
 - 📅 **Dynamic Date Presets** - "Last 30 days" always means 30 days from today, not when you created the catalog
 - 📊 **Sorting Options** - Sort by popularity, rating, release date, revenue, or random
 - 👀 **Live Preview** - See catalog results before installing with clickable links to TMDB

@@ -13,6 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const log = createLogger('server');
 const PORT = process.env.PORT || 7000;
+const SERVER_VERSION = process.env.npm_package_version || '2.1.0';
 
 // Track server state for graceful shutdown
 let server = null;
@@ -127,7 +128,7 @@ app.get('/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    version: '1.5.0',
+    version: SERVER_VERSION,
     database: isConnected() ? 'connected' : 'disconnected',
     memory: {
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),

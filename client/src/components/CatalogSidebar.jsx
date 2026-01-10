@@ -1,4 +1,23 @@
-import { Plus, Film, Tv, Trash2, TrendingUp, Flame, Calendar, Star, Play, Radio, Sparkles } from 'lucide-react';
+import { Plus, Film, Tv, Trash2, TrendingUp, Flame, Calendar, Star, Play, Radio, Sparkles, ChevronDown, GripVertical } from 'lucide-react';
+import { useState, useEffect } from 'react';
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // Icons for preset catalog types
 const presetIcons = {
@@ -12,6 +31,19 @@ const presetIcons = {
   popular: Sparkles,
 };
 
+// Check if we're on mobile
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
+  return isMobile;
+};
+
 export function CatalogSidebar({ 
   catalogs, 
   activeCatalog, 
@@ -19,14 +51,122 @@ export function CatalogSidebar({
   onAddCatalog,
   onAddPresetCatalog,
   onDeleteCatalog,
+  onReorderCatalogs,
   presetCatalogs = { movie: [], series: [] },
 }) {
+  const isMobile = useIsMobile();
+  const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
+  const [tvPresetsCollapsed, setTvPresetsCollapsed] = useState(isMobile);
+
+  // Update collapse state when screen size changes
+  useEffect(() => {
+    setMoviePresetsCollapsed(isMobile);
+    setTvPresetsCollapsed(isMobile);
+  }, [isMobile]);
+
   // Check which presets are already added
   const addedPresets = new Set(
     catalogs
       .filter(c => c.filters?.listType && c.filters.listType !== 'discover')
       .map(c => `${c.type}-${c.filters.listType}`)
   );
+
+  const getCatalogKey = (catalog) => String(catalog?._id || catalog?.id || catalog?.name);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 6,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 150,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (!over) return;
+    if (!active?.id || !over?.id) return;
+    if (active.id === over.id) return;
+    if (typeof onReorderCatalogs !== 'function') return;
+
+    const oldIndex = catalogs.findIndex(c => getCatalogKey(c) === String(active.id));
+    const newIndex = catalogs.findIndex(c => getCatalogKey(c) === String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const reordered = arrayMove(catalogs, oldIndex, newIndex);
+    onReorderCatalogs(reordered);
+  };
+
+  const SortableCatalogItem = ({ catalog }) => {
+    const id = getCatalogKey(catalog);
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    };
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={`catalog-item ${activeCatalog?._id === catalog._id ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
+        onClick={() => onSelectCatalog(catalog)}
+      >
+        <div className="catalog-item-icon">
+          {catalog.type === 'series' ? <Tv size={20} /> : <Film size={20} />}
+        </div>
+        <div className="catalog-item-info">
+          <div className="catalog-item-name">{catalog.name}</div>
+          <div className="catalog-item-type">
+            {catalog.type === 'series' ? 'TV Shows' : 'Movies'}
+            {catalog.filters?.listType && catalog.filters.listType !== 'discover' && (
+              <span className="catalog-item-badge">Preset</span>
+            )}
+          </div>
+        </div>
+        <div className="catalog-item-actions">
+          <button
+            className="btn btn-ghost btn-icon catalog-drag-handle"
+            type="button"
+            title="Drag to reorder"
+            aria-label="Drag to reorder"
+            onClick={(e) => e.stopPropagation()}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical size={16} />
+          </button>
+          <button
+            className="btn btn-ghost btn-icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteCatalog(catalog._id);
+            }}
+            title="Delete catalog"
+            type="button"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <aside className="sidebar">
@@ -52,38 +192,23 @@ export function CatalogSidebar({
             <p className="text-sm">Add a custom catalog or use presets below</p>
           </div>
         ) : (
-          catalogs.map((catalog) => (
-            <div
-              key={catalog._id || catalog.name}
-              className={`catalog-item ${activeCatalog?._id === catalog._id ? 'active' : ''}`}
-              onClick={() => onSelectCatalog(catalog)}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={catalogs.map(getCatalogKey)}
+              strategy={verticalListSortingStrategy}
             >
-              <div className="catalog-item-icon">
-                {catalog.type === 'series' ? <Tv size={20} /> : <Film size={20} />}
-              </div>
-              <div className="catalog-item-info">
-                <div className="catalog-item-name">{catalog.name}</div>
-                <div className="catalog-item-type">
-                  {catalog.type === 'series' ? 'TV Shows' : 'Movies'}
-                  {catalog.filters?.listType && catalog.filters.listType !== 'discover' && (
-                    <span className="catalog-item-badge">Preset</span>
-                  )}
-                </div>
-              </div>
-              <div className="catalog-item-actions">
-                <button
-                  className="btn btn-ghost btn-icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteCatalog(catalog._id);
-                  }}
-                  title="Delete catalog"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-          ))
+              {catalogs.map((catalog) => (
+                <SortableCatalogItem
+                  key={getCatalogKey(catalog)}
+                  catalog={catalog}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 
@@ -92,10 +217,14 @@ export function CatalogSidebar({
         <h4 className="sidebar-section-title">Quick Add Presets</h4>
         
         {/* Movie Presets */}
-        <div className="preset-group">
-          <div className="preset-group-header">
+        <div className={`preset-group ${moviePresetsCollapsed ? 'collapsed' : ''}`}>
+          <div 
+            className="preset-group-header"
+            onClick={() => setMoviePresetsCollapsed(!moviePresetsCollapsed)}
+          >
             <Film size={14} />
             <span>Movies</span>
+            <ChevronDown size={14} className="chevron" />
           </div>
           <div className="preset-list">
             {(presetCatalogs.movie || []).map((preset) => {
@@ -119,10 +248,14 @@ export function CatalogSidebar({
         </div>
 
         {/* TV Presets */}
-        <div className="preset-group">
-          <div className="preset-group-header">
+        <div className={`preset-group ${tvPresetsCollapsed ? 'collapsed' : ''}`}>
+          <div 
+            className="preset-group-header"
+            onClick={() => setTvPresetsCollapsed(!tvPresetsCollapsed)}
+          >
             <Tv size={14} />
             <span>TV Shows</span>
+            <ChevronDown size={14} className="chevron" />
           </div>
           <div className="preset-list">
             {(presetCatalogs.series || []).map((preset) => {

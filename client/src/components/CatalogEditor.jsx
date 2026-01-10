@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Eye, 
-  Save, 
   RefreshCw, 
   Star, 
   Check, 
@@ -16,12 +15,15 @@ import {
   Users,
   Settings,
   Sparkles,
-  X
+  X,
+  Shuffle,
+  Zap
 } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
 import { MultiSelect } from './MultiSelect';
 import { SearchInput } from './SearchInput';
 import { RangeSlider, SingleSlider } from './RangeSlider';
+import { LabelWithTooltip } from './Tooltip';
 
 const DEFAULT_CATALOG = {
   name: '',
@@ -48,6 +50,58 @@ const DATE_PRESETS = [
   { label: 'Last year', value: 'last_year', lastYear: true },
 ];
 
+// Filter Templates for quick setup
+const FILTER_TEMPLATES = [
+  {
+    id: 'hidden_gems',
+    name: 'Hidden Gems',
+    icon: 'gem',
+    description: 'Underrated high-quality content',
+    filters: {
+      sortBy: 'vote_average.desc',
+      voteCountMin: 50,
+      ratingMin: 7.5,
+      ratingMax: 10,
+    }
+  },
+  {
+    id: 'recent_hits',
+    name: 'Recent Hits',
+    icon: 'trending',
+    description: 'Popular content from this year',
+    filters: {
+      sortBy: 'popularity.desc',
+      yearFrom: CURRENT_YEAR,
+      yearTo: CURRENT_YEAR,
+      ratingMin: 6,
+    }
+  },
+  {
+    id: 'classics',
+    name: 'Classics',
+    icon: 'classic',
+    description: 'Timeless favorites before 2000',
+    filters: {
+      sortBy: 'vote_average.desc',
+      yearFrom: 1950,
+      yearTo: 1999,
+      voteCountMin: 500,
+      ratingMin: 7.5,
+    }
+  },
+  {
+    id: 'family_night',
+    name: 'Family Night',
+    icon: 'family',
+    description: 'Fun for all ages',
+    filters: {
+      sortBy: 'popularity.desc',
+      certifications: ['G', 'PG'],
+      ratingMin: 6,
+    }
+  },
+];
+
 export function CatalogEditor({ 
   catalog, 
   genres = { movie: [], series: [] }, 
@@ -56,8 +110,6 @@ export function CatalogEditor({
   languages = [], 
   countries = [],
   sortOptions = { movie: [], series: [] }, 
-  // eslint-disable-next-line no-unused-vars
-  listTypes = { movie: [], series: [] },
   releaseTypes = [],
   tvStatuses = [],
   tvTypes = [],
@@ -67,12 +119,10 @@ export function CatalogEditor({
   tvNetworks = [],
   onUpdate, 
   onPreview,
-  onSave,
-  // eslint-disable-next-line no-unused-vars
-  isSaving,
   searchPerson,
   searchCompany,
   searchKeyword,
+  searchTVNetworks,
   getPersonById,
   getCompanyById,
   getKeywordById,
@@ -87,11 +137,13 @@ export function CatalogEditor({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
   const [watchProviders, setWatchProviders] = useState([]);
+  const [providerSearch, setProviderSearch] = useState('');
   const [selectedDatePreset, setSelectedDatePreset] = useState(null);
+  const [tvNetworkOptions, setTVNetworkOptions] = useState(tvNetworks);
   const [expandedSections, setExpandedSections] = useState({
-    basic: true,
-    genres: true,
-    filters: true,
+    basic: false,
+    genres: false,
+    filters: false,
     release: false,
     streaming: false,
     people: false,
@@ -109,21 +161,73 @@ export function CatalogEditor({
   const syncTimeoutRef = useRef(null);
   const prevCatalogIdRef = useRef(null);
 
-  // Handle clicks on Include genre chips
-  const handleIncludeGenreClick = useCallback((genreId) => {
+  // Keep a growing union of known networks so previously selected IDs always have labels.
+  useEffect(() => {
+    setTVNetworkOptions(prev => {
+      const byId = new Map();
+      (prev || []).forEach(n => {
+        if (n && n.id != null) byId.set(String(n.id), n);
+      });
+      (tvNetworks || []).forEach(n => {
+        if (n && n.id != null) {
+          const key = String(n.id);
+          if (!byId.has(key)) byId.set(key, n);
+        }
+      });
+      return Array.from(byId.values());
+    });
+  }, [tvNetworks]);
+
+  const handleTVNetworkSearch = useCallback(async (query) => {
+    if (!searchTVNetworks) return;
+    const q = String(query || '').trim();
+    if (q.length < 2) return;
+    try {
+      const results = await searchTVNetworks(q);
+      if (!Array.isArray(results) || results.length === 0) return;
+      setTVNetworkOptions(prev => {
+        const byId = new Map();
+        (prev || []).forEach(n => {
+          if (n && n.id != null) byId.set(String(n.id), n);
+        });
+        results.forEach(n => {
+          if (n && n.id != null) {
+            const key = String(n.id);
+            if (!byId.has(key)) byId.set(key, n);
+          }
+        });
+        return Array.from(byId.values());
+      });
+    } catch {
+      // best effort: network search shouldn't break the editor
+    }
+  }, [searchTVNetworks]);
+
+  // Tri-state genre click: neutral -> include -> exclude -> neutral
+  const handleTriStateGenreClick = useCallback((genreId) => {
     setLocalCatalog(prev => {
       const current = prev || DEFAULT_CATALOG;
       const included = current.filters?.genres || [];
       const excluded = current.filters?.excludeGenres || [];
       
-      // Toggle: if already included, remove it; otherwise add it
       const isIncluded = included.includes(genreId);
-      const newIncluded = isIncluded
-        ? included.filter(id => id !== genreId)
-        : [...included, genreId];
+      const isExcluded = excluded.includes(genreId);
       
-      // Remove from exclude list if present (mutual exclusivity)
-      const newExcluded = excluded.filter(id => id !== genreId);
+      let newIncluded, newExcluded;
+      
+      if (isIncluded) {
+        // include -> exclude
+        newIncluded = included.filter(id => id !== genreId);
+        newExcluded = [...excluded, genreId];
+      } else if (isExcluded) {
+        // exclude -> neutral
+        newIncluded = included;
+        newExcluded = excluded.filter(id => id !== genreId);
+      } else {
+        // neutral -> include
+        newIncluded = [...included, genreId];
+        newExcluded = excluded;
+      }
       
       return {
         ...current,
@@ -136,32 +240,14 @@ export function CatalogEditor({
     });
   }, []);
 
-  // Handle clicks on Exclude genre chips
-  const handleExcludeGenreClick = useCallback((genreId) => {
-    setLocalCatalog(prev => {
-      const current = prev || DEFAULT_CATALOG;
-      const included = current.filters?.genres || [];
-      const excluded = current.filters?.excludeGenres || [];
-      
-      // Toggle: if already excluded, remove it; otherwise add it
-      const isExcluded = excluded.includes(genreId);
-      const newExcluded = isExcluded
-        ? excluded.filter(id => id !== genreId)
-        : [...excluded, genreId];
-      
-      // Remove from include list if present (mutual exclusivity)
-      const newIncluded = included.filter(id => id !== genreId);
-      
-      return {
-        ...current,
-        filters: {
-          ...current.filters,
-          genres: newIncluded,
-          excludeGenres: newExcluded
-        }
-      };
-    });
-  }, []);
+  // Get genre state for tri-state display
+  const getGenreState = useCallback((genreId) => {
+    const included = localCatalog?.filters?.genres || [];
+    const excluded = localCatalog?.filters?.excludeGenres || [];
+    if (included.includes(genreId)) return 'include';
+    if (excluded.includes(genreId)) return 'exclude';
+    return 'neutral';
+  }, [localCatalog?.filters?.genres, localCatalog?.filters?.excludeGenres]);
 
   useEffect(() => {
     if (catalog) {
@@ -192,28 +278,22 @@ export function CatalogEditor({
         const initial = toPlaceholdersFromCsv(csv);
         (async () => {
           if (initial.length > 0 && (typeof getPersonById === 'function' || typeof searchPerson === 'function')) {
-            console.debug('[CatalogEditor] Resolving people ids:', initial.map(i => i.id));
             const resolved = await Promise.all(initial.map(async item => {
               if (item.name && !/^\d+$/.test(item.name)) return item;
               try {
                 if (typeof getPersonById === 'function') {
-                  console.debug('[CatalogEditor] getPersonById ->', item.id);
                   const resp = await getPersonById(item.id);
-                  console.debug('[CatalogEditor] getPersonById resp ->', item.id, resp);
                   if (resp && resp.name) return { id: item.id, name: resp.name };
                 }
                 if (typeof searchPerson === 'function') {
-                  console.debug('[CatalogEditor] searchPerson ->', item.id);
                   const sres = await searchPerson(item.id);
-                  console.debug('[CatalogEditor] searchPerson resp ->', item.id, sres?.length);
                   if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || item.id };
                 }
-              } catch (err) {
-                console.debug('[CatalogEditor] error resolving person', item.id, err);
+              } catch {
+                // ignore resolution errors; keep placeholder
               }
               return item;
             }));
-            console.debug('[CatalogEditor] Resolved people:', resolved);
             setSelectedPeople(resolved);
           } else {
             setSelectedPeople(initial);
@@ -229,28 +309,22 @@ export function CatalogEditor({
         // Resolve numeric-only ids into names when possible
         (async () => {
           if (initial.length > 0 && (typeof getCompanyById === 'function' || typeof searchCompany === 'function')) {
-            console.debug('[CatalogEditor] Resolving company ids:', initial.map(i => i.id));
             const resolved = await Promise.all(initial.map(async item => {
               if (item.name && !/^\d+$/.test(item.name)) return item;
               try {
                 if (typeof getCompanyById === 'function') {
-                  console.debug('[CatalogEditor] getCompanyById ->', item.id);
                   const resp = await getCompanyById(item.id);
-                  console.debug('[CatalogEditor] getCompanyById resp ->', item.id, resp);
                   if (resp && resp.name) return { id: item.id, name: resp.name };
                 }
                 if (typeof searchCompany === 'function') {
-                  console.debug('[CatalogEditor] searchCompany ->', item.id);
                   const sres = await searchCompany(item.id);
-                  console.debug('[CatalogEditor] searchCompany resp ->', item.id, sres?.length);
                   if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || sres[0].title || item.id };
                 }
-              } catch (err) {
-                console.debug('[CatalogEditor] error resolving company', item.id, err);
+              } catch {
+                // ignore resolution errors; keep placeholder
               }
               return item;
             }));
-            console.debug('[CatalogEditor] Resolved companies:', resolved);
             setSelectedCompanies(resolved);
           } else {
             setSelectedCompanies(initial);
@@ -265,28 +339,22 @@ export function CatalogEditor({
         const initial = toPlaceholdersFromCsv(csv);
         (async () => {
           if (initial.length > 0 && (typeof getKeywordById === 'function' || typeof searchKeyword === 'function')) {
-            console.debug('[CatalogEditor] Resolving keyword ids:', initial.map(i => i.id));
             const resolved = await Promise.all(initial.map(async item => {
               if (item.name && !/^\d+$/.test(item.name)) return item;
               try {
                 if (typeof getKeywordById === 'function') {
-                  console.debug('[CatalogEditor] getKeywordById ->', item.id);
                   const resp = await getKeywordById(item.id);
-                  console.debug('[CatalogEditor] getKeywordById resp ->', item.id, resp);
                   if (resp && resp.name) return { id: item.id, name: resp.name };
                 }
                 if (typeof searchKeyword === 'function') {
-                  console.debug('[CatalogEditor] searchKeyword ->', item.id);
                   const sres = await searchKeyword(item.id);
-                  console.debug('[CatalogEditor] searchKeyword resp ->', item.id, sres?.length);
                   if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || item.id };
                 }
-              } catch (err) {
-                console.debug('[CatalogEditor] error resolving keyword', item.id, err);
+              } catch {
+                // ignore resolution errors; keep placeholder
               }
               return item;
             }));
-            console.debug('[CatalogEditor] Resolved keywords:', resolved);
             setSelectedKeywords(resolved);
           } else {
             setSelectedKeywords(initial);
@@ -403,11 +471,13 @@ export function CatalogEditor({
             name: p.provider_name,
             logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null
           })));
+          setProviderSearch('');
         } catch (err) {
           console.error('Failed to load providers:', err);
         }
       }
     };
+        setProviderSearch('');
     loadProviders();
   }, [localCatalog?.filters?.watchRegion, localCatalog?.type, getWatchProviders]);
 
@@ -420,7 +490,6 @@ export function CatalogEditor({
     if (!hasNumeric) return;
 
     (async () => {
-      console.debug('[CatalogEditor] Resolving newly-selected people:', selectedPeople.map(p => p.id));
       try {
         const resolved = await Promise.all(selectedPeople.map(async item => {
           if (item.name && !/^\d+$/.test(String(item.name))) return item;
@@ -433,17 +502,16 @@ export function CatalogEditor({
               const sres = await searchPerson(item.id);
               if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || item.id };
             }
-          } catch (err) {
-            console.debug('[CatalogEditor] error resolving newly-selected person', item.id, err);
+          } catch {
+            // ignore resolution errors; keep placeholder
           }
           return item;
         }));
         if (!cancelled) {
-          console.debug('[CatalogEditor] Resolved newly-selected people ->', resolved);
           setSelectedPeople(resolved);
         }
-      } catch (err) {
-        console.debug('[CatalogEditor] Error resolving newly-selected people batch', err);
+      } catch {
+        // ignore
       }
     })();
 
@@ -456,7 +524,6 @@ export function CatalogEditor({
     if (!hasNumeric) return;
 
     (async () => {
-      console.debug('[CatalogEditor] Resolving newly-selected companies:', selectedCompanies.map(c => c.id));
       try {
         const resolved = await Promise.all(selectedCompanies.map(async item => {
           if (item.name && !/^\d+$/.test(String(item.name))) return item;
@@ -469,17 +536,16 @@ export function CatalogEditor({
               const sres = await searchCompany(item.id);
               if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || sres[0].title || item.id };
             }
-          } catch (err) {
-            console.debug('[CatalogEditor] error resolving newly-selected company', item.id, err);
+          } catch {
+            // ignore resolution errors; keep placeholder
           }
           return item;
         }));
         if (!cancelled) {
-          console.debug('[CatalogEditor] Resolved newly-selected companies ->', resolved);
           setSelectedCompanies(resolved);
         }
-      } catch (err) {
-        console.debug('[CatalogEditor] Error resolving newly-selected companies batch', err);
+      } catch {
+        // ignore
       }
     })();
 
@@ -492,7 +558,6 @@ export function CatalogEditor({
     if (!hasNumeric) return;
 
     (async () => {
-      console.debug('[CatalogEditor] Resolving newly-selected keywords:', selectedKeywords.map(k => k.id));
       try {
         const resolved = await Promise.all(selectedKeywords.map(async item => {
           if (item.name && !/^\d+$/.test(String(item.name))) return item;
@@ -505,17 +570,16 @@ export function CatalogEditor({
               const sres = await searchKeyword(item.id);
               if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || item.id };
             }
-          } catch (err) {
-            console.debug('[CatalogEditor] error resolving newly-selected keyword', item.id, err);
+          } catch {
+            // ignore resolution errors; keep placeholder
           }
           return item;
         }));
         if (!cancelled) {
-          console.debug('[CatalogEditor] Resolved newly-selected keywords ->', resolved);
           setSelectedKeywords(resolved);
         }
-      } catch (err) {
-        console.debug('[CatalogEditor] Error resolving newly-selected keywords batch', err);
+      } catch {
+        // ignore
       }
     })();
 
@@ -523,7 +587,20 @@ export function CatalogEditor({
   }, [selectedKeywords, getKeywordById, searchKeyword]);
 
   const toggleSection = (section) => {
-    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+    setExpandedSections(prev => {
+      const isCurrentlyExpanded = prev[section];
+      // If closing, just close it. If opening, close all others first.
+      if (isCurrentlyExpanded) {
+        return { ...prev, [section]: false };
+      } else {
+        // Collapse all sections, then open just this one
+        const allClosed = Object.keys(prev).reduce((acc, key) => {
+          acc[key] = false;
+          return acc;
+        }, {});
+        return { ...allClosed, [section]: true };
+      }
+    });
   };
 
   const handleFiltersChange = useCallback((key, value) => {
@@ -603,27 +680,10 @@ export function CatalogEditor({
     // Store the dynamic preset value - backend will calculate actual dates at request time
     handleFiltersChange('datePreset', preset.value);
     
-    // Also calculate dates for immediate preview display
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    let fromDate, toDate;
-    
-    if (preset.days) {
-      fromDate = new Date(Date.now() - preset.days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      toDate = todayStr;
-    } else if (preset.year) {
-      // This year: from Jan 1 to today
-      fromDate = `${CURRENT_YEAR}-01-01`;
-      toDate = todayStr;
-    } else if (preset.lastYear) {
-      // Last year: full year
-      fromDate = `${CURRENT_YEAR - 1}-01-01`;
-      toDate = `${CURRENT_YEAR - 1}-12-31`;
-    }
-
+    // Clear any manually set dates since we're using a dynamic preset
     const isMovie = localCatalog?.type === 'movie';
-    handleFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', fromDate);
-    handleFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', toDate);
+    handleFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', undefined);
+    handleFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', undefined);
   }, [localCatalog?.type, handleFiltersChange]);
 
   const handleProviderToggle = useCallback((providerId) => {
@@ -665,24 +725,205 @@ export function CatalogEditor({
     }
   };
 
-  // eslint-disable-next-line no-unused-vars
-  const handleSave = () => {
-    const catalogToSave = {
-      ...localCatalog,
-      filters: {
-        ...localCatalog.filters,
-        withPeople: selectedPeople.map(p => p.id).join(',') || undefined,
-        withCompanies: selectedCompanies.map(c => c.id).join(',') || undefined,
-        withKeywords: selectedKeywords.map(k => k.id).join(',') || undefined,
-        excludeKeywords: excludeKeywords.map(k => k.id).join(',') || undefined,
-        excludeCompanies: excludeCompanies.map(c => c.id).join(',') || undefined,
-      }
-    };
-    if (catalog?._id) {
-      onUpdate(catalog._id, catalogToSave);
+  // Compute active filters for the summary bar
+  const getActiveFilters = useCallback(() => {
+    const filters = localCatalog?.filters || {};
+    const active = [];
+    
+    // Genres
+    if (filters.genres?.length > 0) {
+      const genreNames = filters.genres.map(id => {
+        const genre = (genres[localCatalog?.type] || []).find(g => g.id === id);
+        return genre?.name || id;
+      }).slice(0, 2);
+      const extra = filters.genres.length > 2 ? ` +${filters.genres.length - 2}` : '';
+      active.push({ key: 'genres', label: `Genres: ${genreNames.join(', ')}${extra}`, section: 'genres' });
     }
-    onSave();
-  };
+    
+    // Excluded Genres
+    if (filters.excludeGenres?.length > 0) {
+      active.push({ key: 'excludeGenres', label: `Excluding ${filters.excludeGenres.length} genre(s)`, section: 'genres' });
+    }
+    
+    // Original language (filter)
+    if (filters.language) {
+      const lang = languages.find(l => l.code === filters.language);
+      active.push({ key: 'language', label: `Original language: ${lang?.name || filters.language}`, section: 'filters' });
+    }
+
+    // Display language (localization)
+    if (filters.displayLanguage) {
+      const lang = languages.find(l => l.code === filters.displayLanguage);
+      active.push({ key: 'displayLanguage', label: `Display language: ${lang?.name || filters.displayLanguage}`, section: 'filters' });
+    }
+    
+    // Country
+    if (filters.originCountry) {
+      const country = countries.find(c => c.code === filters.originCountry);
+      active.push({ key: 'originCountry', label: `Country: ${country?.name || filters.originCountry}`, section: 'filters' });
+    }
+    
+    // Year Range
+    if (filters.yearFrom || filters.yearTo) {
+      const from = filters.yearFrom || 'Any';
+      const to = filters.yearTo || 'Now';
+      active.push({ key: 'year', label: `Year: ${from}-${to}`, section: 'filters' });
+    }
+    
+    // Rating
+    if (filters.ratingMin > 0 || filters.ratingMax < 10) {
+      active.push({ key: 'rating', label: `Rating: ${filters.ratingMin || 0}-${filters.ratingMax || 10}`, section: 'filters' });
+    }
+    
+    // Runtime
+    if (filters.runtimeMin || filters.runtimeMax) {
+      active.push({ key: 'runtime', label: `Runtime: ${filters.runtimeMin || 0}-${filters.runtimeMax || '∞'}min`, section: 'filters' });
+    }
+    
+    // Date Preset (dynamic date filters)
+    if (filters.datePreset) {
+      const presetMatch = DATE_PRESETS.find(p => p.value === filters.datePreset);
+      const label = presetMatch ? presetMatch.label : filters.datePreset;
+      active.push({ key: 'datePreset', label: `Date: ${label}`, section: 'release' });
+    } else if (filters.releaseDateFrom || filters.releaseDateTo || filters.airDateFrom || filters.airDateTo) {
+      // Manual date range (only show if no preset is active)
+      active.push({ key: 'releaseDate', label: 'Release date set', section: 'release' });
+    }
+    
+    // Streaming
+    if (filters.watchProviders?.length > 0) {
+      active.push({ key: 'watchProviders', label: `${filters.watchProviders.length} streaming service(s)`, section: 'streaming' });
+    }
+    
+    // People
+    if (selectedPeople.length > 0) {
+      active.push({ key: 'people', label: `${selectedPeople.length} cast/crew`, section: 'people' });
+    }
+    
+    // Keywords
+    if (selectedKeywords.length > 0) {
+      active.push({ key: 'keywords', label: `${selectedKeywords.length} keyword(s)`, section: 'people' });
+    }
+    
+    return active;
+  }, [localCatalog, genres, languages, countries, selectedPeople, selectedKeywords]);
+
+  // Clear a specific filter
+  const clearFilter = useCallback((filterKey) => {
+    switch (filterKey) {
+      case 'genres':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, genres: [] } }));
+        break;
+      case 'excludeGenres':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, excludeGenres: [] } }));
+        break;
+      case 'language':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, language: undefined } }));
+        break;
+      case 'displayLanguage':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, displayLanguage: undefined } }));
+        break;
+      case 'originCountry':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, originCountry: undefined } }));
+        break;
+      case 'year':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, yearFrom: undefined, yearTo: undefined } }));
+        break;
+      case 'rating':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, ratingMin: 0, ratingMax: 10 } }));
+        break;
+      case 'runtime':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, runtimeMin: undefined, runtimeMax: undefined } }));
+        break;
+      case 'datePreset':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, datePreset: undefined } }));
+        setSelectedDatePreset(null);
+        break;
+      case 'releaseDate':
+        setLocalCatalog(prev => ({ 
+          ...prev, 
+          filters: { 
+            ...prev.filters, 
+            releaseDateFrom: undefined, 
+            releaseDateTo: undefined,
+            airDateFrom: undefined,
+            airDateTo: undefined,
+            datePreset: undefined,
+          } 
+        }));
+        setSelectedDatePreset(null);
+        break;
+      case 'watchProviders':
+        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, watchProviders: [] } }));
+        break;
+      case 'people':
+        setSelectedPeople([]);
+        break;
+      case 'keywords':
+        setSelectedKeywords([]);
+        break;
+      default:
+        break;
+    }
+  }, []);
+
+  // Clear all filters
+  const clearAllFilters = useCallback(() => {
+    setLocalCatalog(prev => ({
+      ...prev,
+      filters: {
+        ...DEFAULT_CATALOG.filters,
+        sortBy: prev.filters?.sortBy || 'popularity.desc',
+      }
+    }));
+    setSelectedPeople([]);
+    setSelectedCompanies([]);
+    setSelectedKeywords([]);
+    setExcludeKeywords([]);
+    setExcludeCompanies([]);
+    setSelectedDatePreset(null);
+  }, []);
+
+  // Apply a filter template
+  const applyTemplate = useCallback((template) => {
+    setLocalCatalog(prev => ({
+      ...prev,
+      filters: {
+        ...prev.filters,
+        ...template.filters,
+      }
+    }));
+  }, []);
+
+  // Surprise Me - random sensible filters
+  const handleSurpriseMe = useCallback(() => {
+    const currentGenreList = genres[localCatalog?.type] || [];
+    if (currentGenreList.length === 0) return;
+    
+    // Pick 1-2 random genres
+    const shuffled = [...currentGenreList].sort(() => Math.random() - 0.5);
+    const randomGenres = shuffled.slice(0, Math.floor(Math.random() * 2) + 1).map(g => g.id);
+    
+    // Random decade
+    const decades = [1980, 1990, 2000, 2010, 2020];
+    const randomDecade = decades[Math.floor(Math.random() * decades.length)];
+    
+    // Random minimum rating
+    const ratings = [6, 6.5, 7, 7.5];
+    const randomRating = ratings[Math.floor(Math.random() * ratings.length)];
+    
+    setLocalCatalog(prev => ({
+      ...prev,
+      filters: {
+        ...prev.filters,
+        genres: randomGenres,
+        yearFrom: randomDecade,
+        yearTo: randomDecade + 9,
+        ratingMin: randomRating,
+        sortBy: Math.random() > 0.5 ? 'vote_average.desc' : 'popularity.desc',
+      }
+    }));
+  }, [genres, localCatalog?.type]);
 
   // Early return if no catalog selected
   if (!catalog) {
@@ -716,21 +957,31 @@ export function CatalogEditor({
   const isPresetCatalog = currentListType && currentListType !== 'discover';
   const supportsFullFilters = !isPresetCatalog;
 
+  // Get active filters for summary bar
+  const activeFilters = getActiveFilters();
+
+  // Count active filters per section for badges
+  const getFilterCountForSection = (sectionKey) => {
+    const sectionFilters = activeFilters.filter(f => f.section === sectionKey);
+    return sectionFilters.length;
+  };
+
   return (
-    <div className="editor-panel">
-      {/* Header */}
-      <div className="editor-header">
-        <div className="editor-title">
-          {isMovie ? <Film size={22} /> : <Tv size={22} />}
-          <input
-            type="text"
-            className="editor-name-input"
-            placeholder="Catalog Name..."
-            value={localCatalog?.name || ''}
-            onChange={(e) => handleNameChange(e.target.value)}
-          />
-        </div>
-        <div className="editor-actions">
+    <div className="editor-container">
+      <div className="editor-panel">
+        {/* Header */}
+        <div className="editor-header">
+          <div className="editor-title">
+            {isMovie ? <Film size={22} /> : <Tv size={22} />}
+            <input
+              type="text"
+              className="editor-name-input"
+              placeholder="Catalog Name..."
+              value={localCatalog?.name || ''}
+              onChange={(e) => handleNameChange(e.target.value)}
+            />
+          </div>
+          <div className="editor-actions">
           <button 
             className="btn btn-secondary"
             onClick={loadPreview}
@@ -761,6 +1012,66 @@ export function CatalogEditor({
           </button>
         </div>
 
+        {/* Quick Actions Bar */}
+        {supportsFullFilters && (
+          <div className="quick-actions-bar">
+            <div className="quick-actions-row">
+              <button 
+                className="quick-action-btn surprise-btn"
+                onClick={handleSurpriseMe}
+                title="Apply random filters for discovery"
+              >
+                <Shuffle size={16} />
+                Surprise Me
+              </button>
+              <div className="template-divider" />
+              {FILTER_TEMPLATES.map(template => (
+                <button
+                  key={template.id}
+                  className="quick-action-btn template-btn"
+                  onClick={() => applyTemplate(template)}
+                  title={template.description}
+                >
+                  <Zap size={14} />
+                  {template.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Active Filters Summary */}
+        {activeFilters.length > 0 && (
+          <div className="active-filters-bar">
+            <div className="active-filters-chips">
+              {activeFilters.map(filter => (
+                <div 
+                  key={filter.key} 
+                  className="active-filter-chip"
+                  onClick={() => toggleSection(filter.section)}
+                >
+                  <span>{filter.label}</span>
+                  <button 
+                    className="chip-remove"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearFilter(filter.key);
+                    }}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button 
+              className="clear-all-btn"
+              onClick={clearAllFilters}
+            >
+              Clear All
+            </button>
+          </div>
+        )}
+
         {/* Core Filters Section - Only show for Custom Discover */}
         {!isPresetCatalog && (
         <div className="filter-section">
@@ -770,6 +1081,9 @@ export function CatalogEditor({
               <h4 className="filter-section-title">Sort & Filter</h4>
               <span className="filter-section-desc">Sorting, language, year, rating</span>
             </div>
+            {getFilterCountForSection('filters') > 0 && (
+              <span className="filter-count-badge">{getFilterCountForSection('filters')}</span>
+            )}
             {expandedSections.filters ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
           {expandedSections.filters && (
@@ -779,7 +1093,10 @@ export function CatalogEditor({
                 <>
                   <div className="filter-grid">
                     <div className="filter-group">
-                      <label className="filter-label">Sort By</label>
+                      <LabelWithTooltip 
+                        label="Sort By" 
+                        tooltip="How to order your results. Popular shows what's trending now, while rating shows critically acclaimed content."
+                      />
                       <SearchableSelect
                         options={sortOptions[localCatalog?.type] || sortOptions.movie || []}
                         value={localCatalog?.filters?.sortBy || 'popularity.desc'}
@@ -792,7 +1109,10 @@ export function CatalogEditor({
                     </div>
 
                     <div className="filter-group">
-                      <label className="filter-label">Language</label>
+                      <LabelWithTooltip 
+                        label="Original Language" 
+                        tooltip="Filter by the original language of the content (e.g., select 'Japanese' for anime, 'Korean' for K-dramas)."
+                      />
                       <SearchableSelect
                         options={languages}
                         value={localCatalog?.filters?.language || ''}
@@ -805,7 +1125,26 @@ export function CatalogEditor({
                     </div>
 
                     <div className="filter-group">
-                      <label className="filter-label">Country</label>
+                      <LabelWithTooltip 
+                        label="Display Language" 
+                        tooltip="Localize titles and overviews (when available) to this language. Tip: set Display Language to English while keeping Original Language set to Japanese/Korean/etc."
+                      />
+                      <SearchableSelect
+                        options={languages}
+                        value={localCatalog?.filters?.displayLanguage || ''}
+                        onChange={(value) => handleFiltersChange('displayLanguage', value)}
+                        placeholder="Default"
+                        searchPlaceholder="Search languages..."
+                        labelKey="name"
+                        valueKey="code"
+                      />
+                    </div>
+
+                    <div className="filter-group">
+                      <LabelWithTooltip 
+                        label="Country" 
+                        tooltip="Filter by country of origin. Useful for finding British shows, Bollywood movies, etc."
+                      />
                       <SearchableSelect
                         options={countries}
                         value={localCatalog?.filters?.originCountry || ''}
@@ -822,6 +1161,7 @@ export function CatalogEditor({
                   <div style={{ marginTop: '24px' }}>
                     <RangeSlider
                       label="Year Range"
+                      tooltip="Filter by release year or first air date. Great for finding classics or recent releases."
                       min={1900}
                       max={CURRENT_YEAR + 2}
                       step={1}
@@ -838,6 +1178,7 @@ export function CatalogEditor({
                   <div style={{ marginTop: '20px' }}>
                     <RangeSlider
                       label="Rating"
+                      tooltip="TMDB average user rating (0-10 scale). Higher ratings indicate better reviews."
                       min={0}
                       max={10}
                       step={0.5}
@@ -854,6 +1195,7 @@ export function CatalogEditor({
                   <div style={{ marginTop: '20px' }}>
                     <RangeSlider
                       label="Runtime (minutes)"
+                      tooltip="Filter by total runtime. Perfect for finding quick watches or epic adventures."
                       min={0}
                       max={400}
                       step={5}
@@ -923,6 +1265,7 @@ export function CatalogEditor({
                 <div style={{ marginTop: '20px' }}>
                   <SingleSlider
                     label="Minimum Votes"
+                    tooltip="Requires this many user ratings. Higher values filter out obscure titles and ensure quality."
                     min={0}
                     max={10000}
                     step={100}
@@ -944,6 +1287,9 @@ export function CatalogEditor({
               <h4 className="filter-section-title">{isMovie ? 'Release' : 'Air Date'} & Classification</h4>
               <span className="filter-section-desc">Date ranges, age ratings, release type</span>
             </div>
+            {getFilterCountForSection('release') > 0 && (
+              <span className="filter-count-badge">{getFilterCountForSection('release')}</span>
+            )}
             {expandedSections.release ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
           {expandedSections.release && (
@@ -963,10 +1309,10 @@ export function CatalogEditor({
 
               <div className="filter-two-col">
                 <div className="filter-group">
-                  <label className="filter-label">
-                    {isMovie ? 'Release' : 'Episode Air'} Date From
-                    {!isMovie && <span className="filter-label-hint">When episodes aired</span>}
-                  </label>
+                  <LabelWithTooltip 
+                    label={isMovie ? 'Release Date From' : 'Episode Air Date From'}
+                    tooltip={isMovie ? 'Filter movies released on or after this date' : 'Filter shows that had episodes airing on or after this date'}
+                  />
                   <input
                     type="date"
                     className="input"
@@ -979,9 +1325,10 @@ export function CatalogEditor({
                   />
                 </div>
                 <div className="filter-group">
-                  <label className="filter-label">
-                    {isMovie ? 'Release' : 'Episode Air'} Date To
-                  </label>
+                  <LabelWithTooltip 
+                    label={isMovie ? 'Release Date To' : 'Episode Air Date To'}
+                    tooltip={isMovie ? 'Filter movies released on or before this date' : 'Filter shows that had episodes airing on or before this date'}
+                  />
                   <input
                     type="date"
                     className="input"
@@ -999,10 +1346,11 @@ export function CatalogEditor({
               {!isMovie && (
                 <div className="filter-two-col" style={{ marginTop: '16px' }}>
                   <div className="filter-group">
-                    <label className="filter-label">
-                      Show Premiered From
-                      <span className="filter-label-hint">When show first aired (premiere date)</span>
-                    </label>
+                    <LabelWithTooltip 
+                      label="Show Premiered From" 
+                      tooltip="Filter by when the TV show first aired. This is the date of the very first episode, not individual episode air dates."
+                    />
+                    <span className="filter-label-hint">When show first aired (premiere date)</span>
                     <input
                       type="date"
                       className="input"
@@ -1011,7 +1359,10 @@ export function CatalogEditor({
                     />
                   </div>
                   <div className="filter-group">
-                    <label className="filter-label">Show Premiered To</label>
+                    <LabelWithTooltip 
+                      label="Show Premiered To" 
+                      tooltip="Latest premiere date to include. Shows that first aired before or on this date."
+                    />
                     <input
                       type="date"
                       className="input"
@@ -1026,7 +1377,10 @@ export function CatalogEditor({
                 <>
                   <div className="filter-two-col" style={{ marginTop: '16px' }}>
                     <div className="filter-group">
-                      <label className="filter-label">Release Type</label>
+                      <LabelWithTooltip 
+                        label="Release Type" 
+                        tooltip="How the movie was released: Theatrical (cinemas), Digital (streaming/download), Physical (DVD/Blu-ray), TV broadcast, etc."
+                      />
                       <MultiSelect
                         options={releaseTypes}
                         value={localCatalog?.filters?.releaseTypes || []}
@@ -1037,7 +1391,10 @@ export function CatalogEditor({
                       />
                     </div>
                     <div className="filter-group">
-                      <label className="filter-label">Age Rating</label>
+                      <LabelWithTooltip 
+                        label="Age Rating" 
+                        tooltip="Content certification/age rating (e.g., PG-13, R, TV-MA). Varies by country - US ratings shown by default."
+                      />
                       <MultiSelect
                         options={certOptions.map(c => ({ value: c.certification, label: c.certification }))}
                         value={localCatalog?.filters?.certifications || []}
@@ -1049,10 +1406,11 @@ export function CatalogEditor({
                     </div>
                   </div>
                   <div className="filter-group" style={{ marginTop: '16px' }}>
-                    <label className="filter-label">
-                      Release Region
-                      <span className="filter-label-hint">Use regional release dates instead of worldwide premiere</span>
-                    </label>
+                    <LabelWithTooltip 
+                      label="Release Region" 
+                      tooltip="Filter by when content was released in a specific country. Useful since movies often premiere at different times worldwide."
+                    />
+                    <span className="filter-label-hint">Use regional release dates instead of worldwide premiere</span>
                     <SearchableSelect
                       options={[{ code: '', name: 'Worldwide (default)' }, ...countries]}
                       value={localCatalog?.filters?.region || ''}
@@ -1068,7 +1426,10 @@ export function CatalogEditor({
                 <>
                   <div className="filter-two-col" style={{ marginTop: '16px' }}>
                     <div className="filter-group">
-                      <label className="filter-label">Show Status</label>
+                      <LabelWithTooltip 
+                        label="Show Status" 
+                        tooltip="Whether the TV show is currently Returning Series, Ended, Canceled, In Production, or Pilot status."
+                      />
                       <SearchableSelect
                         options={[{ value: '', label: 'Any' }, ...tvStatuses]}
                         value={localCatalog?.filters?.tvStatus || ''}
@@ -1080,7 +1441,10 @@ export function CatalogEditor({
                       />
                     </div>
                     <div className="filter-group">
-                      <label className="filter-label">Show Type</label>
+                      <LabelWithTooltip 
+                        label="Show Type" 
+                        tooltip="Format of TV show: Scripted (regular series), Reality, Documentary, Talk Show, News, Miniseries, etc."
+                      />
                       <SearchableSelect
                         options={[{ value: '', label: 'Any' }, ...tvTypes]}
                         value={localCatalog?.filters?.tvType || ''}
@@ -1108,6 +1472,9 @@ export function CatalogEditor({
               <h4 className="filter-section-title">Where to Watch</h4>
               <span className="filter-section-desc">Filter by streaming services and original networks</span>
             </div>
+            {getFilterCountForSection('streaming') > 0 && (
+              <span className="filter-count-badge">{getFilterCountForSection('streaming')}</span>
+            )}
             {expandedSections.streaming ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
           {expandedSections.streaming && (
@@ -1115,16 +1482,18 @@ export function CatalogEditor({
               {/* TV Networks - only show for TV content */}
               {localCatalog?.type === 'series' && tvNetworks.length > 0 && (
                 <div className="filter-group" style={{ marginBottom: '16px' }}>
-                  <label className="filter-label">
-                    Original Networks
-                    <span className="filter-label-hint">Where the show originally aired (HBO, Netflix Originals, etc.)</span>
-                  </label>
+                  <LabelWithTooltip 
+                    label="Original Networks" 
+                    tooltip="Filter by the TV network that originally produced/aired the show (HBO, NBC, Netflix Originals, etc.). Different from streaming services."
+                  />
+                  <span className="filter-label-hint">Where the show originally aired (HBO, Netflix Originals, etc.)</span>
                   <MultiSelect
-                    options={tvNetworks.map(n => ({ code: String(n.id), name: n.name }))}
+                    options={tvNetworkOptions.map(n => ({ code: String(n.id), name: n.name }))}
                     value={(localCatalog?.filters?.withNetworks || '').split('|').filter(Boolean)}
                     onChange={(values) => handleFiltersChange('withNetworks', values.join('|'))}
                     placeholder="Any network"
                     searchPlaceholder="Search networks..."
+                    onSearch={handleTVNetworkSearch}
                     labelKey="name"
                     valueKey="code"
                   />
@@ -1134,7 +1503,10 @@ export function CatalogEditor({
               {/* Streaming availability filters */}
               <div className="filter-two-col">
                 <div className="filter-group">
-                  <label className="filter-label">Your Region</label>
+                  <LabelWithTooltip 
+                    label="Your Region" 
+                    tooltip="Choose your country to see which streaming services have this content available in your area."
+                  />
                   <SearchableSelect
                     options={watchRegions.map(r => ({ code: r.iso_3166_1, name: r.english_name }))}
                     value={localCatalog?.filters?.watchRegion || ''}
@@ -1146,7 +1518,10 @@ export function CatalogEditor({
                   />
                 </div>
                 <div className="filter-group">
-                  <label className="filter-label">Availability Type</label>
+                  <LabelWithTooltip 
+                    label="Availability Type" 
+                    tooltip="How to access: Subscription (e.g., Netflix, Disney+), Free with ads, Rent, Buy, or Free on ad-supported platforms."
+                  />
                   <MultiSelect
                     options={monetizationTypes}
                     value={localCatalog?.filters?.watchMonetizationTypes || []}
@@ -1159,31 +1534,70 @@ export function CatalogEditor({
               </div>
 
               <div style={{ marginTop: '16px' }}>
-                <label className="filter-label">
-                  Streaming Services
-                  <span className="filter-label-hint">
-                    {localCatalog?.filters?.watchRegion && watchProviders.length > 0
-                      ? 'Where you can currently watch in your region'
-                      : 'Select your region to see available services'}
-                  </span>
-                </label>
+                <LabelWithTooltip 
+                  label="Streaming Services" 
+                  tooltip="Filter by specific streaming platforms (Netflix, Amazon Prime, Hulu, etc.) where content is available in your selected region."
+                />
+                <span className="filter-label-hint">
+                  {localCatalog?.filters?.watchRegion && watchProviders.length > 0
+                    ? 'Where you can currently watch in your region'
+                    : 'Select your region to see available services'}
+                </span>
                 {localCatalog?.filters?.watchRegion && watchProviders.length > 0 ? (
-                  <div className="provider-grid">
-                    {watchProviders.slice(0, 20).map((provider) => (
-                      <div
-                        key={provider.id}
-                        className={`provider-item ${(localCatalog?.filters?.watchProviders || []).includes(provider.id) ? 'selected' : ''}`}
-                        onClick={() => handleProviderToggle(provider.id)}
-                      >
-                        {provider.logo ? (
-                          <img src={provider.logo} alt={provider.name} className="provider-logo" />
-                        ) : (
-                          <div className="provider-logo" style={{ background: 'var(--bg-tertiary)' }} />
-                        )}
-                        <span className="provider-name">{provider.name}</span>
+                  <>
+                    <div className="provider-search">
+                      <input
+                        type="text"
+                        value={providerSearch}
+                        onChange={(e) => setProviderSearch(e.target.value)}
+                        placeholder="Search streaming services..."
+                        className="provider-search-input"
+                      />
+                      {providerSearch && (
+                        <button
+                          type="button"
+                          className="provider-search-clear"
+                          onClick={() => setProviderSearch('')}
+                          aria-label="Clear provider search"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="provider-grid-wrap">
+                      <div className="provider-grid">
+                        {(() => {
+                          const filtered = providerSearch
+                            ? watchProviders.filter(p => p?.name?.toLowerCase().includes(providerSearch.trim().toLowerCase()))
+                            : watchProviders;
+
+                          if (filtered.length === 0) {
+                            return (
+                              <div className="filter-hint" style={{ gridColumn: '1 / -1', marginTop: '4px' }}>
+                                No streaming services match your search.
+                              </div>
+                            );
+                          }
+
+                          return filtered.map((provider) => (
+                            <div
+                              key={provider.id}
+                              className={`provider-item ${(localCatalog?.filters?.watchProviders || []).includes(provider.id) ? 'selected' : ''}`}
+                              onClick={() => handleProviderToggle(provider.id)}
+                            >
+                              {provider.logo ? (
+                                <img src={provider.logo} alt={provider.name} className="provider-logo" />
+                              ) : (
+                                <div className="provider-logo" style={{ background: 'var(--bg-tertiary)' }} />
+                              )}
+                              <span className="provider-name">{provider.name}</span>
+                            </div>
+                          ));
+                        })()}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  </>
                 ) : (
                   <div className="filter-hint" style={{ marginTop: '8px', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
                     Choose a region above to see streaming services available in that area
@@ -1202,10 +1616,13 @@ export function CatalogEditor({
       <Sparkles size={18} />
       <div className="filter-section-title-group">
         <h4 className="filter-section-title">Genres</h4>
-        {selectedGenres.length > 0 && (
-          <span className="filter-section-desc">{selectedGenres.length} selected</span>
-        )}
+        <span className="filter-section-desc">
+          {selectedGenres.length > 0 ? `${selectedGenres.length} selected` : 'Select genres to include/exclude'}
+        </span>
       </div>
+      {getFilterCountForSection('genres') > 0 && (
+        <span className="filter-count-badge">{getFilterCountForSection('genres')}</span>
+      )}
       {expandedSections.genres ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
     </button>
 
@@ -1224,47 +1641,92 @@ export function CatalogEditor({
           </div>
         ) : (
           <>
-            {/* Include Genres Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <label className="filter-label" style={{ marginBottom: '8px', display: 'block' }}>
-                Include Genres
-                <span className="filter-label-hint"> Show content from these genres</span>
-              </label>
-              <div className="genre-grid">
-                {currentGenres.map((genre) => (
-                  <button
-                    key={genre.id}
-                    type="button"
-                    className={`genre-chip ${selectedGenres.includes(genre.id) ? 'selected' : ''}`}
-                    onClick={() => handleIncludeGenreClick(genre.id)}
-                  >
-                    <span className="genre-chip-label">{genre.name}</span>
-                    {selectedGenres.includes(genre.id) && <Check size={14} />}
-                  </button>
-                ))}
-              </div>
+            {/* Tri-State Genre Selection */}
+            <div className="genre-instructions">
+              <span className="genre-instruction-item">
+                <span className="genre-dot neutral"></span> Click to include
+              </span>
+              <span className="genre-instruction-item">
+                <span className="genre-dot include"></span> Click again to exclude
+              </span>
+              <span className="genre-instruction-item">
+                <span className="genre-dot exclude"></span> Click again to clear
+              </span>
             </div>
 
-            {/* Exclude Genres Section */}
-            <div>
-              <label className="filter-label" style={{ marginBottom: '8px', display: 'block' }}>
-                Exclude Genres
-                <span className="filter-label-hint"> Hide content from these genres</span>
-              </label>
-              <div className="genre-grid">
-                {currentGenres.map((genre) => (
+            {/* Genre Match Mode - Only show when 2+ genres selected */}
+            {selectedGenres.length >= 2 && (
+              <div className="genre-match-mode-box">
+                <div className="genre-match-mode-label">
+                  How should multiple genres be matched?
+                </div>
+                <div className="genre-match-mode-options">
+                  <label className={`genre-match-option ${(localCatalog?.filters?.genreMatchMode || 'any') === 'any' ? 'active' : ''}`}>
+                    <input
+                      type="radio"
+                      name="genreMatchMode"
+                      value="any"
+                      checked={(localCatalog?.filters?.genreMatchMode || 'any') === 'any'}
+                      onChange={() => handleFiltersChange('genreMatchMode', 'any')}
+                    />
+                    <span className="option-text">Match ANY (more results)</span>
+                  </label>
+                  <label className={`genre-match-option ${localCatalog?.filters?.genreMatchMode === 'all' ? 'active' : ''}`}>
+                    <input
+                      type="radio"
+                      name="genreMatchMode"
+                      value="all"
+                      checked={localCatalog?.filters?.genreMatchMode === 'all'}
+                      onChange={() => handleFiltersChange('genreMatchMode', 'all')}
+                    />
+                    <span className="option-text">Match ALL (specific results)</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            <div className="genre-grid tristate">
+              {currentGenres.map((genre) => {
+                const state = getGenreState(genre.id);
+                return (
                   <button
                     key={genre.id}
                     type="button"
-                    className={`genre-chip exclude ${excludedGenres.includes(genre.id) ? 'selected' : ''}`}
-                    onClick={() => handleExcludeGenreClick(genre.id)}
+                    className={`genre-chip tristate ${state}`}
+                    onClick={() => handleTriStateGenreClick(genre.id)}
+                    title={state === 'neutral' ? 'Click to include' : state === 'include' ? 'Click to exclude' : 'Click to clear'}
                   >
                     <span className="genre-chip-label">{genre.name}</span>
-                    {excludedGenres.includes(genre.id) && <X size={14} />}
+                    {state === 'include' && <Check size={14} />}
+                    {state === 'exclude' && <X size={14} />}
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
+
+            {/* Summary of selected genres */}
+            {(selectedGenres.length > 0 || excludedGenres.length > 0) && (
+              <div className="genre-summary">
+                {selectedGenres.length > 0 && (
+                  <div className="genre-summary-row include">
+                    <Check size={14} />
+                    <span>Including: {selectedGenres.map(id => {
+                      const g = currentGenres.find(g => g.id === id);
+                      return g?.name || id;
+                    }).join(', ')}</span>
+                  </div>
+                )}
+                {excludedGenres.length > 0 && (
+                  <div className="genre-summary-row exclude">
+                    <X size={14} />
+                    <span>Excluding: {excludedGenres.map(id => {
+                      const g = currentGenres.find(g => g.id === id);
+                      return g?.name || id;
+                    }).join(', ')}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1281,13 +1743,19 @@ export function CatalogEditor({
               <h4 className="filter-section-title">People & Studios</h4>
               <span className="filter-section-desc">Filter by cast, crew, or production company</span>
             </div>
+            {getFilterCountForSection('people') > 0 && (
+              <span className="filter-count-badge">{getFilterCountForSection('people')}</span>
+            )}
             {expandedSections.people ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
           {expandedSections.people && (
             <div className="filter-section-content">
               <div className="filter-stack">
                 <div className="filter-group">
-                  <label className="filter-label">Cast & Crew</label>
+                  <LabelWithTooltip 
+                    label="Cast & Crew" 
+                    tooltip="Find content featuring specific actors, directors, writers, or other crew members. Results will include their credited works."
+                  />
                   <SearchInput
                     type="person"
                     placeholder="Search actors, directors..."
@@ -1298,7 +1766,10 @@ export function CatalogEditor({
                   />
                 </div>
                 <div className="filter-group">
-                  <label className="filter-label">Studios / Companies</label>
+                  <LabelWithTooltip 
+                    label="Studios / Companies" 
+                    tooltip="Filter by production companies (e.g., Warner Bros, Pixar, A24). Shows content produced or distributed by these studios."
+                  />
                   <SearchInput
                     type="company"
                     placeholder="Search production companies..."
@@ -1309,7 +1780,10 @@ export function CatalogEditor({
                   />
                 </div>
                 <div className="filter-group">
-                  <label className="filter-label">Keywords / Tags</label>
+                  <LabelWithTooltip 
+                    label="Keywords / Tags" 
+                    tooltip="Search by themes or topics (e.g., 'time travel', 'heist', 'based on novel'). More specific than genres for finding particular story elements."
+                  />
                   <SearchInput
                     type="keyword"
                     placeholder="Search keywords to include..."
@@ -1320,10 +1794,11 @@ export function CatalogEditor({
                   />
                 </div>
                 <div className="filter-group">
-                  <label className="filter-label">
-                    Exclude Keywords
-                    <span className="filter-label-hint">Results will NOT contain these keywords</span>
-                  </label>
+                  <LabelWithTooltip 
+                    label="Exclude Keywords" 
+                    tooltip="Filter OUT content with these themes/topics. Results will NOT contain any of the selected keywords."
+                  />
+                  <span className="filter-label-hint">Results will NOT contain these keywords</span>
                   <SearchInput
                     type="keyword"
                     placeholder="Search keywords to exclude..."
@@ -1334,10 +1809,11 @@ export function CatalogEditor({
                   />
                 </div>
                 <div className="filter-group">
-                  <label className="filter-label">
-                    Exclude Companies
-                    <span className="filter-label-hint">Filter out content from these studios</span>
-                  </label>
+                  <LabelWithTooltip 
+                    label="Exclude Companies" 
+                    tooltip="Filter OUT content from specific studios/production companies. Useful to avoid certain distributors or production styles."
+                  />
+                  <span className="filter-label-hint">Filter out content from these studios</span>
                   <SearchInput
                     type="company"
                     placeholder="Search companies to exclude..."
@@ -1373,7 +1849,10 @@ export function CatalogEditor({
                   <div className={`checkbox ${localCatalog?.filters?.imdbOnly ? 'checked' : ''}`}>
                     {localCatalog?.filters?.imdbOnly && <Check size={14} />}
                   </div>
-                  <span>Only show items with IMDB IDs</span>
+                  <LabelWithTooltip 
+                    label="Only show items with IMDB IDs" 
+                    tooltip="Filter to only content that has an IMDB entry. Ensures compatibility with addons that require IMDB IDs."
+                  />
                 </label>
                 {/* Include Adult - Only for discover/random */}
                 {supportsFullFilters && (
@@ -1385,7 +1864,10 @@ export function CatalogEditor({
                   <div className={`checkbox ${localCatalog?.filters?.includeAdult ? 'checked' : ''}`}>
                     {localCatalog?.filters?.includeAdult && <Check size={14} />}
                   </div>
-                  <span>Include adult content</span>
+                  <LabelWithTooltip 
+                    label="Include adult content" 
+                    tooltip="Include adult/18+ rated content in results. Disabled by default."
+                  />
                 </label>
                 )}
               </div>
@@ -1393,86 +1875,103 @@ export function CatalogEditor({
           )}
         </div>
 
-        {/* Preview Section */}
+        {/* Mobile Preview Button - at end of filters for easy access */}
+        <div className="mobile-preview-btn-container">
+          <button 
+            className="btn btn-secondary mobile-preview-btn"
+            onClick={loadPreview}
+            disabled={previewLoading}
+          >
+            {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
+            Preview
+          </button>
+        </div>
+      </div>
+      </div>
+
+      {/* Preview Panel - Separate Box */}
+      <div className="preview-panel-container">
         <div className="preview-section">
-          <div className="preview-header">
-            <h4 className="preview-title">
-              <Eye size={18} />
-              Preview
-            </h4>
-            {previewData && (
-              <span className="preview-count">
-                {previewData.totalResults?.toLocaleString()} results
-              </span>
+          <div className="preview-inner">
+            <div className="preview-header">
+              <h4 className="preview-title">
+                <Eye size={18} />
+                Preview
+              </h4>
+              {previewData && (
+                <span className="preview-count">
+                  {previewData.totalResults?.toLocaleString()} results
+                </span>
+              )}
+            </div>
+
+            {previewLoading && (
+              <div className="preview-loading">
+                <Loader size={32} className="animate-spin" />
+                <p>Loading preview...</p>
+              </div>
+            )}
+
+            {!previewLoading && previewError && (
+              <div className="preview-error">
+                <p>{previewError}</p>
+                <button className="btn btn-secondary" onClick={loadPreview}>
+                  <RefreshCw size={16} />
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!previewLoading && !previewError && previewData && (
+              <div className="preview-grid">
+                {previewData.metas.map((item) => {
+                  // Build TMDB URL - use tmdbId if available, otherwise extract from id
+                  const tmdbId = item.tmdbId || (item.id?.startsWith('tmdb:') ? item.id.replace('tmdb:', '') : null);
+                  const tmdbUrl = tmdbId 
+                    ? `https://www.themoviedb.org/${item.type === 'series' ? 'tv' : 'movie'}/${tmdbId}`
+                    : null;
+                  
+                  return (
+                    <a 
+                      key={item.id} 
+                      className="preview-card"
+                      href={tmdbUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`View "${item.name}" on TMDB`}
+                    >
+                      {item.poster ? (
+                        <img src={item.poster} alt={item.name} loading="lazy" />
+                      ) : (
+                        <div className="preview-card-placeholder">
+                          <ImageOff size={24} />
+                        </div>
+                      )}
+                      <div className="preview-card-overlay">
+                        <div className="preview-card-title">{item.name}</div>
+                        <div className="preview-card-meta">
+                          {item.releaseInfo && <span>{item.releaseInfo}</span>}
+                          {item.imdbRating && (
+                            <span className="preview-card-rating">
+                              <Star size={10} fill="currentColor" />
+                              {item.imdbRating}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+
+            {!previewLoading && !previewError && !previewData && (
+              <div className="preview-empty">
+                <Eye size={32} />
+                <p>Configure filters and click Preview</p>
+              </div>
             )}
           </div>
-
-          {previewLoading && (
-            <div className="preview-loading">
-              <Loader size={32} className="animate-spin" />
-              <p>Loading preview...</p>
-            </div>
-          )}
-
-          {!previewLoading && previewError && (
-            <div className="preview-error">
-              <p>{previewError}</p>
-              <button className="btn btn-secondary" onClick={loadPreview}>
-                <RefreshCw size={16} />
-                Retry
-              </button>
-            </div>
-          )}
-
-          {!previewLoading && !previewError && previewData && (
-            <div className="preview-grid">
-              {previewData.metas.map((item) => {
-                // Build TMDB URL - use tmdbId if available, otherwise extract from id
-                const tmdbId = item.tmdbId || (item.id?.startsWith('tmdb:') ? item.id.replace('tmdb:', '') : null);
-                const tmdbUrl = tmdbId 
-                  ? `https://www.themoviedb.org/${item.type === 'series' ? 'tv' : 'movie'}/${tmdbId}`
-                  : null;
-                
-                return (
-                  <a 
-                    key={item.id} 
-                    className="preview-card"
-                    href={tmdbUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={`View "${item.name}" on TMDB`}
-                  >
-                    {item.poster ? (
-                      <img src={item.poster} alt={item.name} loading="lazy" />
-                    ) : (
-                      <div className="preview-card-placeholder">
-                        <ImageOff size={24} />
-                      </div>
-                    )}
-                    <div className="preview-card-overlay">
-                      <div className="preview-card-title">{item.name}</div>
-                      <div className="preview-card-meta">
-                        {item.releaseInfo && <span>{item.releaseInfo}</span>}
-                        {item.imdbRating && (
-                          <span className="preview-card-rating">
-                            <Star size={10} fill="currentColor" />
-                            {item.imdbRating}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </a>
-                );
-              })}
-            </div>
-          )}
-
-          {!previewLoading && !previewError && !previewData && (
-            <div className="preview-empty">
-              <Eye size={32} />
-              <p>Configure filters and click Preview</p>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Tooltip } from './Tooltip';
 
 export function RangeSlider({
   min = 0,
@@ -7,6 +8,7 @@ export function RangeSlider({
   value = [min, max],
   onChange,
   label,
+  tooltip,
   formatValue = (v) => v,
   showInputs = false,
 }) {
@@ -39,7 +41,10 @@ export function RangeSlider({
     <div className="range-slider">
       {label && (
         <div className="range-slider-header">
-          <span className="range-slider-label">{label}</span>
+          <span className="range-slider-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {label}
+            {tooltip && <Tooltip text={tooltip} />}
+          </span>
           <span className="range-slider-value">
             {formatValue(localValue[0])} — {formatValue(localValue[1])}
           </span>
@@ -111,6 +116,7 @@ export function SingleSlider({
   value = min,
   onChange,
   label,
+  tooltip,
   formatValue = (v) => v,
 }) {
   const [localValue, setLocalValue] = useState(value);
@@ -131,7 +137,10 @@ export function SingleSlider({
     <div className="range-slider">
       {label && (
         <div className="range-slider-header">
-          <span className="range-slider-label">{label}</span>
+          <span className="range-slider-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {label}
+            {tooltip && <Tooltip text={tooltip} />}
+          </span>
           <span className="range-slider-value">{formatValue(localValue)}</span>
         </div>
       )}

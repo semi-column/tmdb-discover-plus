@@ -29,14 +29,19 @@ let genreCache = { movie: null, tv: null };
 
 // Load static fallback genre mapping from JSON
 let staticGenreMap = { movie: {}, tv: {} };
-  try {
-    // Resolve path relative to this module so it works regardless of CWD
-    const genresPath = path.join(__dirname, 'tmdb_genres.json');
-    const raw = fs.readFileSync(genresPath, 'utf8');
-    staticGenreMap = JSON.parse(raw);
-  } catch (err) {
-    log.warn('Could not load static TMDB genre mapping', { error: err.message });
-  }
+try {
+  // Resolve path relative to this module so it works regardless of CWD
+  const genresPath = path.join(__dirname, 'tmdb_genres.json');
+  const raw = fs.readFileSync(genresPath, 'utf8');
+  staticGenreMap = JSON.parse(raw);
+} catch (err) {
+  log.warn('Could not load static TMDB genre mapping', { error: err.message });
+}
+
+function redactTmdbUrl(urlString) {
+  if (typeof urlString !== 'string') return urlString;
+  return urlString.replace(/([?&]api_key=)[^&\s]+/gi, '$1[REDACTED]');
+}
 
 /**
  * Make a request to TMDB API
@@ -58,7 +63,7 @@ async function tmdbFetch(endpoint, apiKey, params = {}) {
   try {
     // Optional debug logging of full TMDB request URL
     if (process.env.DEBUG_TMDB === '1') {
-      log.debug('TMDB request', { url: url.toString() });
+      log.debug('TMDB request', { url: redactTmdbUrl(url.toString()) });
     }
 
     const response = await fetch(url.toString(), { agent: httpsAgent });
@@ -72,7 +77,9 @@ async function tmdbFetch(endpoint, apiKey, params = {}) {
     cache.set(cacheKey, data);
     return data;
   } catch (error) {
-    log.error('TMDB fetch error', { error: error.message });
+    // Note: node-fetch often includes the full URL in the error message.
+    // The logger sanitization also redacts secrets, but we redact here too for defense-in-depth.
+    log.error('TMDB fetch error', { error: redactTmdbUrl(error.message) });
     throw error;
   }
 }
@@ -112,10 +119,12 @@ export async function discover(apiKey, options = {}) {
     ratingMax,
     sortBy = 'popularity.desc',
     language,
+    displayLanguage,
     originCountry,
     includeAdult = false,
     voteCountMin = 100,
     page = 1,
+    genreMatchMode = 'any', // 'any' (OR) or 'all' (AND)
     // Movie-specific
     releaseDateFrom,
     releaseDateTo,
@@ -159,10 +168,12 @@ export async function discover(apiKey, options = {}) {
     'vote_count.gte': voteCountMin,
   };
 
-  // Genres: use pipe-separated list to request OR semantics from TMDB
-  // (TMDB accepts comma for AND, pipe '|' for OR)
+  // Genres: use pipe-separated list for OR, comma for AND
+  // TMDB accepts comma (,) for AND logic, pipe (|) for OR logic
+  // Default to OR (pipe) for backward compatibility unless explicitly set to 'all'
   if (genres.length > 0) {
-    params.with_genres = genres.join('|');
+    const separator = genreMatchMode === 'all' ? ',' : '|';
+    params.with_genres = genres.join(separator);
   }
   if (excludeGenres.length > 0) {
     params.without_genres = excludeGenres.join(',');
@@ -181,8 +192,11 @@ export async function discover(apiKey, options = {}) {
   if (ratingMin) params['vote_average.gte'] = ratingMin;
   if (ratingMax) params['vote_average.lte'] = ratingMax;
 
-  // Language filter
+  // Original language filter
   if (language) params.with_original_language = language;
+
+  // Display language (localize titles/overviews where available)
+  if (displayLanguage) params.language = displayLanguage;
 
   // Origin country
   if (originCountry) params.with_origin_country = originCountry;
@@ -270,11 +284,12 @@ export async function discover(apiKey, options = {}) {
  * These use dedicated TMDB endpoints instead of /discover
  */
 export async function fetchSpecialList(apiKey, listType, type = 'movie', options = {}) {
-  const { page = 1, language, region } = options;
+  const { page = 1, language, displayLanguage, region } = options;
   const mediaType = type === 'series' ? 'tv' : 'movie';
   
   const params = { page };
-  if (language) params.language = language;
+  const languageParam = displayLanguage || language;
+  if (languageParam) params.language = languageParam;
   if (region) params.region = region;
 
   let endpoint;
@@ -360,7 +375,16 @@ export async function getDetails(apiKey, tmdbId, type = 'movie') {
  */
 export async function search(apiKey, query, type = 'movie', page = 1) {
   const mediaType = type === 'series' ? 'tv' : 'movie';
-  return tmdbFetch(`/search/${mediaType}`, apiKey, { query, page });
+  // TMDB supports language localization on search as well
+  const params = { query, page };
+  // Backward-compatible: allow passing an options object as the 5th argument
+  // eslint-disable-next-line prefer-rest-params
+  const maybeOptions = arguments.length >= 5 ? arguments[4] : undefined;
+  const displayLanguage = maybeOptions?.displayLanguage;
+  const language = maybeOptions?.language;
+  const languageParam = displayLanguage || language;
+  if (languageParam) params.language = languageParam;
+  return tmdbFetch(`/search/${mediaType}`, apiKey, params);
 }
 
 /**
@@ -564,14 +588,46 @@ export async function getKeywordById(apiKey, id) {
  * Get TV networks list
  */
 export async function getNetworks(apiKey, query) {
-  // TMDB doesn't have a networks list endpoint, so we search
-  const data = await tmdbFetch('/search/company', apiKey, { query });
-  // Filter to only include broadcasting networks (heuristic)
-  return data.results?.slice(0, 10).map(network => ({
-    id: network.id,
-    name: network.name,
-    logoPath: network.logo_path ? `${TMDB_IMAGE_BASE}/w185${network.logo_path}` : null
-  })) || [];
+  // TMDB doesn't provide a general "list networks" or "search networks" endpoint.
+  // The most reliable way to find a network by name is:
+  //  1) Search TV shows
+  //  2) Pull networks from TV show details (which contain network IDs + logos)
+  const q = String(query || '').trim();
+  if (!apiKey || !q) return [];
+
+  const search = await tmdbFetch('/search/tv', apiKey, { query: q, page: 1, include_adult: false });
+  const tvIds = (search.results || []).slice(0, 12).map(r => r?.id).filter(Boolean);
+  if (tvIds.length === 0) return [];
+
+  const needle = q.toLowerCase();
+  const byId = new Map();
+
+  // Fetch a handful of TV details sequentially to reduce rate spikes while typing.
+  for (const tvId of tvIds) {
+    try {
+      const details = await tmdbFetch(`/tv/${tvId}`, apiKey);
+      const networks = Array.isArray(details?.networks) ? details.networks : [];
+
+      for (const n of networks) {
+        if (!n?.id || !n?.name) continue;
+        if (!String(n.name).toLowerCase().includes(needle)) continue;
+        const key = String(n.id);
+        if (byId.has(key)) continue;
+        byId.set(key, {
+          id: n.id,
+          name: n.name,
+          logoPath: n.logo_path ? `${TMDB_IMAGE_BASE}/w185${n.logo_path}` : null,
+        });
+        if (byId.size >= 10) break;
+      }
+
+      if (byId.size >= 10) break;
+    } catch {
+      // Ignore per-title failures; continue best-effort.
+    }
+  }
+
+  return Array.from(byId.values());
 }
 
 /**

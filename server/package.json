@@ -1,14 +1,13 @@
 {
   "name": "tmdb-discover-plus",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "TMDB Discover+ - Custom Catalog Builder for Stremio",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node tests/run-tests.js",
-    "test:only": "node tests/stremio-client.test.js"
+    "test": "node tests/run-tests.js"
   },
   "keywords": ["stremio", "addon", "tmdb", "catalog"],
   "author": "",

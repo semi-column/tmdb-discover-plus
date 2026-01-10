@@ -121,9 +121,17 @@ a:hover {
 
 /* Utility Classes */
 .container {
-  max-width: 1400px;
+  width: 100%;
+  max-width: 1800px;
   margin: 0 auto;
   padding: 0 24px;
+}
+
+/* Fluid container for large screens */
+@media (min-width: 1800px) {
+  .container {
+    max-width: calc(100% - 100px);
+  }
 }
 
 .flex {

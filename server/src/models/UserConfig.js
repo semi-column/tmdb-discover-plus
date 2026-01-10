@@ -26,6 +26,7 @@ const catalogSchema = new mongoose.Schema({
     ratingMax: Number,
     sortBy: { type: String, default: 'popularity.desc' },
     language: String,
+    displayLanguage: String,
     originCountry: String,
     includeAdult: { type: Boolean, default: false },
     imdbOnly: { type: Boolean, default: true },

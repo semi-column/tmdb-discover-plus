@@ -15,7 +15,7 @@ const router = Router();
 const ADDON_ID = 'community.tmdb.discover.plus';
 const ADDON_NAME = 'TMDB Discover+';
 const ADDON_DESCRIPTION = 'Create custom movie and TV catalogs with powerful TMDB filters';
-const ADDON_VERSION = '2.0.0';
+const ADDON_VERSION = '2.1.0';
 
 /**
  * Resolve dynamic date presets to actual dates.
@@ -99,8 +99,6 @@ function resolveDynamicDatePreset(filters, type) {
   return resolved;
 }
 
-/**
- * TMDB returns 20 items per page.
 /**
  * TMDB returns 20 items per page.
  * This constant is used in the manifest (pageSize) to tell Stremio
@@ -450,7 +448,9 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
 
     // If search query provided, use search instead of discover
     if (search) {
-      result = await tmdb.search(config.tmdbApiKey, search, type, page);
+      result = await tmdb.search(config.tmdbApiKey, search, type, page, {
+        displayLanguage: resolvedFilters?.displayLanguage || catalogConfig.filters?.displayLanguage,
+      });
     } else {
       // Check if using a special list type (trending, now playing, etc.)
       const listType = resolvedFilters?.listType || catalogConfig.filters?.listType;
@@ -460,6 +460,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
         // Use special list endpoint (pass language/region from resolvedFilters falling back to stored filters)
         result = await tmdb.fetchSpecialList(config.tmdbApiKey, listType, type, {
           page,
+          displayLanguage: resolvedFilters?.displayLanguage || catalogConfig.filters?.displayLanguage,
           language: resolvedFilters?.language || catalogConfig.filters?.language,
           region: resolvedFilters?.originCountry || catalogConfig.filters?.originCountry,
         });
