@@ -1259,8 +1259,6 @@ export function CatalogEditor({
                   </p>
                 </div>
               )}
-
-              {/* Minimum Votes Slider - Only for discover/random */}
               {supportsFullFilters && (
                 <div style={{ marginTop: '20px' }}>
                   <SingleSlider
@@ -1278,7 +1276,6 @@ export function CatalogEditor({
             </div>
           )}
         </div>        )}
-        {/* Release/Air Date Section - Only for discover/random */}
         {supportsFullFilters && (
         <div className="filter-section">
           <button className="filter-section-header" onClick={() => toggleSection('release')}>
@@ -1462,8 +1459,6 @@ export function CatalogEditor({
           )}
         </div>
         )}
-
-        {/* Streaming Section - Only for discover/random */}
         {supportsFullFilters && (
         <div className="filter-section">
           <button className="filter-section-header" onClick={() => toggleSection('streaming')}>
@@ -1608,8 +1603,6 @@ export function CatalogEditor({
           )}
         </div>
         )}
-
-        {/* Genres Section - Only for discover/random */}
         {supportsFullFilters && (
   <div className="filter-section">
     <button className="filter-section-header" onClick={() => toggleSection('genres')}>
@@ -1733,8 +1726,6 @@ export function CatalogEditor({
     )}
   </div>
 )}
-
-        {/* People & Studios Section - Only for discover/random */}
         {supportsFullFilters && (
         <div className="filter-section">
           <button className="filter-section-header" onClick={() => toggleSection('people')}>
@@ -1854,7 +1845,6 @@ export function CatalogEditor({
                     tooltip="Filter to only content that has an IMDB entry. Ensures compatibility with addons that require IMDB IDs."
                   />
                 </label>
-                {/* Include Adult - Only for discover/random */}
                 {supportsFullFilters && (
                 <label 
                   className="checkbox-label-row"

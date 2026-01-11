@@ -12,7 +12,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd }) {
     
     onAdd({
       name: name.trim(),
-      type: 'movie', // Default to movie, user can change in editor
+      type: 'movie',
       filters: {
         genres: [],
         sortBy: 'popularity.desc',

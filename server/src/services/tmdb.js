@@ -10,8 +10,6 @@ import { createLogger } from '../utils/logger.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const log = createLogger('tmdb');
 
-// Allow disabling TLS verification via env var (for corporate proxies)
-// WARNING: Only enable this if absolutely necessary, as it weakens security
 const httpsAgent = new https.Agent({
   rejectUnauthorized: process.env.DISABLE_TLS_VERIFY !== 'true'
 });
@@ -22,15 +20,14 @@ const cache = new NodeCache({
 });
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+const TMDB_WEBSITE_BASE_URL = 'https://www.themoviedb.org';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
 // Genre mappings (will be populated from API)
 let genreCache = { movie: null, tv: null };
 
-// Load static fallback genre mapping from JSON
 let staticGenreMap = { movie: {}, tv: {} };
 try {
-  // Resolve path relative to this module so it works regardless of CWD
   const genresPath = path.join(__dirname, 'tmdb_genres.json');
   const raw = fs.readFileSync(genresPath, 'utf8');
   staticGenreMap = JSON.parse(raw);
@@ -61,7 +58,6 @@ async function tmdbFetch(endpoint, apiKey, params = {}) {
   if (cached) return cached;
 
   try {
-    // Optional debug logging of full TMDB request URL
     if (process.env.DEBUG_TMDB === '1') {
       log.debug('TMDB request', { url: redactTmdbUrl(url.toString()) });
     }
@@ -77,11 +73,86 @@ async function tmdbFetch(endpoint, apiKey, params = {}) {
     cache.set(cacheKey, data);
     return data;
   } catch (error) {
-    // Note: node-fetch often includes the full URL in the error message.
-    // The logger sanitization also redacts secrets, but we redact here too for defense-in-depth.
     log.error('TMDB fetch error', { error: redactTmdbUrl(error.message) });
     throw error;
   }
+}
+
+function normalizeLoose(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ') // keep boundaries
+    .trim();
+}
+
+function matchesLoose(haystack, needle) {
+  const h = normalizeLoose(haystack);
+  const n = normalizeLoose(needle);
+  if (!n) return false;
+  return h.includes(n);
+}
+
+async function tmdbWebsiteFetchJson(endpoint, params = {}) {
+  const url = new URL(`${TMDB_WEBSITE_BASE_URL}${endpoint}`);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  const cacheKey = `tmdb_site:${url.toString()}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+  const response = await fetch(url.toString(), {
+    agent: httpsAgent,
+    headers: {
+      'Accept': 'application/json, text/plain, */*',
+      'X-Requested-With': 'XMLHttpRequest',
+      // Lightweight UA to avoid some overly aggressive bot blocks.
+      'User-Agent': 'tmdb-discover-plus/2.x',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`TMDB website search error: ${response.status}`);
+  }
+
+  const text = await response.text();
+  const trimmed = text.trim();
+  const data = trimmed ? JSON.parse(trimmed) : null;
+  cache.set(cacheKey, data);
+  return data;
+}
+
+async function getNetworksViaWebsite(query) {
+  const q = String(query || '').trim();
+  if (!q) return [];
+
+  const data = await tmdbWebsiteFetchJson('/search/remote/tv_network', {
+    language: 'en',
+    query: q,
+    value: q,
+    include_adult: 'false',
+  });
+
+  const results = Array.isArray(data?.results) ? data.results : [];
+  const filtered = results
+    .filter(r => r?.id && r?.name && matchesLoose(r.name, q))
+    .slice(0, 20)
+    .map(r => ({
+      id: r.id,
+      name: r.name,
+      logoPath: r.logo_path ? `${TMDB_IMAGE_BASE}/w185${r.logo_path}` : null,
+    }));
+
+  // De-dupe by id
+  const byId = new Map();
+  for (const n of filtered) {
+    const key = String(n.id);
+    if (!byId.has(key)) byId.set(key, n);
+  }
+  return Array.from(byId.values());
 }
 
 /**
@@ -324,17 +395,13 @@ export async function fetchSpecialList(apiKey, listType, type = 'movie', options
       endpoint = `/${mediaType}/popular`;
       break;
     case 'random':
-      // Random: fetch from a random page (1-500, TMDB's max)
-      // We'll get total_pages first from a discover query, then pick random
       const discoverResult = await discover(apiKey, { type, page: 1, ...options });
       const maxPage = Math.min(discoverResult.total_pages || 1, 500);
       const randomPage = Math.floor(Math.random() * maxPage) + 1;
       const randomResult = await discover(apiKey, { type, page: randomPage, ...options });
-      // Shuffle the results
       randomResult.results = shuffleArray(randomResult.results || []);
       return randomResult;
     default:
-      // Fallback to discover
       return discover(apiKey, { type, page, ...options });
   }
 
@@ -588,46 +655,9 @@ export async function getKeywordById(apiKey, id) {
  * Get TV networks list
  */
 export async function getNetworks(apiKey, query) {
-  // TMDB doesn't provide a general "list networks" or "search networks" endpoint.
-  // The most reliable way to find a network by name is:
-  //  1) Search TV shows
-  //  2) Pull networks from TV show details (which contain network IDs + logos)
   const q = String(query || '').trim();
   if (!apiKey || !q) return [];
-
-  const search = await tmdbFetch('/search/tv', apiKey, { query: q, page: 1, include_adult: false });
-  const tvIds = (search.results || []).slice(0, 12).map(r => r?.id).filter(Boolean);
-  if (tvIds.length === 0) return [];
-
-  const needle = q.toLowerCase();
-  const byId = new Map();
-
-  // Fetch a handful of TV details sequentially to reduce rate spikes while typing.
-  for (const tvId of tvIds) {
-    try {
-      const details = await tmdbFetch(`/tv/${tvId}`, apiKey);
-      const networks = Array.isArray(details?.networks) ? details.networks : [];
-
-      for (const n of networks) {
-        if (!n?.id || !n?.name) continue;
-        if (!String(n.name).toLowerCase().includes(needle)) continue;
-        const key = String(n.id);
-        if (byId.has(key)) continue;
-        byId.set(key, {
-          id: n.id,
-          name: n.name,
-          logoPath: n.logo_path ? `${TMDB_IMAGE_BASE}/w185${n.logo_path}` : null,
-        });
-        if (byId.size >= 10) break;
-      }
-
-      if (byId.size >= 10) break;
-    } catch {
-      // Ignore per-title failures; continue best-effort.
-    }
-  }
-
-  return Array.from(byId.values());
+  return getNetworksViaWebsite(q);
 }
 
 /**

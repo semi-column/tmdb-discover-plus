@@ -341,7 +341,6 @@ function App() {
 
   // Handle deleting a config from the dropdown
   const handleDeleteConfigFromDropdown = async (userId) => {
-    // Use config.apiKey or fallback to localStorage
     const apiKey = config.apiKey || localStorage.getItem('tmdb-stremio-apikey');
     
     if (!apiKey) {
@@ -352,8 +351,6 @@ function App() {
     try {
       await api.deleteConfig(userId, apiKey);
     } catch (err) {
-      // If 404, the config doesn't exist on server - that's fine, just remove from UI
-      // This handles "ghost" configs from stale memory stores
       if (!err.message?.includes('not found')) {
         console.error('Failed to delete config:', err);
         addToast('Failed to delete configuration', 'error');
@@ -362,7 +359,6 @@ function App() {
       console.log('Config not found on server, removing from local list:', userId);
     }
     
-    // Always remove from local list
     const remaining = userConfigs.filter(c => c.userId !== userId);
     setUserConfigs(remaining);
     

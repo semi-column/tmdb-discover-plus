@@ -74,7 +74,6 @@ function resolveDynamicDatePreset(filters, type) {
       break;
     }
     case 'upcoming': {
-      // Only for movies - next 6 months
       if (isMovie) {
         const sixMonthsLater = new Date(today);
         sixMonthsLater.setMonth(today.getMonth() + 6);
@@ -84,11 +83,9 @@ function resolveDynamicDatePreset(filters, type) {
       break;
     }
     default:
-      // Unknown preset, leave unchanged
       log.debug('Unknown date preset', { preset: filters.datePreset });
   }
 
-  // Remove datePreset from filters (not needed for TMDB API)
   delete resolved.datePreset;
 
   log.debug('Resolved dynamic date preset', { 
@@ -530,8 +527,6 @@ router.get('/tv-networks', (req, res) => {
   });
 
   const curated = (tmdb.TV_NETWORKS || []).map(normalizeNetwork);
-
-  // If no query, return curated list (fast, no TMDB key needed)
   if (!query) {
     return res.json(curated);
   }
@@ -539,7 +534,6 @@ router.get('/tv-networks', (req, res) => {
   const searchLower = String(query).toLowerCase();
   const curatedMatches = curated.filter(n => n.name.toLowerCase().includes(searchLower));
 
-  // If apiKey provided, augment results with TMDB search
   if (apiKey) {
     tmdb.getNetworks(apiKey, String(query))
       .then((remote) => {
@@ -552,13 +546,11 @@ router.get('/tv-networks', (req, res) => {
         res.json(Array.from(byId.values()));
       })
       .catch(() => {
-        // Graceful fallback: if TMDB search fails, still return curated matches
         res.json(curatedMatches);
       });
     return;
   }
 
-  // No apiKey: best effort local match against curated list
   return res.json(curatedMatches);
 });
 
@@ -573,17 +565,14 @@ router.post('/preview', async (req, res) => {
       return res.status(400).json({ error: 'API key required' });
     }
 
-    // Resolve dynamic date presets (e.g., "last_30_days" → actual dates from today)
     const resolvedFilters = resolveDynamicDatePreset(filters, type);
 
     let results;
     
-    // Check if using a special list type (trending, now playing, etc.)
     const listType = resolvedFilters?.listType;
     const isRandomSort = resolvedFilters?.sortBy === 'random';
     
     if (listType && listType !== 'discover') {
-      // Use special list endpoint
       results = await tmdb.fetchSpecialList(apiKey, listType, type, {
         page,
         displayLanguage: resolvedFilters?.displayLanguage,
@@ -591,11 +580,10 @@ router.post('/preview', async (req, res) => {
         region: resolvedFilters?.originCountry,
       });
     } else if (isRandomSort) {
-      // Random sort - fetch from random page and shuffle
       const discoverResult = await tmdb.discover(apiKey, {
         type,
         ...resolvedFilters,
-        sortBy: 'popularity.desc', // Use popularity for base query
+        sortBy: 'popularity.desc',
         page: 1,
       });
       const maxPage = Math.min(discoverResult.total_pages || 1, 500);
@@ -898,7 +886,6 @@ router.get('/configs', async (req, res) => {
       return res.status(400).json({ error: 'API key required' });
     }
     
-    // Validate API key format
     if (!isValidApiKeyFormat(apiKey)) {
       return res.status(400).json({ error: 'Invalid API key format' });
     }
@@ -909,7 +896,6 @@ router.get('/configs', async (req, res) => {
     
     if (isConnected()) {
       try {
-        // Find all configs with this API key from MongoDB
         configs = await UserConfig.find({ tmdbApiKey: apiKey }).lean();
         log.info('Found configs in MongoDB', { count: configs.length });
       } catch (err) {
@@ -917,7 +903,6 @@ router.get('/configs', async (req, res) => {
         throw err;
       }
     } else {
-      // Only use memory store if MongoDB is not connected
       log.warn('MongoDB not connected, using memory store');
       for (const [userId, config] of memoryStore.entries()) {
         if (config.tmdbApiKey === apiKey) {
@@ -926,7 +911,6 @@ router.get('/configs', async (req, res) => {
       }
     }
     
-    // Return simplified config list (don't expose API key)
     const response = configs.map(config => ({
       userId: config.userId,
       catalogCount: config.catalogs?.length || 0,
@@ -953,7 +937,6 @@ router.delete('/config/:userId', async (req, res) => {
     const { userId } = req.params;
     const { apiKey } = req.query;
     
-    // Validate userId format
     if (!isValidUserId(userId)) {
       return res.status(400).json({ error: 'Invalid user ID format' });
     }
@@ -961,7 +944,6 @@ router.delete('/config/:userId', async (req, res) => {
     log.info('Delete config request', { userId, hasApiKey: !!apiKey, dbConnected: isConnected() });
     
     if (isConnected()) {
-      // Use MongoDB
       const query = apiKey ? { userId, tmdbApiKey: apiKey } : { userId };
       const deleteResult = await UserConfig.deleteOne(query);
       
@@ -971,13 +953,11 @@ router.delete('/config/:userId', async (req, res) => {
       }
       return res.status(404).json({ error: 'Configuration not found' });
     } else {
-      // Only use memory store if MongoDB is not connected
       const config = memoryStore.get(userId);
       if (!config) {
         return res.status(404).json({ error: 'Configuration not found' });
       }
       
-      // Verify ownership if API key provided
       if (apiKey && config.tmdbApiKey !== apiKey) {
         return res.status(403).json({ error: 'Not authorized to delete this configuration' });
       }
@@ -992,12 +972,8 @@ router.delete('/config/:userId', async (req, res) => {
   }
 });
 
-/**
- * Debug endpoint - get raw MongoDB document (for debugging)
- * NOTE: This endpoint should be disabled or protected in production
- */
+/** Debug config endpoint */
 router.get('/debug/config/:userId', async (req, res) => {
-  // Only allow in development mode
   if (process.env.NODE_ENV === 'production') {
     return res.status(404).json({ error: 'Not found' });
   }
@@ -1013,7 +989,6 @@ router.get('/debug/config/:userId', async (req, res) => {
       });
     }
     
-    // Get raw document from MongoDB
     const rawDoc = await UserConfig.findOne({ userId }).lean();
     
     res.json({
