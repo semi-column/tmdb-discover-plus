@@ -91,15 +91,10 @@ jobs:
           echo "${{ secrets.BEAMUP_SSH_KEY }}" > ~/.ssh/beamup_key
           chmod 600 ~/.ssh/beamup_key
           ssh-keyscan -H a.baby-beamup.club >> ~/.ssh/known_hosts 2>/dev/null || true
-          cat >> ~/.ssh/config << EOF
-          Host beamup
-            HostName a.baby-beamup.club
-            User dokku
-            IdentityFile ~/.ssh/beamup_key
-            StrictHostKeyChecking no
-          EOF
 
       - name: Deploy to BeamUp
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/beamup_key -o StrictHostKeyChecking=no"
         run: |
           git remote add beamup dokku@a.baby-beamup.club:84f50d1c22e7-tmdb-discover-plus || true
           git push beamup HEAD:main --force
