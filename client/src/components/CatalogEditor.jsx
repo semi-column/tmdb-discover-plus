@@ -592,17 +592,40 @@ export function CatalogEditor({
 
   // Attach per-button native listeners implementing the requested pattern.
   // We add/remove listeners whenever the genre list changes.
+  //
+  // Safari/iOS Long-Press Fix:
+  // The key issue is that iOS Safari's scroll gesture recognition would fire
+  // pointercancel/touchcancel when it thinks the user might be scrolling.
+  // 
+  // Our solution:
+  // 1. CSS touch-action: none on .genre-chip prevents the browser from
+  //    recognizing scroll gestures on touches that START on the genre chip.
+  // 2. We use setPointerCapture() to keep receiving pointer events even if
+  //    the touch moves slightly outside the element.
+  // 3. For Safari specifically, we always use touch events (not pointer events)
+  //    since Safari's pointer event implementation has edge cases with long-press.
+  // 4. We prevent default on touchstart to ensure no scroll is initiated.
+  //
   useEffect(() => {
     // Cleanup previous listeners
     const prev = timersRef.current;
     prev.forEach((entry, el) => {
       try {
-        el.removeEventListener('touchstart', entry._start);
-        el.removeEventListener('touchend', entry._end);
-        el.removeEventListener('touchmove', entry._end);
-        el.removeEventListener('mousedown', entry._start);
-        el.removeEventListener('mouseup', entry._end);
-        el.removeEventListener('mouseleave', entry._end);
+        // Pointer listeners
+        if (entry._pdown) el.removeEventListener('pointerdown', entry._pdown);
+        if (entry._pmove) el.removeEventListener('pointermove', entry._pmove);
+        if (entry._pup) el.removeEventListener('pointerup', entry._pup);
+        if (entry._pcancel) el.removeEventListener('pointercancel', entry._pcancel);
+        // Touch listeners
+        if (entry._tstart) el.removeEventListener('touchstart', entry._tstart);
+        if (entry._tmove) el.removeEventListener('touchmove', entry._tmove);
+        if (entry._tend) el.removeEventListener('touchend', entry._tend);
+        if (entry._tcancel) el.removeEventListener('touchcancel', entry._tcancel);
+        // Mouse listeners
+        if (entry._mdown) el.removeEventListener('mousedown', entry._mdown);
+        if (entry._mmove) el.removeEventListener('mousemove', entry._mmove);
+        if (entry._mup) el.removeEventListener('mouseup', entry._mup);
+        if (entry._mlv) el.removeEventListener('mouseleave', entry._mlv);
       } catch (err) {
         // ignore
       }
@@ -618,71 +641,96 @@ export function CatalogEditor({
       if (!genreId) return;
 
       // Movement threshold (px) — if pointer/touch moves more than this, cancel
-      const MOVE_THRESHOLD = 15;
+      // Increased slightly for touch devices which have natural jitter
+      const MOVE_THRESHOLD = 20;
+      const LONG_PRESS_DURATION = 500; // ms
       let pressTimer = null;
       let startX = 0;
       let startY = 0;
-      let moved = false;
+      let longPressTriggered = false;
+      let activePointerId = null;
 
       const triggerLongPress = () => {
+        longPressTriggered = true;
         handleLongPressAction(genreId);
       };
 
-      // Pointer event handlers (preferred)
+      const clearPress = () => {
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+      };
+
+      // ================== POINTER EVENTS ==================
       const onPointerDown = (ev) => {
-        // only react to primary pointers (touch/left mouse)
         if (ev.isPrimary === false) return;
-        moved = false;
+        longPressTriggered = false;
         startX = ev.clientX;
         startY = ev.clientY;
-        // start timer
+        activePointerId = ev.pointerId;
+
+        // Capture the pointer to continue receiving events even if touch moves
+        // slightly outside the element bounds (important for iOS Safari)
+        try {
+          el.setPointerCapture(ev.pointerId);
+        } catch (e) {
+          // setPointerCapture may not be supported or allowed
+        }
+
+        clearPress();
         pressTimer = setTimeout(() => {
           pressTimer = null;
           triggerLongPress();
-        }, 500);
+        }, LONG_PRESS_DURATION);
       };
 
       const onPointerMove = (ev) => {
-        if (!pressTimer) return;
+        if (!pressTimer || ev.pointerId !== activePointerId) return;
         const dx = Math.abs(ev.clientX - startX);
         const dy = Math.abs(ev.clientY - startY);
         if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
-          moved = true;
-          clearTimeout(pressTimer);
-          pressTimer = null;
+          clearPress();
         }
       };
 
       const onPointerUp = (ev) => {
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-          pressTimer = null;
-        }
-        // If long press triggered, prevent default to stop click generation
-        if (longPressedRef.current.has(genreId)) {
-           // We don't preventDefault here for PointerEvents usually, 
-           // but we can rely on the click handler check.
+        clearPress();
+        if (activePointerId !== null) {
+          try {
+            el.releasePointerCapture(activePointerId);
+          } catch (e) {
+            // ignore
+          }
+          activePointerId = null;
         }
       };
 
       const onPointerCancel = (ev) => {
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-          pressTimer = null;
-        }
+        clearPress();
+        activePointerId = null;
       };
 
-      // Touch fallback for older Safari
+      // ================== TOUCH EVENTS (Safari fallback) ==================
       const onTouchStart = (ev) => {
-        if (!ev.touches || ev.touches.length > 1) return; // ignore multi-touch
+        if (!ev.touches || ev.touches.length > 1) return;
         const t = ev.touches[0];
-        moved = false;
+        longPressTriggered = false;
         startX = t.clientX;
         startY = t.clientY;
+
+        // Prevent default to stop any scroll recognition from starting.
+        // Because touch-action: none is set via CSS, this is a belt-and-suspenders
+        // approach that ensures Safari doesn't try to scroll.
+        if (ev.cancelable) {
+          ev.preventDefault();
+        }
+
+        clearPress();
         pressTimer = setTimeout(() => {
           pressTimer = null;
           triggerLongPress();
-        }, 500);
+        }, LONG_PRESS_DURATION);
       };
 
       const onTouchMove = (ev) => {
@@ -691,40 +739,33 @@ export function CatalogEditor({
         const dx = Math.abs(t.clientX - startX);
         const dy = Math.abs(t.clientY - startY);
         if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
-          moved = true;
-          clearTimeout(pressTimer);
-          pressTimer = null;
+          clearPress();
         }
       };
 
       const onTouchEnd = (ev) => {
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-          pressTimer = null;
-        }
-        // If long press triggered, prevent default to stop click generation
-        if (longPressedRef.current.has(genreId) && ev.cancelable) {
+        clearPress();
+        // If long press was triggered, prevent the synthetic click
+        if (longPressTriggered && ev.cancelable) {
           ev.preventDefault();
         }
       };
 
-      const onTouchCancel = (ev) => {
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-          pressTimer = null;
-        }
+      const onTouchCancel = () => {
+        clearPress();
       };
 
-      // Mouse fallback
+      // ================== MOUSE EVENTS (desktop fallback) ==================
       const onMouseDown = (ev) => {
-        if (ev.button !== 0) return; // only left-click
-        moved = false;
+        if (ev.button !== 0) return;
+        longPressTriggered = false;
         startX = ev.clientX;
         startY = ev.clientY;
+        clearPress();
         pressTimer = setTimeout(() => {
           pressTimer = null;
           triggerLongPress();
-        }, 500);
+        }, LONG_PRESS_DURATION);
       };
 
       const onMouseMove = (ev) => {
@@ -732,65 +773,90 @@ export function CatalogEditor({
         const dx = Math.abs(ev.clientX - startX);
         const dy = Math.abs(ev.clientY - startY);
         if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
-          moved = true;
-          clearTimeout(pressTimer);
-          pressTimer = null;
+          clearPress();
         }
       };
 
-      const onMouseUp = (ev) => {
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-          pressTimer = null;
-        }
+      const onMouseUp = () => {
+        clearPress();
       };
 
-      // Decide which set of listeners to attach
-      // Force touch events on iOS because PointerEvents can be flaky with long-press
-      // (often firing pointercancel unexpectedly when system gestures interfere)
-      const isIOS = typeof navigator !== 'undefined' && 
-        (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
-      const supportsPointer = typeof window !== 'undefined' && window.PointerEvent && !isIOS;
+      const onMouseLeave = () => {
+        clearPress();
+      };
 
-      if (supportsPointer) {
-        timersRef.current.set(el, {
-          _pdown: onPointerDown,
-          _pmove: onPointerMove,
-          _pup: onPointerUp,
-          _pcancel: onPointerCancel,
-        });
+      // ================== DETECT BROWSER & ATTACH LISTENERS ==================
+      // Detect Safari (both iOS and macOS) - Safari's pointer events have issues
+      // with long-press in scrollable containers, so we prefer touch events there.
+      const isSafari = typeof navigator !== 'undefined' && (
+        /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
+        // iOS devices (iPhone, iPad, iPod)
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        // iPad with desktop Safari UA (iPadOS 13+)
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      );
+
+      const isTouchDevice = typeof window !== 'undefined' && (
+        'ontouchstart' in window ||
+        navigator.maxTouchPoints > 0
+      );
+
+      const supportsPointer = typeof window !== 'undefined' && window.PointerEvent;
+
+      // Store handlers for cleanup
+      const handlers = {};
+
+      // For Safari (iOS or macOS with touch), always use touch events
+      // For other touch devices, prefer pointer events if available
+      // For desktop non-touch, use mouse events
+      if (isSafari && isTouchDevice) {
+        // Safari touch: use touch events exclusively
+        handlers._tstart = onTouchStart;
+        handlers._tmove = onTouchMove;
+        handlers._tend = onTouchEnd;
+        handlers._tcancel = onTouchCancel;
+
+        // CRITICAL: passive: false allows preventDefault() to work
+        el.addEventListener('touchstart', onTouchStart, { passive: false });
+        el.addEventListener('touchmove', onTouchMove, { passive: true });
+        el.addEventListener('touchend', onTouchEnd, { passive: false });
+        el.addEventListener('touchcancel', onTouchCancel, { passive: true });
+      } else if (supportsPointer && isTouchDevice) {
+        // Non-Safari touch device with pointer events (Chrome, Firefox on mobile)
+        handlers._pdown = onPointerDown;
+        handlers._pmove = onPointerMove;
+        handlers._pup = onPointerUp;
+        handlers._pcancel = onPointerCancel;
+
+        el.addEventListener('pointerdown', onPointerDown);
+        el.addEventListener('pointermove', onPointerMove);
+        el.addEventListener('pointerup', onPointerUp);
+        el.addEventListener('pointercancel', onPointerCancel);
+      } else if (supportsPointer) {
+        // Desktop with pointer events (mouse/pen)
+        handlers._pdown = onPointerDown;
+        handlers._pmove = onPointerMove;
+        handlers._pup = onPointerUp;
+        handlers._pcancel = onPointerCancel;
+
         el.addEventListener('pointerdown', onPointerDown);
         el.addEventListener('pointermove', onPointerMove);
         el.addEventListener('pointerup', onPointerUp);
         el.addEventListener('pointercancel', onPointerCancel);
       } else {
-        // touch listeners (non-passive start)
-        timersRef.current.set(el, {
-          _tstart: onTouchStart,
-          _tmove: onTouchMove,
-          _tend: onTouchEnd,
-          _tcancel: onTouchCancel,
-          _mdown: onMouseDown,
-          _mmove: onMouseMove,
-          _mup: onMouseUp,
-        });
+        // Fallback: mouse events for older browsers
+        handlers._mdown = onMouseDown;
+        handlers._mmove = onMouseMove;
+        handlers._mup = onMouseUp;
+        handlers._mlv = onMouseLeave;
 
-        // attach with passive:false where supported
-        try {
-          el.addEventListener('touchstart', onTouchStart, { passive: false });
-        } catch (err) {
-          el.addEventListener('touchstart', onTouchStart, false);
-        }
-        el.addEventListener('touchmove', onTouchMove);
-        el.addEventListener('touchend', onTouchEnd);
-        el.addEventListener('touchcancel', onTouchCancel);
-
-        // mouse fallback
         el.addEventListener('mousedown', onMouseDown);
         el.addEventListener('mousemove', onMouseMove);
         el.addEventListener('mouseup', onMouseUp);
+        el.addEventListener('mouseleave', onMouseLeave);
       }
+
+      timersRef.current.set(el, handlers);
     });
 
     return () => {
@@ -801,17 +867,16 @@ export function CatalogEditor({
           if (entry._pmove) el.removeEventListener('pointermove', entry._pmove);
           if (entry._pup) el.removeEventListener('pointerup', entry._pup);
           if (entry._pcancel) el.removeEventListener('pointercancel', entry._pcancel);
-
           // Touch listeners
           if (entry._tstart) el.removeEventListener('touchstart', entry._tstart);
           if (entry._tmove) el.removeEventListener('touchmove', entry._tmove);
           if (entry._tend) el.removeEventListener('touchend', entry._tend);
           if (entry._tcancel) el.removeEventListener('touchcancel', entry._tcancel);
-
           // Mouse listeners
           if (entry._mdown) el.removeEventListener('mousedown', entry._mdown);
           if (entry._mmove) el.removeEventListener('mousemove', entry._mmove);
           if (entry._mup) el.removeEventListener('mouseup', entry._mup);
+          if (entry._mlv) el.removeEventListener('mouseleave', entry._mlv);
         } catch (err) {
           // ignore
         }

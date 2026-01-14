@@ -1660,7 +1660,15 @@ input[type="date"] {
   -webkit-user-select: none;   /* Safari, older WebKit */
   -webkit-touch-callout: none; /* Disable iOS callout menu on long-press */
   user-select: none;           /* Standard */
-  touch-action: manipulation;  /* Prefer simple gesture handling (lets scrolling remain) */
+  /*
+   * CRITICAL for Safari long-press:
+   * Using touch-action: none disables ALL browser touch gestures (including scroll)
+   * on the genre chip itself. This prevents iOS Safari from recognizing a scroll
+   * gesture and firing pointercancel/touchcancel during a long-press.
+   * The parent container (.editor-content) still scrolls normally because
+   * touch-action only affects touches that START on this element.
+   */
+  touch-action: none;
   -webkit-user-drag: none;     /* Prevent image/element dragging on iOS */
   -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
 }
