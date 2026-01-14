@@ -6,6 +6,7 @@ import { isConnected } from './database.js';
 import * as tmdb from './tmdb.js';
 import { shuffleArray, getBaseUrl, parseIdArray } from '../utils/helpers.js';
 import { createLogger } from '../utils/logger.js';
+import { apiRateLimit, strictRateLimit } from '../utils/rateLimit.js';
 import { 
   isValidUserId, 
   isValidCatalogId,
@@ -17,6 +18,10 @@ import {
 
 const router = Router();
 const log = createLogger('userConfig');
+
+// Apply rate limiting to all frontend API endpoints.
+// (Addon routes are mounted separately and are intentionally not rate-limited here.)
+router.use(apiRateLimit);
 
 /**
  * Resolve dynamic date presets to actual dates.
@@ -686,7 +691,7 @@ router.post('/preview', async (req, res) => {
 /**
  * Create or update user configuration
  */
-router.post('/config', async (req, res) => {
+router.post('/config', strictRateLimit, async (req, res) => {
   try {
     const { userId, tmdbApiKey, catalogs, preferences } = req.body;
     

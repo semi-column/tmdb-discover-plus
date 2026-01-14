@@ -141,8 +141,8 @@ app.get('/health', (req, res) => {
   res.json(health);
 });
 
-// API routes for frontend (with rate limiting)
-app.use('/api', apiRateLimit, apiRouter);
+// API routes for frontend (rate limiting applied within the API router)
+app.use('/api', apiRouter);
 
 // Stremio addon routes (no rate limiting - Stremio needs unrestricted access)
 app.use('/', addonRouter);

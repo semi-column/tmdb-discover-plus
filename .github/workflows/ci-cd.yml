@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Explicit least-privilege permissions (recommended by GitHub and required by some security scanners)
+permissions:
+  contents: read
+
 # Ensure only one workflow runs at a time per branch
 # New runs will wait for the previous one to complete
 concurrency:
