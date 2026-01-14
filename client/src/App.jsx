@@ -479,6 +479,12 @@ function App() {
                   loading={configsLoading}
                   onSelectConfig={handleSwitchConfig}
                   onDeleteConfig={handleDeleteConfigFromDropdown}
+                  onCreateNew={() => {
+                    // Create a fresh config with the same API key
+                    config.setUserId(null);
+                    config.setCatalogs([]);
+                    window.history.pushState({}, '', '/configure');
+                  }}
                 />
               )}
               <button 

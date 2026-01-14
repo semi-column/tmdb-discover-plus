@@ -3286,6 +3286,19 @@ input[type="date"] {
   border-bottom: 4px solid transparent;
 }
 
+.config-dropdown-footer {
+  padding: 8px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.config-dropdown-new {
+  width: 100%;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
 /* Mobile responsive for config dropdown */
 @media (max-width: 768px) {
   .config-dropdown-trigger {
