@@ -585,29 +585,11 @@ export function CatalogEditor({
 
     // Re-attach listeners for current buttons
     const grid = document.querySelectorAll('.genre-chip');
-    const hasScrollableAncestor = (node) => {
-      let el = node.parentElement;
-      while (el && el !== document.body) {
-        try {
-          const style = window.getComputedStyle(el);
-          const overflowY = style.overflowY;
-          if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) return true;
-        } catch (err) {
-          // ignore
-        }
-        el = el.parentElement;
-      }
-      return false;
-    };
 
     grid.forEach((el) => {
       const id = el.getAttribute('data-genre-id') || el.dataset.genreId || null;
       const genreId = id ? Number(id) : null;
       if (!genreId) return;
-
-      // If the chip is inside a scrollable ancestor, skip attaching long-press
-      // listeners because scroll gestures will conflict with long-press semantics on iOS.
-      if (hasScrollableAncestor(el)) return;
 
       // Movement threshold (px) — if pointer/touch moves more than this, cancel
       const MOVE_THRESHOLD = 10;
