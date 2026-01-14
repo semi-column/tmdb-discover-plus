@@ -56,6 +56,7 @@ export function CatalogEditor({
   languages = [], 
   countries = [],
   sortOptions = { movie: [], series: [] }, 
+  // eslint-disable-next-line no-unused-vars
   listTypes = { movie: [], series: [] },
   releaseTypes = [],
   tvStatuses = [],
@@ -67,6 +68,7 @@ export function CatalogEditor({
   onUpdate, 
   onPreview,
   onSave,
+  // eslint-disable-next-line no-unused-vars
   isSaving,
   searchPerson,
   searchCompany,
@@ -114,6 +116,7 @@ export function CatalogEditor({
   const genrePressState = useRef(new Map());
 
   // Helper to idempotently add a genre to the exclude list
+  // eslint-disable-next-line no-unused-vars
   function addGenreToExclude(genreId) {
     setLocalCatalog(prev => {
       const current = prev || DEFAULT_CATALOG;
@@ -285,7 +288,7 @@ export function CatalogEditor({
             try {
               const resp = await getKeywordById(item.id);
               if (resp && resp.name) return { id: item.id, name: resp.name };
-            } catch (err) { /* ignore */ }
+            } catch { /* ignore */ }
             return item;
           }));
           setExcludeKeywords(resolved);
@@ -304,7 +307,7 @@ export function CatalogEditor({
             try {
               const resp = await getCompanyById(item.id);
               if (resp && resp.name) return { id: item.id, name: resp.name };
-            } catch (err) { /* ignore */ }
+            } catch { /* ignore */ }
             return item;
           }));
           setExcludeCompanies(resolved);
@@ -722,7 +725,7 @@ export function CatalogEditor({
     // Try to capture the pointer
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (err) {
+    } catch {
       // ignore
     }
 
@@ -753,7 +756,7 @@ export function CatalogEditor({
     if (state?.pointerId != null) {
       try {
         e.currentTarget.releasePointerCapture(state.pointerId);
-      } catch (err) {
+      } catch {
         // ignore
       }
       state.pointerId = null;
@@ -879,6 +882,7 @@ export function CatalogEditor({
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const handleSave = () => {
     const catalogToSave = {
       ...localCatalog,
