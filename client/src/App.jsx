@@ -116,6 +116,7 @@ function App() {
           setPageLoading(false);
         });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlUserId]); // We intentionally only trigger on urlUserId; additional fetch on apiKey change handled below
 
   // If the user enters an API key on the Configure page after the initial load,
@@ -136,6 +137,7 @@ function App() {
         .catch((err) => console.error('[App] Re-fetch error:', err))
         .finally(() => setPageLoading(false));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.apiKey, urlUserId]);
 
   const addToast = useCallback((message, type = 'success') => {

@@ -338,14 +338,18 @@ export function CatalogEditor({
 
   // Cleanup long-press state when component unmounts
   useEffect(() => {
+    // Capture refs for cleanup
+    const longPressedSet = longPressedRef.current;
+    const pressStateMap = genrePressState.current;
+    
     return () => {
       // Clear any long-press markers on unmount.
-      if (longPressedRef.current) longPressedRef.current.clear();
+      if (longPressedSet) longPressedSet.clear();
       // Clear any active timers
-      genrePressState.current.forEach((state) => {
+      pressStateMap.forEach((state) => {
         if (state.timer) clearTimeout(state.timer);
       });
-      genrePressState.current.clear();
+      pressStateMap.clear();
     };
   }, []);
 
@@ -562,9 +566,8 @@ export function CatalogEditor({
     });
   }, [catalog?._id, onUpdate]);
 
-  // Hoisted function declaration avoids temporal-dead-zone errors when other
-  // callbacks reference this function before it's initialized.
-  function handleGenreToggle(genreId, exclude = false) {
+  // Genre toggle handler wrapped in useCallback
+  const handleGenreToggle = useCallback((genreId, exclude = false) => {
     const key = exclude ? 'excludeGenres' : 'genres';
     const otherKey = exclude ? 'genres' : 'excludeGenres';
 
@@ -591,7 +594,7 @@ export function CatalogEditor({
         }
       };
     });
-  }
+  }, []);
 
   // Unified handler for long-press actions (triggered by timer or contextmenu)
   // Toggles exclude state: if already excluded, removes it; otherwise adds to exclude

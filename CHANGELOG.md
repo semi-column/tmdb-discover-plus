@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Region Filter** - Filter movies by regional release dates (theatrical releases in specific countries)
 - **First Air Date Filter** - Filter TV shows by premiere date (when the show first aired vs episode air dates)
 - **Dynamic Date Presets** - Date presets (Last 30/90 days, This Year, etc.) now calculate dates at request time, ensuring catalogs always show fresh content relative to the current date
+- **Clickable Preview Cards** - Preview tiles now link directly to TMDB pages, making it easy to explore content details and keywords
+- **CI/CD Pipeline** - GitHub Actions workflow for automated linting, testing, and deployment to BeamUp
 
 ### Changed
 - Date presets now store preset type instead of static dates, resolving dynamically when catalog is fetched
