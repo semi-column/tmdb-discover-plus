@@ -1636,29 +1636,44 @@ export function CatalogEditor({
 
           {!previewLoading && !previewError && previewData && (
             <div className="preview-grid">
-              {previewData.metas.map((item) => (
-                <div key={item.id} className="preview-card">
-                  {item.poster ? (
-                    <img src={item.poster} alt={item.name} loading="lazy" />
-                  ) : (
-                    <div className="preview-card-placeholder">
-                      <ImageOff size={24} />
+              {previewData.metas.map((item) => {
+                // Build TMDB URL - use tmdbId if available, otherwise extract from id
+                const tmdbId = item.tmdbId || (item.id?.startsWith('tmdb:') ? item.id.replace('tmdb:', '') : null);
+                const tmdbUrl = tmdbId 
+                  ? `https://www.themoviedb.org/${item.type === 'series' ? 'tv' : 'movie'}/${tmdbId}`
+                  : null;
+                
+                return (
+                  <a 
+                    key={item.id} 
+                    className="preview-card"
+                    href={tmdbUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`View "${item.name}" on TMDB`}
+                  >
+                    {item.poster ? (
+                      <img src={item.poster} alt={item.name} loading="lazy" />
+                    ) : (
+                      <div className="preview-card-placeholder">
+                        <ImageOff size={24} />
+                      </div>
+                    )}
+                    <div className="preview-card-overlay">
+                      <div className="preview-card-title">{item.name}</div>
+                      <div className="preview-card-meta">
+                        {item.releaseInfo && <span>{item.releaseInfo}</span>}
+                        {item.imdbRating && (
+                          <span className="preview-card-rating">
+                            <Star size={10} fill="currentColor" />
+                            {item.imdbRating}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  <div className="preview-card-overlay">
-                    <div className="preview-card-title">{item.name}</div>
-                    <div className="preview-card-meta">
-                      {item.releaseInfo && <span>{item.releaseInfo}</span>}
-                      {item.imdbRating && (
-                        <span className="preview-card-rating">
-                          <Star size={10} fill="currentColor" />
-                          {item.imdbRating}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  </a>
+                );
+              })}
             </div>
           )}
 
