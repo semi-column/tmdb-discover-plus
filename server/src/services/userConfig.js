@@ -789,23 +789,28 @@ router.get('/configs', async (req, res) => {
     
     let configs = [];
     
+    // Check MongoDB if connected
     if (isConnected()) {
       try {
         // Find all configs with this API key
-        configs = await UserConfig.find({ tmdbApiKey: apiKey }).lean();
+        const dbConfigs = await UserConfig.find({ tmdbApiKey: apiKey }).lean();
+        configs = dbConfigs;
         log.info('Found configs in MongoDB', { count: configs.length, dbName: UserConfig.db?.name || 'unknown' });
       } catch (err) {
         log.error('MongoDB error finding configs', { error: err.message });
-        throw err;
       }
-    } else {
-      log.warn('MongoDB not connected, using memory store');
-      // Search in memory store
-      for (const [userId, config] of memoryStore.entries()) {
-        if (config.tmdbApiKey === apiKey) {
-          configs.push(config);
-        }
+    }
+    
+    // Also check memory store and merge (avoiding duplicates)
+    const existingUserIds = new Set(configs.map(c => c.userId));
+    for (const [userId, config] of memoryStore.entries()) {
+      if (config.tmdbApiKey === apiKey && !existingUserIds.has(userId)) {
+        configs.push(config);
       }
+    }
+    
+    if (memoryStore.size > 0) {
+      log.info('Memory store has configs', { totalInMemory: memoryStore.size, matchingApiKey: configs.length - existingUserIds.size });
     }
     
     // Return simplified config list (don't expose API key)
@@ -840,53 +845,47 @@ router.delete('/config/:userId', async (req, res) => {
       return res.status(400).json({ error: 'Invalid user ID format' });
     }
     
-    log.info('Delete config request', { userId, hasApiKey: !!apiKey });
+    log.info('Delete config request', { userId, hasApiKey: !!apiKey, dbConnected: isConnected() });
     
+    let deleted = false;
+    
+    // Try to delete from MongoDB first if connected
     if (isConnected()) {
-      // Try to find the config first
-      let config = await UserConfig.findOne({ userId }).lean();
-      
-      // If not found by userId but we have an API key, try to find by both
-      if (!config && apiKey) {
-        config = await UserConfig.findOne({ userId, tmdbApiKey: apiKey }).lean();
-      }
-      
-      if (!config) {
-        // Last resort: if we have an API key, try to delete directly
-        // This handles cases where the config exists but findOne fails
-        if (apiKey) {
-          const deleteResult = await UserConfig.deleteOne({ userId, tmdbApiKey: apiKey });
-          if (deleteResult.deletedCount > 0) {
-            log.info('Config deleted from MongoDB (direct delete)', { userId });
-            return res.json({ success: true, message: 'Configuration deleted' });
-          }
+      try {
+        // Try to delete by userId (and optionally verify API key ownership)
+        const query = apiKey ? { userId, tmdbApiKey: apiKey } : { userId };
+        const deleteResult = await UserConfig.deleteOne(query);
+        
+        if (deleteResult.deletedCount > 0) {
+          log.info('Config deleted from MongoDB', { userId });
+          deleted = true;
+        } else {
+          log.debug('Config not found in MongoDB, trying memory store', { userId });
         }
-        return res.status(404).json({ error: 'Configuration not found' });
+      } catch (err) {
+        log.error('MongoDB delete error', { error: err.message });
       }
-      
-      // Verify the requester owns this config (API key must match)
-      if (apiKey && config.tmdbApiKey !== apiKey) {
-        return res.status(403).json({ error: 'Not authorized to delete this configuration' });
-      }
-      
-      await UserConfig.deleteOne({ userId });
-      log.info('Config deleted from MongoDB', { userId });
-    } else {
-      const config = memoryStore.get(userId);
-      if (!config) {
-        return res.status(404).json({ error: 'Configuration not found' });
-      }
-      
-      // Verify the requester owns this config
-      if (apiKey && config.tmdbApiKey !== apiKey) {
-        return res.status(403).json({ error: 'Not authorized to delete this configuration' });
-      }
-      
-      memoryStore.delete(userId);
-      log.info('Config deleted from memory store', { userId });
     }
     
-    res.json({ success: true, message: 'Configuration deleted' });
+    // Also check/delete from memory store (in case server is using memory mode
+    // or MongoDB query didn't find it but memory store has it)
+    if (memoryStore.has(userId)) {
+      const memConfig = memoryStore.get(userId);
+      // Verify ownership if API key provided
+      if (!apiKey || memConfig.tmdbApiKey === apiKey) {
+        memoryStore.delete(userId);
+        log.info('Config deleted from memory store', { userId });
+        deleted = true;
+      } else {
+        log.warn('Memory store config ownership mismatch', { userId });
+      }
+    }
+    
+    if (deleted) {
+      return res.json({ success: true, message: 'Configuration deleted' });
+    }
+    
+    return res.status(404).json({ error: 'Configuration not found' });
   } catch (error) {
     log.error('DELETE /config/:userId error', { error: error.message });
     res.status(500).json({ error: error.message });
