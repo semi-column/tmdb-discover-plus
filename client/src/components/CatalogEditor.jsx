@@ -115,6 +115,36 @@ export function CatalogEditor({
   // Track active long-press state per genre (for React event handlers)
   const genrePressState = useRef(new Map());
 
+  // Genre toggle handler wrapped in useCallback - MUST be defined before handleGenreClick
+  const handleGenreToggle = useCallback((genreId, exclude = false) => {
+    const key = exclude ? 'excludeGenres' : 'genres';
+    const otherKey = exclude ? 'genres' : 'excludeGenres';
+
+    setLocalCatalog(prev => {
+      const current = prev || DEFAULT_CATALOG;
+      const currentGenres = current.filters?.[key] || [];
+      const otherGenres = current.filters?.[otherKey] || [];
+
+      // Toggle: if already in this list, remove it; otherwise add it
+      const isCurrentlyInList = currentGenres.includes(genreId);
+      const newGenres = isCurrentlyInList
+        ? currentGenres.filter(id => id !== genreId)
+        : [...currentGenres, genreId];
+
+      // Remove from the other list to ensure mutual exclusivity
+      const newOtherGenres = otherGenres.filter(id => id !== genreId);
+
+      return {
+        ...current,
+        filters: {
+          ...current.filters,
+          [key]: newGenres,
+          [otherKey]: newOtherGenres
+        }
+      };
+    });
+  }, []);
+
   // Helper to idempotently add a genre to the exclude list
   // eslint-disable-next-line no-unused-vars
   function addGenreToExclude(genreId) {
@@ -565,36 +595,6 @@ export function CatalogEditor({
       return updated;
     });
   }, [catalog?._id, onUpdate]);
-
-  // Genre toggle handler wrapped in useCallback
-  const handleGenreToggle = useCallback((genreId, exclude = false) => {
-    const key = exclude ? 'excludeGenres' : 'genres';
-    const otherKey = exclude ? 'genres' : 'excludeGenres';
-
-    setLocalCatalog(prev => {
-      const current = prev || DEFAULT_CATALOG;
-      const currentGenres = current.filters?.[key] || [];
-      const otherGenres = current.filters?.[otherKey] || [];
-
-      // Toggle: if already in this list, remove it; otherwise add it
-      const isCurrentlyInList = currentGenres.includes(genreId);
-      const newGenres = isCurrentlyInList
-        ? currentGenres.filter(id => id !== genreId)
-        : [...currentGenres, genreId];
-
-      // Remove from the other list to ensure mutual exclusivity
-      const newOtherGenres = otherGenres.filter(id => id !== genreId);
-
-      return {
-        ...current,
-        filters: {
-          ...current.filters,
-          [key]: newGenres,
-          [otherKey]: newOtherGenres
-        }
-      };
-    });
-  }, []);
 
   // Unified handler for long-press actions (triggered by timer or contextmenu)
   // Toggles exclude state: if already excluded, removes it; otherwise adds to exclude
