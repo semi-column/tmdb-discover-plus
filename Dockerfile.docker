@@ -24,7 +24,7 @@ FROM node:20-alpine AS production
 # Add labels for container identification
 LABEL org.opencontainers.image.title="TMDB Discover+"
 LABEL org.opencontainers.image.description="Custom Catalog Builder for Stremio"
-LABEL org.opencontainers.image.source="https://github.com/yourusername/tmdb-discover-plus"
+LABEL org.opencontainers.image.source="https://github.com/semi-column/tmdb-discover-plus"
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Create non-root user for security
