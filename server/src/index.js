@@ -55,50 +55,25 @@ const clientDistPath = path.join(__dirname, '../../client/dist');
 // Redirect legacy /configure routes to the SPA root
 // The app now handles configuration at the home route; preserve an optional
 // userId by forwarding it as a query parameter so the client can pick it up.
-app.get('/configure', (req, res) => {
-  // Prevent edge caches from serving a stale static helper page
+// Serve static frontend files and handle legacy redirects
+app.get(['/configure', '/configure/:userId'], (req, res) => {
   res.set('Cache-Control', 'no-store, must-revalidate');
+  const { userId } = req.params;
+  if (userId) {
+    return res.redirect(302, `/?userId=${encodeURIComponent(userId)}`);
+  }
   return res.redirect(302, '/');
 });
 
-app.get('/configure/:userId', (req, res) => {
-  const { userId } = req.params;
-  // Prevent edge caches from serving a stale static helper page
+// Handle legacy /:userId/configure format
+app.get('/:userId/configure', (req, res) => {
   res.set('Cache-Control', 'no-store, must-revalidate');
-  // redirect to /?userId=<id> so the SPA can read and act on it
-  return res.redirect(302, `/?userId=${encodeURIComponent(userId)}`);
-});
-
-// Ensure configure redirects are handled BEFORE any static file serving so the
-// old configure.html (if present in any build) doesn't get returned by static
-// middleware or intermediate caches.
-app.use((req, res, next) => {
-  // Prevent edge caches from serving a stale static helper page
-  // Handle three legacy formats and redirect them to SPA root with userId query:
-  //  - /configure
-  //  - /configure/:userId
-  //  - /:userId/configure   <-- legacy format seen in some clients
-
-  const path = req.path || '';
-
-  // 1) /configure or /configure/:userId
-  let m = path.match(/^\/configure(?:\/(.*))?$/);
-  if (m) {
-    res.set('Cache-Control', 'no-store, must-revalidate');
-    const userId = m[1];
-    if (userId) return res.redirect(302, `/?userId=${encodeURIComponent(userId)}`);
-    return res.redirect(302, '/');
-  }
-
-  // 2) /:userId/configure  (userId at root)
-  m = path.match(/^\/([^\/]+)\/configure(?:\/)?$/);
-  if (m) {
-    res.set('Cache-Control', 'no-store, must-revalidate');
-    const userId = m[1];
+  const { userId } = req.params;
+  // Basic validation to avoid capturing static files or other routes
+  if (userId && !userId.includes('.')) {
     return res.redirect(302, `/?userId=${encodeURIComponent(userId)}`);
   }
-
-  return next();
+  return res.status(404).send('Not Found');
 });
 
 // Serve static files but ensure HTML files are not cached by intermediate CDNs

@@ -70,11 +70,17 @@ export function rateLimit(options = {}) {
       return next();
     }
 
+    // Bypass rate limiting for localhost in development mode
     const ip = getClientIp(req);
+    const isDev = process.env.NODE_ENV === 'development';
+    const isLocalhost = ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip === '::ffff:127.0.0.1';
+    if (isDev && isLocalhost) {
+      return next();
+    }
     const now = Date.now();
-    
+
     let record = store.get(ip);
-    
+
     // Initialize or reset if window expired
     if (!record || now > record.resetTime) {
       record = {
@@ -83,29 +89,29 @@ export function rateLimit(options = {}) {
       };
       store.set(ip, record);
     }
-    
+
     // Increment count
     record.count++;
-    
+
     // Calculate remaining requests and reset time
     const remaining = Math.max(0, maxRequests - record.count);
     const resetSeconds = Math.ceil((record.resetTime - now) / 1000);
-    
+
     // Set rate limit headers
     res.setHeader('X-RateLimit-Limit', maxRequests);
     res.setHeader('X-RateLimit-Remaining', remaining);
     res.setHeader('X-RateLimit-Reset', Math.ceil(record.resetTime / 1000));
-    
+
     // Check if over limit
     if (record.count > maxRequests) {
       log.warn('Rate limit exceeded', { ip, count: record.count, limit: maxRequests });
       res.setHeader('Retry-After', resetSeconds);
-      return res.status(429).json({ 
+      return res.status(429).json({
         error: message,
         retryAfter: resetSeconds,
       });
     }
-    
+
     // If skipSuccessfulRequests, decrement on successful response
     if (skipSuccessfulRequests) {
       res.on('finish', () => {
@@ -114,7 +120,7 @@ export function rateLimit(options = {}) {
         }
       });
     }
-    
+
     next();
   };
 }

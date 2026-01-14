@@ -1,141 +1,18 @@
 import { Router } from 'express';
-import { getUserConfig } from '../services/userConfig.js';
+import { getUserConfig } from '../services/configService.js';
 import * as tmdb from '../services/tmdb.js';
 import { shuffleArray, getBaseUrl, normalizeGenreName, parseIdArray } from '../utils/helpers.js';
+import { resolveDynamicDatePreset } from '../utils/dateHelpers.js';
 import { createLogger } from '../utils/logger.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const log = createLogger('addon');
 
 const router = Router();
 
-const ADDON_ID = 'community.tmdb.discover.plus';
-const ADDON_NAME = 'TMDB Discover+';
-const ADDON_DESCRIPTION = 'Create custom movie and TV catalogs with powerful TMDB filters';
-const ADDON_VERSION = '2.1.0';
+import { buildManifest, enrichManifestWithGenres } from '../services/manifestService.js';
 
-/**
- * Resolve dynamic date presets to actual dates.
- * @param {Object} filters
- * @param {string} type
- * @returns {Object}
- */
-function resolveDynamicDatePreset(filters, type) {
-  if (!filters?.datePreset) {
-    return filters;
-  }
-
-  const resolved = { ...filters };
-  const today = new Date();
-  const formatDate = (d) => d.toISOString().split('T')[0];
-  const isMovie = type === 'movie';
-  const fromField = isMovie ? 'releaseDateFrom' : 'airDateFrom';
-  const toField = isMovie ? 'releaseDateTo' : 'airDateTo';
-
-  switch (filters.datePreset) {
-    case 'last_30_days': {
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 30);
-      resolved[fromField] = formatDate(thirtyDaysAgo);
-      resolved[toField] = formatDate(today);
-      break;
-    }
-    case 'last_90_days': {
-      const ninetyDaysAgo = new Date(today);
-      ninetyDaysAgo.setDate(today.getDate() - 90);
-      resolved[fromField] = formatDate(ninetyDaysAgo);
-      resolved[toField] = formatDate(today);
-      break;
-    }
-    case 'last_180_days': {
-      const sixMonthsAgo = new Date(today);
-      sixMonthsAgo.setDate(today.getDate() - 180);
-      resolved[fromField] = formatDate(sixMonthsAgo);
-      resolved[toField] = formatDate(today);
-      break;
-    }
-    case 'this_year': {
-      const startOfYear = new Date(today.getFullYear(), 0, 1);
-      resolved[fromField] = formatDate(startOfYear);
-      resolved[toField] = formatDate(today);
-      break;
-    }
-    case 'last_year': {
-      const lastYear = today.getFullYear() - 1;
-      resolved[fromField] = `${lastYear}-01-01`;
-      resolved[toField] = `${lastYear}-12-31`;
-      break;
-    }
-    case 'upcoming': {
-      if (isMovie) {
-        const sixMonthsLater = new Date(today);
-        sixMonthsLater.setMonth(today.getMonth() + 6);
-        resolved[fromField] = formatDate(today);
-        resolved[toField] = formatDate(sixMonthsLater);
-      }
-      break;
-    }
-    default:
-      log.debug('Unknown date preset', { preset: filters.datePreset });
-  }
-
-  delete resolved.datePreset;
-
-  log.debug('Resolved dynamic date preset', { 
-    preset: filters.datePreset, 
-    from: resolved[fromField], 
-    to: resolved[toField] 
-  });
-
-  return resolved;
-}
-
-/** TMDB list page size */
+// Constants
 const TMDB_PAGE_SIZE = 20;
-
-/**
- * Build Stremio manifest for a user
- */
-function buildManifest(userConfig, baseUrl) {
-  const catalogs = (userConfig?.catalogs || [])
-    .filter(c => c.enabled !== false)
-    .map(catalog => ({
-      id: `tmdb-${catalog._id || catalog.name.toLowerCase().replace(/\s+/g, '-')}`,
-      type: catalog.type === 'series' ? 'series' : 'movie',
-      name: catalog.name,
-      pageSize: TMDB_PAGE_SIZE,
-      extra: [ { name: 'skip' }, { name: 'search' } ],
-    }));
-
-  return {
-    id: ADDON_ID,
-    name: ADDON_NAME,
-    description: ADDON_DESCRIPTION,
-    version: ADDON_VERSION,
-    logo: `${baseUrl.replace(/^http:/, 'https:')}/logo.png`,
-    resources: ['catalog', 'meta'],
-    types: ['movie', 'series'],
-    catalogs,
-    // We return IMDB IDs when available (tt...), and fallback to tmdb:{id}.
-    // Include both so Stremio can route meta requests correctly.
-    idPrefixes: ['tmdb-', 'tmdb:', 'tt'],
-    behaviorHints: {
-      configurable: true,
-    },
-    config: [
-      {
-        key: 'tmdbApiKey',
-        type: 'password',
-        title: 'TMDB API Key',
-        default: '',
-        required: false
-      }
-    ],
-  };
-}
 
 function pickPreferredMetaLanguage(config) {
   const pref = config?.preferences?.defaultLanguage;
@@ -161,98 +38,9 @@ router.get('/:userId/manifest.json', async (req, res) => {
 
     const manifest = buildManifest(config || {}, baseUrl);
 
-    if (manifest.catalogs && Array.isArray(manifest.catalogs) && config) {
-        await Promise.all(manifest.catalogs.map(async (catalog) => {
-          try {
-            const helperType = catalog.type === 'series' ? 'series' : 'movie';
-            const staticKey = catalog.type === 'series' ? 'tv' : 'movie';
-
-            let idToName = {};
-            let fullNames = null;
-            try {
-              if (config.tmdbApiKey) {
-                const live = await tmdb.getGenres(config.tmdbApiKey, helperType);
-                if (Array.isArray(live) && live.length > 0) {
-                  live.forEach(g => { idToName[String(g.id)] = g.name; });
-                  fullNames = live.map(g => g.name);
-                }
-              }
-            } catch (err) {
-              idToName = {};
-              fullNames = null;
-            }
-
-            if (!fullNames) {
-              try {
-                const genresPath = path.join(__dirname, '..', 'services', 'tmdb_genres.json');
-                const raw = fs.readFileSync(genresPath, 'utf8');
-                const staticGenreMap = JSON.parse(raw);
-                const mapping = staticGenreMap[staticKey] || {};
-                Object.entries(mapping).forEach(([id, name]) => { idToName[String(id)] = name; });
-                fullNames = Object.values(mapping || {});
-              } catch (err) {
-                idToName = {};
-                fullNames = null;
-              }
-            }
-
-            let options = null;
-            try {
-              const savedCatalog = (config.catalogs || []).find(c => {
-                const idFromStored = `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
-                const idFromIdOnly = `tmdb-${String(c._id)}`;
-                const nameMatch = c.name && catalog.name && c.name.toLowerCase() === catalog.name.toLowerCase();
-                return idFromStored === catalog.id || idFromIdOnly === catalog.id || nameMatch;
-              });
-
-              const parseIdArray = (val) => {
-                if (!val) return [];
-                if (Array.isArray(val)) return val.map(String).filter(Boolean);
-                return String(val).split(',').map(s => s.trim()).filter(Boolean);
-              };
-
-              if (savedCatalog && savedCatalog.filters) {
-                const selected = parseIdArray(savedCatalog.filters.genres);
-                const excluded = parseIdArray(savedCatalog.filters.excludeGenres);
-
-                if (selected.length > 0) {
-                  options = selected.map(gid => idToName[String(gid)]).filter(Boolean);
-                  if ((options.length === 0) && fullNames && fullNames.length > 0) {
-                    const wantedNorm = selected.map(s => normalizeGenreName(s));
-                    const matched = fullNames.filter(name => wantedNorm.includes(normalizeGenreName(name)));
-                    if (matched.length > 0) {
-                      options = matched;
-                    }
-                  }
-
-                  if (!options || options.length === 0) {
-                    log.warn('Could not map saved genres', { catalogId: catalog.id, selectedCount: selected.length });
-                  }
-                } else if (fullNames && fullNames.length > 0) {
-                  if (excluded.length > 0) {
-                    const excludeNames = excluded.map(gid => idToName[String(gid)]).filter(Boolean);
-                    const excludeSet = new Set(excludeNames);
-                    options = fullNames.filter(name => !excludeSet.has(name));
-                  } else {
-                    options = fullNames;
-                  }
-                }
-              } else {
-                if (fullNames && fullNames.length > 0) options = fullNames;
-              }
-            } catch (err) {
-              options = null;
-            }
-
-            if (options && options.length > 0) {
-              catalog.extra = catalog.extra || [];
-              catalog.extra = catalog.extra.filter(e => e.name !== 'genre');
-              catalog.extra.push({ name: 'genre', options, optionsLimit: 1 });
-            }
-          } catch (err) {
-            log.warn('Error injecting genre options into manifest catalog', { error: err.message });
-          }
-        }));
+    // Enrich catalogs with dynamic genre choices (if applicable)
+    if (config) {
+      await enrichManifestWithGenres(manifest, config);
     }
 
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -269,7 +57,7 @@ router.get('/:userId/manifest.json', async (req, res) => {
 function parseExtra(extraString) {
   const params = {};
   if (!extraString) return params;
-  
+
   const parts = extraString.split('&');
   for (const part of parts) {
     const [key, value] = part.split('=');
@@ -333,7 +121,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     const search = extra.search || null;
 
     const page = Math.floor(skip / TMDB_PAGE_SIZE) + 1;
-    
+
     log.debug('Catalog request', { catalogId, skip, page, extra });
 
     const config = await getUserConfig(userId);
@@ -459,7 +247,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
         });
         const maxPage = Math.min(discoverResult.total_pages || 1, 500);
         const randomPage = Math.floor(Math.random() * maxPage) + 1;
-        
+
         result = await tmdb.discover(config.tmdbApiKey, {
           type,
           ...resolvedFilters,
@@ -485,7 +273,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     const metas = await Promise.all(
       allItems.map(async (item) => {
         let imdbId = null;
-        
+
         const externalIds = await tmdb.getExternalIds(config.tmdbApiKey, item.id, type);
         imdbId = externalIds?.imdb_id || null;
 
@@ -498,7 +286,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     );
 
     const filteredMetas = metas.filter(m => m !== null);
-    
+
     log.debug('Returning catalog results', { count: filteredMetas.length, page, skip });
 
     res.json({

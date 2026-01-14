@@ -11,10 +11,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const log = createLogger('tmdb');
 
 const httpsAgent = new https.Agent({
+  keepAlive: true,
   rejectUnauthorized: process.env.DISABLE_TLS_VERIFY !== 'true'
 });
 
-const cache = new NodeCache({ 
+const cache = new NodeCache({
   stdTTL: 3600,  // 1 hour default TTL
   checkperiod: 600 // Check for expired keys every 10 min
 });
@@ -72,9 +73,9 @@ function assertAllowedUrl(url, { origin, pathPrefix }) {
 }
 
 /**
- * Make a request to TMDB API
+ * Make a request to TMDB API with retries
  */
-async function tmdbFetch(endpoint, apiKey, params = {}) {
+async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
   const ep = normalizeEndpoint(endpoint);
   const url = new URL(TMDB_API_ORIGIN);
   url.pathname = `${TMDB_API_BASE_PATH}${ep}`;
@@ -83,7 +84,7 @@ async function tmdbFetch(endpoint, apiKey, params = {}) {
   assertAllowedUrl(url, { origin: TMDB_API_ORIGIN, pathPrefix: `${TMDB_API_BASE_PATH}/` });
 
   url.searchParams.set('api_key', apiKey);
-  
+
   Object.entries(params).forEach(([key, value]) => {
     // Prevent callers from overriding api_key via params.
     if (key === 'api_key') return;
@@ -96,25 +97,58 @@ async function tmdbFetch(endpoint, apiKey, params = {}) {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  try {
-    if (process.env.DEBUG_TMDB === '1') {
-      log.debug('TMDB request', { url: redactTmdbUrl(url.toString()) });
-    }
+  let lastError;
 
-    const response = await fetch(url.toString(), { agent: httpsAgent });
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.status_message || `TMDB API error: ${response.status}`);
-    }
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      if (process.env.DEBUG_TMDB === '1') {
+        log.debug(`TMDB request (attempt ${attempt + 1})`, { url: redactTmdbUrl(url.toString()) });
+      }
 
-    const data = await response.json();
-    cache.set(cacheKey, data);
-    return data;
-  } catch (error) {
-    log.error('TMDB fetch error', { error: redactTmdbUrl(error.message) });
-    throw error;
+      const response = await fetch(url.toString(), { agent: httpsAgent });
+
+      if (!response.ok) {
+        // If 429 (Too Many Requests), we might want to respect Retry-After header, 
+        // but typically standard backoff is enough for loose rate limits.
+        // For 5xx errors, we retry. For 4xx (except maybe 429), we generally don't retry.
+        if (response.status >= 500 || response.status === 429) {
+          throw new Error(`TMDB API retryable error: ${response.status}`);
+        }
+
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.status_message || `TMDB API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      cache.set(cacheKey, data);
+      return data;
+    } catch (error) {
+      lastError = error;
+      const isNetworkError =
+        error.code === 'ECONNREFUSED' ||
+        error.code === 'ECONNRESET' ||
+        error.code === 'ETIMEDOUT' ||
+        error.message.includes('retryable error') ||
+        error.name === 'FetchError';
+
+      if (attempt < retries && isNetworkError) {
+        // Exponential backoff: 300ms, 600ms, 1200ms...
+        const delay = 300 * Math.pow(2, attempt);
+        log.warn(`TMDB request failed, retrying in ${delay}ms`, {
+          attempt: attempt + 1,
+          error: redactTmdbUrl(error.message)
+        });
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // If we're out of retries or it's not a retryable error, break.
+      break;
+    }
   }
+
+  log.error('TMDB fetch error after retries', { error: redactTmdbUrl(lastError.message) });
+  throw lastError;
 }
 
 /**
@@ -234,7 +268,7 @@ async function getNetworksViaWebsite(query) {
  */
 export async function getGenres(apiKey, type = 'movie') {
   const mediaType = type === 'series' ? 'tv' : 'movie';
-  
+
   if (genreCache[mediaType]) {
     return genreCache[mediaType];
   }
@@ -354,18 +388,18 @@ export async function discover(apiKey, options = {}) {
   if (mediaType === 'movie') {
     // Region for regional release dates
     if (region) params.region = region;
-    
+
     // Release date filters
     if (releaseDateFrom) params['primary_release_date.gte'] = releaseDateFrom;
     if (releaseDateTo) params['primary_release_date.lte'] = releaseDateTo;
-    
+
     // Release type filter (1=Premiere, 2=Limited, 3=Theatrical, 4=Digital, 5=Physical, 6=TV)
     if (releaseType) {
       params.with_release_type = releaseType;
     } else if (releaseTypes.length > 0) {
       params.with_release_type = releaseTypes.join('|');
     }
-    
+
     // Certification (age rating) - supports multiple values with pipe separator
     if (certifications.length > 0) {
       params.certification = certifications.join('|');
@@ -381,17 +415,17 @@ export async function discover(apiKey, options = {}) {
     // Air date filters (when episodes air)
     if (airDateFrom) params['air_date.gte'] = airDateFrom;
     if (airDateTo) params['air_date.lte'] = airDateTo;
-    
+
     // First air date filters (when show premiered) - separate from episode air dates
     if (firstAirDateFrom) params['first_air_date.gte'] = firstAirDateFrom;
     if (firstAirDateTo) params['first_air_date.lte'] = firstAirDateTo;
-    
+
     // Networks
     if (withNetworks) params.with_networks = withNetworks;
-    
+
     // Status (0=Returning, 1=Planned, 2=Pilot, 3=Ended, 4=Cancelled, 5=Production)
     if (tvStatus) params.with_status = tvStatus;
-    
+
     // Type (0=Documentary, 1=News, 2=Miniseries, 3=Reality, 4=Scripted, 5=Talk, 6=Video)
     if (tvType) params.with_type = tvType;
   }
@@ -431,14 +465,14 @@ export async function discover(apiKey, options = {}) {
 export async function fetchSpecialList(apiKey, listType, type = 'movie', options = {}) {
   const { page = 1, language, displayLanguage, region } = options;
   const mediaType = type === 'series' ? 'tv' : 'movie';
-  
+
   const params = { page };
   const languageParam = displayLanguage || language;
   if (languageParam) params.language = languageParam;
   if (region) params.region = region;
 
   let endpoint;
-  
+
   switch (listType) {
     case 'trending_day':
       endpoint = `/trending/${mediaType}/day`;
@@ -488,7 +522,7 @@ export async function fetchSpecialList(apiKey, listType, type = 'movie', options
 export async function getExternalIds(apiKey, tmdbId, type = 'movie') {
   const mediaType = type === 'series' ? 'tv' : 'movie';
   const cacheKey = `external_ids_${mediaType}_${tmdbId}`;
-  
+
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -629,12 +663,12 @@ export function toStremioMeta(item, type, imdbId = null) {
     imdbId: imdbId || null,
     type: type === 'series' ? 'series' : 'movie',
     name: title,
-    poster: item.poster_path 
-      ? `${TMDB_IMAGE_BASE}/w500${item.poster_path}` 
+    poster: item.poster_path
+      ? `${TMDB_IMAGE_BASE}/w500${item.poster_path}`
       : null,
     posterShape: 'poster',
-    background: item.backdrop_path 
-      ? `${TMDB_IMAGE_BASE}/w1280${item.backdrop_path}` 
+    background: item.backdrop_path
+      ? `${TMDB_IMAGE_BASE}/w1280${item.backdrop_path}`
       : null,
     description: item.overview || '',
     releaseInfo: year,
