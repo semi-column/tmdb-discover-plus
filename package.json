@@ -1,0 +1,33 @@
+{
+  "name": "tmdb-discover-plus",
+  "version": "1.5.0",
+  "description": "TMDB Discover+ - Custom Catalog Builder for Stremio",
+  "main": "server/src/index.js",
+  "type": "module",
+  "engines": {
+    "node": "18.x"
+  },
+  "scripts": {
+    "start": "node server/src/index.js",
+    "build": "cd client && npm install && npm run build",
+    "heroku-postbuild": "cd server && npm install && cd ../client && npm install --include=dev && npm run build",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "keywords": ["stremio", "addon", "tmdb", "catalog"],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0",
+    "nanoid": "^5.0.4",
+    "node-cache": "^5.1.2",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
