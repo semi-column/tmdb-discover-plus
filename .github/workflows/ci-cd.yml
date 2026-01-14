@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Ensure only one workflow runs at a time per branch
+# New runs will wait for the previous one to complete
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   NODE_VERSION: '18.x'
 
@@ -103,7 +109,7 @@ jobs:
         run: |
           echo "## 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** https://tmdb-discover-plus.beamup.dev" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** http://84f50d1c22e7-tmdb-discover-plus.baby-beamup.club/" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
