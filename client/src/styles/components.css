@@ -3029,3 +3029,218 @@ input[type="date"] {
   }
 }
 
+/* ======================================
+   Config Dropdown Component
+   ====================================== */
+
+.config-dropdown {
+  position: relative;
+  z-index: 100;
+}
+
+.config-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  max-width: 350px;
+}
+
+.config-dropdown-trigger.open {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.config-dropdown-current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.config-dropdown-id {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.config-dropdown-summary {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.config-dropdown-chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.config-dropdown-chevron.rotate {
+  transform: rotate(180deg);
+}
+
+.config-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  min-width: 320px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: dropdownFadeIn 0.15s ease;
+}
+
+.config-dropdown-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+}
+
+.config-dropdown-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.config-dropdown-item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+}
+
+.config-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.config-dropdown-item.active {
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.config-dropdown-item-content {
+  flex: 1;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  min-width: 0;
+}
+
+.config-dropdown-item-content:hover {
+  background: var(--bg-hover);
+}
+
+.config-dropdown-item.active .config-dropdown-item-content:hover {
+  background: rgba(124, 58, 237, 0.12);
+}
+
+.config-dropdown-item-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.config-dropdown-item-id code {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.config-dropdown-item-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.config-dropdown-item-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.config-dropdown-delete {
+  padding: 8px;
+  margin-right: 8px;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.config-dropdown-delete:hover {
+  color: var(--error);
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.config-dropdown-delete.btn-danger-active {
+  color: var(--error);
+  background: rgba(248, 81, 73, 0.2);
+}
+
+.config-dropdown-confirm-tooltip {
+  position: absolute;
+  right: 48px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 8px;
+  background: var(--error);
+  color: white;
+  font-size: 11px;
+  border-radius: 4px;
+  white-space: nowrap;
+  animation: fadeIn 0.15s ease;
+}
+
+.config-dropdown-confirm-tooltip::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-left: 4px solid var(--error);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+/* Mobile responsive for config dropdown */
+@media (max-width: 768px) {
+  .config-dropdown-trigger {
+    min-width: auto;
+    max-width: none;
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .config-dropdown-menu {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    min-width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    max-height: 60vh;
+    z-index: 10000;
+  }
+  
+  .config-dropdown-list {
+    max-height: 50vh;
+  }
+  
+  .config-dropdown-summary {
+    display: none;
+  }
+}
+
