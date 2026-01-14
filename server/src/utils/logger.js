@@ -124,5 +124,4 @@ export function createLogger(context) {
   };
 }
 
-// Default logger for quick imports
 export const logger = createLogger('app');
