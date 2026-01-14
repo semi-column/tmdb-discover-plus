@@ -26,9 +26,6 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId
   };
 
   const manifestUrl = installUrl;
-  const desktopInstallUrl = stremioUrl || (typeof manifestUrl === 'string'
-    ? manifestUrl.replace(/^https?:\/\//, 'stremio://')
-    : '');
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -47,7 +44,7 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId
 
           {/* One-Click Install */}
           <div style={{ marginBottom: '24px' }}>
-            <button 
+            <button
               className="btn btn-primary w-full"
               onClick={handleInstall}
               style={{ padding: '16px 24px', fontSize: '16px' }}
@@ -64,7 +61,7 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId
           <div className="install-link-box">
             <div className="install-link-label">Addon Manifest URL</div>
             <div className="install-link">{manifestUrl}</div>
-            <button 
+            <button
               className="btn btn-secondary btn-sm copy-button"
               onClick={() => handleCopy(manifestUrl)}
             >
@@ -82,26 +79,11 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId
             </button>
           </div>
 
-          {/* Desktop deep link (optional) */}
-          {desktopInstallUrl ? (
-            <div className="install-link-box" style={{ marginTop: '12px' }}>
-              <div className="install-link-label">Desktop Install URL (optional)</div>
-              <div className="install-link">{desktopInstallUrl}</div>
-              <button
-                className="btn btn-secondary btn-sm copy-button"
-                onClick={() => handleCopy(desktopInstallUrl)}
-              >
-                <Copy size={14} />
-                Copy URL
-              </button>
-            </div>
-          ) : null}
-
           {/* Configure Link */}
           <div className="install-link-box">
             <div className="install-link-label">Configuration URL (Bookmark this!)</div>
             <div className="install-link">{configureUrl}</div>
-            <button 
+            <button
               className="btn btn-secondary btn-sm copy-button"
               onClick={() => handleCopy(configureUrl)}
             >
@@ -110,8 +92,8 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId
             </button>
           </div>
 
-          <div style={{ 
-            background: 'rgba(124, 58, 237, 0.1)', 
+          <div style={{
+            background: 'rgba(124, 58, 237, 0.1)',
             border: '1px solid var(--accent-primary)',
             borderRadius: 'var(--radius-md)',
             padding: '14px',
@@ -128,9 +110,9 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId
           <button className="btn btn-ghost" onClick={onClose}>
             Close
           </button>
-          <a 
+          <a
             href={`https://web.stremio.com/#/addons?addon=${encodeURIComponent(manifestUrl)}`}
-            target="_blank" 
+            target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary"
           >
