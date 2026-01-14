@@ -79,10 +79,16 @@ export async function run() {
         const importUserId = (await import('../utils.js')).getSharedUserId();
         assert(importUserId, 'User ID not set from previous test');
 
-        // Create/update config with datePreset
+        // First get existing config to preserve catalogs
+        const existingRes = await apiRequest(`/api/config/${importUserId}?apiKey=${CONFIG.tmdbApiKey}`);
+        assert(existingRes.ok, `Get existing config failed: ${existingRes.status}`);
+        const existingCatalogs = existingRes.data.catalogs || [];
+
+        // Add datePreset catalog to existing ones
         const configData = {
             tmdbApiKey: CONFIG.tmdbApiKey,
             catalogs: [
+                ...existingCatalogs,
                 {
                     id: 'test-date-preset',
                     name: 'Date Preset Test',
