@@ -78,6 +78,36 @@ async function tmdbFetch(endpoint, apiKey, params = {}) {
   }
 }
 
+/**
+ * Resolve a TMDB item by IMDB ID.
+ * Uses /find/{external_id} endpoint.
+ */
+export async function findByImdbId(apiKey, imdbId, type = 'movie', options = {}) {
+  const id = String(imdbId || '').trim();
+  if (!apiKey || !id) return null;
+
+  const mediaType = type === 'series' ? 'tv' : 'movie';
+  const params = {
+    external_source: 'imdb_id',
+  };
+  const languageParam = options?.displayLanguage || options?.language;
+  if (languageParam) params.language = languageParam;
+
+  try {
+    const data = await tmdbFetch(`/find/${encodeURIComponent(id)}`, apiKey, params);
+    const bucket = mediaType === 'tv' ? data?.tv_results : data?.movie_results;
+    const first = Array.isArray(bucket) && bucket.length > 0 ? bucket[0] : null;
+    if (!first?.id) return null;
+    return {
+      tmdbId: first.id,
+      mediaType,
+      raw: first,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function normalizeLoose(s) {
   return String(s || '')
     .toLowerCase()
@@ -432,9 +462,74 @@ export async function getExternalIds(apiKey, tmdbId, type = 'movie') {
  */
 export async function getDetails(apiKey, tmdbId, type = 'movie') {
   const mediaType = type === 'series' ? 'tv' : 'movie';
+  // Allow localization via TMDB `language` parameter.
+  // eslint-disable-next-line prefer-rest-params
+  const maybeOptions = arguments.length >= 4 ? arguments[3] : undefined;
+  const languageParam = maybeOptions?.displayLanguage || maybeOptions?.language;
   return tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, {
-    append_to_response: 'external_ids,credits'
+    append_to_response: 'external_ids,credits',
+    ...(languageParam ? { language: languageParam } : {}),
   });
+}
+
+/**
+ * Convert TMDB details to a full Stremio Meta Object.
+ */
+export function toStremioFullMeta(details, type, imdbId = null) {
+  if (!details) return {};
+  const isMovie = type === 'movie';
+  const title = isMovie ? details.title : details.name;
+  const releaseDate = isMovie ? details.release_date : details.first_air_date;
+  const year = releaseDate ? String(releaseDate).split('-')[0] : '';
+
+  const genres = Array.isArray(details.genres)
+    ? details.genres.map(g => g?.name).filter(Boolean)
+    : [];
+
+  // Credits (best-effort; Stremio warns these may be deprecated but still supported)
+  const credits = details.credits || {};
+  const cast = Array.isArray(credits.cast)
+    ? credits.cast.slice(0, 20).map(p => p?.name).filter(Boolean)
+    : [];
+
+  const crew = Array.isArray(credits.crew) ? credits.crew : [];
+  const directors = crew.filter(p => p?.job === 'Director').map(p => p?.name).filter(Boolean);
+
+  // Runtime: movie.runtime (minutes) or tv.episode_run_time (array)
+  let runtimeMin = null;
+  if (isMovie && typeof details.runtime === 'number') runtimeMin = details.runtime;
+  if (!isMovie && Array.isArray(details.episode_run_time) && details.episode_run_time.length > 0) {
+    const first = details.episode_run_time.find(v => typeof v === 'number');
+    if (typeof first === 'number') runtimeMin = first;
+  }
+
+  const poster = details.poster_path ? `${TMDB_IMAGE_BASE}/w500${details.poster_path}` : null;
+  const background = details.backdrop_path ? `${TMDB_IMAGE_BASE}/w1280${details.backdrop_path}` : null;
+  const logo = Array.isArray(details.images?.logos) && details.images.logos.length > 0
+    ? details.images.logos.find(l => l?.file_path)?.file_path
+    : null;
+
+  return {
+    id: imdbId || `tmdb:${details.id}`,
+    tmdbId: details.id,
+    imdbId: imdbId || details?.external_ids?.imdb_id || null,
+    type: type === 'series' ? 'series' : 'movie',
+    name: title,
+    poster,
+    posterShape: 'poster',
+    background,
+    logo: logo ? `${TMDB_IMAGE_BASE}/w300${logo}` : undefined,
+    description: details.overview || '',
+    releaseInfo: year,
+    imdbRating: typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null,
+    genres,
+    cast: cast.length > 0 ? cast : undefined,
+    director: directors.length > 0 ? directors : undefined,
+    runtime: runtimeMin ? `${runtimeMin}m` : undefined,
+    language: details.original_language || undefined,
+    country: Array.isArray(details.origin_country) ? details.origin_country.join(', ') : undefined,
+    released: releaseDate ? new Date(releaseDate).toISOString() : undefined,
+  };
 }
 
 /**
@@ -487,6 +582,7 @@ export function toStremioMeta(item, type, imdbId = null) {
   return {
     id: imdbId || `tmdb:${item.id}`,
     tmdbId: item.id,
+    imdbId: imdbId || null,
     type: type === 'series' ? 'series' : 'movie',
     name: title,
     poster: item.poster_path 

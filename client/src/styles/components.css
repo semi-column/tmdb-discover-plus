@@ -2281,6 +2281,50 @@ input[type="date"] {
   border: 1px solid var(--border-color);
 }
 
+.range-slider-value.editable {
+  cursor: text;
+  user-select: none;
+}
+
+.range-slider-value.editable:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.range-slider-value-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.range-slider-value-input {
+  width: 72px;
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  padding: 0;
+  outline: none;
+}
+
+/* Hide number spinners (up/down arrows) */
+.range-slider-value-input::-webkit-outer-spin-button,
+.range-slider-value-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.range-slider-value-input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.range-slider-value-input:focus {
+  outline: none;
+}
+
 .range-slider-track-container {
   position: relative;
   height: 24px;

@@ -1171,6 +1171,7 @@ export function CatalogEditor({
                       ]}
                       onChange={handleYearRangeChange}
                       formatValue={(v) => v}
+                      showInputs
                     />
                   </div>
 
@@ -1181,13 +1182,14 @@ export function CatalogEditor({
                       tooltip="TMDB average user rating (0-10 scale). Higher ratings indicate better reviews."
                       min={0}
                       max={10}
-                      step={0.5}
+                      step={0.1}
                       value={[
                         localCatalog?.filters?.ratingMin || 0,
                         localCatalog?.filters?.ratingMax || 10
                       ]}
                       onChange={handleRatingRangeChange}
                       formatValue={(v) => v.toFixed(1)}
+                      showInputs
                     />
                   </div>
 
@@ -1198,13 +1200,14 @@ export function CatalogEditor({
                       tooltip="Filter by total runtime. Perfect for finding quick watches or epic adventures."
                       min={0}
                       max={400}
-                      step={5}
+                      step={1}
                       value={[
                         localCatalog?.filters?.runtimeMin || 0,
                         localCatalog?.filters?.runtimeMax || 400
                       ]}
                       onChange={handleRuntimeRangeChange}
                       formatValue={(v) => v === 0 ? 'Any' : v === 400 ? '400+' : `${v}m`}
+                      showInputs
                     />
                     <div className="runtime-presets" style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       <button
@@ -1266,10 +1269,11 @@ export function CatalogEditor({
                     tooltip="Requires this many user ratings. Higher values filter out obscure titles and ensure quality."
                     min={0}
                     max={10000}
-                    step={100}
+                    step={1}
                     value={localCatalog?.filters?.voteCountMin ?? 100}
                     onChange={(v) => handleFiltersChange('voteCountMin', v)}
                     formatValue={(v) => v.toLocaleString()}
+                    showInput
                   />
                 </div>
               )}

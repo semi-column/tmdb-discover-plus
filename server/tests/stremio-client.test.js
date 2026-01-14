@@ -125,6 +125,24 @@ async function main() {
     assert(Array.isArray(cat.data?.metas), 'catalog response metas should be array');
     console.log(`✅ Catalog OK (items: ${cat.data.metas.length})`);
 
+    // 3.5) Fetch meta for first item (if any)
+    if (cat.data.metas.length > 0) {
+      const firstItem = cat.data.metas[0];
+      assert(firstItem?.id, 'catalog first item missing id');
+      const meta = await fetchJson(`/${encodeURIComponent(userId)}/meta/${encodeURIComponent(firstItem.type)}/${encodeURIComponent(firstItem.id)}.json`);
+      assert(meta.status === 200, `GET meta expected 200, got ${meta.status}`);
+      assert(meta.data && typeof meta.data === 'object', 'meta response should be JSON object');
+      assert(meta.data.meta && typeof meta.data.meta === 'object', 'meta response missing meta object');
+      // Best-effort: some IDs may not resolve; addon returns {} in that case
+      if (meta.data.meta.id) {
+        assert(meta.data.meta.type === firstItem.type, 'meta.type should match');
+        assert(typeof meta.data.meta.name === 'string', 'meta.name should be string');
+        // ensure we include imdbId field for interoperability
+        assert(Object.prototype.hasOwnProperty.call(meta.data.meta, 'imdbId'), 'meta.imdbId should exist');
+      }
+      console.log('✅ Meta OK');
+    }
+
     // 4) Catalog search
     const q = encodeURIComponent('Matrix');
     const catSearch = await fetchJson(`/${encodeURIComponent(userId)}/catalog/${encodeURIComponent(firstCatalog.type)}/${encodeURIComponent(firstCatalog.id)}/search=${q}.json`);

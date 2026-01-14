@@ -116,10 +116,12 @@ function buildManifest(userConfig, baseUrl) {
     description: ADDON_DESCRIPTION,
     version: ADDON_VERSION,
     logo: `${baseUrl.replace(/^http:/, 'https:')}/logo.png`,
-    resources: ['catalog', 'meta', 'stream', 'subtitles'],
+    resources: ['catalog', 'meta'],
     types: ['movie', 'series'],
     catalogs,
-    idPrefixes: ['tmdb-'],
+    // We return IMDB IDs when available (tt...), and fallback to tmdb:{id}.
+    // Include both so Stremio can route meta requests correctly.
+    idPrefixes: ['tmdb-', 'tmdb:', 'tt'],
     behaviorHints: {
       configurable: true,
     },
@@ -133,6 +135,22 @@ function buildManifest(userConfig, baseUrl) {
       }
     ],
   };
+}
+
+function pickPreferredMetaLanguage(config) {
+  const pref = config?.preferences?.defaultLanguage;
+  if (pref) return pref;
+
+  const enabled = (config?.catalogs || []).filter(c => c?.enabled !== false);
+  const langs = enabled
+    .map(c => c?.filters?.displayLanguage)
+    .filter(Boolean)
+    .map(String);
+
+  // If user has a single displayLanguage across catalogs, treat that as preference.
+  const uniq = Array.from(new Set(langs));
+  if (uniq.length === 1) return uniq[0];
+  return 'en';
 }
 
 router.get('/:userId/manifest.json', async (req, res) => {
@@ -493,6 +511,87 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     res.json({ metas: [] });
   }
 }
+
+/**
+ * Meta handler
+ * Supports both IDs:
+ * - IMDB: tt123...
+ * - TMDB: tmdb:123
+ */
+async function handleMetaRequest(userId, type, id, extra, res) {
+  try {
+    const config = await getUserConfig(userId);
+    if (!config) return res.json({ meta: {} });
+
+    const apiKey = config.tmdbApiKey;
+    if (!apiKey) return res.json({ meta: {} });
+
+    const requestedId = String(id || '');
+    const language = extra?.displayLanguage || extra?.language || pickPreferredMetaLanguage(config);
+
+    let tmdbId = null;
+    let imdbId = null;
+
+    if (/^tt\d+/i.test(requestedId)) {
+      imdbId = requestedId;
+      const found = await tmdb.findByImdbId(apiKey, imdbId, type, { language });
+      tmdbId = found?.tmdbId || null;
+    } else if (requestedId.startsWith('tmdb:')) {
+      tmdbId = Number(requestedId.replace('tmdb:', ''));
+    } else if (/^\d+$/.test(requestedId)) {
+      // Fallback: allow raw numeric TMDB id
+      tmdbId = Number(requestedId);
+    }
+
+    if (!tmdbId) return res.json({ meta: {} });
+
+    const details = await tmdb.getDetails(apiKey, tmdbId, type, { language });
+    const detailsImdb = details?.external_ids?.imdb_id || null;
+    imdbId = imdbId || detailsImdb;
+
+    const meta = tmdb.toStremioFullMeta(details, type, imdbId);
+
+    res.json({
+      meta,
+      cacheMaxAge: 3600,
+      staleRevalidate: 86400,
+      staleError: 86400,
+    });
+  } catch (error) {
+    log.error('Meta error', { error: error.message });
+    res.json({ meta: {} });
+  }
+}
+
+// Meta handler with extra args in path
+router.get('/:userId/meta/:type/:id/:extra.json', async (req, res) => {
+  const { userId, type, id } = req.params;
+  const original = req.originalUrl || req.url || '';
+  let rawExtra = req.params.extra || '';
+  try {
+    const splitMarker = `/${id}/`;
+    const parts = original.split(splitMarker);
+    if (parts.length > 1) {
+      let after = parts[1];
+      const qIdx = after.indexOf('?');
+      if (qIdx !== -1) after = after.substring(0, qIdx);
+      const jsonIdx = after.indexOf('.json');
+      if (jsonIdx !== -1) after = after.substring(0, jsonIdx);
+      rawExtra = after;
+    }
+  } catch {
+    rawExtra = req.params.extra || '';
+  }
+
+  const extraParams = parseExtra(rawExtra);
+  await handleMetaRequest(userId, type, id, extraParams, res);
+});
+
+// Meta handler without extra args
+router.get('/:userId/meta/:type/:id.json', async (req, res) => {
+  const { userId, type, id } = req.params;
+  await handleMetaRequest(userId, type, id, { ...req.query }, res);
+});
 
 /** Catalog handler with extra params in path */
 router.get('/:userId/catalog/:type/:catalogId/:extra.json', async (req, res) => {

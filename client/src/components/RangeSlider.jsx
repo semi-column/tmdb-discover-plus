@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Tooltip } from './Tooltip';
 
 export function RangeSlider({
@@ -10,13 +10,34 @@ export function RangeSlider({
   label,
   tooltip,
   formatValue = (v) => v,
+  // When true, the value pill becomes editable (click to type exact values)
   showInputs = false,
 }) {
   const [localValue, setLocalValue] = useState(value);
+  const [editing, setEditing] = useState(false);
+  const minInputRef = useRef(null);
   
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
+
+  useEffect(() => {
+    if (!showInputs) {
+      setEditing(false);
+      return;
+    }
+    if (editing) {
+      // Focus first input when entering edit mode
+      queueMicrotask(() => {
+        try {
+          minInputRef.current?.focus();
+          minInputRef.current?.select?.();
+        } catch {
+          // ignore
+        }
+      });
+    }
+  }, [editing, showInputs]);
 
   const handleMinChange = useCallback((newMin) => {
     const clampedMin = Math.min(Math.max(min, newMin), localValue[1]);
@@ -45,9 +66,58 @@ export function RangeSlider({
             {label}
             {tooltip && <Tooltip text={tooltip} />}
           </span>
-          <span className="range-slider-value">
-            {formatValue(localValue[0])} — {formatValue(localValue[1])}
-          </span>
+          {showInputs ? (
+            <div
+              className={`range-slider-value editable ${editing ? 'editing' : ''}`}
+              role="button"
+              tabIndex={0}
+              title="Click to edit"
+              onClick={() => setEditing(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') setEditing(true);
+                if (e.key === 'Escape') setEditing(false);
+              }}
+              onBlurCapture={(e) => {
+                // close edit mode when focus leaves the value container
+                if (editing && !e.currentTarget.contains(e.relatedTarget)) {
+                  setEditing(false);
+                }
+              }}
+            >
+              {editing ? (
+                <div className="range-slider-value-edit">
+                  <input
+                    ref={minInputRef}
+                    type="number"
+                    min={min}
+                    max={localValue[1]}
+                    step={step}
+                    value={localValue[0]}
+                    onChange={(e) => handleMinChange(Number(e.target.value))}
+                    className="range-slider-value-input"
+                  />
+                  <span className="range-slider-separator">to</span>
+                  <input
+                    type="number"
+                    min={localValue[0]}
+                    max={max}
+                    step={step}
+                    value={localValue[1]}
+                    onChange={(e) => handleMaxChange(Number(e.target.value))}
+                    className="range-slider-value-input"
+                  />
+                </div>
+              ) : (
+                <span>
+                  {formatValue(localValue[0])} — {formatValue(localValue[1])}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="range-slider-value">
+              {formatValue(localValue[0])} — {formatValue(localValue[1])}
+            </span>
+          )}
         </div>
       )}
       
@@ -82,29 +152,6 @@ export function RangeSlider({
         />
       </div>
 
-      {showInputs && (
-        <div className="range-slider-inputs">
-          <input
-            type="number"
-            min={min}
-            max={localValue[1]}
-            step={step}
-            value={localValue[0]}
-            onChange={(e) => handleMinChange(Number(e.target.value))}
-            className="range-slider-input"
-          />
-          <span className="range-slider-separator">to</span>
-          <input
-            type="number"
-            min={localValue[0]}
-            max={max}
-            step={step}
-            value={localValue[1]}
-            onChange={(e) => handleMaxChange(Number(e.target.value))}
-            className="range-slider-input"
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -118,12 +165,33 @@ export function SingleSlider({
   label,
   tooltip,
   formatValue = (v) => v,
+  // When true, the value pill becomes editable (click to type an exact value)
+  showInput = false,
 }) {
   const [localValue, setLocalValue] = useState(value);
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef(null);
   
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
+
+  useEffect(() => {
+    if (!showInput) {
+      setEditing(false);
+      return;
+    }
+    if (editing) {
+      queueMicrotask(() => {
+        try {
+          inputRef.current?.focus();
+          inputRef.current?.select?.();
+        } catch {
+          // ignore
+        }
+      });
+    }
+  }, [editing, showInput]);
 
   const handleChange = (newValue) => {
     const clamped = Math.min(Math.max(min, newValue), max);
@@ -141,7 +209,41 @@ export function SingleSlider({
             {label}
             {tooltip && <Tooltip text={tooltip} />}
           </span>
-          <span className="range-slider-value">{formatValue(localValue)}</span>
+          {showInput ? (
+            <div
+              className={`range-slider-value editable ${editing ? 'editing' : ''}`}
+              role="button"
+              tabIndex={0}
+              title="Click to edit"
+              onClick={() => setEditing(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') setEditing(true);
+                if (e.key === 'Escape') setEditing(false);
+              }}
+              onBlurCapture={(e) => {
+                if (editing && !e.currentTarget.contains(e.relatedTarget)) {
+                  setEditing(false);
+                }
+              }}
+            >
+              {editing ? (
+                <input
+                  ref={inputRef}
+                  type="number"
+                  min={min}
+                  max={max}
+                  step={step}
+                  value={localValue}
+                  onChange={(e) => handleChange(Number(e.target.value))}
+                  className="range-slider-value-input"
+                />
+              ) : (
+                <span>{formatValue(localValue)}</span>
+              )}
+            </div>
+          ) : (
+            <span className="range-slider-value">{formatValue(localValue)}</span>
+          )}
         </div>
       )}
       
@@ -163,6 +265,7 @@ export function SingleSlider({
           className="range-slider-thumb"
         />
       </div>
+
     </div>
   );
 }
