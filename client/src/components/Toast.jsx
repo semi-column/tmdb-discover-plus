@@ -1,11 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, X } from 'lucide-react';
 
-export function Toast({ message, type = 'success', onClose, duration = 4000 }) {
+export function Toast({ id, message, type = 'success', removeToast, duration = 2500 }) {
+  // Create stable callback reference
+  const handleClose = useCallback(() => {
+    removeToast(id);
+  }, [id, removeToast]);
+
   useEffect(() => {
-    const timer = setTimeout(onClose, duration);
+    const timer = setTimeout(handleClose, duration);
     return () => clearTimeout(timer);
-  }, [onClose, duration]);
+  }, [handleClose, duration]);
 
   return (
     <div className={`toast ${type}`}>
@@ -17,7 +22,7 @@ export function Toast({ message, type = 'success', onClose, duration = 4000 }) {
         )}
       </div>
       <span className="toast-message">{message}</span>
-      <button className="btn btn-ghost btn-icon" onClick={onClose}>
+      <button className="btn btn-ghost btn-icon" onClick={handleClose}>
         <X size={16} />
       </button>
     </div>
@@ -30,9 +35,10 @@ export function ToastContainer({ toasts, removeToast }) {
       {toasts.map((toast) => (
         <Toast
           key={toast.id}
+          id={toast.id}
           message={toast.message}
           type={toast.type}
-          onClose={() => removeToast(toast.id)}
+          removeToast={removeToast}
         />
       ))}
     </div>

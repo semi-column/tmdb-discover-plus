@@ -34,25 +34,27 @@ const presetIcons = {
 // Check if we're on mobile
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
-  
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  
+
   return isMobile;
 };
 
-export function CatalogSidebar({ 
-  catalogs, 
-  activeCatalog, 
-  onSelectCatalog, 
+export function CatalogSidebar({
+  catalogs,
+  activeCatalog,
+  onSelectCatalog,
   onAddCatalog,
   onAddPresetCatalog,
   onDeleteCatalog,
   onReorderCatalogs,
   presetCatalogs = { movie: [], series: [] },
+  configName = '',
+  onConfigNameChange,
 }) {
   const isMobile = useIsMobile();
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
@@ -168,17 +170,33 @@ export function CatalogSidebar({
     );
   };
 
+  // Get placeholder text - fallback to first catalog name
+  const getPlaceholder = () => {
+    if (catalogs.length > 0 && catalogs[0].name) {
+      return catalogs[0].name;
+    }
+    return 'Untitled Config';
+  };
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <h3 className="sidebar-title">Your Catalogs</h3>
-        <button 
+        <div className="config-name-wrapper">
+          <input
+            type="text"
+            className="config-name-input"
+            value={configName}
+            onChange={(e) => onConfigNameChange && onConfigNameChange(e.target.value)}
+            placeholder={getPlaceholder()}
+          />
+        </div>
+        <button
           className="btn btn-primary btn-sm"
           onClick={onAddCatalog}
           title="Add custom catalog"
         >
           <Plus size={16} />
-          Custom
+          Add Catalog
         </button>
       </div>
 
@@ -215,10 +233,10 @@ export function CatalogSidebar({
       {/* Preset Catalogs Section */}
       <div className="sidebar-section">
         <h4 className="sidebar-section-title">Quick Add Presets</h4>
-        
+
         {/* Movie Presets */}
         <div className={`preset-group ${moviePresetsCollapsed ? 'collapsed' : ''}`}>
-          <div 
+          <div
             className="preset-group-header"
             onClick={() => setMoviePresetsCollapsed(!moviePresetsCollapsed)}
           >
@@ -249,7 +267,7 @@ export function CatalogSidebar({
 
         {/* TV Presets */}
         <div className={`preset-group ${tvPresetsCollapsed ? 'collapsed' : ''}`}>
-          <div 
+          <div
             className="preset-group-header"
             onClick={() => setTvPresetsCollapsed(!tvPresetsCollapsed)}
           >

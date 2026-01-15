@@ -205,6 +205,7 @@ export function useAppController() {
         try {
             const payload = {
                 tmdbApiKey: config.apiKey,
+                configName: config.configName,
                 catalogs: catalogsToSave,
                 preferences: config.preferences,
             };
@@ -214,8 +215,12 @@ export function useAppController() {
                 : await api.saveConfig(payload);
 
             config.setUserId(result.userId);
+            if (result.configName !== undefined) config.setConfigName(result.configName);
             if (result.catalogs) config.setCatalogs(result.catalogs);
             if (result.preferences) config.setPreferences(result.preferences);
+
+            // Mark as saved to clear dirty state
+            config.markAsSaved();
 
             if (!urlUserId) {
                 window.history.pushState({}, '', `/?userId=${result.userId}`);

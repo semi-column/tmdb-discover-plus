@@ -1,271 +1,316 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Tooltip } from './Tooltip';
+import { useState, useEffect, useCallback } from 'react';
+import { LabelWithTooltip } from './Tooltip';
 
+/**
+ * RangeSlider - Dual-value range selector with editable text inputs
+ * 
+ * Key UX improvements:
+ * - Stores input as STRING while editing (allows clearing/typing freely)
+ * - Only converts to number and validates on blur/Enter
+ * - Escape key cancels edit and restores previous value
+ */
 export function RangeSlider({
-  min = 0,
-  max = 100,
-  step = 1,
-  value = [min, max],
-  onChange,
-  label,
-  tooltip,
-  formatValue = (v) => v,
-  // When true, the value pill becomes editable (click to type exact values)
-  showInputs = false,
+    label,
+    tooltip,
+    min,
+    max,
+    step = 1,
+    value = [min, max],
+    onChange,
+    formatValue = (v) => v,
+    showInputs = false
 }) {
-  const [localValue, setLocalValue] = useState(value);
-  const [editing, setEditing] = useState(false);
-  const minInputRef = useRef(null);
-  
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
+    // Store as strings to allow free text editing (including empty)
+    const [minInputValue, setMinInputValue] = useState(String(value[0]));
+    const [maxInputValue, setMaxInputValue] = useState(String(value[1]));
+    const [isEditingMin, setIsEditingMin] = useState(false);
+    const [isEditingMax, setIsEditingMax] = useState(false);
 
-  useEffect(() => {
-    if (!showInputs) {
-      setEditing(false);
-      return;
-    }
-    if (editing) {
-      // Focus first input when entering edit mode
-      queueMicrotask(() => {
-        try {
-          minInputRef.current?.focus();
-          minInputRef.current?.select?.();
-        } catch {
-          // ignore
+    // Sync local state when value prop changes (but not while editing)
+    useEffect(() => {
+        if (!isEditingMin) {
+            setMinInputValue(String(value[0]));
         }
-      });
-    }
-  }, [editing, showInputs]);
+    }, [value[0], isEditingMin]);
 
-  const handleMinChange = useCallback((newMin) => {
-    const clampedMin = Math.min(Math.max(min, newMin), localValue[1]);
-    const newValue = [clampedMin, localValue[1]];
-    setLocalValue(newValue);
-    onChange?.(newValue);
-  }, [min, localValue, onChange]);
+    useEffect(() => {
+        if (!isEditingMax) {
+            setMaxInputValue(String(value[1]));
+        }
+    }, [value[1], isEditingMax]);
 
-  const handleMaxChange = useCallback((newMax) => {
-    const clampedMax = Math.max(Math.min(max, newMax), localValue[0]);
-    const newValue = [localValue[0], clampedMax];
-    setLocalValue(newValue);
-    onChange?.(newValue);
-  }, [max, localValue, onChange]);
+    // Handle min input change - store as string, allow empty
+    const handleMinChange = useCallback((e) => {
+        setMinInputValue(e.target.value);
+    }, []);
 
-  const getPercent = (val) => ((val - min) / (max - min)) * 100;
+    // Handle max input change - store as string, allow empty
+    const handleMaxChange = useCallback((e) => {
+        setMaxInputValue(e.target.value);
+    }, []);
 
-  const minPercent = getPercent(localValue[0]);
-  const maxPercent = getPercent(localValue[1]);
+    // Commit min value - validate and apply
+    const commitMinValue = useCallback(() => {
+        setIsEditingMin(false);
 
-  return (
-    <div className="range-slider">
-      {label && (
-        <div className="range-slider-header">
-          <span className="range-slider-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {label}
-            {tooltip && <Tooltip text={tooltip} />}
-          </span>
-          {showInputs ? (
-            <div
-              className={`range-slider-value editable ${editing ? 'editing' : ''}`}
-              role="button"
-              tabIndex={0}
-              title="Click to edit"
-              onClick={() => setEditing(true)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') setEditing(true);
-                if (e.key === 'Escape') setEditing(false);
-              }}
-              onBlurCapture={(e) => {
-                // close edit mode when focus leaves the value container
-                if (editing && !e.currentTarget.contains(e.relatedTarget)) {
-                  setEditing(false);
-                }
-              }}
-            >
-              {editing ? (
-                <div className="range-slider-value-edit">
-                  <input
-                    ref={minInputRef}
-                    type="number"
+        const parsed = parseFloat(minInputValue);
+
+        // If empty or invalid, restore to current prop value
+        if (minInputValue === '' || isNaN(parsed)) {
+            setMinInputValue(String(value[0]));
+            return;
+        }
+
+        // Clamp and round to step
+        let newMin = Math.max(min, Math.min(parsed, value[1]));
+        newMin = Math.round(newMin / step) * step;
+
+        setMinInputValue(String(newMin));
+        onChange([newMin, value[1]]);
+    }, [minInputValue, value, min, step, onChange]);
+
+    // Commit max value - validate and apply
+    const commitMaxValue = useCallback(() => {
+        setIsEditingMax(false);
+
+        const parsed = parseFloat(maxInputValue);
+
+        // If empty or invalid, restore to current prop value
+        if (maxInputValue === '' || isNaN(parsed)) {
+            setMaxInputValue(String(value[1]));
+            return;
+        }
+
+        // Clamp and round to step
+        let newMax = Math.min(max, Math.max(parsed, value[0]));
+        newMax = Math.round(newMax / step) * step;
+
+        setMaxInputValue(String(newMax));
+        onChange([value[0], newMax]);
+    }, [maxInputValue, value, max, step, onChange]);
+
+    const handleMinKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            commitMinValue();
+            e.target.blur();
+        } else if (e.key === 'Escape') {
+            setMinInputValue(String(value[0]));
+            setIsEditingMin(false);
+            e.target.blur();
+        }
+    };
+
+    const handleMaxKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            commitMaxValue();
+            e.target.blur();
+        } else if (e.key === 'Escape') {
+            setMaxInputValue(String(value[1]));
+            setIsEditingMax(false);
+            e.target.blur();
+        }
+    };
+
+    // Select all text on focus for easy replacement
+    const handleFocus = (e) => {
+        e.target.select();
+    };
+
+    // Calculate percentages for visual track
+    const minPercent = ((value[0] - min) / (max - min)) * 100;
+    const maxPercent = ((value[1] - min) / (max - min)) * 100;
+
+    return (
+        <div className="range-slider">
+            <div className="range-slider-header">
+                {tooltip ? (
+                    <LabelWithTooltip label={label} tooltip={tooltip} />
+                ) : (
+                    <span className="range-slider-label">{label}</span>
+                )}
+                <div className="range-slider-value-display">
+                    {/* Min Input */}
+                    <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*\.?[0-9]*"
+                        className="range-input-field"
+                        value={minInputValue}
+                        onChange={handleMinChange}
+                        onFocus={(e) => {
+                            setIsEditingMin(true);
+                            handleFocus(e);
+                        }}
+                        onBlur={commitMinValue}
+                        onKeyDown={handleMinKeyDown}
+                    />
+                    <span className="range-separator">—</span>
+                    {/* Max Input */}
+                    <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*\.?[0-9]*"
+                        className="range-input-field"
+                        value={maxInputValue}
+                        onChange={handleMaxChange}
+                        onFocus={(e) => {
+                            setIsEditingMax(true);
+                            handleFocus(e);
+                        }}
+                        onBlur={commitMaxValue}
+                        onKeyDown={handleMaxKeyDown}
+                    />
+                </div>
+            </div>
+
+            {/* Visual Track */}
+            <div className="range-slider-track-container">
+                <div className="range-slider-track">
+                    <div
+                        className="range-slider-range"
+                        style={{
+                            left: `${minPercent}%`,
+                            width: `${maxPercent - minPercent}%`
+                        }}
+                    />
+                </div>
+                {/* Min Thumb */}
+                <input
+                    type="range"
+                    className="range-slider-thumb"
                     min={min}
-                    max={localValue[1]}
-                    step={step}
-                    value={localValue[0]}
-                    onChange={(e) => handleMinChange(Number(e.target.value))}
-                    className="range-slider-value-input"
-                  />
-                  <span className="range-slider-separator">to</span>
-                  <input
-                    type="number"
-                    min={localValue[0]}
                     max={max}
                     step={step}
-                    value={localValue[1]}
-                    onChange={(e) => handleMaxChange(Number(e.target.value))}
-                    className="range-slider-value-input"
-                  />
-                </div>
-              ) : (
-                <span>
-                  {formatValue(localValue[0])} — {formatValue(localValue[1])}
-                </span>
-              )}
+                    value={value[0]}
+                    onChange={(e) => {
+                        const newMin = Math.min(parseFloat(e.target.value), value[1] - step);
+                        onChange([newMin, value[1]]);
+                    }}
+                />
+                {/* Max Thumb */}
+                <input
+                    type="range"
+                    className="range-slider-thumb"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={value[1]}
+                    onChange={(e) => {
+                        const newMax = Math.max(parseFloat(e.target.value), value[0] + step);
+                        onChange([value[0], newMax]);
+                    }}
+                />
             </div>
-          ) : (
-            <span className="range-slider-value">
-              {formatValue(localValue[0])} — {formatValue(localValue[1])}
-            </span>
-          )}
         </div>
-      )}
-      
-      <div className="range-slider-track-container">
-        <div className="range-slider-track">
-          <div 
-            className="range-slider-range"
-            style={{
-              left: `${minPercent}%`,
-              width: `${maxPercent - minPercent}%`
-            }}
-          />
-        </div>
-        
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={localValue[0]}
-          onChange={(e) => handleMinChange(Number(e.target.value))}
-          className="range-slider-thumb range-slider-thumb-min"
-        />
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={localValue[1]}
-          onChange={(e) => handleMaxChange(Number(e.target.value))}
-          className="range-slider-thumb range-slider-thumb-max"
-        />
-      </div>
-
-    </div>
-  );
+    );
 }
 
+/**
+ * SingleSlider - Single-value slider with editable text input
+ */
 export function SingleSlider({
-  min = 0,
-  max = 100,
-  step = 1,
-  value = min,
-  onChange,
-  label,
-  tooltip,
-  formatValue = (v) => v,
-  // When true, the value pill becomes editable (click to type an exact value)
-  showInput = false,
+    label,
+    tooltip,
+    min,
+    max,
+    step = 1,
+    value = min,
+    onChange,
+    formatValue = (v) => v,
+    showInput = false
 }) {
-  const [localValue, setLocalValue] = useState(value);
-  const [editing, setEditing] = useState(false);
-  const inputRef = useRef(null);
-  
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
+    // Store as string to allow free text editing
+    const [inputValue, setInputValue] = useState(String(value));
+    const [isEditing, setIsEditing] = useState(false);
 
-  useEffect(() => {
-    if (!showInput) {
-      setEditing(false);
-      return;
-    }
-    if (editing) {
-      queueMicrotask(() => {
-        try {
-          inputRef.current?.focus();
-          inputRef.current?.select?.();
-        } catch {
-          // ignore
+    // Sync from prop when not editing
+    useEffect(() => {
+        if (!isEditing) {
+            setInputValue(String(value));
         }
-      });
-    }
-  }, [editing, showInput]);
+    }, [value, isEditing]);
 
-  const handleChange = (newValue) => {
-    const clamped = Math.min(Math.max(min, newValue), max);
-    setLocalValue(clamped);
-    onChange?.(clamped);
-  };
+    const handleInputChange = (e) => {
+        setInputValue(e.target.value);
+    };
 
-  const percent = ((localValue - min) / (max - min)) * 100;
+    const commitValue = useCallback(() => {
+        setIsEditing(false);
 
-  return (
-    <div className="range-slider">
-      {label && (
-        <div className="range-slider-header">
-          <span className="range-slider-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {label}
-            {tooltip && <Tooltip text={tooltip} />}
-          </span>
-          {showInput ? (
-            <div
-              className={`range-slider-value editable ${editing ? 'editing' : ''}`}
-              role="button"
-              tabIndex={0}
-              title="Click to edit"
-              onClick={() => setEditing(true)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') setEditing(true);
-                if (e.key === 'Escape') setEditing(false);
-              }}
-              onBlurCapture={(e) => {
-                if (editing && !e.currentTarget.contains(e.relatedTarget)) {
-                  setEditing(false);
-                }
-              }}
-            >
-              {editing ? (
+        const parsed = parseFloat(inputValue);
+
+        // If empty or invalid, restore to current prop value
+        if (inputValue === '' || isNaN(parsed)) {
+            setInputValue(String(value));
+            return;
+        }
+
+        // Clamp and round to step
+        let newVal = Math.max(min, Math.min(max, parsed));
+        newVal = Math.round(newVal / step) * step;
+
+        setInputValue(String(newVal));
+        onChange(newVal);
+    }, [inputValue, value, min, max, step, onChange]);
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            commitValue();
+            e.target.blur();
+        } else if (e.key === 'Escape') {
+            setInputValue(String(value));
+            setIsEditing(false);
+            e.target.blur();
+        }
+    };
+
+    const handleFocus = (e) => {
+        e.target.select();
+    };
+
+    const percent = ((value - min) / (max - min)) * 100;
+
+    return (
+        <div className="range-slider">
+            <div className="range-slider-header">
+                {tooltip ? (
+                    <LabelWithTooltip label={label} tooltip={tooltip} />
+                ) : (
+                    <span className="range-slider-label">{label}</span>
+                )}
                 <input
-                  ref={inputRef}
-                  type="number"
-                  min={min}
-                  max={max}
-                  step={step}
-                  value={localValue}
-                  onChange={(e) => handleChange(Number(e.target.value))}
-                  className="range-slider-value-input"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*\.?[0-9]*"
+                    className="range-input-field single"
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onFocus={(e) => {
+                        setIsEditing(true);
+                        handleFocus(e);
+                    }}
+                    onBlur={commitValue}
+                    onKeyDown={handleKeyDown}
                 />
-              ) : (
-                <span>{formatValue(localValue)}</span>
-              )}
             </div>
-          ) : (
-            <span className="range-slider-value">{formatValue(localValue)}</span>
-          )}
-        </div>
-      )}
-      
-      <div className="range-slider-track-container single">
-        <div className="range-slider-track">
-          <div 
-            className="range-slider-range"
-            style={{ left: 0, width: `${percent}%` }}
-          />
-        </div>
-        
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={localValue}
-          onChange={(e) => handleChange(Number(e.target.value))}
-          className="range-slider-thumb"
-        />
-      </div>
 
-    </div>
-  );
+            <div className="range-slider-track-container">
+                <div className="range-slider-track">
+                    <div
+                        className="range-slider-range"
+                        style={{ left: 0, width: `${percent}%` }}
+                    />
+                </div>
+                <input
+                    type="range"
+                    className="range-slider-thumb"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={value}
+                    onChange={(e) => onChange(parseFloat(e.target.value))}
+                />
+            </div>
+        </div>
+    );
 }

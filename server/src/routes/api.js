@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
-import { getUserConfig, saveUserConfig, getConfigsByApiKey } from '../services/configService.js';
+import { getUserConfig, saveUserConfig, getConfigsByApiKey, deleteUserConfig } from '../services/configService.js';
 import * as tmdb from '../services/tmdb.js';
 import { getBaseUrl, normalizeGenreName, parseIdArray } from '../utils/helpers.js';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.js';
@@ -58,6 +58,7 @@ router.get('/configs', async (req, res) => {
         // Return array of configs with safe fields (no raw API key)
         const safeConfigs = configs.map(c => ({
             userId: c.userId,
+            configName: c.configName || '',
             catalogs: c.catalogs || [],
             preferences: c.preferences || {},
             createdAt: c.createdAt,
@@ -503,7 +504,7 @@ router.post('/preview', async (req, res) => {
  */
 router.post('/config', strictRateLimit, async (req, res) => {
     try {
-        const { userId, tmdbApiKey, catalogs, preferences } = req.body;
+        const { userId, tmdbApiKey, catalogs, preferences, configName } = req.body;
 
         log.info('Create/update config request', { userId, catalogCount: catalogs?.length || 0 });
 
@@ -533,6 +534,7 @@ router.post('/config', strictRateLimit, async (req, res) => {
         const config = await saveUserConfig({
             userId: id,
             tmdbApiKey,
+            configName: configName || '',
             catalogs: catalogs || [],
             preferences: preferences || {},
         });
@@ -543,6 +545,7 @@ router.post('/config', strictRateLimit, async (req, res) => {
 
         const response = {
             userId: id,
+            configName: config.configName || '',
             catalogs: config.catalogs || [],
             preferences: config.preferences || {},
             // Browser-friendly URL to the addon manifest
@@ -566,7 +569,7 @@ router.post('/config', strictRateLimit, async (req, res) => {
 router.put('/config/:userId', strictRateLimit, async (req, res) => {
     try {
         const { userId } = req.params;
-        const { tmdbApiKey, catalogs, preferences } = req.body;
+        const { tmdbApiKey, catalogs, preferences, configName } = req.body;
 
         log.info('Update config request', { userId, catalogCount: catalogs?.length || 0 });
 
@@ -587,6 +590,7 @@ router.put('/config/:userId', strictRateLimit, async (req, res) => {
         const config = await saveUserConfig({
             userId,
             tmdbApiKey,
+            configName: configName || '',
             catalogs: catalogs || [],
             preferences: preferences || {},
         });
@@ -597,6 +601,7 @@ router.put('/config/:userId', strictRateLimit, async (req, res) => {
 
         const response = {
             userId,
+            configName: config.configName || '',
             catalogs: config.catalogs || [],
             preferences: config.preferences || {},
             installUrl: manifestUrl,
@@ -608,6 +613,45 @@ router.put('/config/:userId', strictRateLimit, async (req, res) => {
         res.json(response);
     } catch (error) {
         log.error('PUT /config/:userId error', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Delete user configuration
+ */
+router.delete('/config/:userId', strictRateLimit, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { apiKey } = req.query;
+
+        log.info('Delete config request', { userId });
+
+        // Validate userId format
+        if (!isValidUserId(userId)) {
+            return res.status(400).json({ error: 'Invalid user ID format' });
+        }
+
+        // Require apiKey for authorization
+        if (!apiKey) {
+            return res.status(400).json({ error: 'API key required for deletion' });
+        }
+
+        if (!isValidApiKeyFormat(apiKey)) {
+            return res.status(400).json({ error: 'Invalid API key format' });
+        }
+
+        const result = await deleteUserConfig(userId, apiKey);
+
+        log.info('Config deleted', { userId });
+        res.json(result);
+    } catch (error) {
+        log.error('DELETE /config/:userId error', { error: error.message });
+
+        // Return appropriate status code based on error
+        if (error.message.includes('not found') || error.message.includes('Access denied')) {
+            return res.status(404).json({ error: error.message });
+        }
         res.status(500).json({ error: error.message });
     }
 });
@@ -650,6 +694,7 @@ router.get('/config/:userId', async (req, res) => {
 
         const response = {
             userId: config.userId,
+            configName: config.configName || '',
             catalogs: config.catalogs || [],
             preferences: config.preferences || {},
             hasApiKey: !!config.tmdbApiKey,

@@ -116,6 +116,7 @@ export async function saveUserConfig(config) {
                 {
                     $set: {
                         tmdbApiKey: safeTmdbApiKey,
+                        configName: config.configName || '',
                         catalogs: processedCatalogs,
                         preferences: config.preferences || {},
                         updatedAt: new Date(),
@@ -141,6 +142,7 @@ export async function saveUserConfig(config) {
         ...config,
         userId: safeUserId,
         tmdbApiKey: safeTmdbApiKey,
+        configName: config.configName || '',
         catalogs: processedCatalogs,
         _id: safeUserId
     };
@@ -178,4 +180,57 @@ export async function getConfigsByApiKey(apiKey) {
     }
     log.debug('Found configs in memory store', { count: results.length });
     return results;
+}
+
+/**
+ * Delete a user config by userId
+ * Requires matching apiKey for security
+ */
+export async function deleteUserConfig(userId, apiKey) {
+    log.info('Deleting user config', { userId, dbConnected: isConnected() });
+
+    // Validate userId
+    const safeUserId = sanitizeString(userId, 64);
+    if (!isValidUserId(safeUserId)) {
+        throw new Error('Invalid user ID format');
+    }
+
+    // Validate apiKey format
+    if (!apiKey || !isValidApiKeyFormat(apiKey)) {
+        throw new Error('Invalid API key format');
+    }
+
+    if (isConnected()) {
+        try {
+            // Find and delete only if apiKey matches (security check)
+            const result = await UserConfig.findOneAndDelete({
+                userId: safeUserId,
+                tmdbApiKey: apiKey,
+            });
+
+            if (!result) {
+                log.warn('Config not found or apiKey mismatch', { userId: safeUserId });
+                throw new Error('Configuration not found or access denied');
+            }
+
+            log.info('Config deleted from MongoDB', { userId: safeUserId });
+            return { deleted: true, userId: safeUserId };
+        } catch (err) {
+            log.error('MongoDB delete error', { error: err.message });
+            throw err;
+        }
+    }
+
+    // Memory store fallback
+    const existing = memoryStore.get(safeUserId);
+    if (!existing) {
+        throw new Error('Configuration not found');
+    }
+    if (existing.tmdbApiKey !== apiKey) {
+        throw new Error('Access denied');
+    }
+
+    memoryStore.delete(safeUserId);
+    log.info('Config deleted from memory store', { userId: safeUserId });
+    return { deleted: true, userId: safeUserId };
 }

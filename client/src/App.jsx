@@ -107,6 +107,8 @@ function App() {
                 <ConfigDropdown
                   configs={userConfigs}
                   currentUserId={config.userId}
+                  currentCatalogs={config.catalogs}
+                  currentConfigName={config.configName}
                   loading={configsLoading}
                   onSelectConfig={actions.handleSwitchConfig}
                   onDeleteConfig={actions.handleDeleteConfigFromDropdown}
@@ -124,18 +126,23 @@ function App() {
                 Change API Key
               </button>
               {config.catalogs.length > 0 && (
-                <button
-                  className="btn btn-primary"
-                  onClick={actions.handleSave}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <Loader size={18} className="animate-spin" />
-                  ) : (
-                    <Download size={18} />
+                <div className="save-button-wrapper">
+                  {config.isDirty && (
+                    <span className="unsaved-indicator" title="Unsaved changes" />
                   )}
-                  Save & Install
-                </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={actions.handleSave}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? (
+                      <Loader size={18} className="animate-spin" />
+                    ) : (
+                      <Download size={18} />
+                    )}
+                    Save & Install
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -153,6 +160,8 @@ function App() {
                 config.setCatalogs(nextCatalogs);
               }}
               presetCatalogs={tmdb.presetCatalogs}
+              configName={config.configName}
+              onConfigNameChange={config.setConfigName}
             />
 
             <CatalogEditor

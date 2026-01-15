@@ -66,6 +66,11 @@ const userConfigSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
+  // User-defined name for this configuration
+  configName: {
+    type: String,
+    default: ''
+  },
   // User's TMDB API key (encrypted in production)
   tmdbApiKey: {
     type: String,
