@@ -237,7 +237,18 @@ export async function run() {
 
     const deleteUserId = createRes.data.userId;
 
-    const delRes = await del(`/api/config/${deleteUserId}?apiKey=${CONFIG.tmdbApiKey}`);
+    // Login to get JWT token for authentication
+    const loginRes = await post('/api/auth/login', {
+      apiKey: CONFIG.tmdbApiKey,
+      userId: deleteUserId,
+    });
+    assertOk(loginRes, 'Login for delete auth');
+    const token = loginRes.data.token;
+
+    // Delete using JWT auth
+    const delRes = await del(`/api/config/${deleteUserId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     assertOk(delRes, 'Delete config');
 
     // Verify deletion
