@@ -79,12 +79,8 @@ export function useConfig(initialUserId = null) {
           if (loginResult.token) {
             setIsAuthenticated(true);
             setUserId(loginResult.userId);
-            api.clearLegacyApiKey();
-          } else if (loginResult.multipleConfigs) {
-            // Has multiple configs - let user choose
-            setApiKeyState(legacyKey);
-            api.clearLegacyApiKey();
           }
+          api.clearLegacyApiKey();
         } catch {
           // Legacy key invalid, clear it
           api.clearLegacyApiKey();
@@ -104,13 +100,6 @@ export function useConfig(initialUserId = null) {
       setError(null);
       try {
         const result = await api.login(key, userId, rememberMe);
-
-        if (result.multipleConfigs) {
-          // Store key temporarily for config selection
-          setApiKeyState(key);
-          return result;
-        }
-
         setIsAuthenticated(true);
         setUserId(result.userId);
         setApiKeyState('');
@@ -123,27 +112,6 @@ export function useConfig(initialUserId = null) {
       }
     },
     [userId]
-  );
-
-  // Select a specific config when user has multiple
-  const selectConfigById = useCallback(
-    async (selectedUserId, rememberMe = true) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const result = await api.selectConfig(apiKey, selectedUserId, rememberMe);
-        setIsAuthenticated(true);
-        setUserId(result.userId);
-        setApiKeyState('');
-        return result;
-      } catch (err) {
-        setError(err.message);
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [apiKey]
   );
 
   // Logout
@@ -263,7 +231,6 @@ export function useConfig(initialUserId = null) {
     markAsSaved,
     login,
     logout,
-    selectConfigById,
     loadConfig,
     saveConfig,
     updateConfig,

@@ -2,7 +2,6 @@ const API_BASE = '/api';
 
 const TOKEN_KEY = 'tmdb-session-token';
 const LEGACY_KEY = 'tmdb-stremio-apikey';
-const REMEMBER_ME_KEY = 'tmdb-remember-me';
 
 class ApiService {
   constructor() {
@@ -21,15 +20,10 @@ class ApiService {
   setSessionToken(token, rememberMe = true) {
     this._sessionToken = token;
     try {
+      localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
       const storage = rememberMe ? localStorage : sessionStorage;
       storage.setItem(TOKEN_KEY, token);
-      localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? 'true' : 'false');
-      // Clear from the other storage
-      if (rememberMe) {
-        sessionStorage.removeItem(TOKEN_KEY);
-      } else {
-        localStorage.removeItem(TOKEN_KEY);
-      }
     } catch {
       // Storage not available
     }
@@ -40,7 +34,6 @@ class ApiService {
     try {
       localStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(REMEMBER_ME_KEY);
     } catch {
       // Storage not available
     }
@@ -59,14 +52,6 @@ class ApiService {
       localStorage.removeItem(LEGACY_KEY);
     } catch {
       // Storage not available
-    }
-  }
-
-  isRememberMeEnabled() {
-    try {
-      return localStorage.getItem(REMEMBER_ME_KEY) !== 'false';
-    } catch {
-      return true;
     }
   }
 
@@ -111,25 +96,6 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ apiKey, userId, rememberMe }),
       headers: {}, // Don't send auth header for login
-    });
-
-    if (result.multipleConfigs) {
-      // User has multiple configs, return list for selection
-      return result;
-    }
-
-    if (result.token) {
-      this.setSessionToken(result.token, rememberMe);
-    }
-
-    return result;
-  }
-
-  async selectConfig(apiKey, userId, rememberMe = true) {
-    const result = await this.request('/auth/select-config', {
-      method: 'POST',
-      body: JSON.stringify({ apiKey, userId }),
-      headers: {},
     });
 
     if (result.token) {

@@ -5,7 +5,8 @@ import { decrypt, isEncrypted } from './encryption.js';
 
 const log = createLogger('auth');
 
-const JWT_EXPIRY = '7d';
+const JWT_EXPIRY_PERSISTENT = '7d';
+const JWT_EXPIRY_SESSION = '24h';
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -15,22 +16,10 @@ function getJwtSecret() {
   return secret;
 }
 
-/**
- * Generates a JWT token for a user session
- * @param {string} userId - The user's unique identifier
- * @param {string} [configId] - Optional specific config ID if user has multiple
- * @returns {object} - Token and expiry information
- */
-export function generateToken(userId, configId = null) {
-  const payload = { userId };
-  if (configId) payload.configId = configId;
-
-  const token = jwt.sign(payload, getJwtSecret(), { expiresIn: JWT_EXPIRY });
-
-  return {
-    token,
-    expiresIn: JWT_EXPIRY,
-  };
+export function generateToken(userId, rememberMe = true) {
+  const expiresIn = rememberMe ? JWT_EXPIRY_PERSISTENT : JWT_EXPIRY_SESSION;
+  const token = jwt.sign({ userId }, getJwtSecret(), { expiresIn });
+  return { token, expiresIn };
 }
 
 /**

@@ -50,12 +50,11 @@ export function useAppController() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Load user configs (history)
-  const loadUserConfigs = useCallback(async (apiKey) => {
-    if (!apiKey) return [];
+  // Load user configs (history) - works with session token or apiKey
+  const loadUserConfigs = useCallback(async () => {
     setConfigsLoading(true);
     try {
-      const configs = await api.getConfigsByApiKey(apiKey);
+      const configs = await api.getConfigsByApiKey();
       configs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
       setUserConfigs(configs);
       return configs;
@@ -189,7 +188,7 @@ export function useAppController() {
         window.history.pushState({}, '', `/?userId=${result.userId}`);
       }
 
-      await loadUserConfigs(config.apiKey);
+      await loadUserConfigs();
 
       setInstallData({
         installUrl: result.installUrl,

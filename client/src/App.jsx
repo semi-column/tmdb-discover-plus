@@ -56,10 +56,6 @@ function App() {
             state.setWantsToChangeKey(false);
             actions.handleLogin(userId);
           }}
-          onSelectConfig={(userId) => {
-            state.setWantsToChangeKey(false);
-            actions.handleLogin(userId);
-          }}
           skipAutoRedirect={state.wantsToChangeKey}
           isSessionExpired={state.isSessionExpired}
           returnUserId={config.userId}

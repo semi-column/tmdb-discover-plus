@@ -628,35 +628,45 @@ router.put('/config/:userId', optionalAuth, strictRateLimit, async (req, res) =>
 /**
  * Delete user configuration
  */
-router.delete('/config/:userId', strictRateLimit, async (req, res) => {
+router.delete('/config/:userId', requireAuth, strictRateLimit, async (req, res) => {
   try {
     const { userId } = req.params;
-    const { apiKey } = req.query;
+    const authUserId = req.user?.userId;
 
-    log.info('Delete config request', { userId });
+    log.info('Delete config request', { userId, authUserId });
 
     // Validate userId format
     if (!isValidUserId(userId)) {
       return res.status(400).json({ error: 'Invalid user ID format' });
     }
 
-    // Require apiKey for authorization
-    if (!apiKey) {
-      return res.status(400).json({ error: 'API key required for deletion' });
+    // Ensure authenticated user can only delete their own configs
+    // We need to verify the config belongs to the same API key as the auth user
+    const existingConfig = await getUserConfig(userId);
+    if (!existingConfig) {
+      return res.status(404).json({ error: 'Configuration not found' });
     }
 
-    if (!isValidApiKeyFormat(apiKey)) {
-      return res.status(400).json({ error: 'Invalid API key format' });
+    // Get the API key from the authenticated user's config
+    const authConfig = await getUserConfig(authUserId);
+    if (!authConfig) {
+      return res.status(403).json({ error: 'Authentication error' });
     }
 
-    const result = await deleteUserConfig(userId, apiKey);
+    const authApiKey = getApiKeyFromConfig(authConfig);
+    const targetApiKey = getApiKeyFromConfig(existingConfig);
+
+    if (authApiKey !== targetApiKey) {
+      return res.status(403).json({ error: 'Access denied: Cannot delete configs belonging to other users' });
+    }
+
+    const result = await deleteUserConfig(userId, authApiKey);
 
     log.info('Config deleted', { userId });
     res.json(result);
   } catch (error) {
     log.error('DELETE /config/:userId error', { error: error.message });
 
-    // Return appropriate status code based on error
     if (error.message.includes('not found') || error.message.includes('Access denied')) {
       return res.status(404).json({ error: error.message });
     }

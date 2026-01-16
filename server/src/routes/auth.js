@@ -54,7 +54,7 @@ router.post('/login', strictRateLimit, async (req, res) => {
         }
 
         // Generate token for existing config
-        const tokenData = generateToken(requestedUserId);
+        const tokenData = generateToken(requestedUserId, rememberMe);
         log.info('User authenticated for existing config', { userId: requestedUserId });
 
         return res.json({
@@ -70,33 +70,17 @@ router.post('/login', strictRateLimit, async (req, res) => {
     const existingConfigs = await getConfigsByApiKey(apiKey);
 
     if (existingConfigs.length > 0) {
-      // User has existing configs
-      if (existingConfigs.length === 1) {
-        // Single config - auto-select
-        const config = existingConfigs[0];
-        const tokenData = generateToken(config.userId);
-        log.info('User authenticated with single config', { userId: config.userId });
+      // User has existing configs - auto-select the most recently updated one
+      existingConfigs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      const config = existingConfigs[0];
+      const tokenData = generateToken(config.userId, rememberMe);
+      log.info('User authenticated with config', { userId: config.userId, totalConfigs: existingConfigs.length });
 
-        return res.json({
-          ...tokenData,
-          userId: config.userId,
-          configName: config.configName || '',
-          isNewUser: false,
-        });
-      }
-
-      // Multiple configs - return list for user to choose
-      const configList = existingConfigs.map((c) => ({
-        userId: c.userId,
-        configName: c.configName || 'Unnamed Configuration',
-        catalogCount: c.catalogs?.length || 0,
-        updatedAt: c.updatedAt,
-      }));
-
-      log.info('User has multiple configs', { count: existingConfigs.length });
       return res.json({
-        multipleConfigs: true,
-        configs: configList,
+        ...tokenData,
+        userId: config.userId,
+        configName: config.configName || '',
+        isNewUser: false,
       });
     }
 
@@ -112,7 +96,7 @@ router.post('/login', strictRateLimit, async (req, res) => {
       preferences: {},
     });
 
-    const tokenData = generateToken(newUserId);
+    const tokenData = generateToken(newUserId, rememberMe);
     log.info('New user created', { userId: newUserId });
 
     return res.json({
