@@ -1,0 +1,9 @@
+dist/
+node_modules/
+.git/
+.env
+package-lock.json
+public/
+client/dist/
+coverage/
+build/

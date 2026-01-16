@@ -6,10 +6,9 @@ A powerful Stremio addon that lets you create custom movie and TV show catalogs 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Docker](https://img.shields.io/badge/docker-ready-blue)
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/semi-column?style=social)](https://github.com/sponsors/semi-column)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/semi.column)
 
-> 💖 **Like this project?** [Become a sponsor](https://github.com/sponsors/semi-column) or [buy me a coffee](https://buymeacoffee.com/semi.column) to support development!
+> 💖 **Like this project?** [Buy me a coffee](https://buymeacoffee.com/semi.column) to support development!
 
 ## ✨ Features
 
@@ -53,6 +52,7 @@ A powerful Stremio addon that lets you create custom movie and TV show catalogs 
 ### Use the Public Instance
 
 Visit the public instance at `https://tmdb-discover-plus.beamup.dev` and:
+
 1. Enter your TMDB API key
 2. Create catalogs with your preferred filters
 3. Click "Install to Stremio"
@@ -82,12 +82,12 @@ The addon will be available at `http://localhost:7000`
 
 #### Docker Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | `7000` |
-| `MONGODB_URI` | MongoDB connection string | (none - uses in-memory) |
-| `LOG_LEVEL` | Logging level (debug/info/warn/error) | `info` |
-| `CORS_ORIGIN` | Allowed CORS origins | `*` |
+| Variable      | Description                           | Default                 |
+| ------------- | ------------------------------------- | ----------------------- |
+| `PORT`        | Server port                           | `7000`                  |
+| `MONGODB_URI` | MongoDB connection string             | (none - uses in-memory) |
+| `LOG_LEVEL`   | Logging level (debug/info/warn/error) | `info`                  |
+| `CORS_ORIGIN` | Allowed CORS origins                  | `*`                     |
 
 ### Manual Installation
 
@@ -179,27 +179,27 @@ CORS_ORIGIN=*
 
 ### Filter Options
 
-| Filter | Description |
-|--------|-------------|
-| **Genres** | Filter by one or more genres |
-| **Exclude Genres** | Exclude specific genres from results |
-| **Year Range** | Release year from/to |
-| **Rating Range** | TMDB vote average (0-10) |
-| **Runtime** | Filter by duration in minutes (with presets: Short, Standard, Long, Epic) |
-| **Sort By** | Popularity, Rating, Release Date, Revenue, Random |
-| **Language** | Original language filter |
-| **Country** | Origin country filter |
-| **Region** | Regional release filter (for theatrical releases) |
-| **First Air Date** | TV show premiere date filter |
-| **Date Presets** | Quick filters: Last 30/90 days, Last 6 months, This/Last Year |
-| **Min Votes** | Minimum vote count for quality filtering |
-| **Streaming Service** | Filter by watch provider |
-| **People** | Filter by actors, directors |
-| **Companies** | Filter by production company |
-| **Exclude Companies** | Exclude specific production companies |
-| **Keywords** | Filter by content keywords |
-| **Exclude Keywords** | Exclude content with specific keywords |
-| **IMDB Only** | Only show items with IMDB IDs |
+| Filter                | Description                                                               |
+| --------------------- | ------------------------------------------------------------------------- |
+| **Genres**            | Filter by one or more genres                                              |
+| **Exclude Genres**    | Exclude specific genres from results                                      |
+| **Year Range**        | Release year from/to                                                      |
+| **Rating Range**      | TMDB vote average (0-10)                                                  |
+| **Runtime**           | Filter by duration in minutes (with presets: Short, Standard, Long, Epic) |
+| **Sort By**           | Popularity, Rating, Release Date, Revenue, Random                         |
+| **Language**          | Original language filter                                                  |
+| **Country**           | Origin country filter                                                     |
+| **Region**            | Regional release filter (for theatrical releases)                         |
+| **First Air Date**    | TV show premiere date filter                                              |
+| **Date Presets**      | Quick filters: Last 30/90 days, Last 6 months, This/Last Year             |
+| **Min Votes**         | Minimum vote count for quality filtering                                  |
+| **Streaming Service** | Filter by watch provider                                                  |
+| **People**            | Filter by actors, directors                                               |
+| **Companies**         | Filter by production company                                              |
+| **Exclude Companies** | Exclude specific production companies                                     |
+| **Keywords**          | Filter by content keywords                                                |
+| **Exclude Keywords**  | Exclude content with specific keywords                                    |
+| **IMDB Only**         | Only show items with IMDB IDs                                             |
 
 ## 📖 Usage
 
@@ -233,33 +233,33 @@ Returns server status, uptime, and database connection state.
 
 ### Stremio Addon Endpoints
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /:userId/manifest.json` | Stremio addon manifest |
-| `GET /:userId/catalog/:type/:id.json` | Catalog results |
-| `GET /:userId/catalog/:type/:id/:extra.json` | Paginated catalog |
+| Endpoint                                     | Description            |
+| -------------------------------------------- | ---------------------- |
+| `GET /:userId/manifest.json`                 | Stremio addon manifest |
+| `GET /:userId/catalog/:type/:id.json`        | Catalog results        |
+| `GET /:userId/catalog/:type/:id/:extra.json` | Paginated catalog      |
 
 ### Configuration API
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/config` | POST | Create new configuration |
-| `/api/config/:userId` | GET | Get user configuration |
-| `/api/config/:userId` | PUT | Update configuration |
-| `/api/validate-key` | POST | Validate TMDB API key |
-| `/api/preview` | POST | Preview catalog results |
+| Endpoint              | Method | Description              |
+| --------------------- | ------ | ------------------------ |
+| `/api/config`         | POST   | Create new configuration |
+| `/api/config/:userId` | GET    | Get user configuration   |
+| `/api/config/:userId` | PUT    | Update configuration     |
+| `/api/validate-key`   | POST   | Validate TMDB API key    |
+| `/api/preview`        | POST   | Preview catalog results  |
 
 ### TMDB Data Endpoints
 
-| Endpoint | Description |
-|----------|-------------|
-| `/api/genres/:type` | Get genres for movie/series |
-| `/api/languages` | Get available languages |
-| `/api/countries` | Get available countries |
-| `/api/watch-providers/:type` | Get streaming providers |
-| `/api/search/person` | Search for actors/directors |
-| `/api/search/company` | Search for production companies |
-| `/api/search/keyword` | Search for keywords |
+| Endpoint                     | Description                     |
+| ---------------------------- | ------------------------------- |
+| `/api/genres/:type`          | Get genres for movie/series     |
+| `/api/languages`             | Get available languages         |
+| `/api/countries`             | Get available countries         |
+| `/api/watch-providers/:type` | Get streaming providers         |
+| `/api/search/person`         | Search for actors/directors     |
+| `/api/search/company`        | Search for production companies |
+| `/api/search/keyword`        | Search for keywords             |
 
 ## 🛠️ Development
 

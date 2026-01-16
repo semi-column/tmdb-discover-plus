@@ -1,6 +1,7 @@
 # Pull Request
 
 ## Description
+
 Please include a summary of the changes and the related issue (if any).
 
 Fixes # (issue number)
@@ -27,9 +28,11 @@ Fixes # (issue number)
 - [ ] Any dependent changes have been merged and published
 
 ## Screenshots (if applicable)
+
 Add screenshots to help explain your changes.
 
 ## Testing Instructions
+
 Please describe the tests that you ran to verify your changes:
 
 1. Step 1
@@ -37,4 +40,5 @@ Please describe the tests that you ran to verify your changes:
 3. ...
 
 ## Additional Notes
+
 Add any additional notes for reviewers.

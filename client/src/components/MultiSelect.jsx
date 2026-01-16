@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, X, Search } from 'lucide-react';
 
-export function MultiSelect({ 
-  options = [], 
-  value = [], 
-  onChange, 
+export function MultiSelect({
+  options = [],
+  value = [],
+  onChange,
   placeholder = 'Select...',
   searchPlaceholder = null,
   emptyMessage = 'No options found',
@@ -62,7 +62,7 @@ export function MultiSelect({
 
   const handleToggle = (optionValue) => {
     const newValue = value.includes(optionValue)
-      ? value.filter(v => v !== optionValue)
+      ? value.filter((v) => v !== optionValue)
       : [...value, optionValue];
     onChange(newValue);
   };
@@ -74,10 +74,10 @@ export function MultiSelect({
   };
 
   const getSelectedLabels = () => {
-    const selected = options.filter(opt => value.includes(opt[valueKey]));
+    const selected = options.filter((opt) => value.includes(opt[valueKey]));
     if (selected.length === 0) return null;
     if (selected.length <= maxDisplay) {
-      return selected.map(s => s[labelKey]).join(', ');
+      return selected.map((s) => s[labelKey]).join(', ');
     }
     return `${selected.length} selected`;
   };
@@ -86,13 +86,18 @@ export function MultiSelect({
 
   const isSearchEnabled = Boolean(searchPlaceholder || onSearch);
   const normalizedSearch = String(search || '').toLowerCase();
-  const filteredOptions = isSearchEnabled && normalizedSearch
-    ? options.filter(opt => String(opt?.[labelKey] || '').toLowerCase().includes(normalizedSearch))
-    : options;
+  const filteredOptions =
+    isSearchEnabled && normalizedSearch
+      ? options.filter((opt) =>
+          String(opt?.[labelKey] || '')
+            .toLowerCase()
+            .includes(normalizedSearch)
+        )
+      : options;
 
   return (
     <div className={`multi-select ${isOpen ? 'open' : ''}`} ref={containerRef}>
-      <div 
+      <div
         className={`multi-select-trigger ${isOpen ? 'open' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
         role="combobox"
@@ -100,12 +105,10 @@ export function MultiSelect({
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && setIsOpen(!isOpen)}
       >
-        <span className={displayText ? '' : 'placeholder'}>
-          {displayText || placeholder}
-        </span>
+        <span className={displayText ? '' : 'placeholder'}>{displayText || placeholder}</span>
         <div className="multi-select-icons">
           {value.length > 0 && (
-            <button 
+            <button
               className="multi-select-clear"
               onClick={handleClear}
               type="button"
@@ -149,36 +152,35 @@ export function MultiSelect({
             </div>
           )}
           <div className="multi-select-options">
-            {isSearchEnabled && isSearching && (
-              <div className="multi-select-empty">Searching…</div>
-            )}
+            {isSearchEnabled && isSearching && <div className="multi-select-empty">Searching…</div>}
             {!isSearching && filteredOptions.length === 0 && (
               <div className="multi-select-empty">{emptyMessage}</div>
             )}
-            {!isSearching && filteredOptions.map((option) => {
-              const isSelected = value.includes(option[valueKey]);
-              return (
-                <div
-                  key={option[valueKey]}
-                  className={`multi-select-option ${isSelected ? 'selected' : ''}`}
-                  onClick={() => handleToggle(option[valueKey])}
-                  role="option"
-                  aria-selected={isSelected}
-                >
-                  <div className={`multi-select-checkbox ${isSelected ? 'checked' : ''}`}>
-                    {isSelected && <Check size={12} />}
+            {!isSearching &&
+              filteredOptions.map((option) => {
+                const isSelected = value.includes(option[valueKey]);
+                return (
+                  <div
+                    key={option[valueKey]}
+                    className={`multi-select-option ${isSelected ? 'selected' : ''}`}
+                    onClick={() => handleToggle(option[valueKey])}
+                    role="option"
+                    aria-selected={isSelected}
+                  >
+                    <div className={`multi-select-checkbox ${isSelected ? 'checked' : ''}`}>
+                      {isSelected && <Check size={12} />}
+                    </div>
+                    {showImages && option[imageKey] && (
+                      <img
+                        src={option[imageKey]}
+                        alt={option[labelKey]}
+                        className="multi-select-option-image"
+                      />
+                    )}
+                    <span>{option[labelKey]}</span>
                   </div>
-                  {showImages && option[imageKey] && (
-                    <img 
-                      src={option[imageKey]} 
-                      alt={option[labelKey]}
-                      className="multi-select-option-image"
-                    />
-                  )}
-                  <span>{option[labelKey]}</span>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       )}

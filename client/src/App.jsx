@@ -16,7 +16,7 @@ function App() {
   const {
     state,
     actions,
-    data: { config, tmdb }
+    data: { config, tmdb },
   } = useAppController();
 
   const {
@@ -46,22 +46,23 @@ function App() {
     );
   }
 
-  // Show API key setup
-  if (isSetup || !config.apiKey) {
+  // Show API key setup / login
+  if (isSetup || (!config.isAuthenticated && config.authChecked)) {
     return (
       <div className="app">
         <Header />
         <ApiKeySetup
-          onValidKey={(apiKey) => {
+          onLogin={(userId) => {
             state.setWantsToChangeKey(false);
-            actions.handleValidApiKey(apiKey);
+            actions.handleLogin(userId);
           }}
-          onSelectExistingConfig={(apiKey, userId) => {
+          onSelectConfig={(userId) => {
             state.setWantsToChangeKey(false);
-            config.setApiKey(apiKey);
-            actions.handleSwitchConfig(userId);
+            actions.handleLogin(userId);
           }}
           skipAutoRedirect={state.wantsToChangeKey}
+          isSessionExpired={state.isSessionExpired}
+          returnUserId={config.userId}
         />
       </div>
     );
@@ -89,12 +90,14 @@ function App() {
       <main className="main">
         <div className="container">
           {/* Top Actions Bar */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '24px'
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '24px',
+            }}
+          >
             <div>
               <h2 style={{ fontSize: '24px', marginBottom: '4px' }}>Catalog Builder</h2>
               <p className="text-secondary">
@@ -118,6 +121,7 @@ function App() {
               <button
                 className="btn btn-secondary"
                 onClick={() => {
+                  config.logout(); // Clear session tokens
                   state.setWantsToChangeKey(true);
                   state.setIsSetup(true);
                 }}
@@ -127,9 +131,7 @@ function App() {
               </button>
               {config.catalogs.length > 0 && (
                 <div className="save-button-wrapper">
-                  {config.isDirty && (
-                    <span className="unsaved-indicator" title="Unsaved changes" />
-                  )}
+                  {config.isDirty && <span className="unsaved-indicator" title="Unsaved changes" />}
                   <button
                     className="btn btn-primary"
                     onClick={actions.handleSave}

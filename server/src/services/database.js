@@ -5,7 +5,7 @@ const log = createLogger('database');
 
 export async function connectDB() {
   const uri = process.env.MONGODB_URI;
-  
+
   if (!uri) {
     log.warn('MONGODB_URI not set - running in memory-only mode');
     log.warn('User configurations will not persist across restarts');

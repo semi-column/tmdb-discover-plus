@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getUserConfig } from '../services/configService.js';
+import { getUserConfig, getApiKeyFromConfig } from '../services/configService.js';
 import * as tmdb from '../services/tmdb.js';
 import { shuffleArray, getBaseUrl, normalizeGenreName, parseIdArray } from '../utils/helpers.js';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.js';
@@ -18,9 +18,9 @@ function pickPreferredMetaLanguage(config) {
   const pref = config?.preferences?.defaultLanguage;
   if (pref) return pref;
 
-  const enabled = (config?.catalogs || []).filter(c => c?.enabled !== false);
+  const enabled = (config?.catalogs || []).filter((c) => c?.enabled !== false);
   const langs = enabled
-    .map(c => c?.filters?.displayLanguage)
+    .map((c) => c?.filters?.displayLanguage)
     .filter(Boolean)
     .map(String);
 
@@ -71,21 +71,23 @@ function parseExtra(extraString) {
 function extractGenreIds(item) {
   const ids = Array.isArray(item?.genre_ids)
     ? item.genre_ids
-    : (Array.isArray(item?.genres) ? item.genres.map(g => g?.id).filter(Boolean) : []);
+    : Array.isArray(item?.genres)
+      ? item.genres.map((g) => g?.id).filter(Boolean)
+      : [];
   return ids.map(String);
 }
 
 function applyGenrePostFilter(items, filters) {
   const include = parseIdArray(filters?.genres);
   const exclude = parseIdArray(filters?.excludeGenres);
-  const matchMode = (filters?.genreMatchMode === 'all') ? 'all' : 'any';
+  const matchMode = filters?.genreMatchMode === 'all' ? 'all' : 'any';
 
   if (include.length === 0 && exclude.length === 0) return items;
 
   const includeSet = new Set(include.map(String));
   const excludeSet = new Set(exclude.map(String));
 
-  return (items || []).filter(item => {
+  return (items || []).filter((item) => {
     const itemIds = extractGenreIds(item);
 
     if (excludeSet.size > 0) {
@@ -130,7 +132,13 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       return res.json({ metas: [] });
     }
 
-    const catalogConfig = config.catalogs.find(c => {
+    const apiKey = getApiKeyFromConfig(config);
+    if (!apiKey) {
+      log.debug('No API key found for config', { userId });
+      return res.json({ metas: [] });
+    }
+
+    const catalogConfig = config.catalogs.find((c) => {
       const id = `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
       return id === catalogId;
     });
@@ -146,12 +154,15 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
 
     if (extra.genre) {
       try {
-        const selected = String(extra.genre).split(',').map(s => normalizeGenreName(s)).filter(Boolean);
+        const selected = String(extra.genre)
+          .split(',')
+          .map((s) => normalizeGenreName(s))
+          .filter(Boolean);
         const mediaType = type === 'series' ? 'tv' : 'movie';
 
         let tmdbGenres = null;
         try {
-          tmdbGenres = await tmdb.getGenres(config.tmdbApiKey, type);
+          tmdbGenres = await tmdb.getGenres(apiKey, type);
         } catch (err) {
           tmdbGenres = null;
         }
@@ -159,12 +170,18 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
         const reverse = {};
 
         if (tmdbGenres && Array.isArray(tmdbGenres)) {
-          tmdbGenres.forEach(g => {
+          tmdbGenres.forEach((g) => {
             reverse[normalizeGenreName(g.name)] = String(g.id);
           });
         } else {
           try {
-            const genresPath = path.join(process.cwd(), 'server', 'src', 'services', 'tmdb_genres.json');
+            const genresPath = path.join(
+              process.cwd(),
+              'server',
+              'src',
+              'services',
+              'tmdb_genres.json'
+            );
             const raw = fs.readFileSync(genresPath, 'utf8');
             const staticGenreMap = JSON.parse(raw);
             const mapping = staticGenreMap[mediaType] || {};
@@ -172,11 +189,13 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
               reverse[normalizeGenreName(name)] = String(id);
             });
           } catch (err) {
-            log.warn('Could not load static genres for mapping extra.genre', { error: err.message });
+            log.warn('Could not load static genres for mapping extra.genre', {
+              error: err.message,
+            });
           }
         }
 
-        let genreIds = selected.map(name => reverse[name]).filter(Boolean);
+        let genreIds = selected.map((name) => reverse[name]).filter(Boolean);
 
         if (genreIds.length === 0 && Object.keys(reverse).length > 0) {
           const fuzzyMatches = [];
@@ -186,7 +205,10 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
 
             if (!found) {
               for (const k of Object.keys(reverse)) {
-                if (k.includes(sel) || sel.includes(k)) { found = reverse[k]; break; }
+                if (k.includes(sel) || sel.includes(k)) {
+                  found = reverse[k];
+                  break;
+                }
               }
             }
 
@@ -194,8 +216,11 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
               const parts = sel.split(' ').filter(Boolean);
               if (parts.length > 0) {
                 for (const k of Object.keys(reverse)) {
-                  const hasAll = parts.every(p => k.includes(p));
-                  if (hasAll) { found = reverse[k]; break; }
+                  const hasAll = parts.every((p) => k.includes(p));
+                  if (hasAll) {
+                    found = reverse[k];
+                    break;
+                  }
                 }
               }
             }
@@ -227,19 +252,20 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     const isRandomSort = (resolvedFilters?.sortBy || catalogConfig.filters?.sortBy) === 'random';
 
     if (search) {
-      result = await tmdb.search(config.tmdbApiKey, search, type, page, {
+      result = await tmdb.search(apiKey, search, type, page, {
         displayLanguage: resolvedFilters?.displayLanguage || catalogConfig.filters?.displayLanguage,
       });
     } else {
       if (listType && listType !== 'discover') {
-        result = await tmdb.fetchSpecialList(config.tmdbApiKey, listType, type, {
+        result = await tmdb.fetchSpecialList(apiKey, listType, type, {
           page,
-          displayLanguage: resolvedFilters?.displayLanguage || catalogConfig.filters?.displayLanguage,
+          displayLanguage:
+            resolvedFilters?.displayLanguage || catalogConfig.filters?.displayLanguage,
           language: resolvedFilters?.language || catalogConfig.filters?.language,
           region: resolvedFilters?.originCountry || catalogConfig.filters?.originCountry,
         });
       } else if (isRandomSort) {
-        const discoverResult = await tmdb.discover(config.tmdbApiKey, {
+        const discoverResult = await tmdb.discover(apiKey, {
           type,
           ...resolvedFilters,
           sortBy: 'popularity.desc',
@@ -248,7 +274,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
         const maxPage = Math.min(discoverResult.total_pages || 1, 500);
         const randomPage = Math.floor(Math.random() * maxPage) + 1;
 
-        result = await tmdb.discover(config.tmdbApiKey, {
+        result = await tmdb.discover(apiKey, {
           type,
           ...resolvedFilters,
           sortBy: 'popularity.desc',
@@ -258,7 +284,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
           result.results = shuffleArray(result.results);
         }
       } else {
-        result = await tmdb.discover(config.tmdbApiKey, {
+        result = await tmdb.discover(apiKey, {
           type,
           ...resolvedFilters,
           page,
@@ -268,13 +294,15 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
 
     const needsGenrePostFilter = !!search || (listType && listType !== 'discover');
     const rawItems = result?.results || [];
-    const allItems = needsGenrePostFilter ? applyGenrePostFilter(rawItems, resolvedFilters) : rawItems;
+    const allItems = needsGenrePostFilter
+      ? applyGenrePostFilter(rawItems, resolvedFilters)
+      : rawItems;
 
     const metas = await Promise.all(
       allItems.map(async (item) => {
         let imdbId = null;
 
-        const externalIds = await tmdb.getExternalIds(config.tmdbApiKey, item.id, type);
+        const externalIds = await tmdb.getExternalIds(apiKey, item.id, type);
         imdbId = externalIds?.imdb_id || null;
 
         if (catalogConfig.filters?.imdbOnly && !imdbId) {
@@ -285,7 +313,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       })
     );
 
-    const filteredMetas = metas.filter(m => m !== null);
+    const filteredMetas = metas.filter((m) => m !== null);
 
     log.debug('Returning catalog results', { count: filteredMetas.length, page, skip });
 
@@ -311,7 +339,7 @@ async function handleMetaRequest(userId, type, id, extra, res) {
     const config = await getUserConfig(userId);
     if (!config) return res.json({ meta: {} });
 
-    const apiKey = config.tmdbApiKey;
+    const apiKey = getApiKeyFromConfig(config);
     if (!apiKey) return res.json({ meta: {} });
 
     const requestedId = String(id || '');

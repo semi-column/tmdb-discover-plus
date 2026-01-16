@@ -43,7 +43,7 @@ export function BuyMeACoffeeButton({
         font,
         fontColor,
         outlineColor,
-        coffeeColor,
+        coffeeColor
       );
     };
 
@@ -79,7 +79,11 @@ export function BuyMeACoffeeButton({
         script.setAttribute('data-coffee-color', coffeeColor);
 
         script.addEventListener('load', () => resolve(), { once: true });
-        script.addEventListener('error', () => reject(new Error('Failed to load Buy Me a Coffee widget script')), { once: true });
+        script.addEventListener(
+          'error',
+          () => reject(new Error('Failed to load Buy Me a Coffee widget script')),
+          { once: true }
+        );
 
         document.head.appendChild(script);
       });

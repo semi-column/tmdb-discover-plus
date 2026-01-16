@@ -36,6 +36,11 @@ npm-debug.log*
 *.spec.js
 __tests__/
 coverage/
+server/tests/
+tests/
+
+# CI / Workflows
+.github/
 
 # Documentation (not needed in container)
 *.md
@@ -44,3 +49,9 @@ coverage/
 # Misc
 .beamupignore
 beamup.json
+
+# Docker
+Dockerfile
+Dockerfile*
+docker-compose*.yml
+.dockerignore

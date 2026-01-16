@@ -12,12 +12,12 @@ const log = createLogger('tmdb');
 
 const httpsAgent = new https.Agent({
   keepAlive: true,
-  rejectUnauthorized: process.env.DISABLE_TLS_VERIFY !== 'true'
+  rejectUnauthorized: process.env.DISABLE_TLS_VERIFY !== 'true',
 });
 
 const cache = new NodeCache({
-  stdTTL: 3600,  // 1 hour default TTL
-  checkperiod: 600 // Check for expired keys every 10 min
+  stdTTL: 3600, // 1 hour default TTL
+  checkperiod: 600, // Check for expired keys every 10 min
 });
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
@@ -66,7 +66,8 @@ function assertAllowedUrl(url, { origin, pathPrefix }) {
   if (!(url instanceof URL)) throw new Error('Invalid URL');
   if (url.protocol !== 'https:') throw new Error('Blocked non-HTTPS outbound request');
   if (url.username || url.password) throw new Error('Blocked URL with credentials');
-  if (origin && url.origin !== origin) throw new Error(`Blocked outbound request to untrusted origin: ${url.origin}`);
+  if (origin && url.origin !== origin)
+    throw new Error(`Blocked outbound request to untrusted origin: ${url.origin}`);
   if (pathPrefix && !url.pathname.startsWith(pathPrefix)) {
     throw new Error(`Blocked outbound request to untrusted path: ${url.pathname}`);
   }
@@ -108,7 +109,7 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
       const response = await fetch(url.toString(), { agent: httpsAgent });
 
       if (!response.ok) {
-        // If 429 (Too Many Requests), we might want to respect Retry-After header, 
+        // If 429 (Too Many Requests), we might want to respect Retry-After header,
         // but typically standard backoff is enough for loose rate limits.
         // For 5xx errors, we retry. For 4xx (except maybe 429), we generally don't retry.
         if (response.status >= 500 || response.status === 429) {
@@ -136,9 +137,9 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
         const delay = 300 * Math.pow(2, attempt);
         log.warn(`TMDB request failed, retrying in ${delay}ms`, {
           attempt: attempt + 1,
-          error: redactTmdbUrl(error.message)
+          error: redactTmdbUrl(error.message),
         });
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
 
@@ -215,7 +216,7 @@ async function tmdbWebsiteFetchJson(endpoint, params = {}) {
   const response = await fetch(url.toString(), {
     agent: httpsAgent,
     headers: {
-      'Accept': 'application/json, text/plain, */*',
+      Accept: 'application/json, text/plain, */*',
       'X-Requested-With': 'XMLHttpRequest',
       // Lightweight UA to avoid some overly aggressive bot blocks.
       'User-Agent': 'tmdb-discover-plus/2.x',
@@ -246,9 +247,9 @@ async function getNetworksViaWebsite(query) {
 
   const results = Array.isArray(data?.results) ? data.results : [];
   const filtered = results
-    .filter(r => r?.id && r?.name && matchesLoose(r.name, q))
+    .filter((r) => r?.id && r?.name && matchesLoose(r.name, q))
     .slice(0, 20)
-    .map(r => ({
+    .map((r) => ({
       id: r.id,
       name: r.name,
       logoPath: r.logo_path ? `${TMDB_IMAGE_BASE}/w185${r.logo_path}` : null,
@@ -561,31 +562,40 @@ export function toStremioFullMeta(details, type, imdbId = null) {
   const year = releaseDate ? String(releaseDate).split('-')[0] : '';
 
   const genres = Array.isArray(details.genres)
-    ? details.genres.map(g => g?.name).filter(Boolean)
+    ? details.genres.map((g) => g?.name).filter(Boolean)
     : [];
 
   // Credits (best-effort; Stremio warns these may be deprecated but still supported)
   const credits = details.credits || {};
   const cast = Array.isArray(credits.cast)
-    ? credits.cast.slice(0, 20).map(p => p?.name).filter(Boolean)
+    ? credits.cast
+        .slice(0, 20)
+        .map((p) => p?.name)
+        .filter(Boolean)
     : [];
 
   const crew = Array.isArray(credits.crew) ? credits.crew : [];
-  const directors = crew.filter(p => p?.job === 'Director').map(p => p?.name).filter(Boolean);
+  const directors = crew
+    .filter((p) => p?.job === 'Director')
+    .map((p) => p?.name)
+    .filter(Boolean);
 
   // Runtime: movie.runtime (minutes) or tv.episode_run_time (array)
   let runtimeMin = null;
   if (isMovie && typeof details.runtime === 'number') runtimeMin = details.runtime;
   if (!isMovie && Array.isArray(details.episode_run_time) && details.episode_run_time.length > 0) {
-    const first = details.episode_run_time.find(v => typeof v === 'number');
+    const first = details.episode_run_time.find((v) => typeof v === 'number');
     if (typeof first === 'number') runtimeMin = first;
   }
 
   const poster = details.poster_path ? `${TMDB_IMAGE_BASE}/w500${details.poster_path}` : null;
-  const background = details.backdrop_path ? `${TMDB_IMAGE_BASE}/w1280${details.backdrop_path}` : null;
-  const logo = Array.isArray(details.images?.logos) && details.images.logos.length > 0
-    ? details.images.logos.find(l => l?.file_path)?.file_path
+  const background = details.backdrop_path
+    ? `${TMDB_IMAGE_BASE}/w1280${details.backdrop_path}`
     : null;
+  const logo =
+    Array.isArray(details.images?.logos) && details.images.logos.length > 0
+      ? details.images.logos.find((l) => l?.file_path)?.file_path
+      : null;
 
   return {
     id: imdbId || `tmdb:${details.id}`,
@@ -639,18 +649,18 @@ export function toStremioMeta(item, type, imdbId = null) {
   // Map TMDB genre_ids (if present) to human-readable names using cached API results first,
   // falling back to the static JSON mapping.
   const mappedGenres = [];
-  const ids = item.genre_ids || item.genres?.map(g => g.id) || [];
+  const ids = item.genre_ids || item.genres?.map((g) => g.id) || [];
   const mediaKey = isMovie ? 'movie' : 'tv';
 
   // Try cached genre list first
   const cachedList = genreCache[mediaKey];
   const staticList = staticGenreMap[mediaKey] || {};
 
-  ids.forEach(id => {
+  ids.forEach((id) => {
     const key = String(id);
     let name = null;
     if (cachedList) {
-      const hit = cachedList.find(g => String(g.id) === key);
+      const hit = cachedList.find((g) => String(g.id) === key);
       if (hit) name = hit.name;
     }
     if (!name && staticList[key]) name = staticList[key];
@@ -663,13 +673,9 @@ export function toStremioMeta(item, type, imdbId = null) {
     imdbId: imdbId || null,
     type: type === 'series' ? 'series' : 'movie',
     name: title,
-    poster: item.poster_path
-      ? `${TMDB_IMAGE_BASE}/w500${item.poster_path}`
-      : null,
+    poster: item.poster_path ? `${TMDB_IMAGE_BASE}/w500${item.poster_path}` : null,
     posterShape: 'poster',
-    background: item.backdrop_path
-      ? `${TMDB_IMAGE_BASE}/w1280${item.backdrop_path}`
-      : null,
+    background: item.backdrop_path ? `${TMDB_IMAGE_BASE}/w1280${item.backdrop_path}` : null,
     description: item.overview || '',
     releaseInfo: year,
     imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
@@ -694,11 +700,13 @@ export async function validateApiKey(apiKey) {
  */
 export async function getLanguages(apiKey) {
   const data = await tmdbFetch('/configuration/languages', apiKey);
-  return data.filter(lang => lang.iso_639_1).map(lang => ({
-    code: lang.iso_639_1,
-    name: lang.english_name,
-    nativeName: lang.name
-  }));
+  return data
+    .filter((lang) => lang.iso_639_1)
+    .map((lang) => ({
+      code: lang.iso_639_1,
+      name: lang.english_name,
+      nativeName: lang.name,
+    }));
 }
 
 /**
@@ -706,10 +714,10 @@ export async function getLanguages(apiKey) {
  */
 export async function getCountries(apiKey) {
   const data = await tmdbFetch('/configuration/countries', apiKey);
-  return data.map(country => ({
+  return data.map((country) => ({
     code: country.iso_3166_1,
     name: country.english_name,
-    nativeName: country.native_name
+    nativeName: country.native_name,
   }));
 }
 
@@ -744,12 +752,14 @@ export async function getWatchRegions(apiKey) {
  */
 export async function searchPerson(apiKey, query) {
   const data = await tmdbFetch('/search/person', apiKey, { query });
-  return data.results?.slice(0, 10).map(person => ({
-    id: person.id,
-    name: person.name,
-    profilePath: person.profile_path ? `${TMDB_IMAGE_BASE}/w185${person.profile_path}` : null,
-    knownFor: person.known_for_department
-  })) || [];
+  return (
+    data.results?.slice(0, 10).map((person) => ({
+      id: person.id,
+      name: person.name,
+      profilePath: person.profile_path ? `${TMDB_IMAGE_BASE}/w185${person.profile_path}` : null,
+      knownFor: person.known_for_department,
+    })) || []
+  );
 }
 
 /**
@@ -757,11 +767,13 @@ export async function searchPerson(apiKey, query) {
  */
 export async function searchCompany(apiKey, query) {
   const data = await tmdbFetch('/search/company', apiKey, { query });
-  return data.results?.slice(0, 10).map(company => ({
-    id: company.id,
-    name: company.name,
-    logoPath: company.logo_path ? `${TMDB_IMAGE_BASE}/w185${company.logo_path}` : null
-  })) || [];
+  return (
+    data.results?.slice(0, 10).map((company) => ({
+      id: company.id,
+      name: company.name,
+      logoPath: company.logo_path ? `${TMDB_IMAGE_BASE}/w185${company.logo_path}` : null,
+    })) || []
+  );
 }
 
 /**
@@ -769,10 +781,12 @@ export async function searchCompany(apiKey, query) {
  */
 export async function searchKeyword(apiKey, query) {
   const data = await tmdbFetch('/search/keyword', apiKey, { query });
-  return data.results?.slice(0, 10).map(keyword => ({
-    id: keyword.id,
-    name: keyword.name
-  })) || [];
+  return (
+    data.results?.slice(0, 10).map((keyword) => ({
+      id: keyword.id,
+      name: keyword.name,
+    })) || []
+  );
 }
 
 /**
@@ -842,7 +856,11 @@ export const LIST_TYPES = {
   movie: [
     { value: 'discover', label: '🔍 Custom Discover', description: 'Use filters below' },
     { value: 'trending_day', label: '🔥 Trending Today', description: 'Movies trending today' },
-    { value: 'trending_week', label: '📈 Trending This Week', description: 'Movies trending this week' },
+    {
+      value: 'trending_week',
+      label: '📈 Trending This Week',
+      description: 'Movies trending this week',
+    },
     { value: 'now_playing', label: '🎬 Now Playing', description: 'Currently in theaters' },
     { value: 'upcoming', label: '📅 Upcoming', description: 'Coming soon to theaters' },
     { value: 'top_rated', label: '⭐ Top Rated', description: 'All-time highest rated' },
@@ -851,7 +869,11 @@ export const LIST_TYPES = {
   series: [
     { value: 'discover', label: '🔍 Custom Discover', description: 'Use filters below' },
     { value: 'trending_day', label: '🔥 Trending Today', description: 'TV shows trending today' },
-    { value: 'trending_week', label: '📈 Trending This Week', description: 'TV shows trending this week' },
+    {
+      value: 'trending_week',
+      label: '📈 Trending This Week',
+      description: 'TV shows trending this week',
+    },
     { value: 'airing_today', label: '📺 Airing Today', description: 'Episodes airing today' },
     { value: 'on_the_air', label: '📡 On The Air', description: 'Currently airing shows' },
     { value: 'top_rated', label: '⭐ Top Rated', description: 'All-time highest rated' },
@@ -863,7 +885,11 @@ export const LIST_TYPES = {
 export const PRESET_CATALOGS = {
   movie: [
     { value: 'trending_day', label: '🔥 Trending Today', description: 'Movies trending today' },
-    { value: 'trending_week', label: '📈 Trending This Week', description: 'Movies trending this week' },
+    {
+      value: 'trending_week',
+      label: '📈 Trending This Week',
+      description: 'Movies trending this week',
+    },
     { value: 'now_playing', label: '🎬 Now Playing', description: 'Currently in theaters' },
     { value: 'upcoming', label: '📅 Upcoming', description: 'Coming soon to theaters' },
     { value: 'top_rated', label: '⭐ Top Rated', description: 'All-time highest rated' },
@@ -871,7 +897,11 @@ export const PRESET_CATALOGS = {
   ],
   series: [
     { value: 'trending_day', label: '🔥 Trending Today', description: 'TV shows trending today' },
-    { value: 'trending_week', label: '📈 Trending This Week', description: 'TV shows trending this week' },
+    {
+      value: 'trending_week',
+      label: '📈 Trending This Week',
+      description: 'TV shows trending this week',
+    },
     { value: 'airing_today', label: '📺 Airing Today', description: 'Episodes airing today' },
     { value: 'on_the_air', label: '📡 On The Air', description: 'Currently airing shows' },
     { value: 'top_rated', label: '⭐ Top Rated', description: 'All-time highest rated' },

@@ -1,16 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 
-export function SearchableSelect({ 
-  options = [], 
-  value, 
-  onChange, 
-  placeholder = 'Select...', 
+export function SearchableSelect({
+  options = [],
+  value,
+  onChange,
+  placeholder = 'Select...',
   searchPlaceholder = 'Search...',
   emptyMessage = 'No options found',
   labelKey = 'name',
   valueKey = 'code',
-  allowClear = true
+  allowClear = true,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -18,11 +18,11 @@ export function SearchableSelect({
   const inputRef = useRef(null);
 
   // Find selected option label
-  const selectedOption = options.find(opt => opt[valueKey] === value);
+  const selectedOption = options.find((opt) => opt[valueKey] === value);
   const displayValue = selectedOption ? selectedOption[labelKey] : '';
 
   // Filter options based on search
-  const filteredOptions = options.filter(opt => 
+  const filteredOptions = options.filter((opt) =>
     opt[labelKey]?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -69,7 +69,7 @@ export function SearchableSelect({
 
   return (
     <div className={`searchable-select ${isOpen ? 'open' : ''}`} ref={containerRef}>
-      <div 
+      <div
         className={`searchable-select-trigger ${isOpen ? 'open' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
         role="combobox"
@@ -78,12 +78,10 @@ export function SearchableSelect({
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && setIsOpen(!isOpen)}
       >
-        <span className={displayValue ? '' : 'placeholder'}>
-          {displayValue || placeholder}
-        </span>
+        <span className={displayValue ? '' : 'placeholder'}>{displayValue || placeholder}</span>
         <div className="searchable-select-icons">
           {allowClear && value && (
-            <button 
+            <button
               className="searchable-select-clear"
               onClick={handleClear}
               type="button"
@@ -134,9 +132,7 @@ export function SearchableSelect({
                 </div>
               ))
             ) : (
-              <div className="searchable-select-empty">
-                {emptyMessage}
-              </div>
+              <div className="searchable-select-empty">{emptyMessage}</div>
             )}
           </div>
         </div>

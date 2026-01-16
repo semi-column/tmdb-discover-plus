@@ -6,67 +6,67 @@
  * @returns {Object} - Filters with resolved date values
  */
 export function resolveDynamicDatePreset(filters, type) {
-    if (!filters?.datePreset) {
-        return filters;
+  if (!filters?.datePreset) {
+    return filters;
+  }
+
+  const resolved = { ...filters };
+  const today = new Date();
+  const formatDate = (d) => d.toISOString().split('T')[0]; // YYYY-MM-DD
+
+  // Determine which date fields to set based on content type
+  const isMovie = type === 'movie';
+  const fromField = isMovie ? 'releaseDateFrom' : 'airDateFrom';
+  const toField = isMovie ? 'releaseDateTo' : 'airDateTo';
+
+  switch (filters.datePreset) {
+    case 'last_30_days': {
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      resolved[fromField] = formatDate(thirtyDaysAgo);
+      resolved[toField] = formatDate(today);
+      break;
     }
-
-    const resolved = { ...filters };
-    const today = new Date();
-    const formatDate = (d) => d.toISOString().split('T')[0]; // YYYY-MM-DD
-
-    // Determine which date fields to set based on content type
-    const isMovie = type === 'movie';
-    const fromField = isMovie ? 'releaseDateFrom' : 'airDateFrom';
-    const toField = isMovie ? 'releaseDateTo' : 'airDateTo';
-
-    switch (filters.datePreset) {
-        case 'last_30_days': {
-            const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(today.getDate() - 30);
-            resolved[fromField] = formatDate(thirtyDaysAgo);
-            resolved[toField] = formatDate(today);
-            break;
-        }
-        case 'last_90_days': {
-            const ninetyDaysAgo = new Date(today);
-            ninetyDaysAgo.setDate(today.getDate() - 90);
-            resolved[fromField] = formatDate(ninetyDaysAgo);
-            resolved[toField] = formatDate(today);
-            break;
-        }
-        case 'last_180_days': {
-            const sixMonthsAgo = new Date(today);
-            sixMonthsAgo.setDate(today.getDate() - 180);
-            resolved[fromField] = formatDate(sixMonthsAgo);
-            resolved[toField] = formatDate(today);
-            break;
-        }
-        case 'this_year': {
-            const startOfYear = new Date(today.getFullYear(), 0, 1);
-            resolved[fromField] = formatDate(startOfYear);
-            resolved[toField] = formatDate(today);
-            break;
-        }
-        case 'last_year': {
-            const lastYear = today.getFullYear() - 1;
-            resolved[fromField] = `${lastYear}-01-01`;
-            resolved[toField] = `${lastYear}-12-31`;
-            break;
-        }
-        case 'upcoming': {
-            if (isMovie) {
-                const sixMonthsLater = new Date(today);
-                sixMonthsLater.setMonth(today.getMonth() + 6);
-                resolved[fromField] = formatDate(today);
-                resolved[toField] = formatDate(sixMonthsLater);
-            }
-            break;
-        }
-        default:
-            // Unknown preset, ignore
-            break;
+    case 'last_90_days': {
+      const ninetyDaysAgo = new Date(today);
+      ninetyDaysAgo.setDate(today.getDate() - 90);
+      resolved[fromField] = formatDate(ninetyDaysAgo);
+      resolved[toField] = formatDate(today);
+      break;
     }
+    case 'last_180_days': {
+      const sixMonthsAgo = new Date(today);
+      sixMonthsAgo.setDate(today.getDate() - 180);
+      resolved[fromField] = formatDate(sixMonthsAgo);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'this_year': {
+      const startOfYear = new Date(today.getFullYear(), 0, 1);
+      resolved[fromField] = formatDate(startOfYear);
+      resolved[toField] = formatDate(today);
+      break;
+    }
+    case 'last_year': {
+      const lastYear = today.getFullYear() - 1;
+      resolved[fromField] = `${lastYear}-01-01`;
+      resolved[toField] = `${lastYear}-12-31`;
+      break;
+    }
+    case 'upcoming': {
+      if (isMovie) {
+        const sixMonthsLater = new Date(today);
+        sixMonthsLater.setMonth(today.getMonth() + 6);
+        resolved[fromField] = formatDate(today);
+        resolved[toField] = formatDate(sixMonthsLater);
+      }
+      break;
+    }
+    default:
+      // Unknown preset, ignore
+      break;
+  }
 
-    delete resolved.datePreset;
-    return resolved;
+  delete resolved.datePreset;
+  return resolved;
 }

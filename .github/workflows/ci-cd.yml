@@ -55,38 +55,13 @@ jobs:
       - name: Build client
         run: cd client && npm run build
 
-      - name: Run E2E Tests
+      - name: Run Integration Tests
         env:
           PORT: 7000
           TEST_BASE_URL: http://127.0.0.1:7000
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           TEST_TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
-        run: |
-          # Start server in background
-          node server/src/index.js &
-          SERVER_PID=$!
-          
-          # Wait for server to be ready (with health check)
-          echo "Waiting for server to be ready..."
-          for i in {1..30}; do
-            if curl -s http://127.0.0.1:7000/health > /dev/null 2>&1; then
-              echo "Server is ready!"
-              break
-            fi
-            echo "Attempt $i/30 - waiting..."
-            sleep 1
-          done
-          
-          # Verify server is responding
-          curl -s http://127.0.0.1:7000/health || { echo "Server failed to start"; kill $SERVER_PID 2>/dev/null; exit 1; }
-          
-          # Run tests
-          node tests/runner.js
-          TEST_EXIT=$?
-          
-          # Cleanup
-          kill $SERVER_PID 2>/dev/null || true
-          
-          exit $TEST_EXIT
+        run: cd server && npm test
 
   # ============================================
   # Deploy to BeamUp (only on main push)
@@ -101,7 +76,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for git push
+          fetch-depth: 0 # Full history for git push
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -137,7 +112,7 @@ jobs:
 
       - name: Deploy to BeamUp
         env:
-          GIT_SSH_COMMAND: "ssh -i ~/.ssh/beamup_key -o StrictHostKeyChecking=no"
+          GIT_SSH_COMMAND: 'ssh -i ~/.ssh/beamup_key -o StrictHostKeyChecking=no'
         run: |
           git remote add beamup dokku@a.baby-beamup.club:84f50d1c22e7-tmdb-discover-plus || true
           git push beamup HEAD:main --force

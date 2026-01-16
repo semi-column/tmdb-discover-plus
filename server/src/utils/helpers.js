@@ -26,19 +26,19 @@ export function getBaseUrl(req) {
   if (process.env.BASE_URL) {
     return process.env.BASE_URL;
   }
-  
+
   // Use X-Forwarded headers if behind proxy, otherwise use req values
   const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';
   let host = req.get('x-forwarded-host') || req.get('host') || 'localhost';
-  
+
   // Handle Beamup/Dokku partial hostnames if configured
   const beamupDomain = process.env.BEAMUP_DOMAIN || 'baby-beamup.club';
   const appName = process.env.BEAMUP_APP_NAME || 'tmdb-discover-plus';
-  
+
   if (host.includes(appName) && !host.includes(beamupDomain)) {
     host = `${host}.${beamupDomain}`;
   }
-  
+
   return `${protocol}://${host}`;
 }
 
@@ -67,5 +67,8 @@ export function normalizeGenreName(name) {
 export function parseIdArray(val) {
   if (!val) return [];
   if (Array.isArray(val)) return val.map(String).filter(Boolean);
-  return String(val).split(',').map(s => s.trim()).filter(Boolean);
+  return String(val)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }

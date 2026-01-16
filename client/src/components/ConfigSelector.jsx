@@ -1,20 +1,20 @@
 import { useState } from 'react';
 import { FolderOpen, Plus, Trash2, Download, Edit3, Loader, AlertTriangle } from 'lucide-react';
 
-export function ConfigSelector({ 
-  configs, 
-  loading, 
-  onSelectConfig, 
-  onCreateNew, 
+export function ConfigSelector({
+  configs,
+  loading,
+  onSelectConfig,
+  onCreateNew,
   onDeleteConfig,
-  onInstallConfig 
+  onInstallConfig,
 }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
   const handleDelete = async (config, e) => {
     e.stopPropagation();
-    
+
     if (confirmDelete === config.userId) {
       // Confirmed, perform delete
       setDeleting(config.userId);
@@ -35,17 +35,17 @@ export function ConfigSelector({
   const formatDate = (dateString) => {
     if (!dateString) return 'Unknown';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
     });
   };
 
   const getCatalogSummary = (catalogs) => {
     if (!catalogs || catalogs.length === 0) return 'No catalogs';
-    const movieCount = catalogs.filter(c => c.type === 'movie').length;
-    const seriesCount = catalogs.filter(c => c.type === 'series').length;
+    const movieCount = catalogs.filter((c) => c.type === 'movie').length;
+    const seriesCount = catalogs.filter((c) => c.type === 'series').length;
     const parts = [];
     if (movieCount > 0) parts.push(`${movieCount} movie${movieCount > 1 ? 's' : ''}`);
     if (seriesCount > 0) parts.push(`${seriesCount} series`);
@@ -73,7 +73,7 @@ export function ConfigSelector({
         <FolderOpen size={24} />
         <h3>Your Configurations</h3>
       </div>
-      
+
       <p className="config-selector-description">
         Select a configuration to edit, or create a new one.
       </p>
@@ -89,9 +89,9 @@ export function ConfigSelector({
       ) : (
         <>
           <div className="config-list">
-            {configs.map(config => (
-              <div 
-                key={config.userId} 
+            {configs.map((config) => (
+              <div
+                key={config.userId}
                 className="config-card"
                 onClick={() => onSelectConfig(config.userId)}
               >
@@ -100,16 +100,12 @@ export function ConfigSelector({
                     <h4 className="config-card-id">
                       <code>{config.userId}</code>
                     </h4>
-                    <p className="config-card-catalogs">
-                      {getCatalogSummary(config.catalogs)}
-                    </p>
-                    <p className="config-card-date">
-                      Updated: {formatDate(config.updatedAt)}
-                    </p>
+                    <p className="config-card-catalogs">{getCatalogSummary(config.catalogs)}</p>
+                    <p className="config-card-date">Updated: {formatDate(config.updatedAt)}</p>
                   </div>
-                  
+
                   <div className="config-card-actions">
-                    <button 
+                    <button
                       className="btn btn-icon btn-ghost"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -119,7 +115,7 @@ export function ConfigSelector({
                     >
                       <Edit3 size={18} />
                     </button>
-                    <button 
+                    <button
                       className="btn btn-icon btn-ghost"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -129,11 +125,15 @@ export function ConfigSelector({
                     >
                       <Download size={18} />
                     </button>
-                    <button 
+                    <button
                       className={`btn btn-icon ${confirmDelete === config.userId ? 'btn-danger' : 'btn-ghost'}`}
                       onClick={(e) => handleDelete(config, e)}
                       disabled={deleting === config.userId}
-                      title={confirmDelete === config.userId ? 'Click again to confirm delete' : 'Delete configuration'}
+                      title={
+                        confirmDelete === config.userId
+                          ? 'Click again to confirm delete'
+                          : 'Delete configuration'
+                      }
                     >
                       {deleting === config.userId ? (
                         <Loader size={18} className="animate-spin" />
@@ -145,7 +145,7 @@ export function ConfigSelector({
                     </button>
                   </div>
                 </div>
-                
+
                 {confirmDelete === config.userId && (
                   <div className="config-card-confirm">
                     <AlertTriangle size={14} />
@@ -155,7 +155,7 @@ export function ConfigSelector({
               </div>
             ))}
           </div>
-          
+
           <button className="btn btn-secondary w-full" onClick={onCreateNew}>
             <Plus size={18} />
             Create New Configuration

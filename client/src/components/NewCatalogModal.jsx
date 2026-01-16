@@ -9,7 +9,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-    
+
     onAdd({
       name: name.trim(),
       type: 'movie',
@@ -21,7 +21,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd }) {
       },
       enabled: true,
     });
-    
+
     setName('');
     onClose();
   };
@@ -59,11 +59,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd }) {
             <button type="button" className="btn btn-ghost" onClick={onClose}>
               Cancel
             </button>
-            <button 
-              type="submit" 
-              className="btn btn-primary"
-              disabled={!name.trim()}
-            >
+            <button type="submit" className="btn btn-primary" disabled={!name.trim()}>
               Create Catalog
             </button>
           </div>

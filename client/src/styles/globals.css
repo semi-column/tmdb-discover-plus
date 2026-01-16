@@ -7,37 +7,37 @@
   --bg-card: #181818;
   --border-color: #2a2a2a;
   --border-light: #3a3a3a;
-  
+
   --text-primary: #e8e8e8;
   --text-secondary: #a0a0a0;
   --text-muted: #666666;
-  
+
   /* Neutral accent with occasional color pop */
   --accent-primary: #4a9eff;
   --accent-secondary: #888888;
   --accent-tertiary: #4ade80;
   --accent-orange: #facc15;
   --accent-light: #60a5fa;
-  
+
   --success: #4ade80;
   --warning: #facc15;
   --error: #ef4444;
-  
+
   --gradient-primary: linear-gradient(135deg, #4a9eff 0%, #4ade80 100%);
   --gradient-tmdb: linear-gradient(135deg, #4a9eff 0%, #1e3a5f 100%);
   --gradient-card: linear-gradient(180deg, rgba(74, 158, 255, 0.02) 0%, transparent 100%);
-  
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.6);
   --shadow-glow: none;
   --shadow-glow-green: none;
-  
+
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-full: 9999px;
-  
+
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
@@ -49,7 +49,9 @@
   padding: 0;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
 }
 
@@ -103,7 +105,9 @@ button {
 }
 
 /* Input Base Styles */
-input, select, textarea {
+input,
+select,
+textarea {
   font-family: inherit;
   font-size: inherit;
 }
@@ -154,57 +158,110 @@ a:hover {
   justify-content: space-between;
 }
 
-.gap-1 { gap: 4px; }
-.gap-2 { gap: 8px; }
-.gap-3 { gap: 12px; }
-.gap-4 { gap: 16px; }
-.gap-6 { gap: 24px; }
-.gap-8 { gap: 32px; }
+.gap-1 {
+  gap: 4px;
+}
+.gap-2 {
+  gap: 8px;
+}
+.gap-3 {
+  gap: 12px;
+}
+.gap-4 {
+  gap: 16px;
+}
+.gap-6 {
+  gap: 24px;
+}
+.gap-8 {
+  gap: 32px;
+}
 
-.text-center { text-align: center; }
-.text-sm { font-size: 14px; }
-.text-xs { font-size: 12px; }
-.text-lg { font-size: 18px; }
-.text-xl { font-size: 20px; }
-.text-2xl { font-size: 24px; }
-.text-3xl { font-size: 30px; }
+.text-center {
+  text-align: center;
+}
+.text-sm {
+  font-size: 14px;
+}
+.text-xs {
+  font-size: 12px;
+}
+.text-lg {
+  font-size: 18px;
+}
+.text-xl {
+  font-size: 20px;
+}
+.text-2xl {
+  font-size: 24px;
+}
+.text-3xl {
+  font-size: 30px;
+}
 
-.font-medium { font-weight: 500; }
-.font-semibold { font-weight: 600; }
-.font-bold { font-weight: 700; }
+.font-medium {
+  font-weight: 500;
+}
+.font-semibold {
+  font-weight: 600;
+}
+.font-bold {
+  font-weight: 700;
+}
 
-.text-muted { color: var(--text-muted); }
-.text-secondary { color: var(--text-secondary); }
+.text-muted {
+  color: var(--text-muted);
+}
+.text-secondary {
+  color: var(--text-secondary);
+}
 
-.w-full { width: 100%; }
+.w-full {
+  width: 100%;
+}
 
-.hidden { display: none; }
+.hidden {
+  display: none;
+}
 
 /* Animation Classes */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { 
+  from {
     opacity: 0;
     transform: translateY(10px);
   }
-  to { 
+  to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-fadeIn {

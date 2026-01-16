@@ -17,7 +17,7 @@ import {
   Sparkles,
   X,
   Shuffle,
-  Zap
+  Zap,
 } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
 import { MultiSelect } from './MultiSelect';
@@ -67,7 +67,7 @@ const FILTER_TEMPLATES = [
       voteCountMin: 50,
       ratingMin: 7.5,
       ratingMax: 10,
-    }
+    },
   },
   {
     id: 'recent_hits',
@@ -79,7 +79,7 @@ const FILTER_TEMPLATES = [
       yearFrom: CURRENT_YEAR,
       yearTo: CURRENT_YEAR,
       ratingMin: 6,
-    }
+    },
   },
   {
     id: 'classics',
@@ -92,7 +92,7 @@ const FILTER_TEMPLATES = [
       yearTo: 1999,
       voteCountMin: 500,
       ratingMin: 7.5,
-    }
+    },
   },
   {
     id: 'family_night',
@@ -103,7 +103,7 @@ const FILTER_TEMPLATES = [
       sortBy: 'popularity.desc',
       certifications: ['G', 'PG'],
       ratingMin: 6,
-    }
+    },
   },
 ];
 
@@ -111,7 +111,7 @@ export function CatalogEditor({
   catalog,
   genres = { movie: [], series: [] },
   genresLoading = false,
-  refreshGenres = () => { },
+  refreshGenres = () => {},
   languages = [],
   countries = [],
   sortOptions = { movie: [], series: [] },
@@ -167,12 +167,12 @@ export function CatalogEditor({
 
   // Keep a growing union of known networks so previously selected IDs always have labels.
   useEffect(() => {
-    setTVNetworkOptions(prev => {
+    setTVNetworkOptions((prev) => {
       const byId = new Map();
-      (prev || []).forEach(n => {
+      (prev || []).forEach((n) => {
         if (n && n.id != null) byId.set(String(n.id), n);
       });
-      (tvNetworks || []).forEach(n => {
+      (tvNetworks || []).forEach((n) => {
         if (n && n.id != null) {
           const key = String(n.id);
           if (!byId.has(key)) byId.set(key, n);
@@ -182,34 +182,37 @@ export function CatalogEditor({
     });
   }, [tvNetworks]);
 
-  const handleTVNetworkSearch = useCallback(async (query) => {
-    if (!searchTVNetworks) return;
-    const q = String(query || '').trim();
-    if (q.length < 2) return;
-    try {
-      const results = await searchTVNetworks(q);
-      if (!Array.isArray(results) || results.length === 0) return;
-      setTVNetworkOptions(prev => {
-        const byId = new Map();
-        (prev || []).forEach(n => {
-          if (n && n.id != null) byId.set(String(n.id), n);
+  const handleTVNetworkSearch = useCallback(
+    async (query) => {
+      if (!searchTVNetworks) return;
+      const q = String(query || '').trim();
+      if (q.length < 2) return;
+      try {
+        const results = await searchTVNetworks(q);
+        if (!Array.isArray(results) || results.length === 0) return;
+        setTVNetworkOptions((prev) => {
+          const byId = new Map();
+          (prev || []).forEach((n) => {
+            if (n && n.id != null) byId.set(String(n.id), n);
+          });
+          results.forEach((n) => {
+            if (n && n.id != null) {
+              const key = String(n.id);
+              if (!byId.has(key)) byId.set(key, n);
+            }
+          });
+          return Array.from(byId.values());
         });
-        results.forEach(n => {
-          if (n && n.id != null) {
-            const key = String(n.id);
-            if (!byId.has(key)) byId.set(key, n);
-          }
-        });
-        return Array.from(byId.values());
-      });
-    } catch {
-      // best effort: network search shouldn't break the editor
-    }
-  }, [searchTVNetworks]);
+      } catch {
+        // best effort: network search shouldn't break the editor
+      }
+    },
+    [searchTVNetworks]
+  );
 
   // Tri-state genre click: neutral -> include -> exclude -> neutral
   const handleTriStateGenreClick = useCallback((genreId) => {
-    setLocalCatalog(prev => {
+    setLocalCatalog((prev) => {
       const current = prev || DEFAULT_CATALOG;
       const included = current.filters?.genres || [];
       const excluded = current.filters?.excludeGenres || [];
@@ -221,12 +224,12 @@ export function CatalogEditor({
 
       if (isIncluded) {
         // include -> exclude
-        newIncluded = included.filter(id => id !== genreId);
+        newIncluded = included.filter((id) => id !== genreId);
         newExcluded = [...excluded, genreId];
       } else if (isExcluded) {
         // exclude -> neutral
         newIncluded = included;
-        newExcluded = excluded.filter(id => id !== genreId);
+        newExcluded = excluded.filter((id) => id !== genreId);
       } else {
         // neutral -> include
         newIncluded = [...included, genreId];
@@ -238,20 +241,11 @@ export function CatalogEditor({
         filters: {
           ...current.filters,
           genres: newIncluded,
-          excludeGenres: newExcluded
-        }
+          excludeGenres: newExcluded,
+        },
       };
     });
   }, []);
-
-  // Get genre state for tri-state display
-  const _getGenreState = useCallback((genreId) => {
-    const included = localCatalog?.filters?.genres || [];
-    const excluded = localCatalog?.filters?.excludeGenres || [];
-    if (included.includes(genreId)) return 'include';
-    if (excluded.includes(genreId)) return 'exclude';
-    return 'neutral';
-  }, [localCatalog?.filters?.genres, localCatalog?.filters?.excludeGenres]);
 
   useEffect(() => {
     if (catalog) {
@@ -259,7 +253,7 @@ export function CatalogEditor({
 
       // Initialize date preset from stored filter
       if (catalog.filters?.datePreset) {
-        const presetMatch = DATE_PRESETS.find(p => p.value === catalog.filters.datePreset);
+        const presetMatch = DATE_PRESETS.find((p) => p.value === catalog.filters.datePreset);
         setSelectedDatePreset(presetMatch ? presetMatch.label : null);
       } else {
         setSelectedDatePreset(null);
@@ -272,32 +266,41 @@ export function CatalogEditor({
 
       const toPlaceholdersFromCsv = (csv) => {
         if (!csv) return [];
-        return String(csv).split(',').filter(Boolean).map(id => ({ id, name: id }));
+        return String(csv)
+          .split(',')
+          .filter(Boolean)
+          .map((id) => ({ id, name: id }));
       };
 
       if (Array.isArray(peopleResolved) && peopleResolved.length > 0) {
-        setSelectedPeople(peopleResolved.map(p => ({ id: String(p.value), name: p.label })));
+        setSelectedPeople(peopleResolved.map((p) => ({ id: String(p.value), name: p.label })));
       } else {
         const csv = catalog.filters?.withPeople || '';
         const initial = toPlaceholdersFromCsv(csv);
         (async () => {
-          if (initial.length > 0 && (typeof getPersonById === 'function' || typeof searchPerson === 'function')) {
-            const resolved = await Promise.all(initial.map(async item => {
-              if (item.name && !/^\d+$/.test(item.name)) return item;
-              try {
-                if (typeof getPersonById === 'function') {
-                  const resp = await getPersonById(item.id);
-                  if (resp && resp.name) return { id: item.id, name: resp.name };
+          if (
+            initial.length > 0 &&
+            (typeof getPersonById === 'function' || typeof searchPerson === 'function')
+          ) {
+            const resolved = await Promise.all(
+              initial.map(async (item) => {
+                if (item.name && !/^\d+$/.test(item.name)) return item;
+                try {
+                  if (typeof getPersonById === 'function') {
+                    const resp = await getPersonById(item.id);
+                    if (resp && resp.name) return { id: item.id, name: resp.name };
+                  }
+                  if (typeof searchPerson === 'function') {
+                    const sres = await searchPerson(item.id);
+                    if (Array.isArray(sres) && sres.length > 0)
+                      return { id: item.id, name: sres[0].name || item.id };
+                  }
+                } catch {
+                  // ignore resolution errors; keep placeholder
                 }
-                if (typeof searchPerson === 'function') {
-                  const sres = await searchPerson(item.id);
-                  if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || item.id };
-                }
-              } catch {
-                // ignore resolution errors; keep placeholder
-              }
-              return item;
-            }));
+                return item;
+              })
+            );
             setSelectedPeople(resolved);
           } else {
             setSelectedPeople(initial);
@@ -306,29 +309,37 @@ export function CatalogEditor({
       }
 
       if (Array.isArray(companiesResolved) && companiesResolved.length > 0) {
-        setSelectedCompanies(companiesResolved.map(c => ({ id: String(c.value), name: c.label })));
+        setSelectedCompanies(
+          companiesResolved.map((c) => ({ id: String(c.value), name: c.label }))
+        );
       } else {
         const csv = catalog.filters?.withCompanies || '';
         const initial = toPlaceholdersFromCsv(csv);
         // Resolve numeric-only ids into names when possible
         (async () => {
-          if (initial.length > 0 && (typeof getCompanyById === 'function' || typeof searchCompany === 'function')) {
-            const resolved = await Promise.all(initial.map(async item => {
-              if (item.name && !/^\d+$/.test(item.name)) return item;
-              try {
-                if (typeof getCompanyById === 'function') {
-                  const resp = await getCompanyById(item.id);
-                  if (resp && resp.name) return { id: item.id, name: resp.name };
+          if (
+            initial.length > 0 &&
+            (typeof getCompanyById === 'function' || typeof searchCompany === 'function')
+          ) {
+            const resolved = await Promise.all(
+              initial.map(async (item) => {
+                if (item.name && !/^\d+$/.test(item.name)) return item;
+                try {
+                  if (typeof getCompanyById === 'function') {
+                    const resp = await getCompanyById(item.id);
+                    if (resp && resp.name) return { id: item.id, name: resp.name };
+                  }
+                  if (typeof searchCompany === 'function') {
+                    const sres = await searchCompany(item.id);
+                    if (Array.isArray(sres) && sres.length > 0)
+                      return { id: item.id, name: sres[0].name || sres[0].title || item.id };
+                  }
+                } catch {
+                  // ignore resolution errors; keep placeholder
                 }
-                if (typeof searchCompany === 'function') {
-                  const sres = await searchCompany(item.id);
-                  if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || sres[0].title || item.id };
-                }
-              } catch {
-                // ignore resolution errors; keep placeholder
-              }
-              return item;
-            }));
+                return item;
+              })
+            );
             setSelectedCompanies(resolved);
           } else {
             setSelectedCompanies(initial);
@@ -337,28 +348,34 @@ export function CatalogEditor({
       }
 
       if (Array.isArray(keywordsResolved) && keywordsResolved.length > 0) {
-        setSelectedKeywords(keywordsResolved.map(k => ({ id: String(k.value), name: k.label })));
+        setSelectedKeywords(keywordsResolved.map((k) => ({ id: String(k.value), name: k.label })));
       } else {
         const csv = catalog.filters?.withKeywords || '';
         const initial = toPlaceholdersFromCsv(csv);
         (async () => {
-          if (initial.length > 0 && (typeof getKeywordById === 'function' || typeof searchKeyword === 'function')) {
-            const resolved = await Promise.all(initial.map(async item => {
-              if (item.name && !/^\d+$/.test(item.name)) return item;
-              try {
-                if (typeof getKeywordById === 'function') {
-                  const resp = await getKeywordById(item.id);
-                  if (resp && resp.name) return { id: item.id, name: resp.name };
+          if (
+            initial.length > 0 &&
+            (typeof getKeywordById === 'function' || typeof searchKeyword === 'function')
+          ) {
+            const resolved = await Promise.all(
+              initial.map(async (item) => {
+                if (item.name && !/^\d+$/.test(item.name)) return item;
+                try {
+                  if (typeof getKeywordById === 'function') {
+                    const resp = await getKeywordById(item.id);
+                    if (resp && resp.name) return { id: item.id, name: resp.name };
+                  }
+                  if (typeof searchKeyword === 'function') {
+                    const sres = await searchKeyword(item.id);
+                    if (Array.isArray(sres) && sres.length > 0)
+                      return { id: item.id, name: sres[0].name || item.id };
+                  }
+                } catch {
+                  // ignore resolution errors; keep placeholder
                 }
-                if (typeof searchKeyword === 'function') {
-                  const sres = await searchKeyword(item.id);
-                  if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || item.id };
-                }
-              } catch {
-                // ignore resolution errors; keep placeholder
-              }
-              return item;
-            }));
+                return item;
+              })
+            );
             setSelectedKeywords(resolved);
           } else {
             setSelectedKeywords(initial);
@@ -371,14 +388,18 @@ export function CatalogEditor({
       const excludeKwInitial = toPlaceholdersFromCsv(excludeKwCsv);
       if (excludeKwInitial.length > 0 && typeof getKeywordById === 'function') {
         (async () => {
-          const resolved = await Promise.all(excludeKwInitial.map(async item => {
-            if (item.name && !/^\d+$/.test(item.name)) return item;
-            try {
-              const resp = await getKeywordById(item.id);
-              if (resp && resp.name) return { id: item.id, name: resp.name };
-            } catch { /* ignore */ }
-            return item;
-          }));
+          const resolved = await Promise.all(
+            excludeKwInitial.map(async (item) => {
+              if (item.name && !/^\d+$/.test(item.name)) return item;
+              try {
+                const resp = await getKeywordById(item.id);
+                if (resp && resp.name) return { id: item.id, name: resp.name };
+              } catch {
+                /* ignore */
+              }
+              return item;
+            })
+          );
           setExcludeKeywords(resolved);
         })();
       } else {
@@ -390,14 +411,18 @@ export function CatalogEditor({
       const excludeCompInitial = toPlaceholdersFromCsv(excludeCompCsv);
       if (excludeCompInitial.length > 0 && typeof getCompanyById === 'function') {
         (async () => {
-          const resolved = await Promise.all(excludeCompInitial.map(async item => {
-            if (item.name && !/^\d+$/.test(item.name)) return item;
-            try {
-              const resp = await getCompanyById(item.id);
-              if (resp && resp.name) return { id: item.id, name: resp.name };
-            } catch { /* ignore */ }
-            return item;
-          }));
+          const resolved = await Promise.all(
+            excludeCompInitial.map(async (item) => {
+              if (item.name && !/^\d+$/.test(item.name)) return item;
+              try {
+                const resp = await getCompanyById(item.id);
+                if (resp && resp.name) return { id: item.id, name: resp.name };
+              } catch {
+                /* ignore */
+              }
+              return item;
+            })
+          );
           setExcludeCompanies(resolved);
         })();
       } else {
@@ -422,7 +447,15 @@ export function CatalogEditor({
       setPreviewData(null);
       prevCatalogIdRef.current = null;
     }
-  }, [catalog, getPersonById, getCompanyById, getKeywordById, searchPerson, searchCompany, searchKeyword]);
+  }, [
+    catalog,
+    getPersonById,
+    getCompanyById,
+    getKeywordById,
+    searchPerson,
+    searchCompany,
+    searchKeyword,
+  ]);
 
   // Keep local changes synced back to parent so switching catalogs preserves state
   useEffect(() => {
@@ -444,12 +477,12 @@ export function CatalogEditor({
           ...localCatalog,
           filters: {
             ...localCatalog.filters,
-            withPeople: selectedPeople.map(p => p.id).join(',') || undefined,
-            withCompanies: selectedCompanies.map(c => c.id).join(',') || undefined,
-            withKeywords: selectedKeywords.map(k => k.id).join(',') || undefined,
-            excludeKeywords: excludeKeywords.map(k => k.id).join(',') || undefined,
-            excludeCompanies: excludeCompanies.map(c => c.id).join(',') || undefined,
-          }
+            withPeople: selectedPeople.map((p) => p.id).join(',') || undefined,
+            withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
+            withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
+            excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
+            excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
+          },
         };
         onUpdate(catalog._id, merged);
       }
@@ -461,7 +494,16 @@ export function CatalogEditor({
         syncTimeoutRef.current = null;
       }
     };
-  }, [localCatalog, selectedPeople, selectedCompanies, selectedKeywords, excludeKeywords, excludeCompanies, catalog, onUpdate]);
+  }, [
+    localCatalog,
+    selectedPeople,
+    selectedCompanies,
+    selectedKeywords,
+    excludeKeywords,
+    excludeCompanies,
+    catalog,
+    onUpdate,
+  ]);
 
   // Load watch providers when region changes
   useEffect(() => {
@@ -470,11 +512,13 @@ export function CatalogEditor({
       if (region && getWatchProviders) {
         try {
           const providers = await getWatchProviders(localCatalog?.type || 'movie', region);
-          setWatchProviders(providers.map(p => ({
-            id: p.provider_id,
-            name: p.provider_name,
-            logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null
-          })));
+          setWatchProviders(
+            providers.map((p) => ({
+              id: p.provider_id,
+              name: p.provider_name,
+              logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
+            }))
+          );
         } catch (err) {
           console.error('Failed to load providers:', err);
         }
@@ -488,27 +532,30 @@ export function CatalogEditor({
   // and the user adds a person/company/keyword without saving the catalog first.
   useEffect(() => {
     let cancelled = false;
-    const hasNumeric = selectedPeople.some(p => /^\d+$/.test(String(p.name)));
+    const hasNumeric = selectedPeople.some((p) => /^\d+$/.test(String(p.name)));
     if (!hasNumeric) return;
 
     (async () => {
       try {
-        const resolved = await Promise.all(selectedPeople.map(async item => {
-          if (item.name && !/^\d+$/.test(String(item.name))) return item;
-          try {
-            if (typeof getPersonById === 'function') {
-              const resp = await getPersonById(item.id);
-              if (resp && resp.name) return { id: item.id, name: resp.name };
+        const resolved = await Promise.all(
+          selectedPeople.map(async (item) => {
+            if (item.name && !/^\d+$/.test(String(item.name))) return item;
+            try {
+              if (typeof getPersonById === 'function') {
+                const resp = await getPersonById(item.id);
+                if (resp && resp.name) return { id: item.id, name: resp.name };
+              }
+              if (typeof searchPerson === 'function') {
+                const sres = await searchPerson(item.id);
+                if (Array.isArray(sres) && sres.length > 0)
+                  return { id: item.id, name: sres[0].name || item.id };
+              }
+            } catch {
+              // ignore resolution errors; keep placeholder
             }
-            if (typeof searchPerson === 'function') {
-              const sres = await searchPerson(item.id);
-              if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || item.id };
-            }
-          } catch {
-            // ignore resolution errors; keep placeholder
-          }
-          return item;
-        }));
+            return item;
+          })
+        );
         if (!cancelled) {
           setSelectedPeople(resolved);
         }
@@ -517,32 +564,37 @@ export function CatalogEditor({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedPeople, getPersonById, searchPerson]);
 
   useEffect(() => {
     let cancelled = false;
-    const hasNumeric = selectedCompanies.some(c => /^\d+$/.test(String(c.name)));
+    const hasNumeric = selectedCompanies.some((c) => /^\d+$/.test(String(c.name)));
     if (!hasNumeric) return;
 
     (async () => {
       try {
-        const resolved = await Promise.all(selectedCompanies.map(async item => {
-          if (item.name && !/^\d+$/.test(String(item.name))) return item;
-          try {
-            if (typeof getCompanyById === 'function') {
-              const resp = await getCompanyById(item.id);
-              if (resp && resp.name) return { id: item.id, name: resp.name };
+        const resolved = await Promise.all(
+          selectedCompanies.map(async (item) => {
+            if (item.name && !/^\d+$/.test(String(item.name))) return item;
+            try {
+              if (typeof getCompanyById === 'function') {
+                const resp = await getCompanyById(item.id);
+                if (resp && resp.name) return { id: item.id, name: resp.name };
+              }
+              if (typeof searchCompany === 'function') {
+                const sres = await searchCompany(item.id);
+                if (Array.isArray(sres) && sres.length > 0)
+                  return { id: item.id, name: sres[0].name || sres[0].title || item.id };
+              }
+            } catch {
+              // ignore resolution errors; keep placeholder
             }
-            if (typeof searchCompany === 'function') {
-              const sres = await searchCompany(item.id);
-              if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || sres[0].title || item.id };
-            }
-          } catch {
-            // ignore resolution errors; keep placeholder
-          }
-          return item;
-        }));
+            return item;
+          })
+        );
         if (!cancelled) {
           setSelectedCompanies(resolved);
         }
@@ -551,32 +603,37 @@ export function CatalogEditor({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCompanies, getCompanyById, searchCompany]);
 
   useEffect(() => {
     let cancelled = false;
-    const hasNumeric = selectedKeywords.some(k => /^\d+$/.test(String(k.name)));
+    const hasNumeric = selectedKeywords.some((k) => /^\d+$/.test(String(k.name)));
     if (!hasNumeric) return;
 
     (async () => {
       try {
-        const resolved = await Promise.all(selectedKeywords.map(async item => {
-          if (item.name && !/^\d+$/.test(String(item.name))) return item;
-          try {
-            if (typeof getKeywordById === 'function') {
-              const resp = await getKeywordById(item.id);
-              if (resp && resp.name) return { id: item.id, name: resp.name };
+        const resolved = await Promise.all(
+          selectedKeywords.map(async (item) => {
+            if (item.name && !/^\d+$/.test(String(item.name))) return item;
+            try {
+              if (typeof getKeywordById === 'function') {
+                const resp = await getKeywordById(item.id);
+                if (resp && resp.name) return { id: item.id, name: resp.name };
+              }
+              if (typeof searchKeyword === 'function') {
+                const sres = await searchKeyword(item.id);
+                if (Array.isArray(sres) && sres.length > 0)
+                  return { id: item.id, name: sres[0].name || item.id };
+              }
+            } catch {
+              // ignore resolution errors; keep placeholder
             }
-            if (typeof searchKeyword === 'function') {
-              const sres = await searchKeyword(item.id);
-              if (Array.isArray(sres) && sres.length > 0) return { id: item.id, name: sres[0].name || item.id };
-            }
-          } catch {
-            // ignore resolution errors; keep placeholder
-          }
-          return item;
-        }));
+            return item;
+          })
+        );
         if (!cancelled) {
           setSelectedKeywords(resolved);
         }
@@ -585,11 +642,13 @@ export function CatalogEditor({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedKeywords, getKeywordById, searchKeyword]);
 
   const toggleSection = (section) => {
-    setExpandedSections(prev => {
+    setExpandedSections((prev) => {
       const isCurrentlyExpanded = prev[section];
       // If closing, just close it. If opening, close all others first.
       if (isCurrentlyExpanded) {
@@ -606,104 +665,93 @@ export function CatalogEditor({
   };
 
   const handleFiltersChange = useCallback((key, value) => {
-    setLocalCatalog(prev => {
+    setLocalCatalog((prev) => {
       const current = prev || DEFAULT_CATALOG;
       return {
         ...current,
         filters: {
           ...current.filters,
-          [key]: value
-        }
+          [key]: value,
+        },
       };
     });
   }, []);
 
   const handleNameChange = useCallback((name) => {
-    setLocalCatalog(prev => ({ ...prev, name }));
+    setLocalCatalog((prev) => ({ ...prev, name }));
   }, []);
 
-  const handleTypeChange = useCallback((type) => {
-    setLocalCatalog(prev => {
-      const updated = {
-        ...prev,
-        type,
-        filters: {
-          ...prev.filters,
-          genres: [],
-          excludeGenres: [],
-          // Reset sortBy to default when changing type as options differ
-          sortBy: 'popularity.desc',
+  const handleTypeChange = useCallback(
+    (type) => {
+      setLocalCatalog((prev) => {
+        const updated = {
+          ...prev,
+          type,
+          filters: {
+            ...prev.filters,
+            genres: [],
+            excludeGenres: [],
+            // Reset sortBy to default when changing type as options differ
+            sortBy: 'popularity.desc',
+          },
+        };
+        // Immediately update parent so sidebar reflects the change
+        if (catalog?._id) {
+          onUpdate(catalog._id, updated);
         }
-      };
-      // Immediately update parent so sidebar reflects the change
-      if (catalog?._id) {
-        onUpdate(catalog._id, updated);
-      }
-      return updated;
-    });
-  }, [catalog?._id, onUpdate]);
+        return updated;
+      });
+    },
+    [catalog?._id, onUpdate]
+  );
 
   const handleYearRangeChange = useCallback((range) => {
-    setLocalCatalog(prev => ({
+    setLocalCatalog((prev) => ({
       ...prev,
       filters: {
         ...prev.filters,
         yearFrom: range[0],
-        yearTo: range[1]
-      }
+        yearTo: range[1],
+      },
     }));
   }, []);
 
   const handleRatingRangeChange = useCallback((range) => {
-    setLocalCatalog(prev => ({
+    setLocalCatalog((prev) => ({
       ...prev,
       filters: {
         ...prev.filters,
         ratingMin: range[0],
-        ratingMax: range[1]
-      }
+        ratingMax: range[1],
+      },
     }));
   }, []);
 
   const handleRuntimeRangeChange = useCallback((range) => {
-    setLocalCatalog(prev => ({
+    setLocalCatalog((prev) => ({
       ...prev,
       filters: {
         ...prev.filters,
         runtimeMin: range[0] === 0 ? undefined : range[0],
-        runtimeMax: range[1] === 400 ? undefined : range[1]
-      }
+        runtimeMax: range[1] === 400 ? undefined : range[1],
+      },
     }));
   }, []);
 
-  const handleDatePreset = useCallback((preset) => {
-    setSelectedDatePreset(preset.label);
+  const handleDatePreset = useCallback(
+    (preset) => {
+      setSelectedDatePreset(preset.label);
 
-    // Store the dynamic preset value - backend will calculate actual dates at request time
-    handleFiltersChange('datePreset', preset.value);
+      // Store the dynamic preset value - backend will calculate actual dates at request time
+      handleFiltersChange('datePreset', preset.value);
 
-    // Clear any manually set dates since we're using a dynamic preset
-    const isMovie = localCatalog?.type === 'movie';
-    handleFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', undefined);
-    handleFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', undefined);
-  }, [localCatalog?.type, handleFiltersChange]);
-
-  const _handleProviderToggle = useCallback((providerId) => {
-    setLocalCatalog(prev => {
-      const current = prev || DEFAULT_CATALOG;
-      const currentProviders = current.filters?.watchProviders || [];
-      const newProviders = currentProviders.includes(providerId)
-        ? currentProviders.filter(id => id !== providerId)
-        : [...currentProviders, providerId];
-      return {
-        ...current,
-        filters: {
-          ...current.filters,
-          watchProviders: newProviders
-        }
-      };
-    });
-  }, []);
+      // Clear any manually set dates since we're using a dynamic preset
+      const isMovie = localCatalog?.type === 'movie';
+      handleFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', undefined);
+      handleFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', undefined);
+    },
+    [localCatalog?.type, handleFiltersChange]
+  );
 
   const loadPreview = async () => {
     if (!localCatalog) return;
@@ -712,11 +760,11 @@ export function CatalogEditor({
     try {
       const filters = {
         ...localCatalog.filters,
-        withPeople: selectedPeople.map(p => p.id).join(',') || undefined,
-        withCompanies: selectedCompanies.map(c => c.id).join(',') || undefined,
-        withKeywords: selectedKeywords.map(k => k.id).join(',') || undefined,
-        excludeKeywords: excludeKeywords.map(k => k.id).join(',') || undefined,
-        excludeCompanies: excludeCompanies.map(c => c.id).join(',') || undefined,
+        withPeople: selectedPeople.map((p) => p.id).join(',') || undefined,
+        withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
+        withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
+        excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
+        excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
       };
       const data = await onPreview(localCatalog.type || 'movie', filters);
       setPreviewData(data);
@@ -734,35 +782,57 @@ export function CatalogEditor({
 
     // Genres
     if (filters.genres?.length > 0) {
-      const genreNames = filters.genres.map(id => {
-        const genre = (genres[localCatalog?.type] || []).find(g => g.id === id);
-        return genre?.name || id;
-      }).slice(0, 2);
+      const genreNames = filters.genres
+        .map((id) => {
+          const genre = (genres[localCatalog?.type] || []).find((g) => g.id === id);
+          return genre?.name || id;
+        })
+        .slice(0, 2);
       const extra = filters.genres.length > 2 ? ` +${filters.genres.length - 2}` : '';
-      active.push({ key: 'genres', label: `Genres: ${genreNames.join(', ')}${extra}`, section: 'genres' });
+      active.push({
+        key: 'genres',
+        label: `Genres: ${genreNames.join(', ')}${extra}`,
+        section: 'genres',
+      });
     }
 
     // Excluded Genres
     if (filters.excludeGenres?.length > 0) {
-      active.push({ key: 'excludeGenres', label: `Excluding ${filters.excludeGenres.length} genre(s)`, section: 'genres' });
+      active.push({
+        key: 'excludeGenres',
+        label: `Excluding ${filters.excludeGenres.length} genre(s)`,
+        section: 'genres',
+      });
     }
 
     // Original language (filter)
     if (filters.language) {
-      const lang = languages.find(l => l.code === filters.language);
-      active.push({ key: 'language', label: `Original language: ${lang?.name || filters.language}`, section: 'filters' });
+      const lang = languages.find((l) => l.code === filters.language);
+      active.push({
+        key: 'language',
+        label: `Original language: ${lang?.name || filters.language}`,
+        section: 'filters',
+      });
     }
 
     // Display language (localization)
     if (filters.displayLanguage) {
-      const lang = languages.find(l => l.code === filters.displayLanguage);
-      active.push({ key: 'displayLanguage', label: `Display language: ${lang?.name || filters.displayLanguage}`, section: 'filters' });
+      const lang = languages.find((l) => l.code === filters.displayLanguage);
+      active.push({
+        key: 'displayLanguage',
+        label: `Display language: ${lang?.name || filters.displayLanguage}`,
+        section: 'filters',
+      });
     }
 
     // Country
     if (filters.originCountry) {
-      const country = countries.find(c => c.code === filters.originCountry);
-      active.push({ key: 'originCountry', label: `Country: ${country?.name || filters.originCountry}`, section: 'filters' });
+      const country = countries.find((c) => c.code === filters.originCountry);
+      active.push({
+        key: 'originCountry',
+        label: `Country: ${country?.name || filters.originCountry}`,
+        section: 'filters',
+      });
     }
 
     // Year Range
@@ -774,37 +844,62 @@ export function CatalogEditor({
 
     // Rating
     if (filters.ratingMin > 0 || filters.ratingMax < 10) {
-      active.push({ key: 'rating', label: `Rating: ${filters.ratingMin || 0}-${filters.ratingMax || 10}`, section: 'filters' });
+      active.push({
+        key: 'rating',
+        label: `Rating: ${filters.ratingMin || 0}-${filters.ratingMax || 10}`,
+        section: 'filters',
+      });
     }
 
     // Runtime
     if (filters.runtimeMin || filters.runtimeMax) {
-      active.push({ key: 'runtime', label: `Runtime: ${filters.runtimeMin || 0}-${filters.runtimeMax || '∞'}min`, section: 'filters' });
+      active.push({
+        key: 'runtime',
+        label: `Runtime: ${filters.runtimeMin || 0}-${filters.runtimeMax || '∞'}min`,
+        section: 'filters',
+      });
     }
 
     // Date Preset (dynamic date filters)
     if (filters.datePreset) {
-      const presetMatch = DATE_PRESETS.find(p => p.value === filters.datePreset);
+      const presetMatch = DATE_PRESETS.find((p) => p.value === filters.datePreset);
       const label = presetMatch ? presetMatch.label : filters.datePreset;
       active.push({ key: 'datePreset', label: `Date: ${label}`, section: 'release' });
-    } else if (filters.releaseDateFrom || filters.releaseDateTo || filters.airDateFrom || filters.airDateTo) {
+    } else if (
+      filters.releaseDateFrom ||
+      filters.releaseDateTo ||
+      filters.airDateFrom ||
+      filters.airDateTo
+    ) {
       // Manual date range (only show if no preset is active)
       active.push({ key: 'releaseDate', label: 'Release date set', section: 'release' });
     }
 
     // Streaming
     if (filters.watchProviders?.length > 0) {
-      active.push({ key: 'watchProviders', label: `${filters.watchProviders.length} streaming service(s)`, section: 'streaming' });
+      active.push({
+        key: 'watchProviders',
+        label: `${filters.watchProviders.length} streaming service(s)`,
+        section: 'streaming',
+      });
     }
 
     // People
     if (selectedPeople.length > 0) {
-      active.push({ key: 'people', label: `${selectedPeople.length} cast/crew`, section: 'people' });
+      active.push({
+        key: 'people',
+        label: `${selectedPeople.length} cast/crew`,
+        section: 'people',
+      });
     }
 
     // Keywords
     if (selectedKeywords.length > 0) {
-      active.push({ key: 'keywords', label: `${selectedKeywords.length} keyword(s)`, section: 'people' });
+      active.push({
+        key: 'keywords',
+        label: `${selectedKeywords.length} keyword(s)`,
+        section: 'people',
+      });
     }
 
     return active;
@@ -814,35 +909,53 @@ export function CatalogEditor({
   const clearFilter = useCallback((filterKey) => {
     switch (filterKey) {
       case 'genres':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, genres: [] } }));
+        setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, genres: [] } }));
         break;
       case 'excludeGenres':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, excludeGenres: [] } }));
+        setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, excludeGenres: [] } }));
         break;
       case 'language':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, language: undefined } }));
+        setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, language: undefined } }));
         break;
       case 'displayLanguage':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, displayLanguage: undefined } }));
+        setLocalCatalog((prev) => ({
+          ...prev,
+          filters: { ...prev.filters, displayLanguage: undefined },
+        }));
         break;
       case 'originCountry':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, originCountry: undefined } }));
+        setLocalCatalog((prev) => ({
+          ...prev,
+          filters: { ...prev.filters, originCountry: undefined },
+        }));
         break;
       case 'year':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, yearFrom: undefined, yearTo: undefined } }));
+        setLocalCatalog((prev) => ({
+          ...prev,
+          filters: { ...prev.filters, yearFrom: undefined, yearTo: undefined },
+        }));
         break;
       case 'rating':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, ratingMin: 0, ratingMax: 10 } }));
+        setLocalCatalog((prev) => ({
+          ...prev,
+          filters: { ...prev.filters, ratingMin: 0, ratingMax: 10 },
+        }));
         break;
       case 'runtime':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, runtimeMin: undefined, runtimeMax: undefined } }));
+        setLocalCatalog((prev) => ({
+          ...prev,
+          filters: { ...prev.filters, runtimeMin: undefined, runtimeMax: undefined },
+        }));
         break;
       case 'datePreset':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, datePreset: undefined } }));
+        setLocalCatalog((prev) => ({
+          ...prev,
+          filters: { ...prev.filters, datePreset: undefined },
+        }));
         setSelectedDatePreset(null);
         break;
       case 'releaseDate':
-        setLocalCatalog(prev => ({
+        setLocalCatalog((prev) => ({
           ...prev,
           filters: {
             ...prev.filters,
@@ -851,12 +964,12 @@ export function CatalogEditor({
             airDateFrom: undefined,
             airDateTo: undefined,
             datePreset: undefined,
-          }
+          },
         }));
         setSelectedDatePreset(null);
         break;
       case 'watchProviders':
-        setLocalCatalog(prev => ({ ...prev, filters: { ...prev.filters, watchProviders: [] } }));
+        setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, watchProviders: [] } }));
         break;
       case 'people':
         setSelectedPeople([]);
@@ -871,12 +984,12 @@ export function CatalogEditor({
 
   // Clear all filters
   const clearAllFilters = useCallback(() => {
-    setLocalCatalog(prev => ({
+    setLocalCatalog((prev) => ({
       ...prev,
       filters: {
         ...DEFAULT_CATALOG.filters,
         sortBy: prev.filters?.sortBy || 'popularity.desc',
-      }
+      },
     }));
     setSelectedPeople([]);
     setSelectedCompanies([]);
@@ -888,12 +1001,12 @@ export function CatalogEditor({
 
   // Apply a filter template
   const applyTemplate = useCallback((template) => {
-    setLocalCatalog(prev => ({
+    setLocalCatalog((prev) => ({
       ...prev,
       filters: {
         ...prev.filters,
         ...template.filters,
-      }
+      },
     }));
   }, []);
 
@@ -904,7 +1017,7 @@ export function CatalogEditor({
 
     // Pick 1-2 random genres
     const shuffled = [...currentGenreList].sort(() => Math.random() - 0.5);
-    const randomGenres = shuffled.slice(0, Math.floor(Math.random() * 2) + 1).map(g => g.id);
+    const randomGenres = shuffled.slice(0, Math.floor(Math.random() * 2) + 1).map((g) => g.id);
 
     // Random decade
     const decades = [1980, 1990, 2000, 2010, 2020];
@@ -914,7 +1027,7 @@ export function CatalogEditor({
     const ratings = [6, 6.5, 7, 7.5];
     const randomRating = ratings[Math.floor(Math.random() * ratings.length)];
 
-    setLocalCatalog(prev => ({
+    setLocalCatalog((prev) => ({
       ...prev,
       filters: {
         ...prev.filters,
@@ -923,7 +1036,7 @@ export function CatalogEditor({
         yearTo: randomDecade + 9,
         ratingMin: randomRating,
         sortBy: Math.random() > 0.5 ? 'vote_average.desc' : 'popularity.desc',
-      }
+      },
     }));
   }, [genres, localCatalog?.type]);
 
@@ -945,7 +1058,6 @@ export function CatalogEditor({
   const catalogType = localCatalog?.type || 'movie';
   const isMovie = catalogType === 'movie';
   const currentGenres = genres[catalogType] || [];
-  const _genresLoadedForType = Array.isArray(currentGenres) && currentGenres.length > 0;
   const selectedGenres = localCatalog?.filters?.genres || [];
   const excludedGenres = localCatalog?.filters?.excludeGenres || [];
   const currentCertifications = certifications[catalogType] || {};
@@ -964,7 +1076,7 @@ export function CatalogEditor({
 
   // Count active filters per section for badges
   const getFilterCountForSection = (sectionKey) => {
-    const sectionFilters = activeFilters.filter(f => f.section === sectionKey);
+    const sectionFilters = activeFilters.filter((f) => f.section === sectionKey);
     return sectionFilters.length;
   };
 
@@ -984,11 +1096,7 @@ export function CatalogEditor({
             />
           </div>
           <div className="editor-actions">
-            <button
-              className="btn btn-secondary"
-              onClick={loadPreview}
-              disabled={previewLoading}
-            >
+            <button className="btn btn-secondary" onClick={loadPreview} disabled={previewLoading}>
               {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
               Preview
             </button>
@@ -1027,7 +1135,7 @@ export function CatalogEditor({
                   Surprise Me
                 </button>
                 <div className="template-divider" />
-                {FILTER_TEMPLATES.map(template => (
+                {FILTER_TEMPLATES.map((template) => (
                   <button
                     key={template.id}
                     className="quick-action-btn template-btn"
@@ -1046,7 +1154,7 @@ export function CatalogEditor({
           {activeFilters.length > 0 && (
             <div className="active-filters-bar">
               <div className="active-filters-chips">
-                {activeFilters.map(filter => (
+                {activeFilters.map((filter) => (
                   <div
                     key={filter.key}
                     className="active-filter-chip"
@@ -1065,10 +1173,7 @@ export function CatalogEditor({
                   </div>
                 ))}
               </div>
-              <button
-                className="clear-all-btn"
-                onClick={clearAllFilters}
-              >
+              <button className="clear-all-btn" onClick={clearAllFilters}>
                 Clear All
               </button>
             </div>
@@ -1169,7 +1274,7 @@ export function CatalogEditor({
                           step={1}
                           value={[
                             localCatalog?.filters?.yearFrom || 1900,
-                            localCatalog?.filters?.yearTo || CURRENT_YEAR + 2
+                            localCatalog?.filters?.yearTo || CURRENT_YEAR + 2,
                           ]}
                           onChange={handleYearRangeChange}
                           formatValue={(v) => v}
@@ -1187,7 +1292,7 @@ export function CatalogEditor({
                           step={0.1}
                           value={[
                             localCatalog?.filters?.ratingMin || 0,
-                            localCatalog?.filters?.ratingMax || 10
+                            localCatalog?.filters?.ratingMax || 10,
                           ]}
                           onChange={handleRatingRangeChange}
                           formatValue={(v) => v.toFixed(1)}
@@ -1205,13 +1310,21 @@ export function CatalogEditor({
                           step={1}
                           value={[
                             localCatalog?.filters?.runtimeMin || 0,
-                            localCatalog?.filters?.runtimeMax || 400
+                            localCatalog?.filters?.runtimeMax || 400,
                           ]}
                           onChange={handleRuntimeRangeChange}
-                          formatValue={(v) => v === 0 ? 'Any' : v === 400 ? '400+' : `${v}m`}
+                          formatValue={(v) => (v === 0 ? 'Any' : v === 400 ? '400+' : `${v}m`)}
                           showInputs
                         />
-                        <div className="runtime-presets" style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div
+                          className="runtime-presets"
+                          style={{
+                            marginTop: '8px',
+                            display: 'flex',
+                            gap: '8px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
                           <button
                             type="button"
                             className={`date-preset ${localCatalog?.filters?.runtimeMax === 60 && !localCatalog?.filters?.runtimeMin ? 'active' : ''}`}
@@ -1256,11 +1369,12 @@ export function CatalogEditor({
                   {!supportsFullFilters && (
                     <div className="list-type-info">
                       <p className="filter-hint">
-                        ℹ️ Pre-made lists like Trending, Popular, etc. don't support filters.
-                        They show globally popular content as ranked by TMDB.
+                        ℹ️ Pre-made lists like Trending, Popular, etc. don't support filters. They
+                        show globally popular content as ranked by TMDB.
                       </p>
                       <p className="filter-hint" style={{ marginTop: '8px' }}>
-                        💡 <strong>Want to filter by country, language, or genre?</strong> Use "🔍 Custom Discover" which gives you full control over all filters.
+                        💡 <strong>Want to filter by country, language, or genre?</strong> Use "🔍
+                        Custom Discover" which gives you full control over all filters.
                       </p>
                     </div>
                   )}
@@ -1281,14 +1395,19 @@ export function CatalogEditor({
                   )}
                 </div>
               )}
-            </div>)}
+            </div>
+          )}
           {supportsFullFilters && (
             <div className="filter-section">
               <button className="filter-section-header" onClick={() => toggleSection('release')}>
                 <Calendar size={18} />
                 <div className="filter-section-title-group">
-                  <h4 className="filter-section-title">{isMovie ? 'Release' : 'Air Date'} & Classification</h4>
-                  <span className="filter-section-desc">Date ranges, age ratings, release type</span>
+                  <h4 className="filter-section-title">
+                    {isMovie ? 'Release' : 'Air Date'} & Classification
+                  </h4>
+                  <span className="filter-section-desc">
+                    Date ranges, age ratings, release type
+                  </span>
                 </div>
                 {getFilterCountForSection('release') > 0 && (
                   <span className="filter-count-badge">{getFilterCountForSection('release')}</span>
@@ -1314,32 +1433,50 @@ export function CatalogEditor({
                     <div className="filter-group">
                       <LabelWithTooltip
                         label={isMovie ? 'Release Date From' : 'Episode Air Date From'}
-                        tooltip={isMovie ? 'Filter movies released on or after this date' : 'Filter shows that had episodes airing on or after this date'}
+                        tooltip={
+                          isMovie
+                            ? 'Filter movies released on or after this date'
+                            : 'Filter shows that had episodes airing on or after this date'
+                        }
                       />
                       <input
                         type="date"
                         className="input"
-                        value={localCatalog?.filters?.[isMovie ? 'releaseDateFrom' : 'airDateFrom'] || ''}
+                        value={
+                          localCatalog?.filters?.[isMovie ? 'releaseDateFrom' : 'airDateFrom'] || ''
+                        }
                         onChange={(e) => {
                           setSelectedDatePreset(null);
                           handleFiltersChange('datePreset', undefined); // Clear dynamic preset when manually editing
-                          handleFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', e.target.value);
+                          handleFiltersChange(
+                            isMovie ? 'releaseDateFrom' : 'airDateFrom',
+                            e.target.value
+                          );
                         }}
                       />
                     </div>
                     <div className="filter-group">
                       <LabelWithTooltip
                         label={isMovie ? 'Release Date To' : 'Episode Air Date To'}
-                        tooltip={isMovie ? 'Filter movies released on or before this date' : 'Filter shows that had episodes airing on or before this date'}
+                        tooltip={
+                          isMovie
+                            ? 'Filter movies released on or before this date'
+                            : 'Filter shows that had episodes airing on or before this date'
+                        }
                       />
                       <input
                         type="date"
                         className="input"
-                        value={localCatalog?.filters?.[isMovie ? 'releaseDateTo' : 'airDateTo'] || ''}
+                        value={
+                          localCatalog?.filters?.[isMovie ? 'releaseDateTo' : 'airDateTo'] || ''
+                        }
                         onChange={(e) => {
                           setSelectedDatePreset(null);
                           handleFiltersChange('datePreset', undefined); // Clear dynamic preset when manually editing
-                          handleFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', e.target.value);
+                          handleFiltersChange(
+                            isMovie ? 'releaseDateTo' : 'airDateTo',
+                            e.target.value
+                          );
                         }}
                       />
                     </div>
@@ -1353,7 +1490,9 @@ export function CatalogEditor({
                           label="Show Premiered From"
                           tooltip="Filter by when the TV show first aired. This is the date of the very first episode, not individual episode air dates."
                         />
-                        <span className="filter-label-hint">When show first aired (premiere date)</span>
+                        <span className="filter-label-hint">
+                          When show first aired (premiere date)
+                        </span>
                         <input
                           type="date"
                           className="input"
@@ -1399,7 +1538,10 @@ export function CatalogEditor({
                             tooltip="Content certification/age rating (e.g., PG-13, R, TV-MA). Varies by country - US ratings shown by default."
                           />
                           <MultiSelect
-                            options={certOptions.map(c => ({ value: c.certification, label: c.certification }))}
+                            options={certOptions.map((c) => ({
+                              value: c.certification,
+                              label: c.certification,
+                            }))}
                             value={localCatalog?.filters?.certifications || []}
                             onChange={(value) => handleFiltersChange('certifications', value)}
                             placeholder="Any"
@@ -1413,7 +1555,9 @@ export function CatalogEditor({
                           label="Release Region"
                           tooltip="Filter by when content was released in a specific country. Useful since movies often premiere at different times worldwide."
                         />
-                        <span className="filter-label-hint">Use regional release dates instead of worldwide premiere</span>
+                        <span className="filter-label-hint">
+                          Use regional release dates instead of worldwide premiere
+                        </span>
                         <SearchableSelect
                           options={[{ code: '', name: 'Worldwide (default)' }, ...countries]}
                           value={localCatalog?.filters?.region || ''}
@@ -1492,7 +1636,10 @@ export function CatalogEditor({
             <FilterSection
               id="genres"
               title="Genres"
-              description={activeFilters.find(f => f.section === 'genres')?.label || 'Select genres to include/exclude'}
+              description={
+                activeFilters.find((f) => f.section === 'genres')?.label ||
+                'Select genres to include/exclude'
+              }
               icon={Sparkles}
               isOpen={expandedSections.genres}
               onToggle={toggleSection}
@@ -1554,7 +1701,9 @@ export function CatalogEditor({
                 <div className="checkbox-grid">
                   <label
                     className="checkbox-label-row"
-                    onClick={() => handleFiltersChange('imdbOnly', !localCatalog?.filters?.imdbOnly)}
+                    onClick={() =>
+                      handleFiltersChange('imdbOnly', !localCatalog?.filters?.imdbOnly)
+                    }
                     style={{ cursor: 'pointer' }}
                   >
                     <div className={`checkbox ${localCatalog?.filters?.imdbOnly ? 'checked' : ''}`}>
@@ -1568,10 +1717,14 @@ export function CatalogEditor({
                   {supportsFullFilters && (
                     <label
                       className="checkbox-label-row"
-                      onClick={() => handleFiltersChange('includeAdult', !localCatalog?.filters?.includeAdult)}
+                      onClick={() =>
+                        handleFiltersChange('includeAdult', !localCatalog?.filters?.includeAdult)
+                      }
                       style={{ cursor: 'pointer' }}
                     >
-                      <div className={`checkbox ${localCatalog?.filters?.includeAdult ? 'checked' : ''}`}>
+                      <div
+                        className={`checkbox ${localCatalog?.filters?.includeAdult ? 'checked' : ''}`}
+                      >
                         {localCatalog?.filters?.includeAdult && <Check size={14} />}
                       </div>
                       <LabelWithTooltip

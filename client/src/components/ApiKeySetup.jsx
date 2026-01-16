@@ -1,46 +1,34 @@
 import { useState, useEffect } from 'react';
-import { Key, Loader, ArrowRight, ExternalLink } from 'lucide-react';
+import { Key, Loader, ArrowRight, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { api } from '../services/api';
 
-export function ApiKeySetup({ onValidKey, onSelectExistingConfig, skipAutoRedirect = false }) {
+export function ApiKeySetup({
+  onLogin,
+  onSelectConfig,
+  skipAutoRedirect = false,
+  isSessionExpired = false,
+  returnUserId = null,
+}) {
   const [apiKey, setApiKey] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [configsLoading, setConfigsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [multipleConfigs, setMultipleConfigs] = useState(null);
 
-  // Check if there's a stored API key and load configs (only if not skipping auto-redirect)
+  // Check for session and handle auto-login
   useEffect(() => {
-    const storedKey = localStorage.getItem('tmdb-stremio-apikey');
-    if (storedKey) {
-      setApiKey(storedKey);
-      // Only auto-redirect if not explicitly changing API key
-      if (!skipAutoRedirect) {
-        loadConfigsAndRedirect(storedKey);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skipAutoRedirect]);
+    if (skipAutoRedirect) return;
 
-  const loadConfigsAndRedirect = async (key) => {
-    setConfigsLoading(true);
-    try {
-      const configList = await api.getConfigsByApiKey(key);
-      if (configList.length > 0) {
-        // Sort by updatedAt descending (latest first)
-        configList.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-        // Redirect to the latest config
-        const latestConfig = configList[0];
-        if (onSelectExistingConfig) {
-          onSelectExistingConfig(key, latestConfig.userId);
-        }
+    const checkSession = async () => {
+      const result = await api.verifySession();
+      if (result.valid && onLogin) {
+        onLogin(result.userId);
       }
-    } catch (err) {
-      console.error('Failed to load configs:', err);
-      // If loading fails, just stay on input step
-    } finally {
-      setConfigsLoading(false);
-    }
-  };
+    };
+
+    checkSession();
+  }, [skipAutoRedirect, onLogin]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,37 +41,101 @@ export function ApiKeySetup({ onValidKey, onSelectExistingConfig, skipAutoRedire
     setError('');
 
     try {
-      const result = await api.validateApiKey(apiKey.trim());
-      if (result.valid) {
-        // Store the API key
-        localStorage.setItem('tmdb-stremio-apikey', apiKey.trim());
-        
-        // Check for existing configs
-        setConfigsLoading(true);
-        const configList = await api.getConfigsByApiKey(apiKey.trim());
-        
-        if (configList.length > 0) {
-          // Sort by updatedAt descending (latest first)
-          configList.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-          // Redirect to the latest config
-          const latestConfig = configList[0];
-          if (onSelectExistingConfig) {
-            onSelectExistingConfig(apiKey.trim(), latestConfig.userId);
-          }
-        } else {
-          // No existing configs, create new
-          onValidKey(apiKey.trim());
-        }
-      } else {
-        setError(result.error || 'Invalid API key');
+      const result = await api.login(apiKey.trim(), returnUserId, rememberMe);
+
+      if (result.multipleConfigs) {
+        // User has multiple configs, show selection
+        setMultipleConfigs(result.configs);
+        return;
+      }
+
+      if (result.token && onLogin) {
+        onLogin(result.userId);
       }
     } catch (err) {
-      setError(err.message || 'Failed to validate API key');
+      setError(err.message || 'Failed to authenticate');
     } finally {
       setLoading(false);
-      setConfigsLoading(false);
     }
   };
+
+  const handleSelectConfig = async (selectedUserId) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const result = await api.selectConfig(apiKey.trim(), selectedUserId, rememberMe);
+      if (result.token && onSelectConfig) {
+        onSelectConfig(result.userId);
+      } else if (result.token && onLogin) {
+        onLogin(result.userId);
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to select configuration');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Show config selection when user has multiple configs
+  if (multipleConfigs) {
+    return (
+      <div className="setup-page">
+        <div className="setup-card">
+          <div className="setup-icon">
+            <Key size={40} />
+          </div>
+
+          <h2>Select Configuration</h2>
+          <p>You have multiple configurations. Select one to continue.</p>
+
+          <div className="config-list" style={{ marginTop: '24px' }}>
+            {multipleConfigs.map((cfg) => (
+              <button
+                key={cfg.userId}
+                className="config-option"
+                onClick={() => handleSelectConfig(cfg.userId)}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  marginBottom: '8px',
+                  background: 'var(--surface-secondary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <strong>{cfg.configName || 'Unnamed Configuration'}</strong>
+                <br />
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {cfg.catalogCount} catalogs • Updated{' '}
+                  {new Date(cfg.updatedAt).toLocaleDateString()}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {error && (
+            <p className="error-message" style={{ marginTop: '16px' }}>
+              {error}
+            </p>
+          )}
+
+          <button
+            className="btn btn-secondary w-full"
+            onClick={() => setMultipleConfigs(null)}
+            style={{ marginTop: '16px' }}
+            disabled={loading}
+          >
+            Use Different API Key
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="setup-page">
@@ -91,32 +143,65 @@ export function ApiKeySetup({ onValidKey, onSelectExistingConfig, skipAutoRedire
         <div className="setup-icon">
           <Key size={40} />
         </div>
-        
-        <h2>Get Started</h2>
+
+        <h2>{isSessionExpired ? 'Session Expired' : 'Get Started'}</h2>
         <p>
-          Enter your TMDB API key to start creating custom catalogs.
-          It's free and takes just a minute to get one.
+          {isSessionExpired
+            ? 'Your session has expired. Please re-enter your API key to continue.'
+            : "Enter your TMDB API key to start creating custom catalogs. It's free and takes just a minute to get one."}
         </p>
 
         <form className="api-key-form" onSubmit={handleSubmit}>
           <div className="input-group">
             <label htmlFor="apiKey">TMDB API Key</label>
-            <div className="input-wrapper">
-              <Key size={18} className="input-icon" />
+            <div
+              className="input-wrapper"
+              style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+            >
+              <Key
+                size={18}
+                className="input-icon"
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  pointerEvents: 'none',
+                  color: 'var(--text-muted)',
+                }}
+              />
               <input
                 id="apiKey"
-                type="password"
+                type={showApiKey ? 'text' : 'password'}
                 className={`input ${error ? 'error' : ''}`}
                 placeholder="Enter your API key..."
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 autoComplete="off"
+                style={{ paddingLeft: '40px', paddingRight: '40px' }}
               />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-muted)',
+                }}
+                title={showApiKey ? 'Hide API key' : 'Show API key'}
+              >
+                {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
             <p className="input-hint">
-              <a 
-                href="https://www.themoviedb.org/settings/api" 
-                target="_blank" 
+              <a
+                href="https://www.themoviedb.org/settings/api"
+                target="_blank"
                 rel="noopener noreferrer"
               >
                 Get a free API key <ExternalLink size={12} style={{ verticalAlign: 'middle' }} />
@@ -125,15 +210,32 @@ export function ApiKeySetup({ onValidKey, onSelectExistingConfig, skipAutoRedire
             {error && <p className="error-message">{error}</p>}
           </div>
 
-          <button 
-            type="submit" 
-            className="btn btn-primary w-full"
-            disabled={loading || configsLoading}
-          >
-            {loading || configsLoading ? (
+          <div className="input-group" style={{ marginTop: '16px' }}>
+            <label
+              className="checkbox-label"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ accentColor: 'var(--primary)' }}
+              />
+              Remember me for 7 days
+            </label>
+          </div>
+
+          <button type="submit" className="btn btn-primary w-full" disabled={loading}>
+            {loading ? (
               <>
                 <Loader size={18} className="animate-spin" />
-                {configsLoading ? 'Loading configurations...' : 'Validating...'}
+                Authenticating...
               </>
             ) : (
               <>

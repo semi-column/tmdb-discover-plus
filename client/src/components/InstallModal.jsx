@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { X, Copy, Check, ExternalLink, Download } from 'lucide-react';
 
-// eslint-disable-next-line no-unused-vars
-export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId, stremioUrl }) {
+export function InstallModal({ isOpen, onClose, installUrl, configureUrl }) {
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
@@ -39,7 +38,8 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId
 
         <div className="modal-body">
           <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-            Your configuration has been saved! Use one of these options to add your custom catalogs to Stremio.
+            Your configuration has been saved! Use one of these options to add your custom catalogs
+            to Stremio.
           </p>
 
           {/* One-Click Install */}
@@ -92,16 +92,19 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl, userId
             </button>
           </div>
 
-          <div style={{
-            background: 'rgba(124, 58, 237, 0.1)',
-            border: '1px solid var(--accent-primary)',
-            borderRadius: 'var(--radius-md)',
-            padding: '14px',
-            marginTop: '16px'
-          }}>
+          <div
+            style={{
+              background: 'rgba(124, 58, 237, 0.1)',
+              border: '1px solid var(--accent-primary)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px',
+              marginTop: '16px',
+            }}
+          >
             <p className="text-sm">
-              <strong>Tip:</strong> You can always return to your configuration page to edit your catalogs.
-              Stremio may cache addon data—if you don’t see changes, refresh the Addons page or restart Stremio.
+              <strong>Tip:</strong> You can always return to your configuration page to edit your
+              catalogs. Stremio may cache addon data—if you don’t see changes, refresh the Addons
+              page or restart Stremio.
             </p>
           </div>
         </div>

@@ -58,8 +58,8 @@ export function ConfigDropdown({
   // Get detailed catalog breakdown (e.g., "2 movies, 1 series")
   const getCatalogBreakdown = (catalogs) => {
     if (!catalogs || catalogs.length === 0) return 'No catalogs';
-    const movieCount = catalogs.filter(c => c.type === 'movie').length;
-    const seriesCount = catalogs.filter(c => c.type === 'series').length;
+    const movieCount = catalogs.filter((c) => c.type === 'movie').length;
+    const seriesCount = catalogs.filter((c) => c.type === 'series').length;
     const parts = [];
     if (movieCount > 0) parts.push(`${movieCount} movie${movieCount > 1 ? 's' : ''}`);
     if (seriesCount > 0) parts.push(`${seriesCount} series`);
@@ -70,11 +70,15 @@ export function ConfigDropdown({
   const getConfigName = (config, index, isCurrentLive = false) => {
     // For current config, use live data
     if (isCurrentLive && currentConfigName) {
-      return currentConfigName.length <= 20 ? currentConfigName : currentConfigName.substring(0, 17) + '...';
+      return currentConfigName.length <= 20
+        ? currentConfigName
+        : currentConfigName.substring(0, 17) + '...';
     }
     // Use configName if set
     if (config.configName) {
-      return config.configName.length <= 20 ? config.configName : config.configName.substring(0, 17) + '...';
+      return config.configName.length <= 20
+        ? config.configName
+        : config.configName.substring(0, 17) + '...';
     }
     // Fall back to first catalog name if available and meaningful
     const catalogs = isCurrentLive ? currentCatalogs : config.catalogs;
@@ -89,8 +93,8 @@ export function ConfigDropdown({
     return `Config ${index + 1}`;
   };
 
-  const currentConfig = configs.find(c => c.userId === currentUserId);
-  const currentIndex = configs.findIndex(c => c.userId === currentUserId);
+  const currentConfig = configs.find((c) => c.userId === currentUserId);
+  const currentIndex = configs.findIndex((c) => c.userId === currentUserId);
 
   if (loading) {
     return (
@@ -117,7 +121,9 @@ export function ConfigDropdown({
         <span className="config-dropdown-current">
           {currentConfig ? (
             <>
-              <span className="config-dropdown-name">{getConfigName(currentConfig, currentIndex, true)}</span>
+              <span className="config-dropdown-name">
+                {getConfigName(currentConfig, currentIndex, true)}
+              </span>
               <span className="config-dropdown-count">
                 ({getCatalogCount(currentCatalogs || currentConfig.catalogs)})
               </span>
@@ -167,7 +173,11 @@ export function ConfigDropdown({
                   className={`btn btn-icon config-dropdown-delete ${confirmDelete === config.userId ? 'btn-danger-active' : ''}`}
                   onClick={(e) => handleDelete(e, config.userId)}
                   disabled={deleting === config.userId}
-                  title={confirmDelete === config.userId ? 'Click again to confirm delete' : 'Delete configuration'}
+                  title={
+                    confirmDelete === config.userId
+                      ? 'Click again to confirm delete'
+                      : 'Delete configuration'
+                  }
                 >
                   {deleting === config.userId ? (
                     <Loader size={16} className="animate-spin" />
@@ -179,9 +189,7 @@ export function ConfigDropdown({
                 </button>
 
                 {confirmDelete === config.userId && (
-                  <div className="config-dropdown-confirm-tooltip">
-                    Click again to confirm
-                  </div>
+                  <div className="config-dropdown-confirm-tooltip">Click again to confirm</div>
                 )}
               </div>
             ))}

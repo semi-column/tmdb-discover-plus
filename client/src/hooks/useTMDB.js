@@ -18,19 +18,22 @@ export function useTMDB(apiKey) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Check if authenticated via session token (apiKey not needed on client)
+  const hasAuth = apiKey || api.getSessionToken();
+
   // Load static data (genres, languages, sort options, etc.)
   const loadMetadata = useCallback(async () => {
-    if (!apiKey) return;
-    
+    if (!hasAuth) return;
+
     setLoading(true);
     setError(null);
-    
+
     try {
       // Load all metadata in parallel
       const [
-        movieGenres, 
-        tvGenres, 
-        langs, 
+        movieGenres,
+        tvGenres,
+        langs,
         ctries,
         sorts,
         lists,
@@ -60,7 +63,7 @@ export function useTMDB(apiKey) {
         api.getWatchRegions(apiKey),
         api.getTVNetworks(null, ''),
       ]);
-      
+
       setGenres({ movie: movieGenres, series: tvGenres });
       setLanguages(langs);
       setCountries(ctries);
@@ -80,59 +83,86 @@ export function useTMDB(apiKey) {
     } finally {
       setLoading(false);
     }
-  }, [apiKey]);
+  }, [apiKey, hasAuth]);
 
   useEffect(() => {
-    if (apiKey) {
+    if (hasAuth) {
       loadMetadata();
     }
-  }, [apiKey, loadMetadata]);
+  }, [hasAuth, loadMetadata]);
 
-  const preview = useCallback(async (type, filters, page = 1) => {
-    if (!apiKey) throw new Error('API key required');
-    return api.preview(apiKey, type, filters, page);
-  }, [apiKey]);
+  const preview = useCallback(
+    async (type, filters, page = 1) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.preview(apiKey, type, filters, page);
+    },
+    [apiKey, hasAuth]
+  );
 
-  const searchPerson = useCallback(async (query) => {
-    if (!apiKey) throw new Error('API key required');
-    return api.searchPerson(apiKey, query);
-  }, [apiKey]);
+  const searchPerson = useCallback(
+    async (query) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.searchPerson(apiKey, query);
+    },
+    [apiKey, hasAuth]
+  );
 
-  const searchCompany = useCallback(async (query) => {
-    if (!apiKey) throw new Error('API key required');
-    return api.searchCompany(apiKey, query);
-  }, [apiKey]);
+  const searchCompany = useCallback(
+    async (query) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.searchCompany(apiKey, query);
+    },
+    [apiKey, hasAuth]
+  );
 
-  const searchKeyword = useCallback(async (query) => {
-    if (!apiKey) throw new Error('API key required');
-    return api.searchKeyword(apiKey, query);
-  }, [apiKey]);
+  const searchKeyword = useCallback(
+    async (query) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.searchKeyword(apiKey, query);
+    },
+    [apiKey, hasAuth]
+  );
 
-  const getWatchProviders = useCallback(async (type, region) => {
-    if (!apiKey) throw new Error('API key required');
-    return api.getWatchProviders(apiKey, type, region);
-  }, [apiKey]);
+  const getWatchProviders = useCallback(
+    async (type, region) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.getWatchProviders(apiKey, type, region);
+    },
+    [apiKey, hasAuth]
+  );
 
-  const searchTVNetworks = useCallback(async (query) => {
-    if (!apiKey) throw new Error('API key required');
-    if (!query) return [];
-    return api.getTVNetworks(apiKey, query);
-  }, [apiKey]);
+  const searchTVNetworks = useCallback(
+    async (query) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      if (!query) return [];
+      return api.getTVNetworks(apiKey, query);
+    },
+    [apiKey, hasAuth]
+  );
 
-  const getPersonById = useCallback(async (id) => {
-    if (!apiKey) throw new Error('API key required');
-    return api.getPersonById(apiKey, id);
-  }, [apiKey]);
+  const getPersonById = useCallback(
+    async (id) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.getPersonById(apiKey, id);
+    },
+    [apiKey, hasAuth]
+  );
 
-  const getCompanyById = useCallback(async (id) => {
-    if (!apiKey) throw new Error('API key required');
-    return api.getCompanyById(apiKey, id);
-  }, [apiKey]);
+  const getCompanyById = useCallback(
+    async (id) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.getCompanyById(apiKey, id);
+    },
+    [apiKey, hasAuth]
+  );
 
-  const getKeywordById = useCallback(async (id) => {
-    if (!apiKey) throw new Error('API key required');
-    return api.getKeywordById(apiKey, id);
-  }, [apiKey]);
+  const getKeywordById = useCallback(
+    async (id) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.getKeywordById(apiKey, id);
+    },
+    [apiKey, hasAuth]
+  );
 
   return {
     genres,

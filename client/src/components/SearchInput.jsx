@@ -2,14 +2,14 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, Loader, User, Building, Tag } from 'lucide-react';
 
-export function SearchInput({ 
+export function SearchInput({
   onSearch,
   onSelect,
   selectedItems = [],
   onRemove,
   placeholder = 'Search...',
   type = 'person', // 'person' | 'company' | 'keyword'
-  multiple = true
+  multiple = true,
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -99,7 +99,7 @@ export function SearchInput({
 
   const handleSelect = (item) => {
     if (multiple) {
-      if (!selectedItems.find(i => i.id === item.id)) {
+      if (!selectedItems.find((i) => i.id === item.id)) {
         onSelect([...selectedItems, item]);
       }
     } else {
@@ -112,7 +112,7 @@ export function SearchInput({
 
   const handleRemove = (itemId) => {
     if (multiple) {
-      onRemove(selectedItems.filter(i => i.id !== itemId));
+      onRemove(selectedItems.filter((i) => i.id !== itemId));
     } else {
       onRemove(null);
     }
@@ -120,10 +120,14 @@ export function SearchInput({
 
   const getIcon = () => {
     switch (type) {
-      case 'person': return <User size={14} />;
-      case 'company': return <Building size={14} />;
-      case 'keyword': return <Tag size={14} />;
-      default: return <Search size={14} />;
+      case 'person':
+        return <User size={14} />;
+      case 'company':
+        return <Building size={14} />;
+      case 'keyword':
+        return <Tag size={14} />;
+      default:
+        return <Search size={14} />;
     }
   };
 
@@ -132,12 +136,12 @@ export function SearchInput({
       {/* Selected items */}
       {multiple && selectedItems.length > 0 && (
         <div className="search-input-selected">
-          {selectedItems.map(item => (
+          {selectedItems.map((item) => (
             <div key={item.id} className="search-input-tag">
               {getIcon()}
               <span>{item.name}</span>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => handleRemove(item.id)}
                 className="search-input-tag-remove"
               >
@@ -164,36 +168,33 @@ export function SearchInput({
       </div>
 
       {/* Dropdown results - render in portal to avoid parent clipping */}
-      {isOpen && results.length > 0 && dropdownStyle && createPortal(
-        <div className="search-input-dropdown" ref={dropdownRef} style={dropdownStyle}>
-          {results.map(item => (
-            <div
-              key={item.id}
-              className="search-input-option"
-              onClick={() => handleSelect(item)}
-            >
-              {item.profilePath || item.logoPath ? (
-                <img 
-                  src={item.profilePath || item.logoPath} 
-                  alt={item.name}
-                  className="search-input-option-image"
-                />
-              ) : (
-                <div className="search-input-option-placeholder">
-                  {getIcon()}
-                </div>
-              )}
-              <div className="search-input-option-info">
-                <span className="search-input-option-name">{item.name}</span>
-                {item.knownFor && (
-                  <span className="search-input-option-meta">{item.knownFor}</span>
+      {isOpen &&
+        results.length > 0 &&
+        dropdownStyle &&
+        createPortal(
+          <div className="search-input-dropdown" ref={dropdownRef} style={dropdownStyle}>
+            {results.map((item) => (
+              <div key={item.id} className="search-input-option" onClick={() => handleSelect(item)}>
+                {item.profilePath || item.logoPath ? (
+                  <img
+                    src={item.profilePath || item.logoPath}
+                    alt={item.name}
+                    className="search-input-option-image"
+                  />
+                ) : (
+                  <div className="search-input-option-placeholder">{getIcon()}</div>
                 )}
+                <div className="search-input-option-info">
+                  <span className="search-input-option-name">{item.name}</span>
+                  {item.knownFor && (
+                    <span className="search-input-option-meta">{item.knownFor}</span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>,
-        document.body
-      )}
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

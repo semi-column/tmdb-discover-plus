@@ -41,7 +41,9 @@
   white-space: normal;
   width: max-content;
   max-width: 260px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(130, 87, 229, 0.1);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(130, 87, 229, 0.1);
   z-index: 1000;
   pointer-events: none;
   animation: tooltipFadeIn 0.15s ease-out;
@@ -327,12 +329,12 @@
 }
 
 /* Date input styling */
-input[type="date"].input {
+input[type='date'].input {
   color-scheme: dark;
   padding: 12px 14px;
 }
 
-input[type="date"].input::-webkit-calendar-picker-indicator {
+input[type='date'].input::-webkit-calendar-picker-indicator {
   filter: invert(0.7);
   cursor: pointer;
 }
@@ -409,7 +411,6 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
 }
 
 @keyframes unsavedPulse {
-
   0%,
   100% {
     transform: scale(1);
@@ -787,7 +788,10 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
   gap: 4px;
   overflow: hidden;
   max-height: 500px;
-  transition: max-height 0.3s ease, opacity 0.2s ease, margin 0.2s ease;
+  transition:
+    max-height 0.3s ease,
+    opacity 0.2s ease,
+    margin 0.2s ease;
 }
 
 .preset-group.collapsed .preset-list {
@@ -1165,7 +1169,12 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
 }
 
 .preview-skeleton {
-  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-hover) 50%, var(--bg-tertiary) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    var(--bg-hover) 50%,
+    var(--bg-tertiary) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -1846,7 +1855,7 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
 }
 
 /* Input date styling */
-input[type="date"] {
+input[type='date'] {
   color-scheme: dark;
 }
 
@@ -2229,7 +2238,6 @@ input[type="date"] {
   color: var(--error);
 }
 
-
 /* Info Banner */
 .info-banner {
   display: flex;
@@ -2475,7 +2483,9 @@ input[type="date"] {
   font-size: 13px;
   font-weight: 500;
   text-align: center;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .range-input-field:focus {
@@ -2490,7 +2500,7 @@ input[type="date"] {
   margin: 0;
 }
 
-.range-input-field[type="number"] {
+.range-input-field[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -2540,7 +2550,7 @@ input[type="date"] {
   margin: 0;
 }
 
-.range-slider-value-input[type="number"] {
+.range-slider-value-input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -2592,7 +2602,9 @@ input[type="date"] {
   cursor: pointer;
   pointer-events: auto;
   box-shadow: var(--shadow-md);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .range-slider-thumb::-webkit-slider-thumb:hover {
@@ -2679,7 +2691,7 @@ input[type="date"] {
   flex-wrap: wrap;
 }
 
-.filter-compact-row>* {
+.filter-compact-row > * {
   flex: 1;
   min-width: 150px;
 }
@@ -3342,22 +3354,22 @@ input[type="date"] {
 
 /* Mobile Top Actions Bar */
 @media (max-width: 768px) {
-  .main>.container>div:first-child {
+  .main > .container > div:first-child {
     flex-direction: column;
     gap: 16px;
     text-align: center;
   }
 
-  .main>.container>div:first-child h2 {
+  .main > .container > div:first-child h2 {
     font-size: 20px;
   }
 
-  .main>.container>div:first-child>div:last-child {
+  .main > .container > div:first-child > div:last-child {
     flex-direction: column;
     width: 100%;
   }
 
-  .main>.container>div:first-child>div:last-child .btn {
+  .main > .container > div:first-child > div:last-child .btn {
     width: 100%;
     justify-content: center;
   }
@@ -3471,7 +3483,7 @@ input[type="date"] {
     flex-direction: column;
   }
 
-  .filter-compact-row>* {
+  .filter-compact-row > * {
     min-width: 100%;
   }
 }
@@ -3633,7 +3645,6 @@ input[type="date"] {
 /* Mobile Searchable Select */
 /* Mobile Searchable Select - Standard positioning */
 @media (max-width: 768px) {
-
   .searchable-select-options,
   .multi-select-options {
     max-height: 40vh;
@@ -3722,7 +3733,6 @@ input[type="date"] {
 
 /* Touch-friendly tap targets */
 @media (max-width: 768px) {
-
   .catalog-item,
   .preset-item,
   .genre-chip,
@@ -3742,7 +3752,6 @@ input[type="date"] {
 
 /* Improve touch scrolling */
 @media (max-width: 768px) {
-
   .editor-content,
   .sidebar,
   .searchable-select-options,

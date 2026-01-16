@@ -1,6 +1,6 @@
 {
   "name": "tmdb-discover-plus",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "TMDB Discover+ - Custom Catalog Builder for Stremio",
   "main": "server/src/index.js",
   "type": "module",
@@ -14,7 +14,10 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
-    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "test": "cd server && npm test",
+    "test:integration": "cd server && npm run test:integration",
+    "format": "prettier --write ."
   },
   "keywords": [
     "stremio",
@@ -46,6 +49,7 @@
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "prettier": "^3.8.0"
   }
 }

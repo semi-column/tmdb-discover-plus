@@ -1,6 +1,6 @@
 /**
  * Simple structured logger for TMDB Discover+
- * 
+ *
  * Supports log levels: debug, info, warn, error
  * Set LOG_LEVEL env var to control output (default: 'info')
  * Set LOG_FORMAT=json for JSON output (useful for log aggregation)
@@ -50,7 +50,7 @@ function sanitizeAny(value) {
  */
 function formatMessage(level, context, message, data = null) {
   const timestamp = new Date().toISOString();
-  
+
   if (useJson) {
     return JSON.stringify({
       timestamp,
@@ -60,7 +60,7 @@ function formatMessage(level, context, message, data = null) {
       ...(data && { data }),
     });
   }
-  
+
   const prefix = `[${timestamp}] [${level.toUpperCase()}] [${context}]`;
   if (data) {
     // In dev mode, format data nicely but avoid logging sensitive info
@@ -77,10 +77,10 @@ function formatMessage(level, context, message, data = null) {
  */
 function sanitizeLogData(data) {
   if (!data || typeof data !== 'object') return data;
-  
+
   const sensitiveKeys = ['tmdbApiKey', 'apiKey', 'password', 'token', 'secret'];
   const sanitized = { ...data };
-  
+
   for (const key of sensitiveKeys) {
     if (key in sanitized) {
       sanitized[key] = '[REDACTED]';
@@ -103,19 +103,19 @@ export function createLogger(context) {
         console.log(formatMessage('debug', context, message, data));
       }
     },
-    
+
     info(message, data = null) {
       if (currentLevel <= LOG_LEVELS.info) {
         console.log(formatMessage('info', context, message, data));
       }
     },
-    
+
     warn(message, data = null) {
       if (currentLevel <= LOG_LEVELS.warn) {
         console.warn(formatMessage('warn', context, message, data));
       }
     },
-    
+
     error(message, data = null) {
       if (currentLevel <= LOG_LEVELS.error) {
         console.error(formatMessage('error', context, message, data));

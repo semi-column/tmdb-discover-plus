@@ -1,4 +1,18 @@
-import { Plus, Film, Tv, Trash2, TrendingUp, Flame, Calendar, Star, Play, Radio, Sparkles, ChevronDown, GripVertical } from 'lucide-react';
+import {
+  Plus,
+  Film,
+  Tv,
+  Trash2,
+  TrendingUp,
+  Flame,
+  Calendar,
+  Star,
+  Play,
+  Radio,
+  Sparkles,
+  ChevronDown,
+  GripVertical,
+} from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 import {
@@ -69,8 +83,8 @@ export function CatalogSidebar({
   // Check which presets are already added
   const addedPresets = new Set(
     catalogs
-      .filter(c => c.filters?.listType && c.filters.listType !== 'discover')
-      .map(c => `${c.type}-${c.filters.listType}`)
+      .filter((c) => c.filters?.listType && c.filters.listType !== 'discover')
+      .map((c) => `${c.type}-${c.filters.listType}`)
   );
 
   const getCatalogKey = (catalog) => String(catalog?._id || catalog?.id || catalog?.name);
@@ -99,8 +113,8 @@ export function CatalogSidebar({
     if (active.id === over.id) return;
     if (typeof onReorderCatalogs !== 'function') return;
 
-    const oldIndex = catalogs.findIndex(c => getCatalogKey(c) === String(active.id));
-    const newIndex = catalogs.findIndex(c => getCatalogKey(c) === String(over.id));
+    const oldIndex = catalogs.findIndex((c) => getCatalogKey(c) === String(active.id));
+    const newIndex = catalogs.findIndex((c) => getCatalogKey(c) === String(over.id));
     if (oldIndex < 0 || newIndex < 0) return;
 
     const reordered = arrayMove(catalogs, oldIndex, newIndex);
@@ -109,14 +123,9 @@ export function CatalogSidebar({
 
   const SortableCatalogItem = ({ catalog }) => {
     const id = getCatalogKey(catalog);
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id });
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+      id,
+    });
 
     const style = {
       transform: CSS.Transform.toString(transform),
@@ -220,10 +229,7 @@ export function CatalogSidebar({
               strategy={verticalListSortingStrategy}
             >
               {catalogs.map((catalog) => (
-                <SortableCatalogItem
-                  key={getCatalogKey(catalog)}
-                  catalog={catalog}
-                />
+                <SortableCatalogItem key={getCatalogKey(catalog)} catalog={catalog} />
               ))}
             </SortableContext>
           </DndContext>

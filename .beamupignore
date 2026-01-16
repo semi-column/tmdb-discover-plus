@@ -17,3 +17,16 @@ server/node_modules/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Tests
+server/tests/
+tests/
+coverage/
+
+# CI
+.github/

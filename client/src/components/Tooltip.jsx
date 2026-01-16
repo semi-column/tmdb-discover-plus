@@ -5,7 +5,7 @@ export function Tooltip({ text, children }) {
   const [show, setShow] = useState(false);
 
   return (
-    <span 
+    <span
       className="tooltip-wrapper"
       onMouseEnter={() => setShow(true)}
       onMouseLeave={() => setShow(false)}

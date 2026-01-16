@@ -95,27 +95,50 @@ export function normalizeContentType(type) {
  */
 export function sanitizeFilters(filters) {
   if (!filters || typeof filters !== 'object') return {};
-  
+
   const sanitized = {};
   const allowedKeys = [
-    'sortBy', 'listType', 'genres', 'excludeGenres', 'language', 'displayLanguage',
-    'originCountry', 'year', 'yearFrom', 'yearTo', 'voteAverage',
-    'voteAverageFrom', 'voteAverageTo', 'voteCount', 'runtime',
-    'runtimeFrom', 'runtimeTo', 'certifications', 'watchProviders',
-    'watchRegion', 'monetization', 'withPeople', 'withCompanies',
-    'withKeywords', 'releaseTypes', 'networks', 'status', 'type',
-    'imdbOnly', 'includeAdult'
+    'sortBy',
+    'listType',
+    'genres',
+    'excludeGenres',
+    'language',
+    'displayLanguage',
+    'originCountry',
+    'year',
+    'yearFrom',
+    'yearTo',
+    'voteAverage',
+    'voteAverageFrom',
+    'voteAverageTo',
+    'voteCount',
+    'runtime',
+    'runtimeFrom',
+    'runtimeTo',
+    'certifications',
+    'watchProviders',
+    'watchRegion',
+    'monetization',
+    'withPeople',
+    'withCompanies',
+    'withKeywords',
+    'releaseTypes',
+    'networks',
+    'status',
+    'type',
+    'imdbOnly',
+    'includeAdult',
   ];
-  
+
   for (const key of allowedKeys) {
     if (filters[key] !== undefined) {
       const value = filters[key];
-      
+
       // Handle arrays
       if (Array.isArray(value)) {
         sanitized[key] = value
           .slice(0, 50) // Limit array length
-          .map(v => typeof v === 'string' ? sanitizeString(v, 100) : v);
+          .map((v) => (typeof v === 'string' ? sanitizeString(v, 100) : v));
       }
       // Handle booleans
       else if (typeof value === 'boolean') {
@@ -131,7 +154,7 @@ export function sanitizeFilters(filters) {
       }
     }
   }
-  
+
   return sanitized;
 }
 
@@ -149,7 +172,7 @@ export const validateRequest = {
     }
     next();
   },
-  
+
   /**
    * Validate catalogId parameter
    */
@@ -160,7 +183,7 @@ export const validateRequest = {
     }
     next();
   },
-  
+
   /**
    * Validate apiKey in query or body
    */

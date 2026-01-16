@@ -70,11 +70,12 @@ export function rateLimit(options = {}) {
       return next();
     }
 
-    // Bypass rate limiting for localhost in development mode
+    // Bypass rate limiting for localhost in development or test mode
     const ip = getClientIp(req);
-    const isDev = process.env.NODE_ENV === 'development';
-    const isLocalhost = ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip === '::ffff:127.0.0.1';
-    if (isDev && isLocalhost) {
+    const isDevOrTest = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+    const isLocalhost =
+      ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip === '::ffff:127.0.0.1';
+    if (isDevOrTest && isLocalhost) {
       return next();
     }
     const now = Date.now();
@@ -126,11 +127,11 @@ export function rateLimit(options = {}) {
 }
 
 /**
- * Stricter rate limit for sensitive endpoints (login, config creation)
+ * Rate limit for sensitive endpoints (login, config creation)
  */
 export const strictRateLimit = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  maxRequests: 20, // 20 requests per minute
+  windowMs: 60 * 1000,
+  maxRequests: 60,
   message: 'Too many requests to this endpoint, please try again later',
 });
 
@@ -138,16 +139,16 @@ export const strictRateLimit = rateLimit({
  * Standard rate limit for API endpoints
  */
 export const apiRateLimit = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  maxRequests: 100, // 100 requests per minute
+  windowMs: 60 * 1000,
+  maxRequests: 300,
   message: 'Too many API requests, please try again later',
 });
 
 /**
- * Relaxed rate limit for catalog/manifest endpoints (Stremio makes many requests)
+ * Relaxed rate limit for addon endpoints (catalog/manifest)
  */
 export const addonRateLimit = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  maxRequests: 300, // 300 requests per minute (Stremio can be chatty)
+  windowMs: 60 * 1000,
+  maxRequests: 1000,
   message: 'Rate limit exceeded',
 });

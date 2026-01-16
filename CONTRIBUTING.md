@@ -57,6 +57,7 @@ npm run dev
 ```
 
 This starts:
+
 - Frontend at http://localhost:5173 (with hot reload)
 - Backend at http://localhost:7000 (with watch mode)
 
@@ -84,6 +85,7 @@ cd client && npm run lint
 ### Contribution Workflow
 
 1. **Create a branch** for your changes:
+
    ```bash
    git checkout -b feature/your-feature-name
    # or
@@ -95,6 +97,7 @@ cd client && npm run lint
 3. **Test your changes** locally
 
 4. **Commit your changes** with a clear message:
+
    ```bash
    git commit -m "feat: add new filter option for runtime"
    # or
@@ -102,6 +105,7 @@ cd client && npm run lint
    ```
 
 5. **Push to your fork**:
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -120,6 +124,7 @@ cd client && npm run lint
 ### PR Title Format
 
 Use conventional commit format:
+
 - `feat:` New feature
 - `fix:` Bug fix
 - `docs:` Documentation only
@@ -204,6 +209,7 @@ Use the feature request issue template when available.
 ## Questions?
 
 Feel free to:
+
 - Open a GitHub Discussion for questions
 - Comment on relevant issues
 - Reach out to maintainers

@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url';
 import { connectDB, isConnected } from './services/database.js';
 import { addonRouter } from './routes/addon.js';
 import { apiRouter } from './routes/api.js';
+import { authRouter } from './routes/auth.js';
 import { createLogger } from './utils/logger.js';
-import { apiRateLimit } from './utils/rateLimit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -22,12 +22,15 @@ let isShuttingDown = false;
 // Trust proxy for correct host/protocol behind reverse proxy (Beamup/Dokku)
 app.set('trust proxy', true);
 
-// Middleware
-// Configure CORS. Allows configuration via environment variables:
-// - CORS_ORIGIN: comma-separated list of allowed origins, or '*' to allow all (default '*')
-// - CORS_ALLOW_CREDENTIALS: 'true' to enable Access-Control-Allow-Credentials (default 'false')
+// CORS configuration
 const rawOrigins = process.env.CORS_ORIGIN || '*';
-const allowedOrigins = rawOrigins === '*' ? ['*'] : rawOrigins.split(',').map(s => s.trim()).filter(Boolean);
+const allowedOrigins =
+  rawOrigins === '*'
+    ? ['*']
+    : rawOrigins
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -51,11 +54,7 @@ app.use(express.json());
 // Determine client dist path (works for both local and deployed)
 const clientDistPath = path.join(__dirname, '../../client/dist');
 
-// Serve static frontend files
-// Redirect legacy /configure routes to the SPA root
-// The app now handles configuration at the home route; preserve an optional
-// userId by forwarding it as a query parameter so the client can pick it up.
-// Serve static frontend files and handle legacy redirects
+// Redirect legacy /configure routes to SPA root
 app.get(['/configure', '/configure/:userId'], (req, res) => {
   res.set('Cache-Control', 'no-store, must-revalidate');
   const { userId } = req.params;
@@ -76,16 +75,16 @@ app.get('/:userId/configure', (req, res) => {
   return res.status(404).send('Not Found');
 });
 
-// Serve static files but ensure HTML files are not cached by intermediate CDNs
-// or browsers. This avoids stale helper pages (like legacy configure.html)
-// being served from caches after a deploy.
-app.use(express.static(clientDistPath, {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-store, must-revalidate');
-    }
-  }
-}));
+// Serve static files with no-cache for HTML
+app.use(
+  express.static(clientDistPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-store, must-revalidate');
+      }
+    },
+  })
+);
 
 // ============================================
 // Health Check Endpoint
@@ -112,14 +111,15 @@ app.get('/health', (req, res) => {
     },
   };
 
-  // Return 200 even if DB is disconnected (addon still works with in-memory)
   res.json(health);
 });
+
+// Auth routes for session-based authentication
+app.use('/api/auth', authRouter);
 
 // API routes for frontend (rate limiting applied within the API router)
 app.use('/api', apiRouter);
 
-// Stremio addon routes (no rate limiting - Stremio needs unrestricted access)
 app.use('/', addonRouter);
 
 // ============================================
@@ -171,7 +171,6 @@ process.on('unhandledRejection', (reason, promise) => {
 async function start() {
   try {
     await connectDB();
-    // Bind to 0.0.0.0 for Docker/Dokku compatibility
     server = app.listen(PORT, '0.0.0.0', () => {
       log.info(`TMDB Discover+ running at http://0.0.0.0:${PORT}`);
       log.info(`Configure at http://localhost:${PORT}/configure`);
