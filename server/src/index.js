@@ -13,8 +13,8 @@ import { createLogger } from './utils/logger.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const log = createLogger('server');
-// Default to 5000 to match Dokku/Beamup expected port
-const PORT = process.env.PORT || 5000;
+// Default to 7000 to match Dokku/Beamup expected port
+const PORT = process.env.PORT || 7000;
 const SERVER_VERSION = process.env.npm_package_version || '2.1.0';
 
 // Track server state for graceful shutdown
@@ -138,6 +138,22 @@ app.use('/api/auth', authRouter);
 app.use('/api', apiRouter);
 
 app.use('/', addonRouter);
+
+// SPA fallback - serve index.html for any unmatched routes
+app.get('*', (req, res) => {
+  const indexPath = path.join(clientDistPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('Not Found');
+  }
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  log.error('Unhandled error', { error: err.message, stack: err.stack, url: req.url });
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 // ============================================
 // Graceful Shutdown Handler

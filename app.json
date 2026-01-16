@@ -1,0 +1,24 @@
+{
+  "name": "tmdb-discover-plus",
+  "description": "TMDB Discover+ - Custom Catalog Builder for Stremio",
+  "keywords": ["stremio", "addon", "tmdb"],
+  "healthchecks": {
+    "web": [
+      {
+        "type": "startup",
+        "name": "web check",
+        "description": "Checking if the app responds",
+        "path": "/health",
+        "attempts": 3,
+        "wait": 5,
+        "timeout": 30,
+        "content": "ok"
+      }
+    ]
+  },
+  "formation": {
+    "web": {
+      "quantity": 1
+    }
+  }
+}
