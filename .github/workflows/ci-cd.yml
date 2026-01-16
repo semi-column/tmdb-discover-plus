@@ -61,6 +61,8 @@ jobs:
           TEST_BASE_URL: http://127.0.0.1:7000
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           TEST_TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          JWT_SECRET: "test-jwt-secret-value-for-ci-cd-pipeline-testing"
+          ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
         run: cd server && npm test
 
   # ============================================
