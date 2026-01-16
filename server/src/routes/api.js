@@ -631,7 +631,7 @@ router.put('/config/:userId', optionalAuth, strictRateLimit, async (req, res) =>
 router.delete('/config/:userId', requireAuth, strictRateLimit, async (req, res) => {
   try {
     const { userId } = req.params;
-    const authUserId = req.user?.userId;
+    const authUserId = req.userId;
 
     log.info('Delete config request', { userId, authUserId });
 
