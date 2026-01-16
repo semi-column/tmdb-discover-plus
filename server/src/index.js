@@ -13,8 +13,8 @@ import { createLogger } from './utils/logger.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const log = createLogger('server');
-// Default to 5000 to match Dokku/Beamup expected port
-const PORT = process.env.PORT || 5000;
+// Default to 7000 to match Dokku/Beamup expected port
+const PORT = process.env.PORT || 7000;
 const SERVER_VERSION = process.env.npm_package_version || '2.1.0';
 
 // Track server state for graceful shutdown
