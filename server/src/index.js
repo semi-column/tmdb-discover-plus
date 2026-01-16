@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectDB, isConnected } from './services/database.js';
@@ -54,6 +55,21 @@ app.use(express.json());
 
 // Determine client dist path (works for both local and deployed)
 const clientDistPath = path.join(__dirname, '../../client/dist');
+
+// Helpful startup diagnostics (do NOT log secret values)
+log.info('Environment status', {
+  port: PORT,
+  nodeEnv: process.env.NODE_ENV || 'undefined',
+  hasEncryptionKey: Boolean(process.env.ENCRYPTION_KEY),
+  encryptionKeyLen: process.env.ENCRYPTION_KEY ? String(process.env.ENCRYPTION_KEY).length : 0,
+  hasJwtSecret: Boolean(process.env.JWT_SECRET),
+  jwtSecretLen: process.env.JWT_SECRET ? String(process.env.JWT_SECRET).length : 0,
+});
+
+log.info('Client dist status', {
+  path: clientDistPath,
+  exists: fs.existsSync(clientDistPath),
+});
 
 // Redirect legacy /configure routes to SPA root
 app.get(['/configure', '/configure/:userId'], (req, res) => {
