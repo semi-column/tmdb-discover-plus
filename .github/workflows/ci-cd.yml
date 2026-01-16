@@ -117,7 +117,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          ssh -i ~/.ssh/beamup_key -o StrictHostKeyChecking=no dokku@a.baby-beamup.club config:set 84f50d1c22e7-tmdb-discover-plus JWT_SECRET="$JWT_SECRET" ENCRYPTION_KEY="$ENCRYPTION_KEY"
+          ssh -i ~/.ssh/beamup_key -o StrictHostKeyChecking=no dokku@a.baby-beamup.club config:set --no-restart 84f50d1c22e7-tmdb-discover-plus JWT_SECRET="$JWT_SECRET" ENCRYPTION_KEY="$ENCRYPTION_KEY"
 
       - name: Deploy to BeamUp
         env:

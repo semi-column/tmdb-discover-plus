@@ -69,4 +69,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-5000}/health || exit 1
 
 # Start the server
-CMD ["node", "server/src/index.js"]
+# Start the server using ENTRYPOINT to ignore any overridden CMD (like /start)
+ENTRYPOINT ["node", "server/src/index.js"]
