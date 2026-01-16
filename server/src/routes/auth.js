@@ -76,11 +76,22 @@ router.post('/login', strictRateLimit, async (req, res) => {
       const tokenData = generateToken(config.userId, rememberMe);
       log.info('User authenticated with config', { userId: config.userId, totalConfigs: existingConfigs.length });
 
+      // Return all configs for immediate loading in the dashboard
+      const allConfigs = existingConfigs.map((c) => ({
+        userId: c.userId,
+        configName: c.configName || '',
+        catalogs: c.catalogs || [],
+        preferences: c.preferences || {},
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      }));
+
       return res.json({
         ...tokenData,
         userId: config.userId,
         configName: config.configName || '',
         isNewUser: false,
+        configs: allConfigs,
       });
     }
 

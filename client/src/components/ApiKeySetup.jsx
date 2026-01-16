@@ -41,7 +41,8 @@ export function ApiKeySetup({
     try {
       const result = await api.login(apiKey.trim(), returnUserId, rememberMe);
       if (result.token && onLogin) {
-        onLogin(result.userId);
+        // Pass both userId and configs (if returned) to the login handler
+        onLogin(result.userId, result.configs || []);
       }
     } catch (err) {
       setError(err.message || 'Failed to authenticate');

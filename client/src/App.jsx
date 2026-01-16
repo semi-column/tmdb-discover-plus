@@ -52,9 +52,9 @@ function App() {
       <div className="app">
         <Header />
         <ApiKeySetup
-          onLogin={(userId) => {
+          onLogin={(userId, configs) => {
             state.setWantsToChangeKey(false);
-            actions.handleLogin(userId);
+            actions.handleLogin(userId, configs);
           }}
           skipAutoRedirect={state.wantsToChangeKey}
           isSessionExpired={state.isSessionExpired}

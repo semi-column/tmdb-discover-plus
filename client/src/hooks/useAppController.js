@@ -133,18 +133,30 @@ export function useAppController() {
   }, [config.isAuthenticated, config.userId, isSetup, loadUserConfigs]);
 
   // Handle successful login
-  const handleLogin = async (userId) => {
+  const handleLogin = async (userId, configs = []) => {
     setIsSetup(false);
     setIsSessionExpired(false);
     setPageLoading(true);
 
     try {
+      // If configs were returned from login, use them immediately
+      if (configs && configs.length > 0) {
+        // Sort by updatedAt descending (most recent first)
+        configs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        setUserConfigs(configs);
+      }
+
       const data = await config.loadConfig(userId);
       if (data.catalogs?.length > 0) {
         setActiveCatalog(data.catalogs[0]);
       }
       window.history.replaceState({}, '', `/?userId=${userId}`);
       addToast('Logged in successfully');
+
+      // If no configs were passed, fall back to loading them
+      if (!configs || configs.length === 0) {
+        loadUserConfigs();
+      }
     } catch (err) {
       console.error('Error loading config after login:', err);
       addToast('Failed to load configuration', 'error');
