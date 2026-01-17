@@ -261,7 +261,7 @@ export async function getConfigsByApiKey(apiKey, apiKeyId = null) {
   if (isConnected()) {
     try {
       // Fast indexed query on apiKeyId
-      const configs = await UserConfig.find({ apiKeyId: targetApiKeyId }).lean();
+      const configs = await UserConfig.find({ apiKeyId: targetApiKeyId }).sort({ updatedAt: -1 }).lean();
       log.debug('Found configs by apiKeyId index', { count: configs.length });
       return configs;
     } catch (err) {
@@ -308,12 +308,8 @@ export async function deleteUserConfig(userId, apiKey) {
         throw new Error('Configuration not found');
       }
 
-      // Verify API key matches (support both encrypted and legacy)
-      const storedKey = getApiKeyFromConfig(config);
-      if (storedKey !== apiKey) {
-        log.warn('API key mismatch on delete', { userId: safeUserId });
-        throw new Error('Access denied');
-      }
+      // API key check is handled by middleware (requireConfigOwnership)
+      // proceeded by findOneAndDelete
 
       // Delete the config
       await UserConfig.findOneAndDelete({ userId: safeUserId });
