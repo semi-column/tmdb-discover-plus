@@ -25,6 +25,7 @@ const catalogSchema = new mongoose.Schema(
       displayLanguage: String,
       originCountry: String,
       includeAdult: { type: Boolean, default: false },
+      discoverOnly: { type: Boolean, default: false },
       imdbOnly: { type: Boolean, default: true },
       voteCountMin: { type: Number, default: 0 },
       runtimeMin: Number,

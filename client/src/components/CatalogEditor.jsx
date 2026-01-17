@@ -1409,6 +1409,24 @@ export function CatalogEditor({
                         tooltip="Include adult/18+ rated content in results. Disabled by default."
                       />
                     </label>
+
+                    <label
+                      className="checkbox-label-row"
+                      onClick={() =>
+                        handleFiltersChange('discoverOnly', !localCatalog?.filters?.discoverOnly)
+                      }
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div
+                        className={`checkbox ${localCatalog?.filters?.discoverOnly ? 'checked' : ''}`}
+                      >
+                        {localCatalog?.filters?.discoverOnly && <Check size={14} />}
+                      </div>
+                      <LabelWithTooltip
+                        label="Discover Only"
+                        tooltip="Hide this catalog from the Board (Home). It will only appear in the Discover tab."
+                      />
+                    </label>
                   </div>
                 </div>
               )}

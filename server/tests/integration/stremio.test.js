@@ -163,6 +163,34 @@ export async function run() {
     assert(res.data.idPrefixes.includes('tt'), 'Should support IMDB IDs (tt prefix)');
   });
 
+  await runTest(SUITE, 'Discover Only catalog is hidden from board', async () => {
+    // Create a specific config for this test
+    const res = await post('/api/config', {
+      catalogs: [
+        createTestCatalog({
+          id: 'discover-only-test',
+          name: 'Discover Only Catalog',
+          type: 'movie',
+          filters: {
+            discoverOnly: true,
+          },
+        }),
+      ],
+    }, { headers: getAuthHeaders() });
+    
+    assertOk(res);
+    const testUserId = res.data.userId;
+    
+    const manifestRes = await get(`/${testUserId}/manifest.json`);
+    assertOk(manifestRes);
+    
+    const catalog = manifestRes.data.catalogs[0];
+    const genreFilter = catalog.extra.find(e => e.name === 'genre');
+    
+    assert(genreFilter, 'Should have genre filter');
+    assert(genreFilter.isRequired === true, 'Genre filter should be required (hidden from board)');
+  });
+
   // ==========================================
   // Catalog Endpoint Tests
   // ==========================================

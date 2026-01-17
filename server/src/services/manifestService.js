@@ -73,6 +73,11 @@ export async function enrichManifestWithGenres(manifest, config) {
   await Promise.all(
     manifest.catalogs.map(async (catalog) => {
       try {
+        // Skip genre enrichment for dedicated search catalogs
+        if (catalog.id.startsWith('tmdb-search-')) return;
+
+
+        
         const helperType = catalog.type === 'series' ? 'series' : 'movie';
         const staticKey = catalog.type === 'series' ? 'tv' : 'movie';
 
@@ -111,6 +116,7 @@ export async function enrichManifestWithGenres(manifest, config) {
           }
         }
 
+        let isDiscoverOnly = false;
         let options = null;
         try {
           const savedCatalog = (config.catalogs || []).find((c) => {
@@ -120,6 +126,10 @@ export async function enrichManifestWithGenres(manifest, config) {
               c.name && catalog.name && c.name.toLowerCase() === catalog.name.toLowerCase();
             return idFromStored === catalog.id || idFromIdOnly === catalog.id || nameMatch;
           });
+
+          if (savedCatalog) {
+             isDiscoverOnly = savedCatalog.filters?.discoverOnly === true;
+          }
 
           if (savedCatalog && savedCatalog.filters) {
             const selected = parseIdArray(savedCatalog.filters.genres);
@@ -164,7 +174,15 @@ export async function enrichManifestWithGenres(manifest, config) {
         if (options && options.length > 0) {
           catalog.extra = catalog.extra || [];
           catalog.extra = catalog.extra.filter((e) => e.name !== 'genre');
-          catalog.extra.push({ name: 'genre', options, optionsLimit: 1 });
+          
+          // If discoverOnly is true, marking 'genre' as required hides it from the Board
+          // because the Board does not provide required filters.
+          catalog.extra.push({ 
+            name: 'genre', 
+            options, 
+            optionsLimit: 1,
+            isRequired: isDiscoverOnly 
+          });
         }
       } catch (err) {
         log.warn('Error injecting genre options into manifest catalog', { error: err.message });
