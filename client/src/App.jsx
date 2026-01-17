@@ -153,12 +153,15 @@ function App() {
               onAddCatalog={() => state.setShowNewCatalogModal(true)}
               onAddPresetCatalog={actions.handleAddPresetCatalog}
               onDeleteCatalog={actions.handleDeleteCatalog}
+              onDuplicateCatalog={actions.handleDuplicateCatalog}
               onReorderCatalogs={(nextCatalogs) => {
                 config.setCatalogs(nextCatalogs);
               }}
               presetCatalogs={tmdb.presetCatalogs}
               configName={config.configName}
               onConfigNameChange={config.setConfigName}
+              preferences={config.preferences}
+              onPreferencesChange={config.setPreferences}
             />
 
             <CatalogEditor

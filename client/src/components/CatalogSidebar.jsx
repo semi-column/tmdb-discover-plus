@@ -10,6 +10,7 @@ import {
   Radio,
   Sparkles,
   ChevronDown,
+  Shuffle,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -51,10 +52,13 @@ export function CatalogSidebar({
   onAddCatalog,
   onAddPresetCatalog,
   onDeleteCatalog,
+  onDuplicateCatalog,
   onReorderCatalogs,
   presetCatalogs = { movie: [], series: [] },
   configName = '',
   onConfigNameChange,
+  preferences = {},
+  onPreferencesChange,
 }) {
   const isMobile = useIsMobile();
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
@@ -137,6 +141,21 @@ export function CatalogSidebar({
         </button>
       </div>
 
+      <div className="sidebar-controls" style={{ padding: '0 16px 12px 16px' }}>
+        <label 
+          className="sidebar-checkbox"
+          title="Randomize catalog order every time Stremio loads"
+        >
+          <input
+            type="checkbox"
+            checked={!!(preferences?.shuffleCatalogs)}
+            onChange={(e) => onPreferencesChange({...preferences, shuffleCatalogs: e.target.checked})}
+          />
+          <Shuffle size={14} />
+          <span>Shuffle Catalogs</span>
+        </label>
+      </div>
+
       <div className="catalog-list">
         {catalogs.length === 0 ? (
           <div className="empty-state">
@@ -163,6 +182,7 @@ export function CatalogSidebar({
                   isActive={activeCatalog?._id === catalog._id}
                   onSelect={onSelectCatalog}
                   onDelete={onDeleteCatalog}
+                  onDuplicate={onDuplicateCatalog}
                 />
               ))}
             </SortableContext>

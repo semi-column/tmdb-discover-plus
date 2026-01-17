@@ -318,6 +318,22 @@ export function useAppController() {
     addToast('Catalog deleted');
   };
 
+  const handleDuplicateCatalog = (catalogId) => {
+    const catalog = config.catalogs.find((c) => c._id === catalogId || c.id === catalogId);
+    if (!catalog) return;
+
+    const newCatalog = {
+      ...JSON.parse(JSON.stringify(catalog)),
+      _id: crypto.randomUUID(),
+      id: crypto.randomUUID(), // Ensure both ID fields are new
+      name: `${catalog.name} (Copy)`,
+    };
+    
+    config.setCatalogs((prev) => [...prev, newCatalog]);
+    setActiveCatalog(newCatalog);
+    addToast('Catalog duplicated');
+  };
+
   const handleUpdateCatalog = (id, data) => {
     config.updateCatalog(id, data);
     setActiveCatalog(data);
@@ -353,6 +369,7 @@ export function useAppController() {
       handleAddCatalog,
       handleAddPresetCatalog,
       handleDeleteCatalog,
+      handleDuplicateCatalog,
       handleUpdateCatalog,
       handleSwitchConfig: (uid) => (window.location.href = `/?userId=${uid}`),
       handleCreateNewConfig: async () => {

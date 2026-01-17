@@ -1,12 +1,13 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Film, Tv, GripVertical, Trash2 } from 'lucide-react';
+import { Film, Tv, GripVertical, Trash2, Copy } from 'lucide-react';
 
 export function SortableCatalogItem({ 
   catalog, 
   isActive, 
   onSelect, 
-  onDelete 
+  onDelete,
+  onDuplicate
 }) {
   const getCatalogKey = (cat) => String(cat?._id || cat?.id || cat?.name);
   const id = getCatalogKey(catalog);
@@ -50,6 +51,17 @@ export function SortableCatalogItem({
           {...listeners}
         >
           <GripVertical size={16} />
+        </button>
+        <button
+          className="btn btn-ghost btn-icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDuplicate(catalog._id);
+          }}
+          title="Duplicate catalog"
+          type="button"
+        >
+          <Copy size={16} />
         </button>
         <button
           className="btn btn-ghost btn-icon"

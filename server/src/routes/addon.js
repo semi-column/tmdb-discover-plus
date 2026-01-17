@@ -44,11 +44,29 @@ router.get('/:userId/manifest.json', async (req, res) => {
     // Enrich catalogs with dynamic genre choices (if applicable)
     if (config) {
       await enrichManifestWithGenres(manifest, config);
+
+      // Shuffle catalogs if enabled in preferences
+      if (config.preferences?.shuffleCatalogs) {
+        manifest.catalogs = shuffleArray(manifest.catalogs);
+        // Force no-store to ensure re-shuffling on reload
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+        res.set('Surrogate-Control', 'no-store');
+      } else {
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+      }
+    }
+    
+    // Fallback headers if config not loaded (should generally not happen here if resolved)
+    if (!res.headersSent) {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
     }
 
-    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
     res.json(manifest);
   } catch (error) {
     log.error('Manifest error', { error: error.message });

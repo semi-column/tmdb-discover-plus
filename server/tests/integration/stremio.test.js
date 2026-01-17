@@ -191,6 +191,40 @@ export async function run() {
     assert(genreFilter.isRequired === true, 'Genre filter should be required (hidden from board)');
   });
 
+  await runTest(SUITE, 'Shuffle Catalogs preference randomizes order', async () => {
+    // 1. Create config with shuffling enabled and multiple catalogs
+    const catalog1 = createTestCatalog({ id: 'cat-1', name: 'Cat 1', type: 'movie' });
+    const catalog2 = createTestCatalog({ id: 'cat-2', name: 'Cat 2', type: 'movie' });
+    const catalog3 = createTestCatalog({ id: 'cat-3', name: 'Cat 3', type: 'movie' });
+
+    const configRes = await post('/api/config', {
+      catalogs: [catalog1, catalog2, catalog3],
+      preferences: { shuffleCatalogs: true },
+    }, { headers: getAuthHeaders() });
+
+    assertOk(configRes);
+    const testUserId = configRes.data.userId;
+
+    // 2. Fetch manifest multiple times and check for order variation
+    const orders = new Set();
+    const attempts = 5;
+
+    for (let i = 0; i < attempts; i++) {
+      const res = await get(`/${testUserId}/manifest.json`);
+      assertOk(res);
+      const currentOrder = res.data.catalogs.map((c) => c.name).join(',');
+      orders.add(currentOrder);
+
+      // Check headers for no-store on at least one response
+      if (i === 0) {
+        const cacheControl = res.headers['cache-control'] || '';
+        assert(cacheControl.includes('no-store'), 'Should have no-store cache control');
+      }
+    }
+
+    assert(orders.size > 1, 'Catalogs should be shuffled (more than 1 unique order in 5 attempts)');
+  });
+
   // ==========================================
   // Catalog Endpoint Tests
   // ==========================================

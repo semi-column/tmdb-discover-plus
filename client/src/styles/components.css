@@ -670,6 +670,46 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   color: var(--text-muted);
 }
 
+/* Sidebar Controls */
+.sidebar-controls {
+  margin-bottom: 8px;
+}
+
+.sidebar-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.sidebar-checkbox:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--accent-light);
+}
+
+.sidebar-checkbox input {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent-primary);
+  /* For better browser support custom checkbox might be needed but accent-color works for standard needs */
+}
+
+.sidebar-checkbox svg {
+  color: var(--accent-light);
+  opacity: 0.8;
+}
+
 /* Catalog List */
 .catalog-list {
   display: flex;

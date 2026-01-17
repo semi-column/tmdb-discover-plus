@@ -93,6 +93,7 @@ const userConfigSchema = new mongoose.Schema({
   preferences: {
     showAdultContent: { type: Boolean, default: false },
     defaultLanguage: { type: String, default: 'en' },
+    shuffleCatalogs: { type: Boolean, default: false },
   },
   // Timestamps
   createdAt: { type: Date, default: Date.now },
