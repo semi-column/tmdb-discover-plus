@@ -109,6 +109,13 @@ export function useAppController() {
     }
   }, [config.authChecked, config.isAuthenticated, config.userId, loadUserConfigs]);
 
+  // Reset login lock when entering setup mode
+  useEffect(() => {
+    if (isSetup) {
+      loginHandledRef.current = false;
+    }
+  }, [isSetup]);
+
   // Effect: Load config from server if userId in URL
   useEffect(() => {
     if (!urlUserId || !config.authChecked) return;
