@@ -251,6 +251,14 @@ export async function run() {
     assertArray(data.metas, 1, 'Should return superhero movies');
   });
 
+  await runTest(SUITE, 'Keyword filter - multiple keywords (OR logic regression test)', async () => {
+    // 9715 (superhero) AND 9799 (romantic comedy) are very different.
+    // AND logic (previous behavior) would return almost 0 results.
+    // OR logic (new behavior) should return plenty of results.
+    const data = await testPreview({ withKeywords: '9715,9799' });
+    assertArray(data.metas, 5, 'Should return many results (OR logic working)');
+  });
+
   // ==========================================
   // Complex Combinations
   // ==========================================

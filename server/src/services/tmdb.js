@@ -441,7 +441,10 @@ export async function discover(apiKey, options = {}) {
   if (excludeCompanies) params.without_companies = excludeCompanies;
 
   // Keyword filters
-  if (withKeywords) params.with_keywords = withKeywords;
+  if (withKeywords) {
+    // TMDB uses pipe (|) for OR, comma (,) for AND. Default to OR.
+    params.with_keywords = String(withKeywords).replace(/,/g, '|');
+  }
   if (excludeKeywords) params.without_keywords = excludeKeywords;
 
   // Watch provider filters
