@@ -15,8 +15,6 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    // Disable minification temporarily to debug, or use esbuild
-    // which has better handling of TDZ (Temporal Dead Zone) issues
     target: 'es2020',
     rollupOptions: {
       output: {

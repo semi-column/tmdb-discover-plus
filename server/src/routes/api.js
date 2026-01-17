@@ -367,39 +367,12 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
         .filter(Boolean);
     };
 
-    if (filters?.excludeGenres && results?.results && Array.isArray(results.results)) {
-      try {
-        const excludeGenres = normalizeCsvOrArray(filters.excludeGenres).map(String);
-        if (excludeGenres.length > 0) {
-          const excludeSet = new Set(excludeGenres);
-          results.results = results.results.filter((item) => {
-            const ids = (item.genre_ids || (item.genres && item.genres.map((g) => g.id)) || []).map(
-              String
-            );
-            return !ids.some((id) => excludeSet.has(id));
-          });
-        }
-      } catch (err) {
-        log.error('Error applying excludeGenres post-filter', { error: err.message });
-      }
-    }
 
-    const metas = await Promise.all(
-      results.results.slice(0, 20).map(async (item) => {
-        let imdbId = null;
 
-        if (filters?.imdbOnly !== false) {
-          const externalIds = await tmdb.getExternalIds(apiKey, item.id, type);
-          imdbId = externalIds?.imdb_id || null;
-
-          if (filters?.imdbOnly && !imdbId) {
-            return null;
-          }
-        }
-
-        return tmdb.toStremioMeta(item, type, imdbId);
-      })
-    );
+    const metas = results.results.slice(0, 20).map((item) => {
+      // Direct mapping without extra fetching or filtering
+      return tmdb.toStremioMeta(item, type, null);
+    });
 
     const filteredMetas = metas.filter(Boolean);
 

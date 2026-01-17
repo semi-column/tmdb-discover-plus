@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Trash2, Loader, AlertTriangle, FolderOpen, Plus } from 'lucide-react';
+import { useConfirmDelete } from '../hooks/useConfirmDelete';
 
 export function ConfigDropdown({
   configs,
@@ -12,41 +13,21 @@ export function ConfigDropdown({
   onCreateNew,
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(null);
-  const [deleting, setDeleting] = useState(null);
   const dropdownRef = useRef(null);
+
+  const { confirmId, deletingId, requestDelete, reset: resetDelete } = useConfirmDelete(onDeleteConfig);
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
-        setConfirmDelete(null);
+        resetDelete();
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleDelete = async (e, userId) => {
-    e.stopPropagation();
-
-    if (confirmDelete === userId) {
-      // Confirmed, perform delete
-      setDeleting(userId);
-      try {
-        await onDeleteConfig(userId);
-      } finally {
-        setDeleting(null);
-        setConfirmDelete(null);
-      }
-    } else {
-      // First click, ask for confirmation
-      setConfirmDelete(userId);
-      // Auto-clear confirmation after 3 seconds
-      setTimeout(() => setConfirmDelete(null), 3000);
-    }
-  };
+  }, [resetDelete]);
 
   // Get catalog count summary (e.g., "3 catalogs" or "1 catalog")
   const getCatalogCount = (catalogs) => {
@@ -170,25 +151,25 @@ export function ConfigDropdown({
                 </div>
 
                 <button
-                  className={`btn btn-icon config-dropdown-delete ${confirmDelete === config.userId ? 'btn-danger-active' : ''}`}
-                  onClick={(e) => handleDelete(e, config.userId)}
-                  disabled={deleting === config.userId}
+                  className={`btn btn-icon config-dropdown-delete ${confirmId === config.userId ? 'btn-danger-active' : ''}`}
+                  onClick={(e) => requestDelete(config.userId, e)}
+                  disabled={deletingId === config.userId}
                   title={
-                    confirmDelete === config.userId
+                    confirmId === config.userId
                       ? 'Click again to confirm delete'
                       : 'Delete configuration'
                   }
                 >
-                  {deleting === config.userId ? (
+                  {deletingId === config.userId ? (
                     <Loader size={16} className="animate-spin" />
-                  ) : confirmDelete === config.userId ? (
+                  ) : confirmId === config.userId ? (
                     <AlertTriangle size={16} />
                   ) : (
                     <Trash2 size={16} />
                   )}
                 </button>
 
-                {confirmDelete === config.userId && (
+                {confirmId === config.userId && (
                   <div className="config-dropdown-confirm-tooltip">Click again to confirm</div>
                 )}
               </div>

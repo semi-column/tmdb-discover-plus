@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { X, Copy, Check, ExternalLink, Download } from 'lucide-react';
+import { logger } from '../utils/logger';
 
-export function InstallModal({ isOpen, onClose, installUrl, configureUrl }) {
+export function InstallModal({ isOpen, onClose, installUrl }) {
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
@@ -12,7 +13,7 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      logger.error('Failed to copy:', err);
     }
   };
 
@@ -79,18 +80,7 @@ export function InstallModal({ isOpen, onClose, installUrl, configureUrl }) {
             </button>
           </div>
 
-          {/* Configure Link */}
-          <div className="install-link-box">
-            <div className="install-link-label">Configuration URL (Bookmark this!)</div>
-            <div className="install-link">{configureUrl}</div>
-            <button
-              className="btn btn-secondary btn-sm copy-button"
-              onClick={() => handleCopy(configureUrl)}
-            >
-              <Copy size={14} />
-              Copy URL
-            </button>
-          </div>
+
 
           <div
             style={{

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useConfig } from './useConfig';
 import { useTMDB } from './useTMDB';
 import { api } from '../services/api';
+import { logger } from '../utils/logger';
 
 export function useAppController() {
   // Get userId from URL (read once per render)
@@ -65,7 +66,7 @@ export function useAppController() {
       setUserConfigs(configs);
       return configs;
     } catch (err) {
-      console.error('Failed to load user configs:', err);
+      logger.error('Failed to load user configs:', err);
       return [];
     } finally {
       setConfigsLoading(false);
@@ -133,7 +134,7 @@ export function useAppController() {
         setPageLoading(false);
       })
       .catch(async (err) => {
-        console.error('[App] Config load error, attempting fallback:', err);
+        logger.error('[App] Config load error, attempting fallback:', err);
         
         // 404 or 403 means the config in URL is invalid/gone/unauthorized
         // We should fallback to the user's latest config or create a new one
@@ -144,14 +145,14 @@ export function useAppController() {
           if (configs && configs.length > 0) {
             // Switch to latest
             const latest = configs[0];
-            console.log('[App] Falling back to latest config:', latest.userId);
+            logger.info('[App] Falling back to latest config:', latest.userId);
             setPageLoading(true); // Ensure loading stays true
             window.history.replaceState({}, '', `/?userId=${latest.userId}`);
             setUrlUserId(latest.userId);
             // The effect will re-trigger with new ID
           } else {
             // No configs exist, create one
-            console.log('[App] No configs found, creating new one');
+            logger.info('[App] No configs found, creating new one');
             const newConfig = await api.saveConfig({
               tmdbApiKey: config.apiKey,
               catalogs: [],
@@ -164,7 +165,7 @@ export function useAppController() {
             await loadUserConfigs();
           }
         } catch (fallbackErr) {
-          console.error('[App] Fallback failed:', fallbackErr);
+          logger.error('[App] Fallback failed:', fallbackErr);
           addToast('Failed to recover configuration', 'error');
           setPageLoading(false); // Only stop loading if fallback completely failed
         }
@@ -206,7 +207,7 @@ export function useAppController() {
         loadUserConfigs();
       }
     } catch (err) {
-      console.error('Error loading config after login:', err);
+      logger.error('Error loading config after login:', err);
       addToast('Failed to load configuration', 'error');
       loginHandledRef.current = false; // Allow retry
     } finally {
@@ -260,7 +261,7 @@ export function useAppController() {
       setShowInstallModal(true);
       addToast('Configuration saved successfully!');
     } catch (err) {
-      console.error('Error:', err);
+      logger.error('Error:', err);
       addToast(err.message || 'Failed to save configuration', 'error');
     } finally {
       setIsSaving(false);
@@ -302,7 +303,7 @@ export function useAppController() {
       _id: crypto.randomUUID(),
       name: preset.label.replace(/^[^\s]+\s/, ''),
       type,
-      filters: { listType: preset.value, imdbOnly: false },
+      filters: { listType: preset.value },
       enabled: true,
     };
     config.setCatalogs((prev) => [...prev, newCatalog]);

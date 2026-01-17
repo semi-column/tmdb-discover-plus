@@ -16,7 +16,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd }) {
       filters: {
         genres: [],
         sortBy: 'popularity.desc',
-        imdbOnly: false,
+
         voteCountMin: 0,
       },
       enabled: true,

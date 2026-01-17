@@ -9,7 +9,7 @@ import { LabelWithTooltip } from './Tooltip';
  * - Only converts to number and validates on blur/Enter
  * - Escape key cancels edit and restores previous value
  */
-export function RangeSlider({ label, tooltip, min, max, step = 1, value = [min, max], onChange }) {
+export function RangeSlider({ label, min, max, step, value, onChange }) {
   // Extract values for dependency arrays
   const minVal = value[0];
   const maxVal = value[1];
@@ -106,11 +106,7 @@ export function RangeSlider({ label, tooltip, min, max, step = 1, value = [min, 
   return (
     <div className="range-slider">
       <div className="range-slider-header">
-        {tooltip ? (
-          <LabelWithTooltip label={label} tooltip={tooltip} />
-        ) : (
-          <span className="range-slider-label">{label}</span>
-        )}
+        <span className="range-slider-label">{label}</span>
         <div className="range-slider-value-display">
           {/* Min Input */}
           <input

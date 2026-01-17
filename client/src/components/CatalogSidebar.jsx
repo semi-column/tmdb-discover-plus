@@ -2,7 +2,6 @@ import {
   Plus,
   Film,
   Tv,
-  Trash2,
   TrendingUp,
   Flame,
   Calendar,
@@ -11,7 +10,6 @@ import {
   Radio,
   Sparkles,
   ChevronDown,
-  GripVertical,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -26,12 +24,13 @@ import {
 } from '@dnd-kit/core';
 import {
   SortableContext,
-  useSortable,
   arrayMove,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+
+import { useIsMobile } from '../hooks/useIsMobile';
+import { SortableCatalogItem } from './SortableCatalogItem';
 
 // Icons for preset catalog types
 const presetIcons = {
@@ -43,19 +42,6 @@ const presetIcons = {
   on_the_air: Radio,
   top_rated: Star,
   popular: Sparkles,
-};
-
-// Check if we're on mobile
-const useIsMobile = () => {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 1024);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  return isMobile;
 };
 
 export function CatalogSidebar({
@@ -121,64 +107,6 @@ export function CatalogSidebar({
     onReorderCatalogs(reordered);
   };
 
-  const SortableCatalogItem = ({ catalog }) => {
-    const id = getCatalogKey(catalog);
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-      id,
-    });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-    };
-
-    return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        className={`catalog-item ${activeCatalog?._id === catalog._id ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
-        onClick={() => onSelectCatalog(catalog)}
-      >
-        <div className="catalog-item-icon">
-          {catalog.type === 'series' ? <Tv size={20} /> : <Film size={20} />}
-        </div>
-        <div className="catalog-item-info">
-          <div className="catalog-item-name">{catalog.name}</div>
-          <div className="catalog-item-type">
-            {catalog.type === 'series' ? 'TV Shows' : 'Movies'}
-            {catalog.filters?.listType && catalog.filters.listType !== 'discover' && (
-              <span className="catalog-item-badge">Preset</span>
-            )}
-          </div>
-        </div>
-        <div className="catalog-item-actions">
-          <button
-            className="btn btn-ghost btn-icon catalog-drag-handle"
-            type="button"
-            title="Drag to reorder"
-            aria-label="Drag to reorder"
-            onClick={(e) => e.stopPropagation()}
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical size={16} />
-          </button>
-          <button
-            className="btn btn-ghost btn-icon"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteCatalog(catalog._id);
-            }}
-            title="Delete catalog"
-            type="button"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   // Get placeholder text - fallback to first catalog name
   const getPlaceholder = () => {
     if (catalogs.length > 0 && catalogs[0].name) {
@@ -229,7 +157,13 @@ export function CatalogSidebar({
               strategy={verticalListSortingStrategy}
             >
               {catalogs.map((catalog) => (
-                <SortableCatalogItem key={getCatalogKey(catalog)} catalog={catalog} />
+                <SortableCatalogItem 
+                  key={getCatalogKey(catalog)} 
+                  catalog={catalog} 
+                  isActive={activeCatalog?._id === catalog._id}
+                  onSelect={onSelectCatalog}
+                  onDelete={onDeleteCatalog}
+                />
               ))}
             </SortableContext>
           </DndContext>

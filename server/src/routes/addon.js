@@ -80,42 +80,7 @@ function extractGenreIds(item) {
   return ids.map(String);
 }
 
-function applyGenrePostFilter(items, filters) {
-  const include = parseIdArray(filters?.genres);
-  const exclude = parseIdArray(filters?.excludeGenres);
-  const matchMode = filters?.genreMatchMode === 'all' ? 'all' : 'any';
 
-  if (include.length === 0 && exclude.length === 0) return items;
-
-  const includeSet = new Set(include.map(String));
-  const excludeSet = new Set(exclude.map(String));
-
-  return (items || []).filter((item) => {
-    const itemIds = extractGenreIds(item);
-
-    if (excludeSet.size > 0) {
-      for (const gid of itemIds) {
-        if (excludeSet.has(String(gid))) return false;
-      }
-    }
-
-    if (includeSet.size > 0) {
-      if (matchMode === 'all') {
-        for (const gid of includeSet) {
-          if (!itemIds.includes(String(gid))) return false;
-        }
-        return true;
-      }
-
-      for (const gid of itemIds) {
-        if (includeSet.has(String(gid))) return true;
-      }
-      return false;
-    }
-
-    return true;
-  });
-}
 
 /**
  * Catalog handler - shared logic for both route formats
@@ -141,10 +106,19 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       return res.json({ metas: [] });
     }
 
-    const catalogConfig = config.catalogs.find((c) => {
+    let catalogConfig = config.catalogs.find((c) => {
       const id = `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
       return id === catalogId;
     });
+
+    // Handle dedicated search catalogs
+    if (!catalogConfig && (catalogId === 'tmdb-search-movie' || catalogId === 'tmdb-search-series')) {
+      catalogConfig = {
+        name: 'TMDB Search',
+        type: catalogId === 'tmdb-search-movie' ? 'movie' : 'series',
+        filters: {} // Use defaults
+      };
+    }
 
     if (!catalogConfig) {
       log.debug('Catalog not found', { catalogId });
@@ -291,26 +265,12 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       }
     }
 
-    const needsGenrePostFilter = !!search || (listType && listType !== 'discover');
-    const rawItems = result?.results || [];
-    const allItems = needsGenrePostFilter
-      ? applyGenrePostFilter(rawItems, resolvedFilters)
-      : rawItems;
+    const allItems = result?.results || [];
 
-    const metas = await Promise.all(
-      allItems.map(async (item) => {
-        let imdbId = null;
-
-        const externalIds = await tmdb.getExternalIds(apiKey, item.id, type);
-        imdbId = externalIds?.imdb_id || null;
-
-        if (catalogConfig.filters?.imdbOnly && !imdbId) {
-          return null;
-        }
-
-        return tmdb.toStremioMeta(item, type, imdbId);
-      })
-    );
+    const metas = allItems.map((item) => {
+      // Direct mapping without extra fetching or filtering
+      return tmdb.toStremioMeta(item, type, null);
+    });
 
     const filteredMetas = metas.filter((m) => m !== null);
 

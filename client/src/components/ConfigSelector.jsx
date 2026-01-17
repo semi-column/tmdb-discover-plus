@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { FolderOpen, Plus, Trash2, Download, Edit3, Loader, AlertTriangle } from 'lucide-react';
+import { useConfirmDelete } from '../hooks/useConfirmDelete';
 
 export function ConfigSelector({
   configs,
@@ -9,28 +9,7 @@ export function ConfigSelector({
   onDeleteConfig,
   onInstallConfig,
 }) {
-  const [confirmDelete, setConfirmDelete] = useState(null);
-  const [deleting, setDeleting] = useState(null);
-
-  const handleDelete = async (config, e) => {
-    e.stopPropagation();
-
-    if (confirmDelete === config.userId) {
-      // Confirmed, perform delete
-      setDeleting(config.userId);
-      try {
-        await onDeleteConfig(config.userId);
-      } finally {
-        setDeleting(null);
-        setConfirmDelete(null);
-      }
-    } else {
-      // First click, ask for confirmation
-      setConfirmDelete(config.userId);
-      // Auto-clear confirmation after 3 seconds
-      setTimeout(() => setConfirmDelete(null), 3000);
-    }
-  };
+  const { confirmId, deletingId, requestDelete } = useConfirmDelete(onDeleteConfig);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Unknown';
@@ -126,18 +105,18 @@ export function ConfigSelector({
                       <Download size={18} />
                     </button>
                     <button
-                      className={`btn btn-icon ${confirmDelete === config.userId ? 'btn-danger' : 'btn-ghost'}`}
-                      onClick={(e) => handleDelete(config, e)}
-                      disabled={deleting === config.userId}
+                      className={`btn btn-icon ${confirmId === config.userId ? 'btn-danger' : 'btn-ghost'}`}
+                      onClick={(e) => requestDelete(config.userId, e)}
+                      disabled={deletingId === config.userId}
                       title={
-                        confirmDelete === config.userId
+                        confirmId === config.userId
                           ? 'Click again to confirm delete'
                           : 'Delete configuration'
                       }
                     >
-                      {deleting === config.userId ? (
+                      {deletingId === config.userId ? (
                         <Loader size={18} className="animate-spin" />
-                      ) : confirmDelete === config.userId ? (
+                      ) : confirmId === config.userId ? (
                         <AlertTriangle size={18} />
                       ) : (
                         <Trash2 size={18} />
@@ -146,7 +125,7 @@ export function ConfigSelector({
                   </div>
                 </div>
 
-                {confirmDelete === config.userId && (
+                {confirmId === config.userId && (
                   <div className="config-card-confirm">
                     <AlertTriangle size={14} />
                     <span>Click delete again to confirm</span>

@@ -134,10 +134,15 @@ export async function run() {
     const catalog = res.data.catalogs[0];
     assertArray(catalog.extra, 1, 'Catalog should have extra properties');
 
-    // Should support skip and search
+    // Should support skip pagination on regular catalogs
     const extraNames = catalog.extra.map((e) => e.name);
     assert(extraNames.includes('skip'), 'Should support skip pagination');
-    assert(extraNames.includes('search'), 'Should support search');
+    
+    // Check that AT LEAST one catalog supports search (dedicated search catalog)
+    const searchCatalog = res.data.catalogs.find(c => 
+      c.extra && c.extra.some(e => e.name === 'search')
+    );
+    assert(searchCatalog, 'Should have a dedicated search catalog');
   });
 
   await runTest(SUITE, 'Manifest has behaviorHints.configurable', async () => {

@@ -797,6 +797,8 @@ export function CatalogEditor({
             <button
               className={`type-btn ${isMovie ? 'active' : ''}`}
               onClick={() => handleTypeChange('movie')}
+              disabled={!supportsFullFilters}
+              style={!supportsFullFilters ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
             >
               <Film size={18} />
               Movies
@@ -804,6 +806,8 @@ export function CatalogEditor({
             <button
               className={`type-btn ${!isMovie ? 'active' : ''}`}
               onClick={() => handleTypeChange('series')}
+              disabled={!supportsFullFilters}
+              style={!supportsFullFilters ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
             >
               <Tv size={18} />
               TV Shows
@@ -1375,34 +1379,19 @@ export function CatalogEditor({
             </FilterSection>
           )}
 
-          {/* Options Section */}
-          <div className="filter-section">
-            <button className="filter-section-header" onClick={() => toggleSection('options')}>
-              <Settings size={18} />
-              <div className="filter-section-title-group">
-                <h4 className="filter-section-title">Options</h4>
-              </div>
-              {expandedSections.options ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-            {expandedSections.options && (
-              <div className="filter-section-content">
-                <div className="checkbox-grid">
-                  <label
-                    className="checkbox-label-row"
-                    onClick={() =>
-                      handleFiltersChange('imdbOnly', !localCatalog?.filters?.imdbOnly)
-                    }
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className={`checkbox ${localCatalog?.filters?.imdbOnly ? 'checked' : ''}`}>
-                      {localCatalog?.filters?.imdbOnly && <Check size={14} />}
-                    </div>
-                    <LabelWithTooltip
-                      label="Only show items with IMDB IDs"
-                      tooltip="Filter to only content that has an IMDB entry. Ensures compatibility with addons that require IMDB IDs."
-                    />
-                  </label>
-                  {supportsFullFilters && (
+          {supportsFullFilters ? (
+            /* Options Section */
+            <div className="filter-section">
+              <button className="filter-section-header" onClick={() => toggleSection('options')}>
+                <Settings size={18} />
+                <div className="filter-section-title-group">
+                  <h4 className="filter-section-title">Options</h4>
+                </div>
+                {expandedSections.options ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              </button>
+              {expandedSections.options && (
+                <div className="filter-section-content">
+                  <div className="checkbox-grid">
                     <label
                       className="checkbox-label-row"
                       onClick={() =>
@@ -1420,11 +1409,21 @@ export function CatalogEditor({
                         tooltip="Include adult/18+ rated content in results. Disabled by default."
                       />
                     </label>
-                  )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+             <div
+              className="flex items-center gap-3 p-4 mt-6 rounded-lg border border-white/5 bg-white/5"
+              style={{ justifyContent: 'center' }}
+            >
+              <Sparkles size={16} className="text-indigo-400" />
+              <span className="text-gray-300 text-sm font-medium">
+                This is a curated preset from TMDB and cannot be modified.
+              </span>
+            </div>
+          )}
 
           {/* Mobile Preview Button - at end of filters for easy access */}
           <div className="mobile-preview-btn-container">

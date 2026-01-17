@@ -162,7 +162,7 @@ export function StreamFilters({
             </div>
           </>
         ) : (
-          <div className="info-box mt-2">
+          <div className="filter-hint mt-2">
             Choose a region above to see streaming services available in that area
           </div>
         )}

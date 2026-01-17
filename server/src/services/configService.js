@@ -33,13 +33,13 @@ export function getApiKeyFromConfig(config) {
  * Get user config (from DB or memory)
  */
 export async function getUserConfig(userId, overrideApiKey = null) {
-  log.info('Getting user config', { userId, dbConnected: isConnected() });
+  log.debug('Getting user config', { userId, dbConnected: isConnected() });
 
   if (isConnected()) {
     try {
-      log.info('Querying MongoDB for userId', { userId, userIdType: typeof userId });
+      log.debug('Querying MongoDB for userId', { userId, userIdType: typeof userId });
       const config = await UserConfig.findOne({ userId }).lean();
-      log.info('MongoDB query result', {
+      log.debug('MongoDB query result', {
         found: !!config,
         userId: config?.userId,
         catalogCount: config?.catalogs?.length || 0,
@@ -176,7 +176,7 @@ export async function saveUserConfig(config) {
  * @returns {Promise<Array>} - Array of configs
  */
 export async function getConfigsByApiKey(apiKey, apiKeyId = null) {
-  log.info('Getting configs by apiKey/apiKeyId', { hasApiKey: !!apiKey, hasApiKeyId: !!apiKeyId, dbConnected: isConnected() });
+  log.debug('Getting configs by apiKey/apiKeyId', { hasApiKey: !!apiKey, hasApiKeyId: !!apiKeyId, dbConnected: isConnected() });
 
   if (!apiKey && !apiKeyId) return [];
 

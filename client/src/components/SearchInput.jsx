@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import axios from 'axios';
 import { Search, X, Loader, User, Building, Tag } from 'lucide-react';
+import { logger } from '../utils/logger';
 
 export function SearchInput({
   onSearch,
@@ -39,7 +41,9 @@ export function SearchInput({
         setResults(data || []);
         setIsOpen(true);
       } catch (err) {
-        console.error('Search error:', err);
+        if (!axios.isCancel(err)) {
+          logger.error('Search error:', err);
+        }
         setResults([]);
       } finally {
         setLoading(false);

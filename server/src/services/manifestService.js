@@ -28,8 +28,22 @@ export function buildManifest(userConfig, baseUrl) {
       type: catalog.type === 'series' ? 'series' : 'movie',
       name: catalog.name,
       pageSize: TMDB_PAGE_SIZE,
-      extra: [{ name: 'skip' }, { name: 'search' }],
+      extra: [{ name: 'skip' }],
     }));
+
+  // Add dedicated search catalogs (hidden from board, used for global search)
+  catalogs.push({
+    id: 'tmdb-search-movie',
+    type: 'movie',
+    name: 'TMDB Search',
+    extra: [{ name: 'search', isRequired: true }],
+  });
+  catalogs.push({
+    id: 'tmdb-search-series',
+    type: 'series',
+    name: 'TMDB Search',
+    extra: [{ name: 'search', isRequired: true }],
+  });
 
   return {
     id: ADDON_ID,
