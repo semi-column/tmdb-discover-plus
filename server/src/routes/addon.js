@@ -279,8 +279,8 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
 
     res.json({
       metas: filteredMetas,
-      cacheMaxAge: 300,
-      staleRevalidate: 600,
+      cacheMaxAge: randomize ? 0 : 300,
+      staleRevalidate: randomize ? 0 : 600,
     });
   } catch (error) {
     log.error('Catalog error', { error: error.message });
