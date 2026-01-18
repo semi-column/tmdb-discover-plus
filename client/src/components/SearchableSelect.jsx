@@ -111,6 +111,29 @@ export function SearchableSelect({
     }
   };
 
+  const handleTriggerKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleOpenToggle();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!isOpen) {
+        setIsOpen(true);
+        setHighlightedIndex(0);
+      } else {
+        setHighlightedIndex((prev) => (prev < allNavOptions.length - 1 ? prev + 1 : prev));
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!isOpen) {
+        setIsOpen(true);
+        setHighlightedIndex(allNavOptions.length - 1);
+      } else {
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : prev));
+      }
+    }
+  };
+
   return (
     <div className={`searchable-select ${isOpen ? 'open' : ''}`} ref={containerRef}>
       <div
@@ -120,7 +143,7 @@ export function SearchableSelect({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && handleOpenToggle()}
+        onKeyDown={handleTriggerKeyDown}
       >
         <span className={displayValue ? '' : 'placeholder'}>{displayValue || placeholder}</span>
         <div className="searchable-select-icons">
