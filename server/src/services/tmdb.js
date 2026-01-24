@@ -576,14 +576,99 @@ export async function getDetails(apiKey, tmdbId, type = 'movie') {
 }
 
 /**
+ * Get season details including episodes
+ * @param {string} apiKey - TMDB API key
+ * @param {number} tmdbId - TMDB TV show ID
+ * @param {number} seasonNumber - Season number
+ * @param {Object} options - Optional parameters
+ * @returns {Object} Season details with episodes
+ */
+export async function getSeasonDetails(apiKey, tmdbId, seasonNumber, options = {}) {
+  const languageParam = options?.displayLanguage || options?.language;
+  const cacheKey = `season_${tmdbId}_${seasonNumber}_${languageParam || 'en'}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const params = {};
+  if (languageParam) params.language = languageParam;
+
+  try {
+    const data = await tmdbFetch(`/tv/${tmdbId}/season/${seasonNumber}`, apiKey, params);
+    cache.set(cacheKey, data, 86400); // Cache for 24 hours
+    return data;
+  } catch (error) {
+    log.warn('Failed to fetch season details', { tmdbId, seasonNumber, error: error.message });
+    return null;
+  }
+}
+
+/**
+ * Get all episodes for a TV series
+ * @param {string} apiKey - TMDB API key
+ * @param {number} tmdbId - TMDB TV show ID
+ * @param {Object} details - TV show details (must include seasons array)
+ * @param {Object} options - Optional parameters
+ * @returns {Array} Array of Stremio Video objects
+ */
+export async function getSeriesEpisodes(apiKey, tmdbId, details, options = {}) {
+  if (!details?.seasons || !Array.isArray(details.seasons)) {
+    return [];
+  }
+
+  const imdbId = details?.external_ids?.imdb_id || null;
+  const videos = [];
+
+  // Filter out specials (season 0) and get regular seasons
+  const regularSeasons = details.seasons.filter(s => s.season_number > 0);
+
+  // Fetch all seasons in parallel (with reasonable limit)
+  const seasonPromises = regularSeasons.slice(0, 50).map(async (season) => {
+    const seasonData = await getSeasonDetails(apiKey, tmdbId, season.season_number, options);
+    if (!seasonData?.episodes) return [];
+
+    return seasonData.episodes.map(ep => {
+      // Build episode ID: prefer IMDb format for Cinemeta/stream compatibility
+      const episodeId = imdbId
+        ? `${imdbId}:${ep.season_number}:${ep.episode_number}`
+        : `tmdb:${tmdbId}:${ep.season_number}:${ep.episode_number}`;
+
+      return {
+        id: episodeId,
+        season: ep.season_number,
+        episode: ep.episode_number,
+        title: ep.name || `Episode ${ep.episode_number}`,
+        released: ep.air_date ? new Date(ep.air_date).toISOString() : undefined,
+        overview: ep.overview || undefined,
+        thumbnail: ep.still_path ? `${TMDB_IMAGE_BASE}/w300${ep.still_path}` : undefined,
+      };
+    });
+  });
+
+  const seasonResults = await Promise.all(seasonPromises);
+
+  // Flatten and sort by season/episode
+  for (const episodes of seasonResults) {
+    videos.push(...episodes);
+  }
+
+  videos.sort((a, b) => {
+    if (a.season !== b.season) return a.season - b.season;
+    return a.episode - b.episode;
+  });
+
+  return videos;
+}
+
+/**
  * Convert TMDB details to a full Stremio Meta Object.
  * @param {Object} details - TMDB details object
  * @param {string} type - Content type ('movie' or 'series')
  * @param {string|null} imdbId - IMDb ID if available
  * @param {Object|null} posterOptions - Optional poster service config { apiKey, service }
+ * @param {Array|null} videos - Optional array of Video objects for series episodes
  * @returns {Object} Stremio meta object
  */
-export function toStremioFullMeta(details, type, imdbId = null, posterOptions = null) {
+export function toStremioFullMeta(details, type, imdbId = null, posterOptions = null, videos = null) {
   if (!details) return {};
   const isMovie = type === 'movie';
   const title = isMovie ? details.title : details.name;
@@ -647,7 +732,7 @@ export function toStremioFullMeta(details, type, imdbId = null, posterOptions = 
       ? details.images.logos.find((l) => l?.file_path)?.file_path
       : null;
 
-  return {
+  const meta = {
     id: effectiveImdbId || `tmdb:${details.id}`,
     tmdbId: details.id,
     imdbId: effectiveImdbId,
@@ -668,6 +753,13 @@ export function toStremioFullMeta(details, type, imdbId = null, posterOptions = 
     country: Array.isArray(details.origin_country) ? details.origin_country.join(', ') : undefined,
     released: releaseDate ? new Date(releaseDate).toISOString() : undefined,
   };
+
+  // Add videos (episodes) for series
+  if (!isMovie && Array.isArray(videos) && videos.length > 0) {
+    meta.videos = videos;
+  }
+
+  return meta;
 }
 
 /**

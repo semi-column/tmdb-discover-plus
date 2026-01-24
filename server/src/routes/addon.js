@@ -356,7 +356,14 @@ async function handleMetaRequest(userId, type, id, extra, res) {
     const detailsImdb = details?.external_ids?.imdb_id || null;
     imdbId = imdbId || detailsImdb;
 
-    const meta = tmdb.toStremioFullMeta(details, type, imdbId, posterOptions);
+    // Fetch episodes for series
+    let videos = null;
+    if (type === 'series') {
+      videos = await tmdb.getSeriesEpisodes(apiKey, tmdbId, details, { language });
+      log.debug('Fetched series episodes', { tmdbId, episodeCount: videos?.length || 0 });
+    }
+
+    const meta = tmdb.toStremioFullMeta(details, type, imdbId, posterOptions, videos);
 
     res.json({
       meta,
