@@ -906,13 +906,9 @@ export function toStremioFullMeta(details, type, imdbId = null, requestedId = nu
     });
     if (enhancedPoster) poster = enhancedPoster;
 
-    const enhancedBackdrop = generateBackdropUrl({
-      ...posterOptions,
-      tmdbId: details.id,
-      type,
-      imdbId: effectiveImdbId,
-    });
-    if (enhancedBackdrop) background = enhancedBackdrop;
+    // Backgrounds: Always use TMDB original backdrops. RPDB backgrounds are often low res or broken.
+    // const enhancedBackdrop = generateBackdropUrl({ ... });
+    // if (enhancedBackdrop) background = enhancedBackdrop;
   }
 
   const logo =
@@ -921,7 +917,7 @@ export function toStremioFullMeta(details, type, imdbId = null, requestedId = nu
       : null;
 
   const meta = {
-    id: requestedId || effectiveImdbId || `tmdb:${details.id}`,
+    id: effectiveImdbId || requestedId || `tmdb:${details.id}`,
     tmdbId: details.id,
     imdbId: effectiveImdbId,
     imdb_id: effectiveImdbId,
@@ -1026,13 +1022,9 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null) {
     });
     if (enhancedPoster) poster = enhancedPoster;
 
-    const enhancedBackdrop = generateBackdropUrl({
-      ...posterOptions,
-      tmdbId: item.id,
-      type,
-      imdbId,
-    });
-    if (enhancedBackdrop) background = enhancedBackdrop;
+    // Backgrounds: Always use TMDB original backdrops.
+    // const enhancedBackdrop = generateBackdropUrl({ ... });
+    // if (enhancedBackdrop) background = enhancedBackdrop;
   }
 
   return {
