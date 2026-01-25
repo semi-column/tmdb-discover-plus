@@ -344,15 +344,46 @@ export async function run() {
     assert(res.data.meta.name && res.data.meta.name.length > 0, 'Should return a valid title');
     assert(res.data.meta.id, 'Should have an id');
     
+    // Verify final parity fields
+    assertString(res.data.meta.year, 'year');
+    assert(res.data.meta.year.length === 4, 'year should be 4 digits');
+    assert(res.data.meta.imdb_id === imdbId, 'imdb_id (snake_case) should match');
+    assertString(res.data.meta.slug, 'slug');
+    assert(res.data.meta.slug.startsWith('movie/'), 'slug should start with movie/');
+    assert(res.data.meta.slug.endsWith(imdbId), 'slug should end with ID');
+    
+    if (res.data.meta.director) {
+        assertString(res.data.meta.director, 'director should be a string');
+    }
+    if (res.data.meta.writer) {
+        assertString(res.data.meta.writer, 'writer should be a string');
+    }
+
     // Verify enhanced metadata
     if (res.data.meta.trailer) {
         assert(res.data.meta.trailer.startsWith('yt:'), 'Trailer should be a YouTube ID (yt:)');
+    }
+    
+    if (res.data.meta.trailerStreams) {
+        assertArray(res.data.meta.trailerStreams, 1, 'Should have trailerStreams');
+        assert(res.data.meta.trailerStreams[0].ytId, 'TrailerStream should have ytId');
+    }
+
+    if (res.data.meta.app_extras) {
+        assert(res.data.meta.app_extras.cast, 'Should have app_extras.cast');
+        assert(res.data.meta.app_extras.directors, 'Should have app_extras.directors');
     }
     
     if (res.data.meta.links) {
         assertArray(res.data.meta.links, 1, 'Should have links');
         const imdbLink = res.data.meta.links.find(l => l.category === 'imdb');
         assert(imdbLink, 'Should have IMDb link');
+        
+        const genreLink = res.data.meta.links.find(l => l.category === 'Genres');
+        assert(genreLink, 'Should have Genres links');
+
+        const castLink = res.data.meta.links.find(l => l.category === 'Cast');
+        assert(castLink, 'Should have Cast links');
     }
 
     if (res.data.meta.behaviorHints) {

@@ -639,7 +639,8 @@ export async function getSeriesEpisodes(apiKey, tmdbId, details, options = {}) {
         title: ep.name || `Episode ${ep.episode_number}`,
         released: ep.air_date ? new Date(ep.air_date).toISOString() : undefined,
         overview: ep.overview || undefined,
-        thumbnail: ep.still_path ? `${TMDB_IMAGE_BASE}/w300${ep.still_path}` : undefined,
+        thumbnail: ep.still_path ? `${TMDB_IMAGE_BASE}/w500${ep.still_path}` : undefined,
+        runtime: formatRuntime(ep.runtime),
       };
     });
   });
@@ -657,6 +658,33 @@ export async function getSeriesEpisodes(apiKey, tmdbId, details, options = {}) {
   });
 
   return videos;
+}
+
+/**
+ * Format minutes into "2h47min" or "58min"
+ * @param {number|null} minutes
+ * @returns {string|undefined}
+ */
+export function formatRuntime(minutes) {
+  if (!minutes) return undefined;
+  if (minutes < 60) return `${minutes}min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h${m}min` : `${h}h`;
+}
+
+/**
+ * Generate a Stremio-style slug
+ * @param {string} type
+ * @param {string} title
+ * @param {string} id
+ * @returns {string}
+ */
+export function generateSlug(type, title, id) {
+  const safeTitle = (title || '')
+    .toLowerCase()
+    .replace(/ /g, '-');
+  return `${type}/${safeTitle}-${id}`;
 }
 
 /**
@@ -721,9 +749,14 @@ export function toStremioFullMeta(details, type, imdbId = null, requestedId = nu
 
   // Format Release Info (Year + Rating)
   let releaseInfo = year;
+  if (!isMovie && (status === 'Returning Series' || status === 'In Production' || !details.last_air_date)) {
+      releaseInfo = `${year}-`;
+  }
+
   if (certification) {
       releaseInfo = releaseInfo ? `${releaseInfo} • ${certification}` : certification;
-  } else if (status) {
+  } else if (status && isMovie) {
+      // For series we usually prefer the year range or year- format
       releaseInfo = releaseInfo ? `${releaseInfo} • ${status}` : status;
   }
 
@@ -742,29 +775,102 @@ export function toStremioFullMeta(details, type, imdbId = null, requestedId = nu
 
   // Links
   const links = [];
+  const displayRating = typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null;
   if (effectiveImdbId) {
     links.push({
-      name: 'IMDb',
+      name: displayRating || 'IMDb',
       category: 'imdb',
       url: `https://www.imdb.com/title/${effectiveImdbId}/`,
     });
   }
-  links.push({
-    name: 'TMDB',
-    category: 'tmdb',
-    url: `https://www.themoviedb.org/${type}/${details.id}`,
+
+  // Genre Links
+  genres.forEach(genre => {
+    links.push({
+      name: genre,
+      category: 'Genres',
+      url: `stremio:///search?search=${encodeURIComponent(genre)}`,
+    });
   });
-  if (details.homepage) {
-     links.push({
-        name: 'Website',
-        category: 'website',
-        url: details.homepage,
-     });
+
+  // Cast Links
+  cast.slice(0, 5).forEach(name => {
+    links.push({
+      name: name,
+      category: 'Cast',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
+  });
+
+  // Director Links
+  directors.forEach(name => {
+    links.push({
+      name: name,
+      category: 'Directors',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
+  });
+
+  // Crew strings
+  const writers = crew.filter(p => ['Writer', 'Screenplay', 'Author'].includes(p.job));
+  const writerNames = writers.map(p => p.name);
+  const writerString = writerNames.join(', ');
+  const directorString = directors.join(', ');
+
+  // Writer Links
+  writerNames.forEach(name => {
+    links.push({
+      name: name,
+      category: 'Writers',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
+  });
+
+  // Share Link
+  const slugTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  links.push({
+    name: title,
+    category: 'share',
+    url: `https://www.strem.io/s/${type}/${slugTitle}-${details.id}`
+  });
+
+  // Trailer Streams
+  const trailerStreams = [];
+  if (details.videos?.results) {
+    details.videos.results
+      .filter(v => v.site === 'YouTube' && v.type === 'Trailer')
+      .forEach(v => {
+        trailerStreams.push({
+          title: v.name,
+          ytId: v.key,
+          lang: v.iso_639_1 || 'en'
+        });
+      });
   }
+
+  // app_extras
+  const app_extras = {
+    cast: Array.isArray(credits.cast) ? credits.cast.slice(0, 15).map(p => ({
+      name: p.name,
+      character: p.character,
+      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w276_and_h350_face${p.profile_path}` : null
+    })) : [],
+    directors: crew.filter(p => p.job === 'Director').map(p => ({
+      name: p.name,
+      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null
+    })),
+    writers: writers.map(p => ({
+      name: p.name,
+      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null
+    })),
+    seasonPosters: Array.isArray(details.seasons) ? details.seasons.map(s => s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null).filter(Boolean) : [],
+    releaseDates: details.release_dates || details.content_ratings || null,
+    certification: certification
+  };
 
   /* behaviorHints */
   const behaviorHints = {
-    defaultVideoId: isMovie ? effectiveImdbId || `tmdb:${details.id}` : undefined,
+    defaultVideoId: isMovie ? effectiveImdbId || `tmdb:${details.id}` : null,
     hasScheduledVideos: !isMovie && (status === 'Returning Series' || status === 'In Production'),
   };
 
@@ -799,25 +905,31 @@ export function toStremioFullMeta(details, type, imdbId = null, requestedId = nu
     id: requestedId || effectiveImdbId || `tmdb:${details.id}`,
     tmdbId: details.id,
     imdbId: effectiveImdbId,
+    imdb_id: effectiveImdbId,
     type: type === 'series' ? 'series' : 'movie',
     name: title,
+    slug: generateSlug(type === 'series' ? 'series' : 'movie', title, effectiveImdbId || `tmdb:${details.id}`),
     poster,
     posterShape: 'poster',
     background,
     fanart: background, // Compatibility alias
     logo: logo ? `${TMDB_IMAGE_BASE}/w300${logo}` : undefined,
     description: details.overview || '',
+    year: year || undefined,
     releaseInfo,
     imdbRating: typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null,
     genres,
     cast: cast.length > 0 ? cast : undefined,
-    director: directors.length > 0 ? directors : undefined,
-    runtime: runtimeMin ? `${runtimeMin}m` : undefined,
+    director: directorString || undefined,
+    writer: writerString || undefined,
+    runtime: formatRuntime(runtimeMin),
     language: details.original_language || undefined,
     country: Array.isArray(details.origin_country) ? details.origin_country.join(', ') : undefined,
     released: releaseDate ? new Date(releaseDate).toISOString() : undefined,
     links: links.length > 0 ? links : undefined,
     trailer: trailer || undefined,
+    trailerStreams: trailerStreams.length > 0 ? trailerStreams : undefined,
+    app_extras,
     behaviorHints,
     status: status || undefined,
   };
