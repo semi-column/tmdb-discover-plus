@@ -1,3 +1,5 @@
+name: release-please
+
 on:
   push:
     branches:
@@ -7,17 +9,75 @@ permissions:
   contents: write
   pull-requests: write
 
-name: release-please
-
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
-          # This assumes you have a single release path '.'.
-          # The config-file and manifest-file ensure we track it correctly
-          # and update sub-packages via extra-files.
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    name: Deploy to BeamUp
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd server && npm ci
+          cd ../client && npm ci
+
+      - name: Build client
+        run: cd client && npm run build
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Add built files to deploy commit
+        run: |
+          git add -f client/dist/
+          git commit -m "Build for deployment [skip ci]" --allow-empty
+
+      - name: Setup SSH for BeamUp
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BEAMUP_SSH_KEY }}" > ~/.ssh/beamup_key
+          chmod 600 ~/.ssh/beamup_key
+          ssh-keyscan -H a.baby-beamup.club >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy to BeamUp
+        env:
+          GIT_SSH_COMMAND: 'ssh -i ~/.ssh/beamup_key -o StrictHostKeyChecking=no'
+        run: |
+          git remote add beamup dokku@a.baby-beamup.club:84f50d1c22e7-tmdb-discover-plus || true
+          git push beamup HEAD:main --force
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** http://84f50d1c22e7-tmdb-discover-plus.baby-beamup.club/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
