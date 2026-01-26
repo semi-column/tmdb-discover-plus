@@ -63,7 +63,7 @@ Visit the public instance at `https://tmdb-discover-plus.beamup.dev` and:
 
 ### Docker (Recommended)
 
-The easiest way to self-host TMDB Discover+:
+The easiest way to self-host TMDB Discover+ with full persistence and caching:
 
 ```bash
 # Clone the repository
@@ -73,7 +73,7 @@ cd tmdb-discover-plus
 # Copy environment file
 cp .env.example .env
 
-# Edit .env with your settings (optional - MongoDB URI for persistence)
+# Edit .env to choose your database (Postgres/Mongo) and cache (Redis/Memory)
 nano .env
 
 # Build and run with Docker Compose
@@ -84,12 +84,15 @@ The addon will be available at `http://localhost:7000`
 
 #### Docker Environment Variables
 
-| Variable      | Description                           | Default                 |
-| ------------- | ------------------------------------- | ----------------------- |
-| `PORT`        | Server port                           | `7000`                  |
-| `MONGODB_URI` | MongoDB connection string             | (none - uses in-memory) |
-| `LOG_LEVEL`   | Logging level (debug/info/warn/error) | `info`                  |
-| `CORS_ORIGIN` | Allowed CORS origins                  | `*`                     |
+| Variable          | Description                                     | Default               |
+| ----------------- | ----------------------------------------------- | --------------------- |
+| `PORT`            | Server port                                     | `7000`                |
+| `DATABASE_DRIVER` | Storage backend (`postgres`, `mongo`, `memory`) | `postgres`            |
+| `POSTGRES_URI`    | Postgres connection URL                         | (internal docker url) |
+| `MONGODB_URI`     | MongoDB connection URL                          | (internal docker url) |
+| `CACHE_DRIVER`    | Cache backend (`redis`, `memory`)               | `redis`               |
+| `REDIS_URL`       | Redis connection URL                            | `redis://redis:6379`  |
+| `LOG_LEVEL`       | Logging level (debug/info/warn/error)           | `info`                |
 
 ### Manual Installation
 
@@ -97,7 +100,8 @@ The addon will be available at `http://localhost:7000`
 
 - Node.js 18+
 - npm or yarn
-- MongoDB (optional, for persistence)
+- Postgres or MongoDB (Recommended for persistence)
+- Redis (Optional for caching)
 
 #### Steps
 
@@ -111,7 +115,7 @@ npm run install:all
 
 # Copy and configure environment
 cp .env.example .env
-# Edit .env with your MongoDB URI if desired
+# Edit .env to configure your DB and Cache connections
 
 # Build the frontend
 npm run build
@@ -165,18 +169,19 @@ location / {
 Create a `.env` file from `.env.example`:
 
 ```bash
-# Required for persistent storage
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/tmdb-discover-plus
+# Database Configuration
+DATABASE_DRIVER=postgres
+POSTGRES_URI=postgres://user:pass@localhost:5432/tmdb_discover
+# MONGODB_URI=mongodb+srv://...
 
-# Optional settings
+# Cache Configuration
+CACHE_DRIVER=redis
+REDIS_URL=redis://localhost:6379
+
+# Server Settings
 PORT=7000
 LOG_LEVEL=info
 CORS_ORIGIN=*
-
-# Debug settings (development only)
-# DEBUG_TMDB=1
-# DISABLE_TLS_VERIFY=true
-# DISABLE_RATE_LIMIT=true
 ```
 
 ### Filter Options

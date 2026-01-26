@@ -12,7 +12,7 @@ services:
   tmdb-discover-plus:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.docker
     container_name: tmdb-discover-plus
     restart: unless-stopped
     ports:
@@ -21,31 +21,72 @@ services:
       - NODE_ENV=production
       - PORT=7000
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/tmdb-discover-plus}
+      - POSTGRES_URI=${POSTGRES_URI}
+      - DATABASE_DRIVER=${DATABASE_DRIVER}
+      - CACHE_DRIVER=${CACHE_DRIVER}
+      - REDIS_URL=redis://redis:6379
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
     healthcheck:
       test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:7000/health']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-    # Uncomment to use with local MongoDB
-    # depends_on:
-    #   - mongodb
+    depends_on:
+      - postgres
+      - redis
+      - mongo
 
-  # Optional: Local MongoDB for development/testing
-  # Uncomment the following to run MongoDB locally
-  # mongodb:
-  #   image: mongo:7
-  #   container_name: tmdb-discover-mongodb
-  #   restart: unless-stopped
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #     - mongodb_data:/data/db
-  #   environment:
-  #     - MONGO_INITDB_DATABASE=tmdb-discover-plus
+  postgres:
+    image: postgres:15-alpine
+    container_name: tmdb-discover-postgres
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=tmdb_discover
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-# Uncomment if using local MongoDB
-# volumes:
-#   mongodb_data:
+  redis:
+    image: redis:alpine
+    container_name: tmdb-discover-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mongo:
+    image: mongo:6-jammy
+    container_name: tmdb-discover-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  mongo_data:

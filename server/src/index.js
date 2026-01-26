@@ -4,7 +4,8 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { connectDB, isConnected } from './services/database.js';
+import { initStorage, getStorage } from './services/storage/index.js';
+import { initCache } from './services/cache/index.js';
 import { addonRouter } from './routes/addon.js';
 import { apiRouter } from './routes/api.js';
 import { authRouter } from './routes/auth.js';
@@ -115,12 +116,19 @@ app.get('/health', (req, res) => {
     });
   }
 
+  let dbStatus = 'disconnected';
+  try {
+      if (getStorage()) {
+          dbStatus = 'connected';
+      }
+  } catch (e) { /* ignore */ }
+
   const health = {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     version: SERVER_VERSION,
-    database: isConnected() ? 'connected' : 'disconnected',
+    database: dbStatus,
     memory: {
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
@@ -169,7 +177,12 @@ function gracefulShutdown(signal) {
   }, 30000);
 
   if (server) {
-    server.close((err) => {
+    server.close(async (err) => {
+        try {
+            const storage = getStorage();
+            if (storage) await storage.disconnect();
+        } catch (e) { log.error('Error disconnecting storage', {error: e.message}); }
+
       clearTimeout(shutdownTimeout);
       if (err) {
         log.error('Error during shutdown', { error: err.message });
@@ -203,7 +216,9 @@ process.on('unhandledRejection', (reason, promise) => {
 // ============================================
 async function start() {
   try {
-    await connectDB();
+    await initCache();
+    await initStorage();
+    
     server = app.listen(PORT, '0.0.0.0', () => {
       log.info(`TMDB Discover+ running at http://0.0.0.0:${PORT}`);
       log.info(`Configure at http://localhost:${PORT}/configure`);

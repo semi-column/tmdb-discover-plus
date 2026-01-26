@@ -14,9 +14,9 @@ export function NewCatalogModal({ isOpen, onClose, onAdd }) {
       name: name.trim(),
       type: 'movie',
       filters: {
+        listType: 'discover',
         genres: [],
         sortBy: 'popularity.desc',
-
         voteCountMin: 0,
       },
       enabled: true,

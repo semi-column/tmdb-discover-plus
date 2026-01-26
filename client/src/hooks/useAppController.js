@@ -155,16 +155,13 @@ export function useAppController() {
             window.history.replaceState({}, '', `/?userId=${latest.userId}`);
             setUrlUserId(latest.userId);
           } else {
-            logger.info('[App] No configs found, creating new one');
-            const newConfig = await api.saveConfig({
-              tmdbApiKey: config.apiKey,
-              catalogs: [],
-              preferences: {},
-            });
-            setPageLoading(true);
-            window.history.replaceState({}, '', `/?userId=${newConfig.userId}`);
-            setUrlUserId(newConfig.userId);
-            await loadUserConfigs();
+            logger.info('[App] No configs found, prompting setup or creating new one');
+            // FIX: Don't automatically create a new config on load failure unless explicitly requested
+            // Just reset the URL to root so the user sees the setup/login screen or their list of configs
+            window.history.replaceState({}, '', '/');
+            setUrlUserId(null); 
+            // The auth effect will handle showing the right state based on userConfigs
+            setPageLoading(false);
           }
         } catch (fallbackErr) {
           logger.error('[App] Fallback failed:', fallbackErr);
@@ -205,8 +202,20 @@ export function useAppController() {
 
       // If no configs were passed, load them
       if (!configs || configs.length === 0) {
-        configsLoadedRef.current = true;
-        loadUserConfigs();
+        configsLoadedRef.current = true; // Set lock before loading
+        const loadedConfigs = await loadUserConfigs();
+        
+        if (!loadedConfigs || loadedConfigs.length === 0) {
+             const newConfig = await api.saveConfig({
+                // tmdbApiKey is optional for authenticated users as it's derived from session
+                catalogs: [],
+                preferences: {},
+             });
+             // Update URL to new config
+             window.history.replaceState({}, '', `/?userId=${newConfig.userId}`);
+             setUrlUserId(newConfig.userId);
+             await config.loadConfig(newConfig.userId);
+        }
       }
     } catch (err) {
       logger.error('Error loading config after login:', err);

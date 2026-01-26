@@ -1,9 +1,9 @@
-import NodeCache from 'node-cache';
 import fetch from 'node-fetch';
 import https from 'node:https';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getCache } from './cache/index.js';
 import { shuffleArray } from '../utils/helpers.js';
 import { createLogger } from '../utils/logger.js';
 import { generatePosterUrl, generateBackdropUrl, isValidPosterConfig } from './posterService.js';
@@ -16,12 +16,7 @@ const httpsAgent = new https.Agent({
   rejectUnauthorized: process.env.DISABLE_TLS_VERIFY !== 'true',
 });
 
-const cache = new NodeCache({
-  stdTTL: 3600, // 1 hour default TTL
-  checkperiod: 600, // Check for expired keys every 10 min
-  maxKeys: 5000, // Increased limit to 5000 keys
-  useClones: false, // Save memory by not cloning objects
-});
+// Cache is initialized in index.js via initCache
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_WEBSITE_BASE_URL = 'https://www.themoviedb.org';
@@ -98,8 +93,14 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
   });
 
   const cacheKey = url.toString();
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  const cache = getCache();
+  
+  try {
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+  } catch (err) {
+      log.warn('Cache get failed', { error: err.message });
+  }
 
   let lastError;
 
@@ -126,7 +127,7 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
       const data = await response.json();
       
       try {
-        cache.set(cacheKey, data);
+        await cache.set(cacheKey, data, 3600); // 1 hour TTL
       } catch (cacheErr) {
         // If cache is full or errors, just log it and proceed. Don't crash the request.
         log.warn('Failed to cache TMDB response', { key: cacheKey, error: cacheErr.message });
@@ -221,8 +222,13 @@ async function tmdbWebsiteFetchJson(endpoint, params = {}) {
   });
 
   const cacheKey = `tmdb_site:${url.toString()}`;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  const cache = getCache();
+  
+  try {
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+  } catch (e) { /* ignore get error */ }
+
   const response = await fetch(url.toString(), {
     agent: httpsAgent,
     headers: {
@@ -242,7 +248,7 @@ async function tmdbWebsiteFetchJson(endpoint, params = {}) {
   const data = trimmed ? JSON.parse(trimmed) : null;
   
   try {
-    cache.set(cacheKey, data);
+    await cache.set(cacheKey, data, 3600);
   } catch (err) {
     log.warn('Failed to cache TMDB website response', { key: cacheKey, error: err.message });
   }
@@ -562,14 +568,17 @@ export async function fetchSpecialList(apiKey, listType, type = 'movie', options
 export async function getExternalIds(apiKey, tmdbId, type = 'movie') {
   const mediaType = type === 'series' ? 'tv' : 'movie';
   const cacheKey = `external_ids_${mediaType}_${tmdbId}`;
+  const cache = getCache();
 
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  try {
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+  } catch (e) { /* ignore */ }
 
   try {
     const data = await tmdbFetch(`/${mediaType}/${tmdbId}/external_ids`, apiKey);
     try {
-      cache.set(cacheKey, data, 86400); // Cache for 24 hours
+      await cache.set(cacheKey, data, 86400); // Cache for 24 hours
     } catch (e) { /* ignore cache errors */ }
     return data;
   } catch (error) {
@@ -603,8 +612,12 @@ export async function getDetails(apiKey, tmdbId, type = 'movie') {
 export async function getSeasonDetails(apiKey, tmdbId, seasonNumber, options = {}) {
   const languageParam = options?.displayLanguage || options?.language;
   const cacheKey = `season_${tmdbId}_${seasonNumber}_${languageParam || 'en'}`;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  const cache = getCache();
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) { /* ignore */ }
 
   const params = {};
   if (languageParam) params.language = languageParam;
@@ -612,7 +625,7 @@ export async function getSeasonDetails(apiKey, tmdbId, seasonNumber, options = {
   try {
     const data = await tmdbFetch(`/tv/${tmdbId}/season/${seasonNumber}`, apiKey, params);
     try {
-      cache.set(cacheKey, data, 86400); // Cache for 24 hours
+      await cache.set(cacheKey, data, 86400); // Cache for 24 hours
     } catch (e) { /* ignore cache errors */ }
     return data;
   } catch (error) {
