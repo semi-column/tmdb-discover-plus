@@ -12,7 +12,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ADDON_ID = 'community.tmdb.discover.plus';
 const ADDON_NAME = 'TMDB Discover+';
 const ADDON_DESCRIPTION = 'Create custom movie and TV catalogs with powerful TMDB filters';
-const ADDON_VERSION = '2.1.0';
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
+const ADDON_VERSION = pkg.version;
 const TMDB_PAGE_SIZE = 20;
 
 /**

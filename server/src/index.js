@@ -16,7 +16,8 @@ const app = express();
 const log = createLogger('server');
 // Default to 7000 to match Dokku/Beamup expected port
 const PORT = process.env.PORT || 7000;
-const SERVER_VERSION = process.env.npm_package_version || '2.1.0';
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
+const SERVER_VERSION = pkg.version;
 
 // Track server state for graceful shutdown
 let server = null;
