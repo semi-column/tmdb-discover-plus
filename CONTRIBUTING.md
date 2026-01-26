@@ -112,6 +112,20 @@ cd client && npm run lint
 
 6. **Open a Pull Request** against the `main` branch
 
+## 🚀 Automated Releases
+
+This project uses [release-please](https://github.com/googleapis/release-please) to automate releases.
+
+- **Pull Requests**: Use [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat:`, `fix:`) in your PR titles.
+- **Release PR**: When changes are merged to `main`, an automated "Release PR" will be created/updated.
+- **Deployment**: Merging the Release PR will automatically:
+  - Tag the release (e.g., `v2.4.0`)
+  - Update `CHANGELOG.md`
+  - Update versions in root, `client/`, and `server/` `package.json` files
+  - Create a GitHub Release with compiled release notes
+
+Please **do not** manually update version numbers or create tags.
+
 ## Pull Request Process
 
 1. **Fill out the PR template** completely
