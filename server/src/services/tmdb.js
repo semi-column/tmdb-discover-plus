@@ -8,7 +8,12 @@ import { shuffleArray } from '../utils/helpers.js';
 import { createLogger } from '../utils/logger.js';
 import { generatePosterUrl, generateBackdropUrl, isValidPosterConfig } from './posterService.js';
 
+import { getRpdbRating } from './rpdb.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ...
+
 const log = createLogger('tmdb');
 
 const httpsAgent = new https.Agent({
@@ -728,7 +733,7 @@ export function generateSlug(type, title, id) {
  * @param {Array|null} videos - Optional array of Video objects for series episodes
  * @returns {Object} Stremio meta object
  */
-export function toStremioFullMeta(details, type, imdbId = null, requestedId = null, posterOptions = null, videos = null) {
+export async function toStremioFullMeta(details, type, imdbId = null, requestedId = null, posterOptions = null, videos = null) {
   if (!details) return {};
   const isMovie = type === 'movie';
   const title = isMovie ? details.title : details.name;
@@ -805,9 +810,30 @@ export function toStremioFullMeta(details, type, imdbId = null, requestedId = nu
     }
   }
 
-  // Links
+// Links
   const links = [];
-  const displayRating = typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null;
+  
+  // Try to get real IMDb rating if configured
+  let displayRating = typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null;
+  const rpdbKey = process.env.RPDB_API_KEY || 't0-free-rpdb'; 
+
+  // Make sure we have an IMDb ID before trying
+  let actualImdbRating = null;
+  if (effectiveImdbId && rpdbKey) {
+      try {
+          // We intentionally don't await this to slow down the request? 
+          // Actually, for meta details, we probably WANT to await it so the UI shows the right number.
+          // Since it's cached, it should be fast after first hit.
+          const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
+          if (realRating && realRating !== 'N/A') {
+              displayRating = realRating;
+              actualImdbRating = realRating;
+          }
+      } catch (e) {
+          // Ignore
+      }
+  }
+
   if (effectiveImdbId) {
     links.push({
       name: displayRating || 'IMDb',

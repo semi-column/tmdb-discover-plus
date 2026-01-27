@@ -363,7 +363,7 @@ async function handleMetaRequest(userId, type, id, extra, res) {
       log.debug('Fetched series episodes', { tmdbId, episodeCount: videos?.length || 0 });
     }
 
-    const meta = tmdb.toStremioFullMeta(details, type, imdbId, requestedId, posterOptions, videos);
+    const meta = await tmdb.toStremioFullMeta(details, type, imdbId, requestedId, posterOptions, videos);
 
     res.json({
       meta,
