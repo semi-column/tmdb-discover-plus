@@ -215,6 +215,13 @@ export async function enrichManifestWithGenres(manifest, config) {
         }
 
         if (options && options.length > 0) {
+          // If discoverOnly is enabled, we MUST have a genre selected (isRequired=true).
+          // To allow the user to see "everything" (default view), we explicitly add "All".
+          // The addon.js handler gracefully ignores "All" as it doesn't match a TMDB genre ID.
+          if (isDiscoverOnly) {
+             options.unshift('All');
+          }
+
           catalog.extra = catalog.extra || [];
           catalog.extra = catalog.extra.filter((e) => e.name !== 'genre');
           
