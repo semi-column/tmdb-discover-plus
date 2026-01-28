@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.5.0...v2.6.0) (2026-01-28)
+
+
+### Features
+
+* add future date presets for upcoming content ([c539cb6](https://github.com/semi-column/tmdb-discover-plus/commit/c539cb6f9099a4555f463ea3e3d24633c638b883)), closes [#16](https://github.com/semi-column/tmdb-discover-plus/issues/16)
+* implement catalog and global configuration import/export ([a7f241f](https://github.com/semi-column/tmdb-discover-plus/commit/a7f241fc3b919bcd8675c50dd5dd95a232fb25f3)), closes [#17](https://github.com/semi-column/tmdb-discover-plus/issues/17)
+* update date filters to rolling windows ([08610c6](https://github.com/semi-column/tmdb-discover-plus/commit/08610c6c1dedf3d08f8fbb4e8d41faa0879a99e2)), closes [#20](https://github.com/semi-column/tmdb-discover-plus/issues/20)
+
+
+### Bug Fixes
+
+* persist disableSearch preference in user config schema ([426aee7](https://github.com/semi-column/tmdb-discover-plus/commit/426aee7698cf02c7ba9708de95d48b7d5e2b239f)), closes [#25](https://github.com/semi-column/tmdb-discover-plus/issues/25)
+* resolve release region persistence and localization issues ([#21](https://github.com/semi-column/tmdb-discover-plus/issues/21), [#23](https://github.com/semi-column/tmdb-discover-plus/issues/23)) ([7bb439f](https://github.com/semi-column/tmdb-discover-plus/commit/7bb439fd7ac815c16a742b3e4d4cb10315aec520))
+
 ## [2.5.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.4.0...v2.5.0) (2026-01-28)
 
 
