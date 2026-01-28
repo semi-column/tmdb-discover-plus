@@ -5,6 +5,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.4.0...v2.5.0) (2026-01-28)
+
+
+### Features
+
+* add behaviorHints.configurable to static manifest ([173ffb2](https://github.com/semi-column/tmdb-discover-plus/commit/173ffb29212f4e80a395ec8147290a34c6ddc9e1))
+* add Buy Me a Coffee button component and integrate into header ([adbf5e9](https://github.com/semi-column/tmdb-discover-plus/commit/adbf5e98b9ac2315f5487ed8b7e6b7653caa9551))
+* add option to disable search catalogs ([a65cdc0](https://github.com/semi-column/tmdb-discover-plus/commit/a65cdc00d8eff40e46b4f99385af1489c2c97a57)), closes [#22](https://github.com/semi-column/tmdb-discover-plus/issues/22)
+* add support for Stremio URLs in install modal and user config response ([0dc76ff](https://github.com/semi-column/tmdb-discover-plus/commit/0dc76ff72907830f33de5f5e97b7584cd4ee330c))
+* Added Discover Only Option [ fixes  [#4](https://github.com/semi-column/tmdb-discover-plus/issues/4) ] ([eaef93d](https://github.com/semi-column/tmdb-discover-plus/commit/eaef93d9d70c7854f77452bd8a068d0161a8b373))
+* Added Paypal for support ([9c6e6be](https://github.com/semi-column/tmdb-discover-plus/commit/9c6e6be8a2497c2d61935a3fea6aa2bd2adadc8c))
+* Added postgres and redis support ([a431d8a](https://github.com/semi-column/tmdb-discover-plus/commit/a431d8a383424fccafe6db3b7e4d9f8b0b03aa62))
+* Added release-please support ([949ab19](https://github.com/semi-column/tmdb-discover-plus/commit/949ab195287225c78efc66ef18dd8bd87a41991c))
+* Added Shuffle Catalogs & Copy Catalog ([ca6398a](https://github.com/semi-column/tmdb-discover-plus/commit/ca6398a58f988e236d86076ddf511a56c9b5691f))
+* enhance API rate limiting for frontend endpoints and update CI/CD permissions ([66d7dab](https://github.com/semi-column/tmdb-discover-plus/commit/66d7dabc1a7857251a531c931e5692682f32967f))
+* enhance range slider with editable inputs and improve meta handling ([7942c0a](https://github.com/semi-column/tmdb-discover-plus/commit/7942c0af08e4c55725a476db789063f33bf639c1))
+* enhance TMDB API request handling with URL normalization and validation ([24ee96b](https://github.com/semi-column/tmdb-discover-plus/commit/24ee96bdb7f59e222260580d7b1fe8e2a118c1ba))
+* enhance user config handling with input validation and sanitization ([5f6928e](https://github.com/semi-column/tmdb-discover-plus/commit/5f6928e7ca43a25f154509ed4619ed575cf7713d))
+* Improve User Experience ([4974704](https://github.com/semi-column/tmdb-discover-plus/commit/49747045cb84c6f8dc9a67caf2bd4359c3033711))
+* Poster Integration, User Count & Quality fixes ([9590acb](https://github.com/semi-column/tmdb-discover-plus/commit/9590acbd6b47e3f4151da260aa5415c363737673))
+* userConfig Loading fix ([0be5bc5](https://github.com/semi-column/tmdb-discover-plus/commit/0be5bc5b04bc773e87d1497c7d48f6d4e3d29fae))
+
+
+### Bug Fixes
+
+* add "All" genre option to discover-only catalogs ([5927b26](https://github.com/semi-column/tmdb-discover-plus/commit/5927b269acb7bcf726bd0ec6396d06142c7a10cd)), closes [#12](https://github.com/semi-column/tmdb-discover-plus/issues/12)
+* Added Random Check to Config ([829edb7](https://github.com/semi-column/tmdb-discover-plus/commit/829edb7efe2c59a7bc255e2ce91297547e405450))
+* Alot of Fix Actually! ([e5957ac](https://github.com/semi-column/tmdb-discover-plus/commit/e5957ace50c3539c2ac09f878cca28ee45d9eafa))
+* background posters not loading ([7420986](https://github.com/semi-column/tmdb-discover-plus/commit/7420986617b4abb2b09a564ed5b7d90039679e63))
+* Config Issue ([169cfae](https://github.com/semi-column/tmdb-discover-plus/commit/169cfae130fc147b0f95e7b21539843e2afd185f))
+* Config Load Failures ([4e1596a](https://github.com/semi-column/tmdb-discover-plus/commit/4e1596a095c2a91631cd450a4e0a51e2595c688e))
+* Deploy ([e06953a](https://github.com/semi-column/tmdb-discover-plus/commit/e06953aa647d2f32bfcf06cfb6c1e46e4a87d837))
+* Deploy ([0098685](https://github.com/semi-column/tmdb-discover-plus/commit/00986855a56d0e9e72daa8f66a593e9123cc090b))
+* Deploy ([ea957a6](https://github.com/semi-column/tmdb-discover-plus/commit/ea957a60c1860ee2435a6c2ef1431a5f3c0725c6))
+* **deploy:** Switch to Buildpack with Explicit Procfile ([3e8c0df](https://github.com/semi-column/tmdb-discover-plus/commit/3e8c0df4eeb79984ddc6ecfdac04f0bfd07ca748))
+* Dynamic DatePreset Not bieng saved to database ([91a468a](https://github.com/semi-column/tmdb-discover-plus/commit/91a468a083950a8718655f0a984fe083096f38af))
+* enhance touch event handling to prevent ghost clicks on genre selection ([238317f](https://github.com/semi-column/tmdb-discover-plus/commit/238317fc8653d397e973aaf017ef46f059c6c036))
+* Final Fixes ([a536d6f](https://github.com/semi-column/tmdb-discover-plus/commit/a536d6f2e6a221fd4127a52e03fd305b366d0950))
+* Fix DB issue ([8ff1b20](https://github.com/semi-column/tmdb-discover-plus/commit/8ff1b202fcbaf28228b2fa436fb1625b00064d58))
+* Fix Worfklow ([39dbd25](https://github.com/semi-column/tmdb-discover-plus/commit/39dbd25025c77851261beb54b8831e941147c531))
+* fixed imdbRatings to be fetched from rpdb instead of using tmdb ratings for metadata ([c23ad0e](https://github.com/semi-column/tmdb-discover-plus/commit/c23ad0e793c55f5cd2f2b775ebadbb06c584a0bf))
+* force OR logic for multi-value filters ([6f73176](https://github.com/semi-column/tmdb-discover-plus/commit/6f73176776b7681846f04909cedee32d8acc1bbc)), closes [#14](https://github.com/semi-column/tmdb-discover-plus/issues/14)
+* Improve install modal scrolling and layout ([6ad78b0](https://github.com/semi-column/tmdb-discover-plus/commit/6ad78b0f6f3ac25a66110eba2e69424b271846b6))
+* Improve Mobile UI for better experience ([d68b1d6](https://github.com/semi-column/tmdb-discover-plus/commit/d68b1d65066976f4fde4059072937e9920f0115d))
+* improve touch event detection for better compatibility across devices ([54bdf5d](https://github.com/semi-column/tmdb-discover-plus/commit/54bdf5d2e04459f00792ad8a4b43383db522ced6))
+* Improved UX ([6431e10](https://github.com/semi-column/tmdb-discover-plus/commit/6431e102f7a3b3209b476f868a1d1affb217d084))
+* Lint Fix ([1ca25a5](https://github.com/semi-column/tmdb-discover-plus/commit/1ca25a506989648632d57427b4c0bbf244a4ed63))
+* Login Break from Session Expired Page ([dab22fc](https://github.com/semi-column/tmdb-discover-plus/commit/dab22fc647f6dccdcf307489d927ec8a659658fc))
+* Memory Leak & Crashing ([dcf8d5b](https://github.com/semi-column/tmdb-discover-plus/commit/dcf8d5bc8c3543ba97452ec22bb7958143113896))
+* Metadata Updates ([f9a3696](https://github.com/semi-column/tmdb-discover-plus/commit/f9a369623f24bc15716ace1234a6ad931ebff6b3))
+* Mobile UI FIxes ([6ce1fec](https://github.com/semi-column/tmdb-discover-plus/commit/6ce1fec4701ecff89959a430bc3eebeeb9924417))
+* More Fixes ([d2e0db5](https://github.com/semi-column/tmdb-discover-plus/commit/d2e0db5df6dae1f496f2aea1157f26802171518f))
+* Networks Search & Genre Filterin gFor Preset Catalogs ([712afa3](https://github.com/semi-column/tmdb-discover-plus/commit/712afa3691bbf8136a8fbb6f9df680385dd1be18))
+* prioritize IMDb IDs in catalog items ([d2ea3ec](https://github.com/semi-column/tmdb-discover-plus/commit/d2ea3ec0e3521ce14b447e4f33bfefcd9a18ed3b)), closes [#13](https://github.com/semi-column/tmdb-discover-plus/issues/13)
+* remove cache on config api ([90264d3](https://github.com/semi-column/tmdb-discover-plus/commit/90264d3796bfecb6b1f4a2542daf5dace258b470))
+* Remove Caching from Randomized Catalogs ([99b2f68](https://github.com/semi-column/tmdb-discover-plus/commit/99b2f6819cd462a3bf8cd816fbddd4dadd76a2bb))
+* Remove Caching from Randomized Catalogs ([4ab964c](https://github.com/semi-column/tmdb-discover-plus/commit/4ab964c2592a4e72084fd054068493ce6f0402e4))
+* Remove Duplicate manifest Url ([a0d251c](https://github.com/semi-column/tmdb-discover-plus/commit/a0d251c5f94ecbcef28a902b4aaceb389b93e8ab))
+* Save Config API fix ([54af95b](https://github.com/semi-column/tmdb-discover-plus/commit/54af95b2a873c9797aebe33bd624b6caa1f47e5e))
+* standardize all redirects to use /?userId= format ([97e2a50](https://github.com/semi-column/tmdb-discover-plus/commit/97e2a50975b9a9a8fee0a6ba2bb38210be0634e6))
+* sync manifest version wit actual release ([d5a2866](https://github.com/semi-column/tmdb-discover-plus/commit/d5a2866b668ab01dd89e6984dee22e7c4ac290fd))
+* Test Failure ([38c4265](https://github.com/semi-column/tmdb-discover-plus/commit/38c42656645bd002964fd6a1f9c2fbbf7aa26b6e))
+* Test Failure ([20beed8](https://github.com/semi-column/tmdb-discover-plus/commit/20beed8798643d4ff9ce9ca5b9b9812b9600b8eb))
+* Test Failures ([71b2dad](https://github.com/semi-column/tmdb-discover-plus/commit/71b2dadeb007aef3df076debda2873437643a1c5))
+* Test Failures ([aecb2d0](https://github.com/semi-column/tmdb-discover-plus/commit/aecb2d05acd7df85d39d7ec8e62e73cd0f11821d))
+* Tests fix ([b3470ce](https://github.com/semi-column/tmdb-discover-plus/commit/b3470cef3cf0369b99a3de09b7f73bc40ca3a8fc))
+* update logo image ([69ca4bf](https://github.com/semi-column/tmdb-discover-plus/commit/69ca4bfa921f76fd6decfac0f72ca3a683e98416))
+* update logo URL in manifest.json ([00f7790](https://github.com/semi-column/tmdb-discover-plus/commit/00f7790d25b540757c3323ec5964f5fc7ffd8a73))
+* Updated workflow to only deploy on releases ([5793fa5](https://github.com/semi-column/tmdb-discover-plus/commit/5793fa5f22faa81efc70c78a916262ea6a7f2621))
+
 ## [2.4.0](https://github.com/semi-column/tmdb-discover-plus/compare/tmdb-discover-plus-v2.3.0...tmdb-discover-plus-v2.4.0) (2026-01-26)
 
 
