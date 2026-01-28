@@ -407,7 +407,13 @@ export async function discover(apiKey, options = {}) {
   if (displayLanguage) params.language = displayLanguage;
 
   // Origin country
-  if (originCountry) params.with_origin_country = originCountry;
+  // Origin country
+  // TMDB supports pipe (|) for OR logic
+  if (originCountry) {
+    params.with_origin_country = Array.isArray(originCountry) 
+      ? originCountry.join('|') 
+      : String(originCountry).replace(/,/g, '|');
+  }
 
   // Runtime filters
   if (runtimeMin) params['with_runtime.gte'] = runtimeMin;
@@ -460,12 +466,13 @@ export async function discover(apiKey, options = {}) {
   }
 
   // People filters (cast, crew, or any person)
-  if (withCast) params.with_cast = withCast;
-  if (withCrew) params.with_crew = withCrew;
-  if (withPeople) params.with_people = withPeople;
+  // TMDB uses pipe (|) for OR logic
+  if (withCast) params.with_cast = String(withCast).replace(/,/g, '|');
+  if (withCrew) params.with_crew = String(withCrew).replace(/,/g, '|');
+  if (withPeople) params.with_people = String(withPeople).replace(/,/g, '|');
 
   // Company filter
-  if (withCompanies) params.with_companies = withCompanies;
+  if (withCompanies) params.with_companies = String(withCompanies).replace(/,/g, '|');
   if (excludeCompanies) params.without_companies = excludeCompanies;
 
   // Keyword filters
