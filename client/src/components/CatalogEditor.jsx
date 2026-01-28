@@ -57,6 +57,8 @@ const DATE_PRESETS = [
   { label: 'Last 90 days', value: 'last_90_days', days: 90 },
   { label: 'Last 6 months', value: 'last_180_days', days: 180 },
   { label: 'Last 12 months', value: 'last_365_days', days: 365 },
+  { label: 'Next 30 days', value: 'next_30_days', future: true },
+  { label: 'Next 3 months', value: 'next_90_days', future: true },
 ];
 
 // Filter Templates for quick setup

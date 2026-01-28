@@ -60,6 +60,21 @@ export function resolveDynamicDatePreset(filters, type) {
       resolved[toField] = `${lastYear}-12-31`;
       break;
     }
+
+    case 'next_30_days': {
+      const futureDate = new Date(today);
+      futureDate.setDate(today.getDate() + 30);
+      resolved[fromField] = formatDate(today);
+      resolved[toField] = formatDate(futureDate);
+      break;
+    }
+    case 'next_90_days': {
+      const futureDate = new Date(today);
+      futureDate.setDate(today.getDate() + 90);
+      resolved[fromField] = formatDate(today);
+      resolved[toField] = formatDate(futureDate);
+      break;
+    }
     case 'upcoming': {
       if (isMovie) {
         const sixMonthsLater = new Date(today);
