@@ -34,18 +34,21 @@ export function buildManifest(userConfig, baseUrl) {
     }));
 
   // Add dedicated search catalogs (hidden from board, used for global search)
-  catalogs.push({
-    id: 'tmdb-search-movie',
-    type: 'movie',
-    name: 'TMDB Search',
-    extra: [{ name: 'search', isRequired: true }],
-  });
-  catalogs.push({
-    id: 'tmdb-search-series',
-    type: 'series',
-    name: 'TMDB Search',
-    extra: [{ name: 'search', isRequired: true }],
-  });
+  // Only if search is not disabled in preferences
+  if (userConfig?.preferences?.disableSearch !== true) {
+    catalogs.push({
+      id: 'tmdb-search-movie',
+      type: 'movie',
+      name: 'TMDB Search',
+      extra: [{ name: 'search', isRequired: true }],
+    });
+    catalogs.push({
+      id: 'tmdb-search-series',
+      type: 'series',
+      name: 'TMDB Search',
+      extra: [{ name: 'search', isRequired: true }],
+    });
+  }
 
   return {
     id: ADDON_ID,

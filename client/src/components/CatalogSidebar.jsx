@@ -290,6 +290,20 @@ export function CatalogSidebar({
           <Shuffle size={14} />
           <span>Shuffle Catalogs</span>
         </label>
+        
+        <label 
+          className="sidebar-checkbox"
+          title="Disable search catalogs if you want to use other addons for search"
+          style={{ marginTop: '8px' }}
+        >
+          <input
+            type="checkbox"
+            checked={!!(preferences?.disableSearch)}
+            onChange={(e) => onPreferencesChange({...preferences, disableSearch: e.target.checked})}
+          />
+          <EyeOff size={14} />
+          <span>Disable Search</span>
+        </label>
       </div>
 
       {/* Poster Settings Section */}
