@@ -350,6 +350,52 @@ export function useAppController() {
     setActiveCatalog(data);
   };
 
+  const handleImportConfig = (importedData) => {
+    try {
+      if (!importedData || typeof importedData !== 'object') {
+        throw new Error('Invalid configuration file');
+      }
+
+      // Basic validation
+      if (importedData.catalogs && !Array.isArray(importedData.catalogs)) {
+        throw new Error('Invalid catalogs format');
+      }
+
+      // Apply changes
+      if (importedData.catalogs) {
+         // Enhance catalogs with new IDs to prevent collisions if they are treated as new
+         // But here we are importing a whole config, so arguably we might want to keep IDs
+         // if we are restoring a backup. 
+         // However, if we import on top of existing, we might duplicate.
+         // "the whole exact config should be loaded" -> implies replacement
+         
+         const newCatalogs = importedData.catalogs.map(c => ({
+            ...c,
+            // Ensure they have valid IDs
+            _id: c._id || crypto.randomUUID(),
+            id: c.id || crypto.randomUUID() 
+         }));
+         config.setCatalogs(newCatalogs);
+         if (newCatalogs.length > 0) {
+            setActiveCatalog(newCatalogs[0]);
+         }
+      }
+
+      if (importedData.preferences) {
+        config.setPreferences(p => ({ ...p, ...importedData.preferences }));
+      }
+      
+      if (importedData.configName) {
+        config.setConfigName(importedData.configName);
+      }
+
+      addToast('Configuration imported successfully');
+    } catch (err) {
+      logger.error('Import config failed:', err);
+      addToast(err.message || 'Failed to import configuration', 'error');
+    }
+  };
+
   return {
     state: {
       isSetup,
@@ -383,6 +429,7 @@ export function useAppController() {
       handleDeleteCatalog,
       handleDuplicateCatalog,
       handleUpdateCatalog,
+      handleImportConfig,
       handleSwitchConfig: (uid) => (window.location.href = `/?userId=${uid}`),
       handleCreateNewConfig: async () => {
         try {

@@ -184,6 +184,7 @@ function App() {
               onConfigNameChange={config.setConfigName}
               preferences={config.preferences}
               onPreferencesChange={config.setPreferences}
+              onImportConfig={actions.handleImportConfig}
             />
 
             <CatalogEditor

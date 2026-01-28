@@ -15,6 +15,8 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Download,
+  Upload as ArrowUpTrayIcon,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -195,6 +197,7 @@ export function CatalogSidebar({
   onConfigNameChange,
   preferences = {},
   onPreferencesChange,
+  onImportConfig,
 }) {
   const isMobile = useIsMobile();
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
@@ -278,6 +281,66 @@ export function CatalogSidebar({
       </div>
 
       <div className="sidebar-controls" style={{ padding: '0 16px 12px 16px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+          <button
+             className="btn btn-secondary btn-sm"
+             style={{ flex: 1, justifyContent: 'center' }}
+             title="Export full configuration (catalogs + preferences)"
+             onClick={() => {
+                const exportData = {
+                  configName,
+                  catalogs,
+                  preferences,
+                  exportedAt: new Date().toISOString()
+                };
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${(configName || 'stremio_config').replace(/\s+/g, '_')}_full.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+             }}
+          >
+            <Download size={14} />
+            <span>Export</span>
+          </button>
+          
+          <label 
+            className="btn btn-secondary btn-sm"
+            style={{ flex: 1, justifyContent: 'center', cursor: 'pointer' }}
+            title="Import full configuration"
+          >
+            <ArrowUpTrayIcon size={14} />
+            <span>Import</span>
+             <input
+                type="file"
+                accept=".json"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    try {
+                      const imported = JSON.parse(event.target.result);
+                      if (onImportConfig) onImportConfig(imported);
+                    } catch (err) {
+                      console.error('Import failed', err);
+                      // Ideally toast here, but we can rely on parent handling mostly or alert
+                      alert('Failed to parse JSON');
+                    }
+                    e.target.value = '';
+                  };
+                  reader.readAsText(file);
+                }}
+              />
+          </label>
+        </div>
+
         <label 
           className="sidebar-checkbox"
           title="Randomize catalog order every time Stremio loads"

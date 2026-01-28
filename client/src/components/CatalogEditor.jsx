@@ -14,6 +14,8 @@ import {
   Play,
   Users,
   Settings,
+  Download as ArrowDownTrayIcon,
+  Upload as ArrowUpTrayIcon,
   Sparkles,
   X,
   Shuffle,
@@ -789,6 +791,58 @@ export function CatalogEditor({
               {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
               Preview
             </button>
+            <button
+              className="btn btn-secondary"
+              title="Export Catalog Config"
+              onClick={() => {
+                const dataStr = JSON.stringify(localCatalog, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${(localCatalog.name || 'catalog').replace(/\s+/g, '_')}_config.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+              }}
+            >
+              <ArrowDownTrayIcon size={16} />
+            </button>
+            <label className="btn btn-secondary" title="Import Catalog Config" style={{ cursor: 'pointer' }}>
+              <ArrowUpTrayIcon size={16} />
+              <input
+                type="file"
+                accept=".json"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    try {
+                      const imported = JSON.parse(event.target.result);
+                      if (imported && typeof imported === 'object') {
+                        // Preserve ID/Name if desired, or overwrite? 
+                        // User likely wants to import settings but maybe keep name if editing current?
+                        // "Import the whole exact config" -> overwrite everything including name/filters
+                        // But keeping _id is safer if editing existing.
+                        // Let's safe-guard _id.
+                        const { _id, ...rest } = imported;
+                        setLocalCatalog(prev => ({ ...prev, ...rest }));
+                      } else {
+                        alert('Invalid JSON file');
+                      }
+                    } catch (err) {
+                      console.error('Import failed', err);
+                      alert('Failed to parse JSON');
+                    }
+                    e.target.value = ''; // reset
+                  };
+                  reader.readAsText(file);
+                }}
+              />
+            </label>
           </div>
         </div>
 
