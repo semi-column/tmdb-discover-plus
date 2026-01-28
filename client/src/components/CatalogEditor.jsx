@@ -56,8 +56,7 @@ const DATE_PRESETS = [
   { label: 'Last 30 days', value: 'last_30_days', days: 30 },
   { label: 'Last 90 days', value: 'last_90_days', days: 90 },
   { label: 'Last 6 months', value: 'last_180_days', days: 180 },
-  { label: 'This year', value: 'this_year', year: true },
-  { label: 'Last year', value: 'last_year', lastYear: true },
+  { label: 'Last 12 months', value: 'last_365_days', days: 365 },
 ];
 
 // Filter Templates for quick setup

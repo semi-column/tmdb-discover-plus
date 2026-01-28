@@ -41,6 +41,13 @@ export function resolveDynamicDatePreset(filters, type) {
       resolved[toField] = formatDate(today);
       break;
     }
+    case 'last_365_days': {
+      const oneYearAgo = new Date(today);
+      oneYearAgo.setDate(today.getDate() - 365);
+      resolved[fromField] = formatDate(oneYearAgo);
+      resolved[toField] = formatDate(today);
+      break;
+    }
     case 'this_year': {
       const startOfYear = new Date(today.getFullYear(), 0, 1);
       resolved[fromField] = formatDate(startOfYear);
