@@ -649,10 +649,23 @@ export async function getDetails(apiKey, tmdbId, type = 'movie') {
   // eslint-disable-next-line prefer-rest-params
   const maybeOptions = arguments.length >= 4 ? arguments[3] : undefined;
   const languageParam = maybeOptions?.displayLanguage || maybeOptions?.language;
-  return tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, {
+  
+  // Build params for the request
+  const params = {
     append_to_response: 'external_ids,credits,videos,release_dates,content_ratings,images',
-    ...(languageParam ? { language: languageParam } : {}),
-  });
+  };
+  
+  if (languageParam) {
+    params.language = languageParam;
+    // IMPORTANT: include_image_language ensures we get logos even when non-English language is selected
+    // Format: "<language>,en,null" - prioritize requested language, then English, then language-neutral
+    params.include_image_language = `${languageParam},en,null`;
+  } else {
+    // Default to English logos if no language specified
+    params.include_image_language = 'en,null';
+  }
+  
+  return tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, params);
 }
 
 /**
@@ -1045,7 +1058,8 @@ export async function toStremioFullMeta(
     description: details.overview || '',
     year: year || undefined,
     releaseInfo,
-    imdbRating: typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null,
+    // Use actual IMDB rating from RPDB if available, fallback to TMDB vote_average
+    imdbRating: actualImdbRating || (typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null),
     genres,
     cast: cast.length > 0 ? cast : undefined,
     director: directors.length > 0 ? directors : undefined,

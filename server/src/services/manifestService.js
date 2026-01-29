@@ -56,12 +56,15 @@ export function buildManifest(userConfig, baseUrl) {
     description: ADDON_DESCRIPTION,
     version: ADDON_VERSION,
     logo: `${baseUrl}/logo.png`,
+    // Top-level idPrefixes (required for Stremio Web compatibility)
+    // This addon owns tmdb: prefixed IDs for metadata
+    idPrefixes: ['tmdb:'],
     resources: [
       'catalog',
       {
         name: 'meta',
         types: ['movie', 'series'],
-        idPrefixes: ['tmdb:', 'tt'],
+        idPrefixes: ['tmdb:'],
       },
     ],
     types: ['movie', 'series'],

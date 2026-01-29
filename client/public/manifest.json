@@ -3,6 +3,7 @@
   "version": "2.6.5",
   "name": "TMDB Discover+",
   "description": "Create custom movie and TV catalogs for Stremio with powerful TMDB filters",
+  "idPrefixes": ["tmdb:"],
   "resources": [
     "catalog",
     {
@@ -12,12 +13,9 @@
         "series"
       ],
       "idPrefixes": [
-        "tmdb:",
-        "tt"
+        "tmdb:"
       ]
-    },
-    "stream",
-    "subtitles"
+    }
   ],
   "types": [
     "movie",
