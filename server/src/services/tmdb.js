@@ -1213,7 +1213,9 @@ export async function toStremioFullMeta(
     // 3. English + Trailer
     // 4. Any Trailer
 
-    const lang = targetLanguage || 'en';
+    // Extract language code (e.g., 'it' from 'it-IT') since TMDB uses ISO 639-1
+    const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
+    log.info('Trailer language search', { targetLanguage, lang, videoCount: allVideos.length, videoLangs: allVideos.map(v => v.iso_639_1) });
 
     const trailerVideo =
       allVideos.find(v => v.iso_639_1 === lang && v.type === 'Trailer') ||
@@ -1224,6 +1226,7 @@ export async function toStremioFullMeta(
 
     if (trailerVideo) {
       trailer = `yt:${trailerVideo.key}`;
+      log.info('Trailer selected', { key: trailerVideo.key, lang: trailerVideo.iso_639_1, type: trailerVideo.type, name: trailerVideo.name });
     }
   }
 
@@ -1330,18 +1333,40 @@ export async function toStremioFullMeta(
     url: `https://www.strem.io/s/${type}/${slugTitle}-${details.id}`,
   });
 
-  // Trailer Streams
+  // Trailer Streams and Trailers array
   const trailerStreams = [];
+  const trailers = []; // tmdb-addon format: { source, type }
+
   if (details.videos?.results) {
-    details.videos.results
-      .filter((v) => v.site === 'YouTube' && v.type === 'Trailer')
-      .forEach((v) => {
-        trailerStreams.push({
-          title: v.name,
-          ytId: v.key,
-          lang: v.iso_639_1 || 'en',
-        });
+    const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
+
+    // Get all YouTube trailers
+    const youtubeTrailers = details.videos.results
+      .filter((v) => v.site === 'YouTube' && v.type === 'Trailer');
+
+    // Sort: target language first, then English, then others
+    youtubeTrailers.sort((a, b) => {
+      const aLang = a.iso_639_1 || 'en';
+      const bLang = b.iso_639_1 || 'en';
+      if (aLang === lang && bLang !== lang) return -1;
+      if (bLang === lang && aLang !== lang) return 1;
+      if (aLang === 'en' && bLang !== 'en') return -1;
+      if (bLang === 'en' && aLang !== 'en') return 1;
+      return 0;
+    });
+
+    youtubeTrailers.forEach((v) => {
+      trailerStreams.push({
+        title: v.name,
+        ytId: v.key,
+        lang: v.iso_639_1 || 'en',
       });
+      // tmdb-addon format
+      trailers.push({
+        source: v.key,
+        type: v.type,
+      });
+    });
   }
 
   // app_extras
@@ -1462,6 +1487,7 @@ export async function toStremioFullMeta(
     released: releaseDate ? new Date(releaseDate).toISOString() : undefined,
     links: links.length > 0 ? links : undefined,
     trailer: trailer || undefined,
+    trailers: trailers.length > 0 ? trailers : undefined, // tmdb-addon format
     trailerStreams: trailerStreams.length > 0 ? trailerStreams : undefined,
     app_extras,
     behaviorHints,
