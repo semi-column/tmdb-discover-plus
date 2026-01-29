@@ -7,10 +7,12 @@ import { createLogger } from '../utils/logger.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { addonRateLimit } from '../utils/rateLimit.js';
 
 const log = createLogger('addon');
 
 const router = Router();
+router.use(addonRateLimit);
 
 import { buildManifest, enrichManifestWithGenres } from '../services/manifestService.js';
 

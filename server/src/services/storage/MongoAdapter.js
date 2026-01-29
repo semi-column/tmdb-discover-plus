@@ -31,7 +31,8 @@ export class MongoAdapter extends StorageInterface {
   }
 
   async getUserConfig(userId) {
-    return UserConfig.findOne({ userId }).lean();
+    if (!userId) return null;
+    return UserConfig.findOne({ userId: String(userId) }).lean();
   }
 
   async saveUserConfig(config) {
@@ -40,18 +41,20 @@ export class MongoAdapter extends StorageInterface {
     // The higher level service handles encryption/validation logic.
     
     return UserConfig.findOneAndUpdate(
-      { userId: config.userId },
+      { userId: String(config.userId) },
       { $set: config },
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
     ).lean();
   }
 
   async getConfigsByApiKeyId(apiKeyId) {
-    return UserConfig.find({ apiKeyId }).sort({ updatedAt: -1 }).lean();
+    if (!apiKeyId) return [];
+    return UserConfig.find({ apiKeyId: String(apiKeyId) }).sort({ updatedAt: -1 }).lean();
   }
 
   async deleteUserConfig(userId) {
-    const res = await UserConfig.findOneAndDelete({ userId });
+    if (!userId) return false;
+    const res = await UserConfig.findOneAndDelete({ userId: String(userId) });
     return !!res;
   }
 

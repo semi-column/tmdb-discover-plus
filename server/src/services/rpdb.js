@@ -13,6 +13,18 @@ const RPDB_BASE_URL = 'https://api.ratingposterdb.com';
  */
 export async function getRpdbRating(apiKey, imdbId) {
     if (!apiKey || !imdbId) return null;
+    
+    // Validate apiKey - should be hex-like or alphanumeric typically
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(apiKey)) {
+        log.warn('Invalid RPDB API Key format', { apiKey: '[REDACTED]' });
+        return null;
+    }
+
+    // Validate imdbId - should follow tt\d+ format
+    if (!/^tt\d+$/.test(imdbId)) {
+        log.warn('Invalid IMDb ID format', { imdbId });
+        return null;
+    }
 
     const cacheKey = `rpdb_rating_${imdbId}`;
     const cache = getCache();

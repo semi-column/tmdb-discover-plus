@@ -1,5 +1,45 @@
 import { useState, useEffect } from 'react';
 
+const toPlaceholdersFromCsv = (csv, sep = ',') => {
+  if (!csv) return [];
+  return String(csv)
+    .split(sep)
+    .filter(Boolean)
+    .map((id) => ({ id, name: id }));
+};
+
+const resolveItems = async (items, fetchById, search) => {
+  if (!items || items.length === 0) return items;
+  const needsResolution = items.some((item) => /^\d+$/.test(item.name) || item.name === item.id);
+  
+  if (!needsResolution && items.every(i => i.name)) return items;
+
+  if (!fetchById && !search) return items;
+
+  return await Promise.all(
+    items.map(async (item) => {
+      if (item.name && !/^\d+$/.test(item.name) && item.name !== item.id) return item;
+      
+      try {
+        if (typeof fetchById === 'function') {
+          const resp = await fetchById(item.id);
+          if (resp && (resp.name || resp.title)) {
+            return { id: item.id, name: resp.name || resp.title, logo: resp.logo };
+          }
+        }
+        if (typeof search === 'function') {
+          const sres = await search(item.id);
+          if (Array.isArray(sres) && sres.length > 0)
+            return { id: item.id, name: sres[0].name || sres[0].title || item.id, logo: sres[0].logo };
+        }
+      } catch {
+        // silence resolution errors
+      }
+      return item;
+    })
+  );
+};
+
 export function useResolvedFilters({
   catalog,
   getPersonById,
@@ -17,117 +57,77 @@ export function useResolvedFilters({
   const [excludeCompanies, setExcludeCompanies] = useState([]);
   const [selectedNetworks, setSelectedNetworks] = useState([]);
 
-  // Converts CSV ID strings (e.g., "123,456") to placeholder objects for initial display
-  const toPlaceholdersFromCsv = (csv, sep = ',') => {
-    if (!csv) return [];
-    return String(csv)
-      .split(sep)
-      .filter(Boolean)
-      .map((id) => ({ id, name: id }));
-  };
-
-  const resolveItems = async (items, fetchById, search) => {
-    if (!items || items.length === 0) return items;
-    const needsResolution = items.some((item) => /^\d+$/.test(item.name) || item.name === item.id);
-    
-    if (!needsResolution && items.every(i => i.name)) return items;
-
-    if (!fetchById && !search) return items;
-
-    return await Promise.all(
-      items.map(async (item) => {
-        if (item.name && !/^\d+$/.test(item.name) && item.name !== item.id) return item;
-        
-        try {
-          if (typeof fetchById === 'function') {
-            const resp = await fetchById(item.id);
-            if (resp && (resp.name || resp.title)) {
-              return { id: item.id, name: resp.name || resp.title, logo: resp.logo };
-            }
-          }
-          if (typeof search === 'function') {
-            const sres = await search(item.id);
-            if (Array.isArray(sres) && sres.length > 0)
-              return { id: item.id, name: sres[0].name || sres[0].title || item.id, logo: sres[0].logo };
-          }
-        } catch (e) {
-          void e;
-        }
-        return item;
-      })
-    );
-  };
-
   useEffect(() => {
     if (!catalog) {
-      if (selectedPeople.length > 0) setSelectedPeople([]);
-      if (selectedCompanies.length > 0) setSelectedCompanies([]);
-      if (selectedKeywords.length > 0) setSelectedKeywords([]);
-      if (excludeKeywords.length > 0) setExcludeKeywords([]);
-      if (excludeCompanies.length > 0) setExcludeCompanies([]);
-      if (selectedNetworks.length > 0) setSelectedNetworks([]);
+      // Defer state resets to avoid synchronous cascading render warning
+      Promise.resolve().then(() => {
+        setSelectedPeople((prev) => (prev.length > 0 ? [] : prev));
+        setSelectedCompanies((prev) => (prev.length > 0 ? [] : prev));
+        setSelectedKeywords((prev) => (prev.length > 0 ? [] : prev));
+        setExcludeKeywords((prev) => (prev.length > 0 ? [] : prev));
+        setExcludeCompanies((prev) => (prev.length > 0 ? [] : prev));
+        setSelectedNetworks((prev) => (prev.length > 0 ? [] : prev));
+      });
       return;
     }
 
-    const peopleResolved = catalog.filters?.withPeopleResolved || null;
-    if (Array.isArray(peopleResolved) && peopleResolved.length > 0) {
-      setSelectedPeople(peopleResolved.map((p) => ({ id: String(p.value), name: p.label })));
-    } else {
-      const initial = toPlaceholdersFromCsv(catalog.filters?.withPeople);
-      setSelectedPeople(initial);
-      resolveItems(initial, getPersonById, searchPerson).then(setSelectedPeople);
-    }
+    // Wrap all state updates in a microtask to avoid synchronous cascading render warning
+    Promise.resolve().then(() => {
+      const { filters } = catalog;
 
-    const companiesResolved = catalog.filters?.withCompaniesResolved || null;
-    if (Array.isArray(companiesResolved) && companiesResolved.length > 0) {
-      setSelectedCompanies(companiesResolved.map((c) => ({ id: String(c.value), name: c.label })));
-    } else {
-      const initial = toPlaceholdersFromCsv(catalog.filters?.withCompanies);
-      setSelectedCompanies(initial);
-      resolveItems(initial, getCompanyById, searchCompany).then(setSelectedCompanies);
-    }
+      // People
+      if (Array.isArray(filters?.withPeopleResolved) && filters.withPeopleResolved.length > 0) {
+        setSelectedPeople(filters.withPeopleResolved.map((p) => ({ id: String(p.value), name: p.label })));
+      } else {
+        const initial = toPlaceholdersFromCsv(filters?.withPeople);
+        setSelectedPeople(initial);
+        resolveItems(initial, getPersonById, searchPerson).then(setSelectedPeople);
+      }
 
-    const keywordsResolved = catalog.filters?.withKeywordsResolved || null;
-    if (Array.isArray(keywordsResolved) && keywordsResolved.length > 0) {
-      setSelectedKeywords(keywordsResolved.map((k) => ({ id: String(k.value), name: k.label })));
-    } else {
-      const initial = toPlaceholdersFromCsv(catalog.filters?.withKeywords);
-      setSelectedKeywords(initial);
-      resolveItems(initial, getKeywordById, searchKeyword).then(setSelectedKeywords);
-    }
+      // Companies
+      if (Array.isArray(filters?.withCompaniesResolved) && filters.withCompaniesResolved.length > 0) {
+        setSelectedCompanies(filters.withCompaniesResolved.map((c) => ({ id: String(c.value), name: c.label })));
+      } else {
+        const initial = toPlaceholdersFromCsv(filters?.withCompanies);
+        setSelectedCompanies(initial);
+        resolveItems(initial, getCompanyById, searchCompany).then(setSelectedCompanies);
+      }
 
-    const excludeKwTotal = toPlaceholdersFromCsv(catalog.filters?.excludeKeywords);
-    setExcludeKeywords(excludeKwTotal);
-    resolveItems(excludeKwTotal, getKeywordById, searchKeyword).then(setExcludeKeywords);
+      // Keywords
+      if (Array.isArray(filters?.withKeywordsResolved) && filters.withKeywordsResolved.length > 0) {
+        setSelectedKeywords(filters.withKeywordsResolved.map((k) => ({ id: String(k.value), name: k.label })));
+      } else {
+        const initial = toPlaceholdersFromCsv(filters?.withKeywords);
+        setSelectedKeywords(initial);
+        resolveItems(initial, getKeywordById, searchKeyword).then(setSelectedKeywords);
+      }
 
-    const excludeCompTotal = toPlaceholdersFromCsv(catalog.filters?.excludeCompanies);
-    setExcludeCompanies(excludeCompTotal);
-    resolveItems(excludeCompTotal, getCompanyById, searchCompany).then(setExcludeCompanies);
+      // Exclude Keywords
+      const initialExcludeKw = toPlaceholdersFromCsv(filters?.excludeKeywords);
+      setExcludeKeywords(initialExcludeKw);
+      resolveItems(initialExcludeKw, getKeywordById, searchKeyword).then(setExcludeKeywords);
 
-    // Network resolution
-    const initialNetworks = toPlaceholdersFromCsv(catalog.filters?.withNetworks, '|');
-    setSelectedNetworks(initialNetworks);
-    resolveItems(initialNetworks, getNetworkById).then(setSelectedNetworks);
+      // Exclude Companies
+      const initialExcludeComp = toPlaceholdersFromCsv(filters?.excludeCompanies);
+      setExcludeCompanies(initialExcludeComp);
+      resolveItems(initialExcludeComp, getCompanyById, searchCompany).then(setExcludeCompanies);
 
-  }, [catalog?._id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    resolveItems(selectedPeople, getPersonById, searchPerson).then(res => {
-        if (JSON.stringify(res) !== JSON.stringify(selectedPeople)) setSelectedPeople(res);
+      // Networks
+      const initialNetworks = toPlaceholdersFromCsv(filters?.withNetworks, '|');
+      setSelectedNetworks(initialNetworks);
+      resolveItems(initialNetworks, getNetworkById).then(setSelectedNetworks);
     });
-  }, [selectedPeople, getPersonById, searchPerson]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    resolveItems(selectedCompanies, getCompanyById, searchCompany).then(res => {
-         if (JSON.stringify(res) !== JSON.stringify(selectedCompanies)) setSelectedCompanies(res);
-    });
-  }, [selectedCompanies, getCompanyById, searchCompany]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    resolveItems(selectedNetworks, getNetworkById).then(res => {
-      if (JSON.stringify(res) !== JSON.stringify(selectedNetworks)) setSelectedNetworks(res);
-    });
-  }, [selectedNetworks, getNetworkById]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    catalog,
+    getPersonById,
+    searchPerson,
+    getCompanyById,
+    searchCompany,
+    getKeywordById,
+    searchKeyword,
+    getNetworkById
+  ]);
   
   return {
     selectedPeople, setSelectedPeople,

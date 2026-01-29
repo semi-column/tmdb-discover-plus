@@ -52,12 +52,13 @@ function formatMessage(level, context, message, data = null) {
   const timestamp = new Date().toISOString();
 
   if (useJson) {
+    const safeData = data ? sanitizeLogData(data) : null;
     return JSON.stringify({
       timestamp,
       level,
       context,
       message,
-      ...(data && { data }),
+      ...(safeData && { data: safeData }),
     });
   }
 

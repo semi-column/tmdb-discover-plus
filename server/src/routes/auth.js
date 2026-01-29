@@ -129,7 +129,7 @@ router.post('/logout', (req, res) => {
   return res.json({ success: true });
 });
 
-router.get('/verify', async (req, res) => {
+router.get('/verify', strictRateLimit, async (req, res) => {
   const bearerToken = req.headers.authorization?.replace('Bearer ', '');
 
   if (!bearerToken) {

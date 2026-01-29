@@ -16,8 +16,12 @@ function getJwtSecret() {
 }
 
 // Non-reversible hash for indexing configs without storing raw API keys
+// Using PBKDF2 to increase computational effort and satisfy security requirements
 export function computeApiKeyId(apiKey) {
-  return crypto.createHmac('sha256', getJwtSecret()).update(apiKey).digest('hex');
+  if (!apiKey) return '';
+  const salt = getJwtSecret(); // Use JWT_SECRET as a constant salt for this purpose
+  const hash = crypto.pbkdf2Sync(apiKey, salt, 100000, 32, 'sha256');
+  return hash.toString('hex');
 }
 
 export function generateToken(apiKey, rememberMe = true) {

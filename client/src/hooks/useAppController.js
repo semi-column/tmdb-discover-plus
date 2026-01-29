@@ -143,7 +143,7 @@ export function useAppController() {
           setPageLoading(false);
         }
       });
-  }, [urlUserId, config.authChecked, isSetup]);
+  }, [urlUserId, config, isSetup, loadUserConfigs, addToast]);
 
   const handleLogin = async (userId, configs = []) => {
     if (loginHandledRef.current) return;

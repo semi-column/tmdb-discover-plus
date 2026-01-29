@@ -10,6 +10,7 @@ import { addonRouter } from './routes/addon.js';
 import { apiRouter } from './routes/api.js';
 import { authRouter } from './routes/auth.js';
 import { createLogger } from './utils/logger.js';
+import { apiRateLimit } from './utils/rateLimit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -48,6 +49,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
+
+// Global generic rate limit for all API routes if not otherwise specified
+app.use('/api', apiRateLimit);
 
 const clientDistPath = path.join(__dirname, '../../client/dist');
 
