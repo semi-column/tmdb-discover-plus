@@ -128,6 +128,16 @@ export function useAppController() {
           
           if (configs && configs.length > 0) {
             const latest = configs[0];
+            
+            // Fix: Prevent infinite loop if the latest config is the one that just failed
+            if (latest.userId === urlUserId) {
+              logger.warn('[App] Latest config is same as failed config, aborting fallback loop');
+              window.history.replaceState({}, '', '/');
+              setUrlUserId(null);
+              setPageLoading(false);
+              return;
+            }
+
             logger.info('[App] Falling back to latest config:', latest.userId);
             setPageLoading(true);
             window.history.replaceState({}, '', `/?userId=${latest.userId}`);
@@ -143,7 +153,7 @@ export function useAppController() {
           setPageLoading(false);
         }
       });
-  }, [urlUserId, config, isSetup, loadUserConfigs, addToast]);
+  }, [urlUserId, config.authChecked, config.isAuthenticated, config.userId, config.loadConfig, isSetup, loadUserConfigs, addToast]);
 
   const handleLogin = async (userId, configs = []) => {
     if (loginHandledRef.current) return;
