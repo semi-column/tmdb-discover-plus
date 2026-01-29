@@ -1,12 +1,22 @@
 {
   "id": "community.tmdb.discover.plus",
-  "version": "2.3.0",
+  "version": "2.6.1",
   "name": "TMDB Discover+",
   "description": "Create custom movie and TV catalogs for Stremio with powerful TMDB filters",
-  "resources": ["catalog", "meta", "stream", "subtitles"],
-  "types": ["movie", "series"],
+  "resources": [
+    "catalog",
+    "meta",
+    "stream",
+    "subtitles"
+  ],
+  "types": [
+    "movie",
+    "series"
+  ],
   "catalogs": [],
-  "idPrefixes": ["tmdb-"],
+  "idPrefixes": [
+    "tmdb-"
+  ],
   "logo": "https://84f50d1c22e7-tmdb-discover-plus.baby-beamup.club/logo.png",
   "behaviorHints": {
     "configurable": true

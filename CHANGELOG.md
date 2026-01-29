@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.0...v2.6.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* manifest version upgrades with releases ([346ecf4](https://github.com/semi-column/tmdb-discover-plus/commit/346ecf44d8a520978897622a1d636c4ac45c55cd))
+* optimized logo for faster loading ([070b713](https://github.com/semi-column/tmdb-discover-plus/commit/070b7133686f151458e800c6f7e0c7152d7af923))
+* Original networks incorrect selected count ([72852a7](https://github.com/semi-column/tmdb-discover-plus/commit/72852a7e00e59c621981af8fde0c3615f61b2f14))
+
 ## [2.6.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.5.0...v2.6.0) (2026-01-28)
 
 
