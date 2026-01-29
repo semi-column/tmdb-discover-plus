@@ -55,14 +55,7 @@ export function buildManifest(userConfig, baseUrl) {
     version: ADDON_VERSION,
     logo: `${baseUrl}/logo.png`,
     idPrefixes: ['tmdb:', 'tt'],
-    resources: [
-      'catalog',
-      {
-        name: 'meta',
-        types: ['movie', 'series'],
-        idPrefixes: ['tmdb:', 'tt'],
-      },
-    ],
+    resources: ['catalog', 'meta'],
     types: ['movie', 'series'],
     catalogs,
     behaviorHints: {
