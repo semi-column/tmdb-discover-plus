@@ -41,7 +41,7 @@ function App() {
     api
       .getStats()
       .then(setStats)
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   if (pageLoading || !config.authChecked) {
@@ -183,6 +183,7 @@ function App() {
               preferences={config.preferences}
               onPreferencesChange={config.setPreferences}
               onImportConfig={actions.handleImportConfig}
+              languages={tmdb.languages}
             />
 
             <CatalogEditor

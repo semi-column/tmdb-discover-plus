@@ -978,8 +978,8 @@ export function CatalogEditor({
                             onChange={(value) => handleFiltersChange('language', value)}
                             placeholder="Any"
                             searchPlaceholder="Search languages..."
-                            labelKey="name"
-                            valueKey="code"
+                            labelKey="english_name"
+                            valueKey="iso_639_1"
                           />
                         </div>
 
@@ -1013,8 +1013,8 @@ export function CatalogEditor({
                             onChange={(value) => handleFiltersChange('originCountry', value)}
                             placeholder="Any"
                             searchPlaceholder="Search countries..."
-                            labelKey="name"
-                            valueKey="code"
+                            labelKey="english_name"
+                            valueKey="iso_3166_1"
                           />
                         </div>
                       </div>
@@ -1314,13 +1314,13 @@ export function CatalogEditor({
                           Use regional release dates instead of worldwide premiere
                         </span>
                         <SearchableSelect
-                          options={[{ code: '', name: 'Worldwide (default)' }, ...countries]}
+                          options={[{ iso_3166_1: '', english_name: 'Worldwide (default)' }, ...countries]}
                           value={localCatalog?.filters?.region || ''}
                           onChange={(value) => handleFiltersChange('region', value)}
                           placeholder="Worldwide"
                           searchPlaceholder="Search countries..."
-                          labelKey="name"
-                          valueKey="code"
+                          labelKey="english_name"
+                          valueKey="iso_3166_1"
                         />
                       </div>
                     </>

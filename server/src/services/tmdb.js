@@ -169,35 +169,7 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
   throw lastError;
 }
 
-/**
- * Resolve a TMDB item by IMDB ID.
- * Uses /find/{external_id} endpoint.
- */
-export async function findByImdbId(apiKey, imdbId, type = 'movie', options = {}) {
-  const id = String(imdbId || '').trim();
-  if (!apiKey || !id) return null;
 
-  const mediaType = type === 'series' ? 'tv' : 'movie';
-  const params = {
-    external_source: 'imdb_id',
-  };
-  const languageParam = options?.displayLanguage || options?.language;
-  if (languageParam) params.language = languageParam;
-
-  try {
-    const data = await tmdbFetch(`/find/${encodeURIComponent(id)}`, apiKey, params);
-    const bucket = mediaType === 'tv' ? data?.tv_results : data?.movie_results;
-    const first = Array.isArray(bucket) && bucket.length > 0 ? bucket[0] : null;
-    if (!first?.id) return null;
-    return {
-      tmdbId: first.id,
-      mediaType,
-      raw: first,
-    };
-  } catch {
-    return null;
-  }
-}
 
 function normalizeLoose(s) {
   return String(s || '')
@@ -292,6 +264,141 @@ async function getNetworksViaWebsite(query) {
     if (!byId.has(key)) byId.set(key, n);
   }
   return Array.from(byId.values());
+}
+
+/**
+ * Get available languages
+ */
+export async function getLanguages(apiKey) {
+  const cacheKey = 'tmdb_languages';
+  const cache = getCache();
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore */
+  }
+
+  const data = await tmdbFetch('/configuration/languages', apiKey);
+  const sorted = data.sort((a, b) => a.english_name.localeCompare(b.english_name));
+
+  try {
+    await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
+  } catch (e) {
+    /* ignore */
+  }
+
+  return sorted;
+}
+
+/**
+ * Get available countries
+ */
+export async function getCountries(apiKey) {
+  const cacheKey = 'tmdb_countries';
+  const cache = getCache();
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore */
+  }
+
+  const data = await tmdbFetch('/configuration/countries', apiKey);
+  const sorted = data.sort((a, b) => a.english_name.localeCompare(b.english_name));
+
+  try {
+    await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
+  } catch (e) {
+    /* ignore */
+  }
+
+  return sorted;
+}
+
+/**
+ * Get certifications (age ratings)
+ */
+export async function getCertifications(apiKey, type = 'movie') {
+  const mediaType = type === 'series' ? 'tv' : 'movie';
+  const cacheKey = `tmdb_certifications_${mediaType}`;
+  const cache = getCache();
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore */
+  }
+
+  const data = await tmdbFetch(`/certification/${mediaType}/list`, apiKey);
+  const certs = data.certifications || {};
+
+  try {
+    await cache.set(cacheKey, certs, 86400 * 7); // 7 days
+  } catch (e) {
+    /* ignore */
+  }
+
+  return certs;
+}
+
+/**
+ * Get watch provider regions
+ */
+export async function getWatchRegions(apiKey) {
+  const cacheKey = 'tmdb_watch_regions';
+  const cache = getCache();
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore */
+  }
+
+  const data = await tmdbFetch('/watch/providers/regions', apiKey);
+  const results = data.results || [];
+  const sorted = results.sort((a, b) => a.english_name.localeCompare(b.english_name));
+
+  try {
+    await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
+  } catch (e) {
+    /* ignore */
+  }
+
+  return sorted;
+}
+
+/**
+ * Get watch providers for a region
+ */
+export async function getWatchProviders(apiKey, type = 'movie', region = 'US') {
+  const mediaType = type === 'series' ? 'tv' : 'movie';
+  const cacheKey = `tmdb_watch_providers_${mediaType}_${region}`;
+  const cache = getCache();
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore */
+  }
+
+  const params = { watch_region: region };
+  const data = await tmdbFetch(`/watch/providers/${mediaType}`, apiKey, params);
+  const results = data.results || [];
+  const sorted = results.sort((a, b) => a.provider_name.localeCompare(b.provider_name));
+
+  try {
+    await cache.set(cacheKey, sorted, 86400); // 24 hours
+  } catch (e) {
+    /* ignore */
+  }
+
+  return sorted;
 }
 
 /**
@@ -1160,6 +1267,17 @@ export async function search(apiKey, query, type = 'movie', page = 1) {
  * @param {Object|null} genreMap - Optional map of ID -> Name for localized genres
  * @returns {Object} Stremio meta preview object
  */
+
+
+/**
+ * Convert TMDB result to Stremio meta preview format
+ * @param {Object} item - TMDB item object
+ * @param {string} type - Content type ('movie' or 'series')
+ * @param {string|null} imdbId - IMDb ID if available
+ * @param {Object|null} posterOptions - Optional poster service config { apiKey, service }
+ * @param {Object|null} genreMap - Optional map of ID -> Name for localized genres
+ * @returns {Object} Stremio meta preview object
+ */
 export function toStremioMeta(item, type, imdbId = null, posterOptions = null, genreMap = null) {
   const isMovie = type === 'movie';
   const title = isMovie ? item.title : item.name;
@@ -1213,9 +1331,10 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
   }
 
   const effectiveImdbId = imdbId || item.imdb_id || null;
+  const primaryId = effectiveImdbId || `tmdb:${item.id}`;
 
   const meta = {
-    id: `tmdb:${item.id}`,
+    id: primaryId,
     tmdbId: item.id,
     imdbId: effectiveImdbId,
     imdb_id: effectiveImdbId, // Some addons/clients expect this format
@@ -1229,12 +1348,50 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
     releaseInfo: year,
     imdbRating: typeof item.vote_average === 'number' ? item.vote_average.toFixed(1) : null,
     genres: mappedGenres,
-    behaviorHints: {
-      defaultVideoId: effectiveImdbId || `tmdb:${item.id}`,
-    },
+    behaviorHints: {},
   };
 
   return meta;
+}
+
+/**
+ * Find TMDB item by IMDb ID
+ */
+export async function findByImdbId(apiKey, imdbId, type = 'movie', options = {}) {
+  const cacheKey = `find_${imdbId}`;
+  const cache = getCache();
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore */
+  }
+
+  const params = { external_source: 'imdb_id' };
+  if (options.language) params.language = options.language;
+
+  try {
+    const data = await tmdbFetch(`/find/${imdbId}`, apiKey, params);
+    let result = null;
+
+    if (type === 'movie' && data.movie_results?.length > 0) {
+      result = data.movie_results[0];
+    } else if ((type === 'series' || type === 'tv') && data.tv_results?.length > 0) {
+      result = data.tv_results[0];
+    }
+
+    if (result) {
+      const found = { tmdbId: result.id };
+      try {
+        await cache.set(cacheKey, found, 86400 * 7); // 7 days
+      } catch (e) { }
+      return found;
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
 }
 
 /**
@@ -1249,57 +1406,7 @@ export async function validateApiKey(apiKey) {
   }
 }
 
-/**
- * Get available languages
- */
-export async function getLanguages(apiKey) {
-  const data = await tmdbFetch('/configuration/languages', apiKey);
-  return data
-    .filter((lang) => lang.iso_639_1)
-    .map((lang) => ({
-      code: lang.iso_639_1,
-      name: lang.english_name,
-      nativeName: lang.name,
-    }));
-}
 
-/**
- * Get available countries
- */
-export async function getCountries(apiKey) {
-  const data = await tmdbFetch('/configuration/countries', apiKey);
-  return data.map((country) => ({
-    code: country.iso_3166_1,
-    name: country.english_name,
-    nativeName: country.native_name,
-  }));
-}
-
-/**
- * Get movie certifications (age ratings)
- */
-export async function getCertifications(apiKey, type = 'movie') {
-  const endpoint = type === 'series' ? '/certification/tv/list' : '/certification/movie/list';
-  const data = await tmdbFetch(endpoint, apiKey);
-  return data.certifications;
-}
-
-/**
- * Get watch providers for a region
- */
-export async function getWatchProviders(apiKey, type = 'movie', region = 'US') {
-  const mediaType = type === 'series' ? 'tv' : 'movie';
-  const data = await tmdbFetch(`/watch/providers/${mediaType}`, apiKey, { watch_region: region });
-  return data.results || [];
-}
-
-/**
- * Get available watch regions
- */
-export async function getWatchRegions(apiKey) {
-  const data = await tmdbFetch('/watch/providers/regions', apiKey);
-  return data.results || [];
-}
 
 /**
  * Search for a person (actor, director, etc.)

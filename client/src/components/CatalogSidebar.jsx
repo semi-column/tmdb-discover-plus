@@ -37,14 +37,11 @@ import {
 } from '@dnd-kit/sortable';
 
 import { useIsMobile } from '../hooks/useIsMobile';
-import { useTMDB } from '../hooks/useTMDB';
 import { SortableCatalogItem } from './SortableCatalogItem';
 import { SearchableSelect } from './SearchableSelect';
 
-function GeneralSettingsSection({ preferences, onPreferencesChange }) {
+function GeneralSettingsSection({ preferences, onPreferencesChange, languages = [] }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const tmdb = useTMDB();
-  const languages = tmdb.languages || [];
 
   const defaultLanguage = preferences?.defaultLanguage || '';
 
@@ -295,6 +292,7 @@ export function CatalogSidebar({
   preferences = {},
   onPreferencesChange,
   onImportConfig,
+  languages = [],
 }) {
   const isMobile = useIsMobile();
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
@@ -466,7 +464,11 @@ export function CatalogSidebar({
         </label>
       </div>
 
-      <GeneralSettingsSection preferences={preferences} onPreferencesChange={onPreferencesChange} />
+      <GeneralSettingsSection
+        preferences={preferences}
+        onPreferencesChange={onPreferencesChange}
+        languages={languages}
+      />
 
       <PosterSettingsSection preferences={preferences} onPreferencesChange={onPreferencesChange} />
 
