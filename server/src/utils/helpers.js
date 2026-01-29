@@ -12,8 +12,22 @@ export function getBaseUrl(req) {
     return process.env.BASE_URL;
   }
 
+  const origin = req.get('origin');
+  if (origin) {
+    return origin.replace(/\/$/, '');
+  }
+
+  const referer = req.get('referer');
+  if (referer) {
+    try {
+      const refererUrl = new URL(referer);
+      return `${refererUrl.protocol}//${refererUrl.host}`;
+    } catch {
+    }
+  }
+
   const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';
-  let host = req.get('x-forwarded-host') || req.get('host') || 'localhost';
+  const host = req.get('x-forwarded-host') || req.get('host') || 'localhost';
 
   return `${protocol}://${host}`;
 }
