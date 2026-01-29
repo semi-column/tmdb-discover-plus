@@ -133,9 +133,9 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     const posterOptions =
       config.preferences?.posterService && config.preferences.posterService !== 'none'
         ? {
-            apiKey: getPosterKeyFromConfig(config),
-            service: config.preferences.posterService,
-          }
+          apiKey: getPosterKeyFromConfig(config),
+          service: config.preferences.posterService,
+        }
         : null;
 
     let catalogConfig = config.catalogs.find((c) => {
@@ -293,8 +293,25 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       log.warn('IMDb enrichment failed (continuing with TMDB IDs)', { error: e.message });
     }
 
+    const displayLanguage = resolvedFilters?.displayLanguage || catalogConfig.filters?.displayLanguage;
+    let genreMap = null;
+
+    if (allItems.length > 0 && displayLanguage && displayLanguage !== 'en') {
+      try {
+        const localizedGenres = await tmdb.getGenres(apiKey, type, displayLanguage);
+        if (Array.isArray(localizedGenres)) {
+          genreMap = {};
+          localizedGenres.forEach((g) => {
+            genreMap[String(g.id)] = g.name;
+          });
+        }
+      } catch (err) {
+        log.warn('Failed to fetch localized genres for catalog', { catalogId, displayLanguage, error: err.message });
+      }
+    }
+
     const metas = allItems.map((item) => {
-      return tmdb.toStremioMeta(item, type, null, posterOptions);
+      return tmdb.toStremioMeta(item, type, null, posterOptions, genreMap);
     });
 
     const filteredMetas = metas.filter((m) => m !== null);
@@ -339,9 +356,9 @@ async function handleMetaRequest(userId, type, id, extra, res) {
     const posterOptions =
       config.preferences?.posterService && config.preferences.posterService !== 'none'
         ? {
-            apiKey: getPosterKeyFromConfig(config),
-            service: config.preferences.posterService,
-          }
+          apiKey: getPosterKeyFromConfig(config),
+          service: config.preferences.posterService,
+        }
         : null;
 
     const requestedId = String(id || '');
@@ -378,7 +395,8 @@ async function handleMetaRequest(userId, type, id, extra, res) {
       imdbId,
       requestedId,
       posterOptions,
-      videos
+      videos,
+      language
     );
 
     res.json({

@@ -35,7 +35,8 @@ const TMDB_SITE_URL = new URL(TMDB_WEBSITE_BASE_URL);
 const TMDB_SITE_ORIGIN = TMDB_SITE_URL.origin; // https://www.themoviedb.org
 
 // Genre mappings (will be populated from API)
-let genreCache = { movie: null, tv: null };
+// Structure: { movie: { en: [...], it: [...] }, tv: { ... } }
+let genreCache = { movie: {}, tv: {} };
 
 let staticGenreMap = { movie: {}, tv: {} };
 try {
@@ -296,22 +297,33 @@ async function getNetworksViaWebsite(query) {
 /**
  * Get genre list for movies or TV
  */
-export async function getGenres(apiKey, type = 'movie') {
+export async function getGenres(apiKey, type = 'movie', language = 'en') {
   const mediaType = type === 'series' ? 'tv' : 'movie';
+  const lang = language || 'en';
 
-  if (genreCache[mediaType]) {
-    return genreCache[mediaType];
+  if (genreCache[mediaType]?.[lang]) {
+    return genreCache[mediaType][lang];
   }
 
-  const data = await tmdbFetch(`/genre/${mediaType}/list`, apiKey);
-  genreCache[mediaType] = data.genres;
+  // If cache structure is not initialized (legacy format handling)
+  if (!genreCache[mediaType]) genreCache[mediaType] = {};
+
+  const params = {};
+  if (lang !== 'en') params.language = lang;
+
+  const data = await tmdbFetch(`/genre/${mediaType}/list`, apiKey, params);
+
+  if (!genreCache[mediaType]) genreCache[mediaType] = {};
+  genreCache[mediaType][lang] = data.genres;
+
   return data.genres;
 }
 
 // Expose cached genres accessor for other modules (may be null if not yet fetched)
-export function getCachedGenres(type = 'movie') {
+export function getCachedGenres(type = 'movie', language = 'en') {
   const mediaType = type === 'series' ? 'tv' : 'movie';
-  return genreCache[mediaType] || null;
+  const lang = language || 'en';
+  return genreCache[mediaType]?.[lang] || null;
 }
 
 /**
@@ -657,12 +669,12 @@ export async function getDetails(apiKey, tmdbId, type = 'movie') {
 
   if (languageParam) {
     params.language = languageParam;
-    // IMPORTANT: include_image_language ensures we get logos even when non-English language is selected
-    // Format: "<language>,en,null" - prioritize requested language, then English, then language-neutral
-    params.include_image_language = `${languageParam},en,null`;
+
+    // Include videos in target language + English fallback
+    params.include_video_language = `${languageParam},en,null`;
   } else {
-    // Default to English logos if no language specified
-    params.include_image_language = 'en,null';
+    // Default to English videos if no language specified
+    params.include_video_language = 'en,null';
   }
 
   return tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, params);
@@ -803,7 +815,8 @@ export async function toStremioFullMeta(
   imdbId = null,
   requestedId = null,
   posterOptions = null,
-  videos = null
+  videos = null,
+  targetLanguage = null
 ) {
   if (!details) return {};
   const isMovie = type === 'movie';
@@ -819,9 +832,9 @@ export async function toStremioFullMeta(
   const credits = details.credits || {};
   const cast = Array.isArray(credits.cast)
     ? credits.cast
-        .slice(0, 20)
-        .map((p) => p?.name)
-        .filter(Boolean)
+      .slice(0, 20)
+      .map((p) => p?.name)
+      .filter(Boolean)
     : [];
 
   const crew = Array.isArray(credits.crew) ? credits.crew : [];
@@ -874,10 +887,22 @@ export async function toStremioFullMeta(
   // Trailer
   let trailer = null;
   if (details.videos?.results?.length > 0) {
-    // Prefer official YouTube trailers
+    const allVideos = details.videos.results.filter((v) => v.site === 'YouTube');
+
+    // Prioritize: 
+    // 1. Language match + Trailer
+    // 2. Language match + Teaser/Clip
+    // 3. English + Trailer
+    // 4. Any Trailer
+
+    const lang = targetLanguage || 'en';
+
     const trailerVideo =
-      details.videos.results.find((v) => v.site === 'YouTube' && v.type === 'Trailer') ||
-      details.videos.results.find((v) => v.site === 'YouTube');
+      allVideos.find(v => v.iso_639_1 === lang && v.type === 'Trailer') ||
+      allVideos.find(v => v.iso_639_1 === lang) ||
+      allVideos.find(v => v.iso_639_1 === 'en' && v.type === 'Trailer') ||
+      allVideos.find(v => v.type === 'Trailer') ||
+      allVideos[0];
 
     if (trailerVideo) {
       trailer = `yt:${trailerVideo.key}`;
@@ -890,7 +915,7 @@ export async function toStremioFullMeta(
   // Try to get real IMDb rating if configured
   let displayRating =
     typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null;
-  const rpdbKey = process.env.RPDB_API_KEY || 't0-free-rpdb';
+  const rpdbKey = process.env.RPDB_API_KEY; // Default dead key removed to prevent errors
 
   // Make sure we have an IMDb ID before trying
   let actualImdbRating = null;
@@ -901,7 +926,7 @@ export async function toStremioFullMeta(
         displayRating = realRating;
         actualImdbRating = realRating;
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   if (effectiveImdbId) {
@@ -983,10 +1008,10 @@ export async function toStremioFullMeta(
   const app_extras = {
     cast: Array.isArray(credits.cast)
       ? credits.cast.slice(0, 15).map((p) => ({
-          name: p.name,
-          character: p.character,
-          photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w276_and_h350_face${p.profile_path}` : null,
-        }))
+        name: p.name,
+        character: p.character,
+        photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w276_and_h350_face${p.profile_path}` : null,
+      }))
       : [],
     directors: crew
       .filter((p) => p.job === 'Director')
@@ -1000,8 +1025,8 @@ export async function toStremioFullMeta(
     })),
     seasonPosters: Array.isArray(details.seasons)
       ? details.seasons
-          .map((s) => (s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null))
-          .filter(Boolean)
+        .map((s) => (s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null))
+        .filter(Boolean)
       : [],
     releaseDates: details.release_dates || details.content_ratings || null,
     certification: certification,
@@ -1033,10 +1058,31 @@ export async function toStremioFullMeta(
     // if (enhancedBackdrop) background = enhancedBackdrop;
   }
 
-  const logo =
-    Array.isArray(details.images?.logos) && details.images.logos.length > 0
-      ? details.images.logos.find((l) => l?.file_path)?.file_path
-      : null;
+  // Logo selection: Prioritize Target Lang > English > Null > Any
+  // We need to resort because the API might have returned a mix
+  let logo = null;
+  if (details.images?.logos?.length > 0) {
+    const logos = details.images.logos;
+    const target = targetLanguage || 'en';
+
+    const candidates = [
+      logos.find(l => l.iso_639_1 === target),
+      logos.find(l => l.iso_639_1 === 'en'),
+      logos.find(l => l.iso_639_1 === null), // Textless/Logo-only
+      logos[0] // Fallback to first available (e.g. original language)
+    ];
+
+    const best = candidates.find(Boolean);
+    if (best) logo = best.file_path;
+  }
+
+  // Fallbacks for Poster/Backdrop if main path is missing
+  if (!poster && details.images?.posters?.length > 0) {
+    poster = `${TMDB_IMAGE_BASE}/w500${details.images.posters[0].file_path}`;
+  }
+  if (!background && details.images?.backdrops?.length > 0) {
+    background = `${TMDB_IMAGE_BASE}/w1280${details.images.backdrops[0].file_path}`;
+  }
 
   const responseId = requestedId || `tmdb:${details.id}`;
 
@@ -1108,9 +1154,10 @@ export async function search(apiKey, query, type = 'movie', page = 1) {
  * @param {string} type - Content type ('movie' or 'series')
  * @param {string|null} imdbId - IMDb ID if available
  * @param {Object|null} posterOptions - Optional poster service config { apiKey, service }
+ * @param {Object|null} genreMap - Optional map of ID -> Name for localized genres
  * @returns {Object} Stremio meta preview object
  */
-export function toStremioMeta(item, type, imdbId = null, posterOptions = null) {
+export function toStremioMeta(item, type, imdbId = null, posterOptions = null, genreMap = null) {
   const isMovie = type === 'movie';
   const title = isMovie ? item.title : item.name;
   const releaseDate = isMovie ? item.release_date : item.first_air_date;
@@ -1120,17 +1167,27 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null) {
   const ids = item.genre_ids || item.genres?.map((g) => g.id) || [];
   const mediaKey = isMovie ? 'movie' : 'tv';
 
-  const cachedList = genreCache[mediaKey];
+  const cachedList = genreCache[mediaKey]?.['en']; // Default fallback
   const staticList = staticGenreMap[mediaKey] || {};
 
   ids.forEach((id) => {
     const key = String(id);
     let name = null;
-    if (cachedList) {
+
+    // 1. Try provided localized map first
+    if (genreMap && genreMap[key]) {
+      name = genreMap[key];
+    }
+
+    // 2. Try cached English list
+    if (!name && cachedList) {
       const hit = cachedList.find((g) => String(g.id) === key);
       if (hit) name = hit.name;
     }
+
+    // 3. Try static fallback
     if (!name && staticList[key]) name = staticList[key];
+
     if (name) mappedGenres.push(name);
   });
 
@@ -1167,7 +1224,7 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null) {
     fanart: background, // Compatibility alias
     description: item.overview || '',
     releaseInfo: year,
-    imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
+    imdbRating: typeof item.vote_average === 'number' ? item.vote_average.toFixed(1) : null,
     genres: mappedGenres,
     behaviorHints: {
       defaultVideoId: effectiveImdbId || `tmdb:${item.id}`,

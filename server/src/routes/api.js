@@ -347,6 +347,23 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
       });
     }
 
+    let genreMap = null;
+    const displayLanguage = resolvedFilters?.displayLanguage;
+
+    if (results?.results?.length > 0 && displayLanguage && displayLanguage !== 'en') {
+      try {
+        const localizedGenres = await tmdb.getGenres(apiKey, type, displayLanguage);
+        if (Array.isArray(localizedGenres)) {
+          genreMap = {};
+          localizedGenres.forEach((g) => {
+            genreMap[String(g.id)] = g.name;
+          });
+        }
+      } catch (err) {
+        log.warn('Failed to fetch localized genres for preview', { displayLanguage, error: err.message });
+      }
+    }
+
     const normalizeCsvOrArray = (val) => {
       if (!val) return [];
       if (Array.isArray(val)) return val.map(String).filter(Boolean);
@@ -357,7 +374,7 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
     };
 
     const metas = results.results.slice(0, 20).map((item) => {
-      return tmdb.toStremioMeta(item, type, null);
+      return tmdb.toStremioMeta(item, type, null, null, genreMap);
     });
 
     const filteredMetas = metas.filter(Boolean);
