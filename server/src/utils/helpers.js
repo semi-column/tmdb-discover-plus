@@ -22,8 +22,7 @@ export function getBaseUrl(req) {
     try {
       const refererUrl = new URL(referer);
       return `${refererUrl.protocol}//${refererUrl.host}`;
-    } catch {
-    }
+    } catch {}
   }
 
   const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';

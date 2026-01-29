@@ -1,11 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-export function useCatalogSync({
-  localCatalog,
-  catalog,
-  onUpdate,
-  dependencies = [],
-}) {
+export function useCatalogSync({ localCatalog, catalog, onUpdate, dependencies = [] }) {
   const initialSyncRef = useRef(true);
   const syncTimeoutRef = useRef(null);
 
@@ -18,7 +13,7 @@ export function useCatalogSync({
     }
 
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-    
+
     syncTimeoutRef.current = setTimeout(() => {
       if (typeof onUpdate === 'function') {
         onUpdate(catalog._id, localCatalog);
@@ -31,6 +26,6 @@ export function useCatalogSync({
         syncTimeoutRef.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localCatalog, catalog?._id, onUpdate, ...dependencies]);
 }

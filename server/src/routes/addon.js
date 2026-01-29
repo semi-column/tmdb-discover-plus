@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { getUserConfig, getApiKeyFromConfig, getPosterKeyFromConfig } from '../services/configService.js';
+import {
+  getUserConfig,
+  getApiKeyFromConfig,
+  getPosterKeyFromConfig,
+} from '../services/configService.js';
 import * as tmdb from '../services/tmdb.js';
 import { shuffleArray, getBaseUrl, normalizeGenreName, parseIdArray } from '../utils/helpers.js';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.js';
@@ -56,7 +60,7 @@ router.get('/:userId/manifest.json', async (req, res) => {
         res.set('Expires', '0');
       }
     }
-    
+
     if (!res.headersSent) {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.set('Pragma', 'no-cache');
@@ -93,7 +97,6 @@ function extractGenreIds(item) {
   return ids.map(String);
 }
 
-
 async function handleCatalogRequest(userId, type, catalogId, extra, res) {
   try {
     const skip = parseInt(extra.skip) || 0;
@@ -116,23 +119,27 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     }
 
     // Get poster service configuration
-    const posterOptions = config.preferences?.posterService && config.preferences.posterService !== 'none'
-      ? {
-          apiKey: getPosterKeyFromConfig(config),
-          service: config.preferences.posterService,
-        }
-      : null;
+    const posterOptions =
+      config.preferences?.posterService && config.preferences.posterService !== 'none'
+        ? {
+            apiKey: getPosterKeyFromConfig(config),
+            service: config.preferences.posterService,
+          }
+        : null;
 
     let catalogConfig = config.catalogs.find((c) => {
       const id = `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
       return id === catalogId;
     });
 
-    if (!catalogConfig && (catalogId === 'tmdb-search-movie' || catalogId === 'tmdb-search-series')) {
+    if (
+      !catalogConfig &&
+      (catalogId === 'tmdb-search-movie' || catalogId === 'tmdb-search-series')
+    ) {
       catalogConfig = {
         name: 'TMDB Search',
         type: catalogId === 'tmdb-search-movie' ? 'movie' : 'series',
-        filters: {}
+        filters: {},
       };
     }
 
@@ -238,7 +245,10 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     const resolvedFilters = resolveDynamicDatePreset(effectiveFilters, type);
 
     const listType = resolvedFilters?.listType || catalogConfig.filters?.listType;
-    const randomize = resolvedFilters?.randomize || catalogConfig.filters?.randomize || (resolvedFilters?.sortBy === 'random');
+    const randomize =
+      resolvedFilters?.randomize ||
+      catalogConfig.filters?.randomize ||
+      resolvedFilters?.sortBy === 'random';
 
     if (search) {
       result = await tmdb.search(apiKey, search, type, page, {
@@ -287,12 +297,12 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       res.set('Cache-Control', 'max-age=300, stale-while-revalidate=600');
     }
 
-    log.debug('Returning catalog results', { 
-      count: filteredMetas.length, 
-      page, 
+    log.debug('Returning catalog results', {
+      count: filteredMetas.length,
+      page,
       skip,
       randomize,
-      cacheHeader: res.get('Cache-Control')
+      cacheHeader: res.get('Cache-Control'),
     });
 
     res.json({
@@ -315,12 +325,13 @@ async function handleMetaRequest(userId, type, id, extra, res) {
     if (!apiKey) return res.json({ meta: {} });
 
     // Get poster service configuration
-    const posterOptions = config.preferences?.posterService && config.preferences.posterService !== 'none'
-      ? {
-          apiKey: getPosterKeyFromConfig(config),
-          service: config.preferences.posterService,
-        }
-      : null;
+    const posterOptions =
+      config.preferences?.posterService && config.preferences.posterService !== 'none'
+        ? {
+            apiKey: getPosterKeyFromConfig(config),
+            service: config.preferences.posterService,
+          }
+        : null;
 
     const requestedId = String(id || '');
     const language = extra?.displayLanguage || extra?.language || pickPreferredMetaLanguage(config);
@@ -350,7 +361,14 @@ async function handleMetaRequest(userId, type, id, extra, res) {
       log.debug('Fetched series episodes', { tmdbId, episodeCount: videos?.length || 0 });
     }
 
-    const meta = await tmdb.toStremioFullMeta(details, type, imdbId, requestedId, posterOptions, videos);
+    const meta = await tmdb.toStremioFullMeta(
+      details,
+      type,
+      imdbId,
+      requestedId,
+      posterOptions,
+      videos
+    );
 
     res.json({
       meta,

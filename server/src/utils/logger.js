@@ -18,16 +18,26 @@ const currentLevel = LOG_LEVELS[process.env.LOG_LEVEL?.toLowerCase()] ?? LOG_LEV
 const useJson = process.env.LOG_FORMAT === 'json';
 
 const SENSITIVE_KEYS = [
-  'api_key', 'apikey', 'tmdbapikey', 'password', 'token', 'secret',
-  'auth', 'authorization', 'bearer', 'key', 'credential',
-  'pass', 'email'
+  'api_key',
+  'apikey',
+  'tmdbapikey',
+  'password',
+  'token',
+  'secret',
+  'auth',
+  'authorization',
+  'bearer',
+  'key',
+  'credential',
+  'pass',
+  'email',
 ];
 
 function sanitizeValue(value, key = '') {
   if (value === null || value === undefined) return value;
-  
+
   const lowerKey = String(key).toLowerCase();
-  if (SENSITIVE_KEYS.some(sk => lowerKey.includes(sk))) {
+  if (SENSITIVE_KEYS.some((sk) => lowerKey.includes(sk))) {
     return '[REDACTED]';
   }
 
@@ -41,12 +51,12 @@ function sanitizeValue(value, key = '') {
   if (value instanceof Error) {
     return {
       message: value.message,
-      stack: '[REDACTED]'
+      stack: '[REDACTED]',
     };
   }
 
   if (Array.isArray(value)) {
-    return value.map(item => sanitizeValue(item));
+    return value.map((item) => sanitizeValue(item));
   }
 
   if (typeof value === 'object') {
@@ -71,9 +81,9 @@ function sanitizeValue(value, key = '') {
 const output = (level, formatted) => {
   const message = String(formatted);
   if (level === 'error') {
-     process.stderr.write(message + '\n');
+    process.stderr.write(message + '\n');
   } else {
-     process.stdout.write(message + '\n');
+    process.stdout.write(message + '\n');
   }
 };
 

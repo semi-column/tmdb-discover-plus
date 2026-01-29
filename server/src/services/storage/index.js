@@ -16,15 +16,15 @@ export async function initStorage() {
 
   // 1. Explicit Driver Selection
   if (driver === 'postgres' && postgresUri) {
-      log.info('Initializing Postgres Adapter (Explicit)');
-      storageInstance = new PostgresAdapter(postgresUri);
+    log.info('Initializing Postgres Adapter (Explicit)');
+    storageInstance = new PostgresAdapter(postgresUri);
   } else if (driver === 'mongo' && mongoUri) {
-      log.info('Initializing MongoDB Adapter (Explicit)');
-      storageInstance = new MongoAdapter(mongoUri);
+    log.info('Initializing MongoDB Adapter (Explicit)');
+    storageInstance = new MongoAdapter(mongoUri);
   } else if (driver === 'memory') {
-      log.info('Initializing Memory Adapter (Explicit)');
-      storageInstance = new MemoryAdapter();
-  } 
+    log.info('Initializing Memory Adapter (Explicit)');
+    storageInstance = new MemoryAdapter();
+  }
   // 2. Auto-detection Priority: Postgres > Mongo > Memory
   else if (postgresUri) {
     log.info('Initializing Postgres Adapter (Auto-detected)');
@@ -33,7 +33,9 @@ export async function initStorage() {
     log.info('Initializing MongoDB Adapter (Auto-detected)');
     storageInstance = new MongoAdapter(mongoUri);
   } else {
-    log.warn('No database configured. Falling back to In-Memory Storage (Data will be lost on restart)');
+    log.warn(
+      'No database configured. Falling back to In-Memory Storage (Data will be lost on restart)'
+    );
     storageInstance = new MemoryAdapter();
   }
 

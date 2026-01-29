@@ -109,10 +109,12 @@ app.get('/health', (req, res) => {
 
   let dbStatus = 'disconnected';
   try {
-      if (getStorage()) {
-          dbStatus = 'connected';
-      }
-  } catch (e) { void e; }
+    if (getStorage()) {
+      dbStatus = 'connected';
+    }
+  } catch (e) {
+    void e;
+  }
 
   const health = {
     status: 'ok',
@@ -161,10 +163,12 @@ function gracefulShutdown(signal) {
 
   if (server) {
     server.close(async (err) => {
-        try {
-            const storage = getStorage();
-            if (storage) await storage.disconnect();
-        } catch (e) { log.error('Error disconnecting storage', {error: e.message}); }
+      try {
+        const storage = getStorage();
+        if (storage) await storage.disconnect();
+      } catch (e) {
+        log.error('Error disconnecting storage', { error: e.message });
+      }
 
       clearTimeout(shutdownTimeout);
       if (err) {
@@ -196,7 +200,7 @@ async function start() {
   try {
     await initCache();
     await initStorage();
-    
+
     server = app.listen(PORT, '0.0.0.0', () => {
       log.info(`TMDB Discover+ running at http://0.0.0.0:${PORT}`);
       log.info(`Configure at http://localhost:${PORT}/configure`);

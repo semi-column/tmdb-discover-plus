@@ -38,7 +38,10 @@ function App() {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
-    api.getStats().then(setStats).catch(() => {});
+    api
+      .getStats()
+      .then(setStats)
+      .catch(() => {});
   }, []);
 
   if (pageLoading || !config.authChecked) {
@@ -103,12 +106,16 @@ function App() {
               <p className="text-secondary">
                 Create and customize your Stremio catalogs with TMDB filters
               </p>
-              
+
               {stats && (
                 <div className="mobile-stats-pill">
-                  <span><strong>{stats.totalUsers.toLocaleString()}</strong> Users</span>
+                  <span>
+                    <strong>{stats.totalUsers.toLocaleString()}</strong> Users
+                  </span>
                   <span className="divider">•</span>
-                  <span><strong>{stats.totalCatalogs.toLocaleString()}</strong> Catalogs</span>
+                  <span>
+                    <strong>{stats.totalCatalogs.toLocaleString()}</strong> Catalogs
+                  </span>
                 </div>
               )}
             </div>
@@ -125,7 +132,7 @@ function App() {
                   onCreateNew={actions.handleCreateNewConfig}
                 />
               )}
-              
+
               {config.catalogs.length > 0 && (
                 <div className="save-button-wrapper">
                   {config.isDirty && <span className="unsaved-indicator" title="Unsaved changes" />}

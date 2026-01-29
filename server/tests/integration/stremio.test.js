@@ -45,7 +45,36 @@ export async function run() {
     const checkRes = await get(`/${userId}/manifest.json`);
     if (!checkRes.ok || !checkRes.data.catalogs || checkRes.data.catalogs.length === 0) {
       // Save a catalog to this config
-      const updateRes = await put(`/api/config/${userId}`, {
+      const updateRes = await put(
+        `/api/config/${userId}`,
+        {
+          catalogs: [
+            createTestCatalog({
+              id: 'stremio-test',
+              name: 'Stremio Test Catalog',
+              type: 'movie',
+              filters: {
+                genres: ['28'],
+                sortBy: 'popularity.desc',
+              },
+            }),
+          ],
+        },
+        { headers: getAuthHeaders() }
+      );
+
+      if (!updateRes.ok) {
+        // Create a new config instead
+        userId = null;
+      }
+    }
+  }
+
+  // If we still don't have a userId with catalogs, create one
+  if (!userId) {
+    const createRes = await post(
+      '/api/config',
+      {
         catalogs: [
           createTestCatalog({
             id: 'stremio-test',
@@ -57,30 +86,9 @@ export async function run() {
             },
           }),
         ],
-      }, { headers: getAuthHeaders() });
-
-      if (!updateRes.ok) {
-        // Create a new config instead
-        userId = null;
-      }
-    }
-  }
-
-  // If we still don't have a userId with catalogs, create one
-  if (!userId) {
-    const createRes = await post('/api/config', {
-      catalogs: [
-        createTestCatalog({
-          id: 'stremio-test',
-          name: 'Stremio Test Catalog',
-          type: 'movie',
-          filters: {
-            genres: ['28'],
-            sortBy: 'popularity.desc',
-          },
-        }),
-      ],
-    }, { headers: getAuthHeaders() });
+      },
+      { headers: getAuthHeaders() }
+    );
 
     if (createRes.ok) {
       userId = createRes.data.userId;
@@ -137,10 +145,10 @@ export async function run() {
     // Should support skip pagination on regular catalogs
     const extraNames = catalog.extra.map((e) => e.name);
     assert(extraNames.includes('skip'), 'Should support skip pagination');
-    
+
     // Check that AT LEAST one catalog supports search (dedicated search catalog)
-    const searchCatalog = res.data.catalogs.find(c => 
-      c.extra && c.extra.some(e => e.name === 'search')
+    const searchCatalog = res.data.catalogs.find(
+      (c) => c.extra && c.extra.some((e) => e.name === 'search')
     );
     assert(searchCatalog, 'Should have a dedicated search catalog');
   });
@@ -165,28 +173,32 @@ export async function run() {
 
   await runTest(SUITE, 'Discover Only catalog is hidden from board', async () => {
     // Create a specific config for this test
-    const res = await post('/api/config', {
-      catalogs: [
-        createTestCatalog({
-          id: 'discover-only-test',
-          name: 'Discover Only Catalog',
-          type: 'movie',
-          filters: {
-            discoverOnly: true,
-          },
-        }),
-      ],
-    }, { headers: getAuthHeaders() });
-    
+    const res = await post(
+      '/api/config',
+      {
+        catalogs: [
+          createTestCatalog({
+            id: 'discover-only-test',
+            name: 'Discover Only Catalog',
+            type: 'movie',
+            filters: {
+              discoverOnly: true,
+            },
+          }),
+        ],
+      },
+      { headers: getAuthHeaders() }
+    );
+
     assertOk(res);
     const testUserId = res.data.userId;
-    
+
     const manifestRes = await get(`/${testUserId}/manifest.json`);
     assertOk(manifestRes);
-    
+
     const catalog = manifestRes.data.catalogs[0];
-    const genreFilter = catalog.extra.find(e => e.name === 'genre');
-    
+    const genreFilter = catalog.extra.find((e) => e.name === 'genre');
+
     assert(genreFilter, 'Should have genre filter');
     assert(genreFilter.isRequired === true, 'Genre filter should be required (hidden from board)');
   });
@@ -197,10 +209,14 @@ export async function run() {
     const catalog2 = createTestCatalog({ id: 'cat-2', name: 'Cat 2', type: 'movie' });
     const catalog3 = createTestCatalog({ id: 'cat-3', name: 'Cat 3', type: 'movie' });
 
-    const configRes = await post('/api/config', {
-      catalogs: [catalog1, catalog2, catalog3],
-      preferences: { shuffleCatalogs: true },
-    }, { headers: getAuthHeaders() });
+    const configRes = await post(
+      '/api/config',
+      {
+        catalogs: [catalog1, catalog2, catalog3],
+        preferences: { shuffleCatalogs: true },
+      },
+      { headers: getAuthHeaders() }
+    );
 
     assertOk(configRes);
     const testUserId = configRes.data.userId;
@@ -343,7 +359,7 @@ export async function run() {
     // Accept any valid title (Inception, Origen, etc.) due to potential localization
     assert(res.data.meta.name && res.data.meta.name.length > 0, 'Should return a valid title');
     assert(res.data.meta.id, 'Should have an id');
-    
+
     // Verify final parity fields
     assertString(res.data.meta.year, 'year');
     assert(res.data.meta.year.length === 4, 'year should be 4 digits');
@@ -351,51 +367,54 @@ export async function run() {
     assertString(res.data.meta.slug, 'slug');
     assert(res.data.meta.slug.startsWith('movie/'), 'slug should start with movie/');
     assert(res.data.meta.slug.endsWith(imdbId), 'slug should end with ID');
-    
+
     if (res.data.meta.director) {
-        assertString(res.data.meta.director, 'director should be a string');
+      assertString(res.data.meta.director, 'director should be a string');
     }
     if (res.data.meta.writer) {
-        assertString(res.data.meta.writer, 'writer should be a string');
+      assertString(res.data.meta.writer, 'writer should be a string');
     }
 
     // Verify enhanced metadata
     if (res.data.meta.trailer) {
-        assert(res.data.meta.trailer.startsWith('yt:'), 'Trailer should be a YouTube ID (yt:)');
+      assert(res.data.meta.trailer.startsWith('yt:'), 'Trailer should be a YouTube ID (yt:)');
     }
-    
+
     if (res.data.meta.trailerStreams) {
-        assertArray(res.data.meta.trailerStreams, 1, 'Should have trailerStreams');
-        assert(res.data.meta.trailerStreams[0].ytId, 'TrailerStream should have ytId');
+      assertArray(res.data.meta.trailerStreams, 1, 'Should have trailerStreams');
+      assert(res.data.meta.trailerStreams[0].ytId, 'TrailerStream should have ytId');
     }
 
     if (res.data.meta.app_extras) {
-        assert(res.data.meta.app_extras.cast, 'Should have app_extras.cast');
-        assert(res.data.meta.app_extras.directors, 'Should have app_extras.directors');
+      assert(res.data.meta.app_extras.cast, 'Should have app_extras.cast');
+      assert(res.data.meta.app_extras.directors, 'Should have app_extras.directors');
     }
-    
-    if (res.data.meta.links) {
-        assertArray(res.data.meta.links, 1, 'Should have links');
-        const imdbLink = res.data.meta.links.find(l => l.category === 'imdb');
-        assert(imdbLink, 'Should have IMDb link');
-        
-        const genreLink = res.data.meta.links.find(l => l.category === 'Genres');
-        assert(genreLink, 'Should have Genres links');
 
-        const castLink = res.data.meta.links.find(l => l.category === 'Cast');
-        assert(castLink, 'Should have Cast links');
+    if (res.data.meta.links) {
+      assertArray(res.data.meta.links, 1, 'Should have links');
+      const imdbLink = res.data.meta.links.find((l) => l.category === 'imdb');
+      assert(imdbLink, 'Should have IMDb link');
+
+      const genreLink = res.data.meta.links.find((l) => l.category === 'Genres');
+      assert(genreLink, 'Should have Genres links');
+
+      const castLink = res.data.meta.links.find((l) => l.category === 'Cast');
+      assert(castLink, 'Should have Cast links');
     }
 
     if (res.data.meta.behaviorHints) {
-        assert(res.data.meta.behaviorHints.defaultVideoId, 'Should have defaultVideoId behavior hint');
+      assert(
+        res.data.meta.behaviorHints.defaultVideoId,
+        'Should have defaultVideoId behavior hint'
+      );
     }
 
     // Check age rating formatting in releaseInfo
     if (res.data.meta.releaseInfo && res.data.meta.releaseInfo.includes('•')) {
-        // e.g. "2010 • PG-13"
-        const parts = res.data.meta.releaseInfo.split('•');
-        assert(parts.length === 2, 'Release info should have year and rating');
-        assert(parts[1].trim().length > 0, 'Rating should not be empty');
+      // e.g. "2010 • PG-13"
+      const parts = res.data.meta.releaseInfo.split('•');
+      assert(parts.length === 2, 'Release info should have year and rating');
+      assert(parts[1].trim().length > 0, 'Rating should not be empty');
     }
   });
 

@@ -151,7 +151,11 @@ export function isValidPosterConfig(posterOptions) {
  * @returns {Object|null} Poster options or null if not configured
  */
 export function createPosterOptions(preferences, decryptFn) {
-  if (!preferences || !preferences.posterService || preferences.posterService === PosterService.NONE) {
+  if (
+    !preferences ||
+    !preferences.posterService ||
+    preferences.posterService === PosterService.NONE
+  ) {
     return null;
   }
 

@@ -3584,7 +3584,7 @@ input[type='date'] {
 /* Mobile Actions Layout (Top Bar) */
 @media (max-width: 1024px) {
   /* Ensure parent allows wrapping/full width if needed, though we target toolbar directly */
-  
+
   /* Target toolbar directly */
   .actions-toolbar {
     display: grid !important;
@@ -3614,7 +3614,7 @@ input[type='date'] {
     margin: 0;
     grid-column: 2 / 3;
   }
-  
+
   .actions-toolbar > .save-button-wrapper .btn {
     width: 100%;
     justify-content: center;
@@ -4446,11 +4446,18 @@ input[type='date'] {
 }
 
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-.confirm-btn-yes, .confirm-btn-no {
+.confirm-btn-yes,
+.confirm-btn-no {
   width: 32px !important;
   height: 32px !important;
   min-width: 32px !important;
@@ -4484,8 +4491,6 @@ input[type='date'] {
   background: rgba(255, 255, 255, 0.15) !important;
   color: var(--text-primary) !important;
 }
-
-
 
 .config-dropdown-footer {
   padding: 8px;

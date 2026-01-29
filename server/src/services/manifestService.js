@@ -61,8 +61,8 @@ export function buildManifest(userConfig, baseUrl) {
       {
         name: 'meta',
         types: ['movie', 'series'],
-        idPrefixes: ['tmdb:', 'tt']
-      }
+        idPrefixes: ['tmdb:', 'tt'],
+      },
     ],
     types: ['movie', 'series'],
     catalogs,
@@ -86,8 +86,6 @@ export async function enrichManifestWithGenres(manifest, config) {
         // Skip genre enrichment for dedicated search catalogs
         if (catalog.id.startsWith('tmdb-search-')) return;
 
-
-        
         const helperType = catalog.type === 'series' ? 'series' : 'movie';
         const staticKey = catalog.type === 'series' ? 'tv' : 'movie';
 
@@ -153,27 +151,34 @@ export async function enrichManifestWithGenres(manifest, config) {
 
               // If mapping failed, try self-healing
               if (options.length === 0) {
-                log.info('Genre mapping failed, attempting self-healing', { catalogId: catalog.id });
-                
+                log.info('Genre mapping failed, attempting self-healing', {
+                  catalogId: catalog.id,
+                });
+
                 const apiKey = getApiKeyFromConfig(config);
                 if (apiKey) {
                   try {
                     const freshGenres = await tmdb.getGenres(apiKey, helperType);
                     if (Array.isArray(freshGenres) && freshGenres.length > 0) {
                       const freshMap = {};
-                      freshGenres.forEach(g => freshMap[String(g.id)] = g.name);
-                      
+                      freshGenres.forEach((g) => (freshMap[String(g.id)] = g.name));
+
                       // Retry mapping with fresh data
-                      const healedOptions = selected.map(gid => freshMap[String(gid)]).filter(Boolean);
-                      
+                      const healedOptions = selected
+                        .map((gid) => freshMap[String(gid)])
+                        .filter(Boolean);
+
                       if (healedOptions.length > 0) {
                         options = healedOptions;
                         healedFixes = healedFixes || {};
                         healedFixes[savedCatalog.id] = {
                           genres: selected,
-                          genreNames: healedOptions
+                          genreNames: healedOptions,
                         };
-                        log.info('Self-healing successful', { catalogId: catalog.id, genres: healedOptions });
+                        log.info('Self-healing successful', {
+                          catalogId: catalog.id,
+                          genres: healedOptions,
+                        });
                       }
                     }
                   } catch (healErr) {
@@ -217,7 +222,7 @@ export async function enrichManifestWithGenres(manifest, config) {
 
         // Persist fixes if any
         if (healedFixes) {
-          updateCatalogGenres(config.userId, healedFixes).catch(e => 
+          updateCatalogGenres(config.userId, healedFixes).catch((e) =>
             log.error('Failed to persist healed genres', { error: e.message })
           );
         }
@@ -227,19 +232,19 @@ export async function enrichManifestWithGenres(manifest, config) {
           // To allow the user to see "everything" (default view), we explicitly add "All".
           // The addon.js handler gracefully ignores "All" as it doesn't match a TMDB genre ID.
           if (isDiscoverOnly) {
-             options.unshift('All');
+            options.unshift('All');
           }
 
           catalog.extra = catalog.extra || [];
           catalog.extra = catalog.extra.filter((e) => e.name !== 'genre');
-          
+
           // If discoverOnly is true, marking 'genre' as required hides it from the Board
           // because the Board does not provide required filters.
-          catalog.extra.push({ 
-            name: 'genre', 
-            options, 
+          catalog.extra.push({
+            name: 'genre',
+            options,
             optionsLimit: 1,
-            isRequired: isDiscoverOnly 
+            isRequired: isDiscoverOnly,
           });
         }
       } catch (err) {

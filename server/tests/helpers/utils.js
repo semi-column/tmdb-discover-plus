@@ -67,7 +67,7 @@ export async function cleanupTestArtifacts() {
   if (userIds.length === 0) return;
 
   log(`Cleaning up ${userIds.length} test configs...`, 'info');
-  
+
   // Use the login helper to get a token if we don't have one
   // or use the one we have
   const token = getSharedData('authToken');
@@ -77,15 +77,15 @@ export async function cleanupTestArtifacts() {
     try {
       const res = await del(`/api/config/${userId}`, { headers });
       if (res.ok) {
-         log(`  ✓ Deleted config for ${userId}`, 'success');
+        log(`  ✓ Deleted config for ${userId}`, 'success');
       } else {
-         log(`  ✗ Failed to delete config for ${userId}: ${res.status}`, 'warn');
+        log(`  ✗ Failed to delete config for ${userId}: ${res.status}`, 'warn');
       }
     } catch (err) {
       log(`  ✗ Error deleting config for ${userId}: ${err.message}`, 'error');
     }
   }
-  
+
   state.createdUserIds.clear();
 }
 

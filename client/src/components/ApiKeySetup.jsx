@@ -2,11 +2,7 @@ import { useState } from 'react';
 import { Key, Loader, ArrowRight, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { api } from '../services/api';
 
-export function ApiKeySetup({
-  onLogin,
-  isSessionExpired = false,
-  returnUserId = null,
-}) {
+export function ApiKeySetup({ onLogin, isSessionExpired = false, returnUserId = null }) {
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -53,10 +49,7 @@ export function ApiKeySetup({
           <div className="input-group">
             <label htmlFor="apiKey">TMDB API Key</label>
             <div className="input-wrapper">
-              <Key
-                size={18}
-                className="input-icon input-icon-overlay"
-              />
+              <Key size={18} className="input-icon input-icon-overlay" />
               <input
                 id="apiKey"
                 type={showApiKey ? 'text' : 'password'}

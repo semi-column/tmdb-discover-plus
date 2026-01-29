@@ -33,30 +33,30 @@ export function StreamFilters({
 
   const networkOptions = useMemo(() => {
     const byId = new Map();
-    
-    tvNetworkOptions.forEach(n => {
+
+    tvNetworkOptions.forEach((n) => {
       if (n && n.id != null) {
         const id = String(n.id);
         const name = n.name || id;
         byId.set(id, { code: id, name });
       }
     });
-    
-    (selectedNetworks || []).forEach(n => {
+
+    (selectedNetworks || []).forEach((n) => {
       if (n && n.id != null) {
         const id = String(n.id);
         const existingName = byId.get(id)?.name;
         const newName = n.name || id;
-        
+
         const existingIsPlaceholder = existingName === id || !existingName;
         const newIsRealName = newName !== id;
-        
+
         if (!byId.has(id) || (existingIsPlaceholder && newIsRealName)) {
           byId.set(id, { code: id, name: newName });
         }
       }
     });
-    
+
     return Array.from(byId.values());
   }, [tvNetworkOptions, selectedNetworks]);
 

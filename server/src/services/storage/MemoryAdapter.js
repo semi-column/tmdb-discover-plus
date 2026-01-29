@@ -26,18 +26,18 @@ export class MemoryAdapter extends StorageInterface {
 
   async saveUserConfig(config) {
     this.users.set(config.userId, config);
-    
+
     // Update secondary index (apiKeyId)
     if (config.apiKeyId) {
-        // Remove old entry for this user from the list if it exists
-        const oldList = this.configs.get(config.apiKeyId) || [];
-        const newList = oldList.filter(c => c.userId !== config.userId);
-        newList.push(config);
-        // Sort by updatedAt desc
-        newList.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-        this.configs.set(config.apiKeyId, newList);
+      // Remove old entry for this user from the list if it exists
+      const oldList = this.configs.get(config.apiKeyId) || [];
+      const newList = oldList.filter((c) => c.userId !== config.userId);
+      newList.push(config);
+      // Sort by updatedAt desc
+      newList.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      this.configs.set(config.apiKeyId, newList);
     }
-    
+
     return config;
   }
 
@@ -51,28 +51,31 @@ export class MemoryAdapter extends StorageInterface {
 
     this.users.delete(userId);
     if (config.apiKeyId) {
-        const list = this.configs.get(config.apiKeyId) || [];
-        this.configs.set(config.apiKeyId, list.filter(c => c.userId !== userId));
+      const list = this.configs.get(config.apiKeyId) || [];
+      this.configs.set(
+        config.apiKeyId,
+        list.filter((c) => c.userId !== userId)
+      );
     }
     return true;
   }
-  
+
   async getPublicStats() {
-      const allConfigs = Array.from(this.users.values());
-      const totalUsers = new Set(allConfigs.map(c => c.apiKeyId)).size;
-      
-      let totalCatalogs = 0;
-      for (const config of allConfigs) {
-          if (Array.isArray(config.catalogs)) {
-              for (const cat of config.catalogs) {
-                   const type = cat.filters?.listType;
-                   if (!type || type === 'discover') {
-                       totalCatalogs++;
-                   }
-              }
+    const allConfigs = Array.from(this.users.values());
+    const totalUsers = new Set(allConfigs.map((c) => c.apiKeyId)).size;
+
+    let totalCatalogs = 0;
+    for (const config of allConfigs) {
+      if (Array.isArray(config.catalogs)) {
+        for (const cat of config.catalogs) {
+          const type = cat.filters?.listType;
+          if (!type || type === 'discover') {
+            totalCatalogs++;
           }
+        }
       }
-      
-      return { totalUsers, totalCatalogs };
+    }
+
+    return { totalUsers, totalCatalogs };
   }
 }

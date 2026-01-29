@@ -11,13 +11,13 @@ export function useWatchProviders({ type, region, getWatchProviders }) {
         setWatchProviders([]);
         return;
       }
-      
+
       setLoading(true);
       setError(null);
-      
+
       try {
         const providers = await getWatchProviders(type || 'movie', region);
-        
+
         setWatchProviders(
           providers.map((p) => ({
             id: p.provider_id,

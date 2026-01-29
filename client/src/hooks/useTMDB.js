@@ -27,20 +27,13 @@ export function useTMDB(apiKey) {
     setError(null);
 
     try {
-      const [
-        movieGenres,
-        tvGenres,
-        langs,
-        ctries,
-        sorts,
-        presets
-      ] = await Promise.all([
+      const [movieGenres, tvGenres, langs, ctries, sorts, presets] = await Promise.all([
         api.getGenres(apiKey, 'movie'),
         api.getGenres(apiKey, 'series'),
         api.getLanguages(apiKey),
         api.getCountries(apiKey),
         api.getSortOptions(),
-        api.getPresetCatalogs()
+        api.getPresetCatalogs(),
       ]);
 
       setGenres({ movie: movieGenres, series: tvGenres });
@@ -51,27 +44,18 @@ export function useTMDB(apiKey) {
 
       setLoading(false);
 
-      const [
-        lists,
-        relTypes,
-        tvStats,
-        tvTyps,
-        monTypes,
-        movieCerts,
-        tvCerts,
-        regions,
-        networks,
-      ] = await Promise.all([
-        api.getListTypes(),
-        api.getReleaseTypes(),
-        api.getTVStatuses(),
-        api.getTVTypes(),
-        api.getMonetizationTypes(),
-        api.getCertifications(apiKey, 'movie'),
-        api.getCertifications(apiKey, 'series'),
-        api.getWatchRegions(apiKey),
-        api.getTVNetworks(null, ''),
-      ]);
+      const [lists, relTypes, tvStats, tvTyps, monTypes, movieCerts, tvCerts, regions, networks] =
+        await Promise.all([
+          api.getListTypes(),
+          api.getReleaseTypes(),
+          api.getTVStatuses(),
+          api.getTVTypes(),
+          api.getMonetizationTypes(),
+          api.getCertifications(apiKey, 'movie'),
+          api.getCertifications(apiKey, 'series'),
+          api.getWatchRegions(apiKey),
+          api.getTVNetworks(null, ''),
+        ]);
 
       setListTypes(lists);
       setReleaseTypes(relTypes);
@@ -81,11 +65,10 @@ export function useTMDB(apiKey) {
       setCertifications({ movie: movieCerts, series: tvCerts });
       setWatchRegions(regions);
       setTVNetworks(networks);
-
     } catch (err) {
       setError(err.message);
       setLoading(false);
-    } 
+    }
   }, [apiKey, hasAuth]);
 
   useEffect(() => {

@@ -86,14 +86,15 @@ export function MultiSelect({
   const normalizedSearch = String(search || '').toLowerCase();
   const filteredOptions =
     isSearchEnabled && normalizedSearch
-      ? options.filter((opt) =>
-          value.includes(opt[valueKey]) ||
-          String(opt?.[labelKey] || '')
-            .toLowerCase()
-            .includes(normalizedSearch)
+      ? options.filter(
+          (opt) =>
+            value.includes(opt[valueKey]) ||
+            String(opt?.[labelKey] || '')
+              .toLowerCase()
+              .includes(normalizedSearch)
         )
-      : (hideUnselected && Array.isArray(value) && value.length > 0)
-        ? options.filter(opt => value.includes(opt[valueKey]))
+      : hideUnselected && Array.isArray(value) && value.length > 0
+        ? options.filter((opt) => value.includes(opt[valueKey]))
         : options;
 
   return (

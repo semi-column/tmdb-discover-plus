@@ -85,14 +85,11 @@ export function sanitizeFilters(filters) {
         sanitized[key] = value
           .slice(0, 50)
           .map((v) => (typeof v === 'string' ? sanitizeString(v, 100) : v));
-      }
-      else if (typeof value === 'boolean') {
+      } else if (typeof value === 'boolean') {
         sanitized[key] = value;
-      }
-      else if (typeof value === 'number') {
+      } else if (typeof value === 'number') {
         sanitized[key] = value;
-      }
-      else if (typeof value === 'string') {
+      } else if (typeof value === 'string') {
         sanitized[key] = sanitizeString(value, 500);
       }
     }

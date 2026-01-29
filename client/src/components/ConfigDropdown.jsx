@@ -143,7 +143,10 @@ export function ConfigDropdown({
                     }
                     setIsOpen(false);
                   }}
-                  style={{ opacity: confirmId === config.userId ? 0.4 : 1, pointerEvents: confirmId === config.userId ? 'none' : 'auto' }}
+                  style={{
+                    opacity: confirmId === config.userId ? 0.4 : 1,
+                    pointerEvents: confirmId === config.userId ? 'none' : 'auto',
+                  }}
                 >
                   <div className="config-dropdown-item-name">
                     <span className="config-name">{getConfigName(config, index)}</span>

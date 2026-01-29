@@ -319,8 +319,6 @@ class ApiService {
     });
   }
 
-
-
   async getConfigsByApiKey(apiKey) {
     const token = this.getSessionToken();
     if (token) {

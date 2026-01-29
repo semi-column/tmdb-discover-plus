@@ -328,7 +328,7 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
     let results;
 
     const listType = resolvedFilters?.listType;
-    const randomize = resolvedFilters?.randomize || (resolvedFilters?.sortBy === 'random');
+    const randomize = resolvedFilters?.randomize || resolvedFilters?.sortBy === 'random';
 
     if (listType && listType !== 'discover') {
       results = await tmdb.fetchSpecialList(apiKey, listType, type, {
@@ -355,8 +355,6 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
         .map((s) => s.trim())
         .filter(Boolean);
     };
-
-
 
     const metas = results.results.slice(0, 20).map((item) => {
       return tmdb.toStremioMeta(item, type, null);
@@ -446,7 +444,10 @@ router.get('/config/:userId', requireAuth, requireConfigOwnership, async (req, r
       hasApiKey: !!config.tmdbApiKeyEncrypted,
     };
 
-    log.debug('Returning config', { userId: config.userId, catalogCount: response.catalogs.length });
+    log.debug('Returning config', {
+      userId: config.userId,
+      catalogCount: response.catalogs.length,
+    });
     res.json(response);
   } catch (error) {
     log.error('GET /config/:userId error', { error: error.message });
@@ -454,63 +455,75 @@ router.get('/config/:userId', requireAuth, requireConfigOwnership, async (req, r
   }
 });
 
-router.put('/config/:userId', requireAuth, requireConfigOwnership, strictRateLimit, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { catalogs, preferences, configName } = req.body;
-    const { apiKey } = req;
+router.put(
+  '/config/:userId',
+  requireAuth,
+  requireConfigOwnership,
+  strictRateLimit,
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { catalogs, preferences, configName } = req.body;
+      const { apiKey } = req;
 
-    log.info('Update config request', { userId, catalogCount: catalogs?.length || 0 });
+      log.info('Update config request', { userId, catalogCount: catalogs?.length || 0 });
 
-    const config = await saveUserConfig({
-      userId,
-      tmdbApiKey: apiKey,
-      configName: configName || '',
-      catalogs: catalogs || [],
-      preferences: preferences || {},
-    });
+      const config = await saveUserConfig({
+        userId,
+        tmdbApiKey: apiKey,
+        configName: configName || '',
+        catalogs: catalogs || [],
+        preferences: preferences || {},
+      });
 
-    const baseUrl = getBaseUrl(req);
-    const host = baseUrl.replace(/^https?:\/\//, '');
-    const manifestUrl = `${baseUrl}/${userId}/manifest.json`;
+      const baseUrl = getBaseUrl(req);
+      const host = baseUrl.replace(/^https?:\/\//, '');
+      const manifestUrl = `${baseUrl}/${userId}/manifest.json`;
 
-    const response = {
-      userId,
-      configName: config.configName || '',
-      catalogs: config.catalogs || [],
-      preferences: config.preferences || {},
-      installUrl: manifestUrl,
-      stremioUrl: `stremio://${host}/${userId}/manifest.json`,
-      configureUrl: `${baseUrl}/configure/${userId}`,
-    };
+      const response = {
+        userId,
+        configName: config.configName || '',
+        catalogs: config.catalogs || [],
+        preferences: config.preferences || {},
+        installUrl: manifestUrl,
+        stremioUrl: `stremio://${host}/${userId}/manifest.json`,
+        configureUrl: `${baseUrl}/configure/${userId}`,
+      };
 
-    log.info('Config updated', { userId, catalogCount: response.catalogs.length });
-    res.json(response);
-  } catch (error) {
-    log.error('PUT /config/:userId error', { error: error.message });
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.delete('/config/:userId', requireAuth, requireConfigOwnership, strictRateLimit, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { apiKey } = req;
-
-    log.info('Delete config request', { userId });
-
-    const result = await deleteUserConfig(userId, apiKey);
-
-    log.info('Config deleted', { userId });
-    res.json(result);
-  } catch (error) {
-    log.error('DELETE /config/:userId error', { error: error.message });
-
-    if (error.message.includes('not found') || error.message.includes('Access denied')) {
-      return res.status(404).json({ error: error.message });
+      log.info('Config updated', { userId, catalogCount: response.catalogs.length });
+      res.json(response);
+    } catch (error) {
+      log.error('PUT /config/:userId error', { error: error.message });
+      res.status(500).json({ error: error.message });
     }
-    res.status(500).json({ error: error.message });
   }
-});
+);
+
+router.delete(
+  '/config/:userId',
+  requireAuth,
+  requireConfigOwnership,
+  strictRateLimit,
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { apiKey } = req;
+
+      log.info('Delete config request', { userId });
+
+      const result = await deleteUserConfig(userId, apiKey);
+
+      log.info('Config deleted', { userId });
+      res.json(result);
+    } catch (error) {
+      log.error('DELETE /config/:userId error', { error: error.message });
+
+      if (error.message.includes('not found') || error.message.includes('Access denied')) {
+        return res.status(404).json({ error: error.message });
+      }
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
 export { router as apiRouter };

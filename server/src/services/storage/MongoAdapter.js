@@ -13,8 +13,8 @@ export class MongoAdapter extends StorageInterface {
 
   async connect() {
     if (!this.uri) {
-        log.warn('No MongoDB URI provided');
-        return false;
+      log.warn('No MongoDB URI provided');
+      return false;
     }
     try {
       await mongoose.connect(this.uri);
@@ -36,10 +36,10 @@ export class MongoAdapter extends StorageInterface {
   }
 
   async saveUserConfig(config) {
-    // Existing logic uses findOneAndUpdate within saveUserConfig service, 
+    // Existing logic uses findOneAndUpdate within saveUserConfig service,
     // but the adapter should handle the DB interaction part.
     // The higher level service handles encryption/validation logic.
-    
+
     return UserConfig.findOneAndUpdate(
       { userId: String(config.userId) },
       { $set: config },
@@ -49,7 +49,9 @@ export class MongoAdapter extends StorageInterface {
 
   async getConfigsByApiKeyId(apiKeyId) {
     if (!apiKeyId) return [];
-    return UserConfig.find({ apiKeyId: String(apiKeyId) }).sort({ updatedAt: -1 }).lean();
+    return UserConfig.find({ apiKeyId: String(apiKeyId) })
+      .sort({ updatedAt: -1 })
+      .lean();
   }
 
   async deleteUserConfig(userId) {
@@ -62,10 +64,10 @@ export class MongoAdapter extends StorageInterface {
     const totalUsers = await UserConfig.distinct('apiKeyId').then((ids) => ids.length);
     const catalogStats = await UserConfig.aggregate([
       { $unwind: '$catalogs' },
-      { 
-        $match: { 
-          'catalogs.filters.listType': { $in: ['discover', null] } 
-        } 
+      {
+        $match: {
+          'catalogs.filters.listType': { $in: ['discover', null] },
+        },
       },
       { $count: 'total' },
     ]);

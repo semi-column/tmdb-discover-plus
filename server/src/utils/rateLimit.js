@@ -13,25 +13,26 @@ const baseOptions = {
   skip: (req) => {
     // Skip rate limiting if disabled via env
     if (process.env.DISABLE_RATE_LIMIT === 'true') return true;
-    
+
     // Bypass rate limiting for localhost in development or test mode
     const isDevOrTest = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
     const ip = req.ip || req.headers['x-forwarded-for'];
-    const isLocalhost = ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip === '::ffff:127.0.0.1';
-    
+    const isLocalhost =
+      ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip === '::ffff:127.0.0.1';
+
     return isDevOrTest && isLocalhost;
   },
   handler: (req, res, options) => {
-    log.warn('Rate limit exceeded', { 
-      ip: req.ip, 
+    log.warn('Rate limit exceeded', {
+      ip: req.ip,
       url: req.originalUrl,
-      limit: options.limit 
+      limit: options.limit,
     });
     res.status(429).json({
       error: options.message,
-      retryAfter: Math.ceil(options.windowMs / 1000)
+      retryAfter: Math.ceil(options.windowMs / 1000),
     });
-  }
+  },
 };
 
 /**

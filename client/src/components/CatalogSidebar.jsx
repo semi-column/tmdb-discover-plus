@@ -82,23 +82,33 @@ function PosterSettingsSection({ preferences, onPreferencesChange }) {
     }
   };
 
-  const serviceUrl = posterService === 'rpdb' 
-    ? 'https://ratingposterdb.com' 
-    : posterService === 'topPosters' 
-      ? 'https://api.top-streaming.stream' 
-      : null;
+  const serviceUrl =
+    posterService === 'rpdb'
+      ? 'https://ratingposterdb.com'
+      : posterService === 'topPosters'
+        ? 'https://api.top-streaming.stream'
+        : null;
 
-  const serviceName = posterService === 'rpdb' ? 'RPDB' : posterService === 'topPosters' ? 'Top Posters' : null;
+  const serviceName =
+    posterService === 'rpdb' ? 'RPDB' : posterService === 'topPosters' ? 'Top Posters' : null;
 
   return (
     <div className="sidebar-section poster-settings">
       <div
         className="sidebar-section-header"
         onClick={() => setIsCollapsed(!isCollapsed)}
-        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0' }}
+        style={{
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 0',
+        }}
       >
         <Image size={14} className="text-muted" />
-        <span className="sidebar-section-title" style={{ flex: 1, margin: 0 }}>Poster Support</span>
+        <span className="sidebar-section-title" style={{ flex: 1, margin: 0 }}>
+          Poster Support
+        </span>
         <ChevronDown
           size={14}
           className="text-muted"
@@ -112,7 +122,14 @@ function PosterSettingsSection({ preferences, onPreferencesChange }) {
       {!isCollapsed && (
         <div style={{ padding: '8px 16px 16px' }}>
           <div className="input-group" style={{ marginBottom: '12px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+            <label
+              style={{
+                fontSize: '12px',
+                color: 'var(--text-muted)',
+                marginBottom: '4px',
+                display: 'block',
+              }}
+            >
               Poster Service
             </label>
             <select
@@ -129,8 +146,18 @@ function PosterSettingsSection({ preferences, onPreferencesChange }) {
 
           {posterService !== 'none' && (
             <div className="input-group">
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                API Key {hasPosterKey && !apiKeyInput && <span style={{ color: 'var(--success)' }}>(set)</span>}
+              <label
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  marginBottom: '4px',
+                  display: 'block',
+                }}
+              >
+                API Key{' '}
+                {hasPosterKey && !apiKeyInput && (
+                  <span style={{ color: 'var(--success)' }}>(set)</span>
+                )}
               </label>
               <div style={{ position: 'relative' }}>
                 <input
@@ -276,95 +303,96 @@ export function CatalogSidebar({
       <div className="sidebar-controls" style={{ padding: '0 16px 12px 16px' }}>
         <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
           <button
-             className="btn btn-secondary btn-sm"
-             style={{ flex: 1, justifyContent: 'center' }}
-             title="Export full configuration (catalogs + preferences)"
-             onClick={() => {
-                const exportData = {
-                  configName,
-                  catalogs,
-                  preferences,
-                  exportedAt: new Date().toISOString()
-                };
-                const dataStr = JSON.stringify(exportData, null, 2);
-                const blob = new Blob([dataStr], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `${(configName || 'stremio_config').replace(/\s+/g, '_')}_full.json`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-             }}
+            className="btn btn-secondary btn-sm"
+            style={{ flex: 1, justifyContent: 'center' }}
+            title="Export full configuration (catalogs + preferences)"
+            onClick={() => {
+              const exportData = {
+                configName,
+                catalogs,
+                preferences,
+                exportedAt: new Date().toISOString(),
+              };
+              const dataStr = JSON.stringify(exportData, null, 2);
+              const blob = new Blob([dataStr], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `${(configName || 'stremio_config').replace(/\s+/g, '_')}_full.json`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+            }}
           >
             <Download size={14} />
             <span>Export</span>
           </button>
-          
-          <label 
+
+          <label
             className="btn btn-secondary btn-sm"
             style={{ flex: 1, justifyContent: 'center', cursor: 'pointer' }}
             title="Import full configuration"
           >
             <ArrowUpTrayIcon size={14} />
             <span>Import</span>
-             <input
-                type="file"
-                accept=".json"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = (event) => {
-                    try {
-                      const imported = JSON.parse(event.target.result);
-                      if (onImportConfig) onImportConfig(imported);
-                    } catch (err) {
-                      console.error('Import failed', err);
-                      alert('Failed to parse JSON');
-                    }
-                    e.target.value = '';
-                  };
-                  reader.readAsText(file);
-                }}
-              />
+            <input
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  try {
+                    const imported = JSON.parse(event.target.result);
+                    if (onImportConfig) onImportConfig(imported);
+                  } catch (err) {
+                    console.error('Import failed', err);
+                    alert('Failed to parse JSON');
+                  }
+                  e.target.value = '';
+                };
+                reader.readAsText(file);
+              }}
+            />
           </label>
         </div>
 
-        <label 
+        <label
           className="sidebar-checkbox"
           title="Randomize catalog order every time Stremio loads"
         >
           <input
             type="checkbox"
-            checked={!!(preferences?.shuffleCatalogs)}
-            onChange={(e) => onPreferencesChange({...preferences, shuffleCatalogs: e.target.checked})}
+            checked={!!preferences?.shuffleCatalogs}
+            onChange={(e) =>
+              onPreferencesChange({ ...preferences, shuffleCatalogs: e.target.checked })
+            }
           />
           <Shuffle size={14} />
           <span>Shuffle Catalogs</span>
         </label>
-        
-        <label 
+
+        <label
           className="sidebar-checkbox"
           title="Disable search catalogs if you want to use other addons for search"
           style={{ marginTop: '8px' }}
         >
           <input
             type="checkbox"
-            checked={!!(preferences?.disableSearch)}
-            onChange={(e) => onPreferencesChange({...preferences, disableSearch: e.target.checked})}
+            checked={!!preferences?.disableSearch}
+            onChange={(e) =>
+              onPreferencesChange({ ...preferences, disableSearch: e.target.checked })
+            }
           />
           <EyeOff size={14} />
           <span>Disable Search</span>
         </label>
       </div>
 
-      <PosterSettingsSection 
-        preferences={preferences} 
-        onPreferencesChange={onPreferencesChange} 
-      />
+      <PosterSettingsSection preferences={preferences} onPreferencesChange={onPreferencesChange} />
 
       <div className="catalog-list">
         {catalogs.length === 0 ? (
@@ -386,9 +414,9 @@ export function CatalogSidebar({
               strategy={verticalListSortingStrategy}
             >
               {catalogs.map((catalog) => (
-                <SortableCatalogItem 
-                  key={getCatalogKey(catalog)} 
-                  catalog={catalog} 
+                <SortableCatalogItem
+                  key={getCatalogKey(catalog)}
+                  catalog={catalog}
                   isActive={activeCatalog?._id === catalog._id}
                   onSelect={onSelectCatalog}
                   onDelete={onDeleteCatalog}

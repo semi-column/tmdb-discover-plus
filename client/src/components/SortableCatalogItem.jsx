@@ -2,16 +2,10 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Film, Tv, GripVertical, Trash2, Copy } from 'lucide-react';
 
-export function SortableCatalogItem({ 
-  catalog, 
-  isActive, 
-  onSelect, 
-  onDelete,
-  onDuplicate
-}) {
+export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onDuplicate }) {
   const getCatalogKey = (cat) => String(cat?._id || cat?.id || cat?.name);
   const id = getCatalogKey(catalog);
-  
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
   });

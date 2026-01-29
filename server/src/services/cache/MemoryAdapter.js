@@ -9,7 +9,7 @@ export class MemoryAdapter extends CacheInterface {
       checkperiod: 600,
       maxKeys: 5000,
       useClones: false,
-      ...options
+      ...options,
     });
   }
 

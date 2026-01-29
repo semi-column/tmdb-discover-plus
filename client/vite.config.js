@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -21,7 +21,7 @@ export default defineConfig({
         // Prevent aggressive chunk merging that can cause hoisting issues
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
-          'lucide': ['lucide-react'],
+          lucide: ['lucide-react'],
         },
       },
     },
@@ -30,4 +30,4 @@ export default defineConfig({
   optimizeDeps: {
     include: ['react', 'react-dom', 'lucide-react'],
   },
-})
+});

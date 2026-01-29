@@ -15,7 +15,7 @@ import {
   Tv,
   Users,
   X,
-  Zap
+  Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MultiSelect } from './MultiSelect';
@@ -158,23 +158,31 @@ export function CatalogEditor({
 
   const prevCatalogIdRef = useRef(null);
   const {
-    selectedPeople, setSelectedPeople,
-    selectedCompanies, setSelectedCompanies,
-    selectedKeywords, setSelectedKeywords,
-    excludeKeywords, setExcludeKeywords,
-    excludeCompanies, setExcludeCompanies,
+    selectedPeople,
+    setSelectedPeople,
+    selectedCompanies,
+    setSelectedCompanies,
+    selectedKeywords,
+    setSelectedKeywords,
+    excludeKeywords,
+    setExcludeKeywords,
+    excludeCompanies,
+    setExcludeCompanies,
     selectedNetworks,
   } = useResolvedFilters({
     catalog: catalog,
-    getPersonById, searchPerson,
-    getCompanyById, searchCompany,
-    getKeywordById, searchKeyword,
+    getPersonById,
+    searchPerson,
+    getCompanyById,
+    searchCompany,
+    getKeywordById,
+    searchKeyword,
     getNetworkById,
   });
   const { watchProviders } = useWatchProviders({
-      type: localCatalog?.type,
-      region: localCatalog?.filters?.watchRegion,
-      getWatchProviders
+    type: localCatalog?.type,
+    region: localCatalog?.filters?.watchRegion,
+    getWatchProviders,
   });
   const peopleIds = selectedPeople.map((p) => p.id).join(',') || undefined;
   const companiesIds = selectedCompanies.map((c) => c.id).join(',') || undefined;
@@ -182,22 +190,25 @@ export function CatalogEditor({
   const excludeKeywordsIds = excludeKeywords.map((k) => k.id).join(',') || undefined;
   const excludeCompaniesIds = excludeCompanies.map((c) => c.id).join(',') || undefined;
 
-  const mergedLocalCatalog = useMemo(() => ({
+  const mergedLocalCatalog = useMemo(
+    () => ({
       ...localCatalog,
       filters: {
-          ...localCatalog.filters,
-          withPeople: peopleIds,
-          withCompanies: companiesIds,
-          withKeywords: keywordsIds,
-          excludeKeywords: excludeKeywordsIds,
-          excludeCompanies: excludeCompaniesIds,
-      }
-  }), [localCatalog, peopleIds, companiesIds, keywordsIds, excludeKeywordsIds, excludeCompaniesIds]);
+        ...localCatalog.filters,
+        withPeople: peopleIds,
+        withCompanies: companiesIds,
+        withKeywords: keywordsIds,
+        excludeKeywords: excludeKeywordsIds,
+        excludeCompanies: excludeCompaniesIds,
+      },
+    }),
+    [localCatalog, peopleIds, companiesIds, keywordsIds, excludeKeywordsIds, excludeCompaniesIds]
+  );
 
   useCatalogSync({
-      localCatalog: mergedLocalCatalog,
-      catalog,
-      onUpdate,
+    localCatalog: mergedLocalCatalog,
+    catalog,
+    onUpdate,
   });
 
   useEffect(() => {
@@ -253,7 +264,6 @@ export function CatalogEditor({
     },
     [searchTVNetworks]
   );
-
 
   const handleTriStateGenreClick = useCallback((genreId) => {
     setLocalCatalog((prev) => {
@@ -315,10 +325,7 @@ export function CatalogEditor({
       setPreviewData(null);
       prevCatalogIdRef.current = null;
     }
-  }, [
-    catalogIdForSync,
-  ]);
-
+  }, [catalogIdForSync]);
 
   const toggleSection = (section) => {
     setExpandedSections((prev) => {
@@ -571,81 +578,90 @@ export function CatalogEditor({
   }, [localCatalog, genres, languages, countries, selectedPeople, selectedKeywords]);
 
   // Clear a specific filter
-  const clearFilter = useCallback((filterKey) => {
-    switch (filterKey) {
-      case 'genres':
-        setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, genres: [] } }));
-        break;
-      case 'excludeGenres':
-        setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, excludeGenres: [] } }));
-        break;
-      case 'language':
-        setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, language: undefined } }));
-        break;
-      case 'displayLanguage':
-        setLocalCatalog((prev) => ({
-          ...prev,
-          filters: { ...prev.filters, displayLanguage: undefined },
-        }));
-        break;
-      case 'originCountry':
-        setLocalCatalog((prev) => ({
-          ...prev,
-          filters: { ...prev.filters, originCountry: undefined },
-        }));
-        break;
-      case 'year':
-        setLocalCatalog((prev) => ({
-          ...prev,
-          filters: { ...prev.filters, yearFrom: undefined, yearTo: undefined },
-        }));
-        break;
-      case 'rating':
-        setLocalCatalog((prev) => ({
-          ...prev,
-          filters: { ...prev.filters, ratingMin: 0, ratingMax: 10 },
-        }));
-        break;
-      case 'runtime':
-        setLocalCatalog((prev) => ({
-          ...prev,
-          filters: { ...prev.filters, runtimeMin: undefined, runtimeMax: undefined },
-        }));
-        break;
-      case 'datePreset':
-        setLocalCatalog((prev) => ({
-          ...prev,
-          filters: { ...prev.filters, datePreset: undefined },
-        }));
-        setSelectedDatePreset(null);
-        break;
-      case 'releaseDate':
-        setLocalCatalog((prev) => ({
-          ...prev,
-          filters: {
-            ...prev.filters,
-            releaseDateFrom: undefined,
-            releaseDateTo: undefined,
-            airDateFrom: undefined,
-            airDateTo: undefined,
-            datePreset: undefined,
-          },
-        }));
-        setSelectedDatePreset(null);
-        break;
-      case 'watchProviders':
-        setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, watchProviders: [] } }));
-        break;
-      case 'people':
-        setSelectedPeople([]);
-        break;
-      case 'keywords':
-        setSelectedKeywords([]);
-        break;
-      default:
-        break;
-    }
-  }, [setSelectedKeywords, setSelectedPeople]);
+  const clearFilter = useCallback(
+    (filterKey) => {
+      switch (filterKey) {
+        case 'genres':
+          setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, genres: [] } }));
+          break;
+        case 'excludeGenres':
+          setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, excludeGenres: [] } }));
+          break;
+        case 'language':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, language: undefined },
+          }));
+          break;
+        case 'displayLanguage':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, displayLanguage: undefined },
+          }));
+          break;
+        case 'originCountry':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, originCountry: undefined },
+          }));
+          break;
+        case 'year':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, yearFrom: undefined, yearTo: undefined },
+          }));
+          break;
+        case 'rating':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, ratingMin: 0, ratingMax: 10 },
+          }));
+          break;
+        case 'runtime':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, runtimeMin: undefined, runtimeMax: undefined },
+          }));
+          break;
+        case 'datePreset':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, datePreset: undefined },
+          }));
+          setSelectedDatePreset(null);
+          break;
+        case 'releaseDate':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: {
+              ...prev.filters,
+              releaseDateFrom: undefined,
+              releaseDateTo: undefined,
+              airDateFrom: undefined,
+              airDateTo: undefined,
+              datePreset: undefined,
+            },
+          }));
+          setSelectedDatePreset(null);
+          break;
+        case 'watchProviders':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, watchProviders: [] },
+          }));
+          break;
+        case 'people':
+          setSelectedPeople([]);
+          break;
+        case 'keywords':
+          setSelectedKeywords([]);
+          break;
+        default:
+          break;
+      }
+    },
+    [setSelectedKeywords, setSelectedPeople]
+  );
 
   // Clear all filters
   const clearAllFilters = useCallback(() => {
@@ -789,7 +805,11 @@ export function CatalogEditor({
             >
               <ArrowDownTrayIcon size={16} />
             </button>
-            <label className="btn btn-secondary" title="Import Catalog Config" style={{ cursor: 'pointer' }}>
+            <label
+              className="btn btn-secondary"
+              title="Import Catalog Config"
+              style={{ cursor: 'pointer' }}
+            >
               <ArrowUpTrayIcon size={16} />
               <input
                 type="file"
@@ -803,13 +823,13 @@ export function CatalogEditor({
                     try {
                       const imported = JSON.parse(event.target.result);
                       if (imported && typeof imported === 'object') {
-                        // Preserve ID/Name if desired, or overwrite? 
+                        // Preserve ID/Name if desired, or overwrite?
                         // User likely wants to import settings but maybe keep name if editing current?
                         // "Import the whole exact config" -> overwrite everything including name/filters
                         // But keeping _id is safer if editing existing.
                         // Let's safe-guard _id.
                         const { _id, ...rest } = imported;
-                        setLocalCatalog(prev => ({ ...prev, ...rest }));
+                        setLocalCatalog((prev) => ({ ...prev, ...rest }));
                       } else {
                         alert('Invalid JSON file');
                       }
@@ -931,16 +951,16 @@ export function CatalogEditor({
                             label="Sort By"
                             tooltip="How to order your results. Popular shows what's trending now, while rating shows critically acclaimed content."
                           />
-                            <SearchableSelect
-                              options={sortOptions[localCatalog?.type] || sortOptions.movie || []}
-                              value={localCatalog?.filters?.sortBy || 'popularity.desc'}
-                              onChange={(value) => handleFiltersChange('sortBy', value)}
-                              placeholder="Most Popular"
-                              searchPlaceholder="Search..."
-                              labelKey="label"
-                              valueKey="value"
-                              allowClear={false}
-                            />
+                          <SearchableSelect
+                            options={sortOptions[localCatalog?.type] || sortOptions.movie || []}
+                            value={localCatalog?.filters?.sortBy || 'popularity.desc'}
+                            onChange={(value) => handleFiltersChange('sortBy', value)}
+                            placeholder="Most Popular"
+                            searchPlaceholder="Search..."
+                            labelKey="label"
+                            valueKey="value"
+                            allowClear={false}
+                          />
                         </div>
 
                         <div className="filter-group">
@@ -1490,7 +1510,7 @@ export function CatalogEditor({
               )}
             </div>
           ) : (
-             <div
+            <div
               className="flex items-center gap-3 p-4 mt-6 rounded-lg border border-white/5 bg-white/5"
               style={{ justifyContent: 'center' }}
             >

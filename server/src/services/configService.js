@@ -54,18 +54,18 @@ export async function saveUserConfig(config) {
 
   let encryptedApiKey = config.tmdbApiKeyEncrypted || null;
   let rawApiKey = null;
-  
+
   if (config.tmdbApiKey) {
-     const safeKey = sanitizeString(config.tmdbApiKey, 64);
-     if (!isValidApiKeyFormat(safeKey)) {
-        throw new Error('Invalid TMDB API key format');
-     }
-     rawApiKey = safeKey;
-     try {
-        encryptedApiKey = encrypt(safeKey);
-     } catch (encryptError) {
-        throw new Error('Encryption failed');
-     }
+    const safeKey = sanitizeString(config.tmdbApiKey, 64);
+    if (!isValidApiKeyFormat(safeKey)) {
+      throw new Error('Invalid TMDB API key format');
+    }
+    rawApiKey = safeKey;
+    try {
+      encryptedApiKey = encrypt(safeKey);
+    } catch (encryptError) {
+      throw new Error('Encryption failed');
+    }
   }
 
   const processedCatalogs = (config.catalogs || []).map((c) => ({
@@ -75,7 +75,7 @@ export async function saveUserConfig(config) {
 
   try {
     const processedPreferences = { ...(config.preferences || {}) };
-    
+
     if (config.preferences?.posterApiKey) {
       const rawPosterKey = sanitizeString(config.preferences.posterApiKey, 128);
       if (rawPosterKey) {
@@ -89,12 +89,12 @@ export async function saveUserConfig(config) {
     }
 
     const updateData = {
-        ...config, // Keep other fields
-        userId: safeUserId,
-        configName: config.configName || '',
-        catalogs: processedCatalogs,
-        preferences: processedPreferences,
-        updatedAt: new Date(),
+      ...config, // Keep other fields
+      userId: safeUserId,
+      configName: config.configName || '',
+      catalogs: processedCatalogs,
+      preferences: processedPreferences,
+      updatedAt: new Date(),
     };
 
     const apiKeyForHash = rawApiKey || (encryptedApiKey ? decrypt(encryptedApiKey) : null);
@@ -124,7 +124,10 @@ export async function saveUserConfig(config) {
 export async function updateCatalogGenres(userId, fixes) {
   if (!fixes || Object.keys(fixes).length === 0) return;
 
-  log.info('Updating catalog genres (self-healing)', { userId, fixedCount: Object.keys(fixes).length });
+  log.info('Updating catalog genres (self-healing)', {
+    userId,
+    fixedCount: Object.keys(fixes).length,
+  });
 
   try {
     const storage = getStorage();
@@ -134,13 +137,13 @@ export async function updateCatalogGenres(userId, fixes) {
     let changed = false;
     const newCatalogs = config.catalogs.map((cat) => {
       if (fixes[cat.id]) {
-        const newCat = { 
-            ...cat, 
-            filters: {
-                ...cat.filters,
-                genres: fixes[cat.id].genres,
-                genreNames: fixes[cat.id].genreNames,
-            }
+        const newCat = {
+          ...cat,
+          filters: {
+            ...cat.filters,
+            genres: fixes[cat.id].genres,
+            genreNames: fixes[cat.id].genreNames,
+          },
         };
         changed = true;
         return newCat;
@@ -166,7 +169,7 @@ export async function getConfigsByApiKey(apiKey, apiKeyId = null) {
   if (!apiKey && !apiKeyId) return [];
 
   const targetApiKeyId = apiKeyId || (apiKey ? computeApiKeyId(apiKey) : null);
-  
+
   if (!targetApiKeyId) return [];
 
   try {
@@ -202,7 +205,7 @@ export async function deleteUserConfig(userId, apiKey) {
 
     const storedKey = getApiKeyFromConfig(config);
     if (storedKey !== apiKey) {
-        throw new Error('Access denied: API key mismatch');
+      throw new Error('Access denied: API key mismatch');
     }
 
     await storage.deleteUserConfig(safeUserId);
@@ -224,4 +227,3 @@ export async function getPublicStats() {
     return { totalUsers: 0, totalCatalogs: 0 };
   }
 }
-

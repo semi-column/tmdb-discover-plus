@@ -10,10 +10,8 @@ function toPlaceholdersFromCsv(csv, sep = ',') {
 
 async function resolveItems(items, fetchById, search) {
   if (!items || items.length === 0) return items;
-  
-  const needsResolution = items.some(
-    (item) => /^\d+$/.test(item.name) || item.name === item.id
-  );
+
+  const needsResolution = items.some((item) => /^\d+$/.test(item.name) || item.name === item.id);
   if (!needsResolution && items.every((i) => i.name)) return items;
   if (!fetchById && !search) return items;
 
@@ -106,8 +104,9 @@ export function useResolvedFilters({
     const initial = toPlaceholdersFromCsv(filterValue);
     setSelectedPeople(initial);
     if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getPersonById, fnRef.current.searchPerson)
-        .then(setSelectedPeople);
+      resolveItems(initial, fnRef.current.getPersonById, fnRef.current.searchPerson).then(
+        setSelectedPeople
+      );
     }
   }, []);
 
@@ -122,8 +121,9 @@ export function useResolvedFilters({
     const initial = toPlaceholdersFromCsv(filterValue);
     setSelectedCompanies(initial);
     if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getCompanyById, fnRef.current.searchCompany)
-        .then(setSelectedCompanies);
+      resolveItems(initial, fnRef.current.getCompanyById, fnRef.current.searchCompany).then(
+        setSelectedCompanies
+      );
     }
   }, []);
 
@@ -138,8 +138,9 @@ export function useResolvedFilters({
     const initial = toPlaceholdersFromCsv(filterValue);
     setSelectedKeywords(initial);
     if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getKeywordById, fnRef.current.searchKeyword)
-        .then(setSelectedKeywords);
+      resolveItems(initial, fnRef.current.getKeywordById, fnRef.current.searchKeyword).then(
+        setSelectedKeywords
+      );
     }
   }, []);
 
@@ -150,8 +151,9 @@ export function useResolvedFilters({
     const initial = toPlaceholdersFromCsv(filterValue);
     setExcludeKeywords(initial);
     if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getKeywordById, fnRef.current.searchKeyword)
-        .then(setExcludeKeywords);
+      resolveItems(initial, fnRef.current.getKeywordById, fnRef.current.searchKeyword).then(
+        setExcludeKeywords
+      );
     }
   }, []);
 
@@ -162,8 +164,9 @@ export function useResolvedFilters({
     const initial = toPlaceholdersFromCsv(filterValue);
     setExcludeCompanies(initial);
     if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getCompanyById, fnRef.current.searchCompany)
-        .then(setExcludeCompanies);
+      resolveItems(initial, fnRef.current.getCompanyById, fnRef.current.searchCompany).then(
+        setExcludeCompanies
+      );
     }
   }, []);
 
@@ -174,8 +177,7 @@ export function useResolvedFilters({
     const initial = toPlaceholdersFromCsv(filterValue, '|');
     setSelectedNetworks(initial);
     if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getNetworkById)
-        .then(setSelectedNetworks);
+      resolveItems(initial, fnRef.current.getNetworkById).then(setSelectedNetworks);
     }
   }, []);
 

@@ -99,12 +99,12 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
 
   const cacheKey = url.toString();
   const cache = getCache();
-  
+
   try {
-      const cached = await cache.get(cacheKey);
-      if (cached) return cached;
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
   } catch (err) {
-      log.warn('Cache get failed', { error: err.message });
+    log.warn('Cache get failed', { error: err.message });
   }
 
   let lastError;
@@ -130,7 +130,7 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
       }
 
       const data = await response.json();
-      
+
       try {
         await cache.set(cacheKey, data, 3600); // 1 hour TTL
       } catch (cacheErr) {
@@ -228,11 +228,13 @@ async function tmdbWebsiteFetchJson(endpoint, params = {}) {
 
   const cacheKey = `tmdb_site:${url.toString()}`;
   const cache = getCache();
-  
+
   try {
-      const cached = await cache.get(cacheKey);
-      if (cached) return cached;
-  } catch (e) { /* ignore get error */ }
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore get error */
+  }
 
   const response = await fetch(url.toString(), {
     agent: httpsAgent,
@@ -251,13 +253,13 @@ async function tmdbWebsiteFetchJson(endpoint, params = {}) {
   const text = await response.text();
   const trimmed = text.trim();
   const data = trimmed ? JSON.parse(trimmed) : null;
-  
+
   try {
     await cache.set(cacheKey, data, 3600);
   } catch (err) {
     log.warn('Failed to cache TMDB website response', { key: cacheKey, error: err.message });
   }
-  
+
   return data;
 }
 
@@ -417,8 +419,8 @@ export async function discover(apiKey, options = {}) {
   // Origin country
   // TMDB supports pipe (|) for OR logic
   if (originCountry) {
-    params.with_origin_country = Array.isArray(originCountry) 
-      ? originCountry.join('|') 
+    params.with_origin_country = Array.isArray(originCountry)
+      ? originCountry.join('|')
       : String(originCountry).replace(/,/g, '|');
   }
 
@@ -593,15 +595,19 @@ export async function getExternalIds(apiKey, tmdbId, type = 'movie') {
   const cache = getCache();
 
   try {
-      const cached = await cache.get(cacheKey);
-      if (cached) return cached;
-  } catch (e) { /* ignore */ }
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore */
+  }
 
   try {
     const data = await tmdbFetch(`/${mediaType}/${tmdbId}/external_ids`, apiKey);
     try {
       await cache.set(cacheKey, data, 604800); // Cache for 7 days
-    } catch (e) { /* ignore cache errors */ }
+    } catch (e) {
+      /* ignore cache errors */
+    }
     return data;
   } catch (error) {
     return null;
@@ -617,17 +623,19 @@ export async function enrichItemsWithImdbIds(apiKey, items, type = 'movie') {
   if (!items || !Array.isArray(items) || items.length === 0) return items;
 
   // Process in parallel
-  // This might fire up to 20 requests at once. 
+  // This might fire up to 20 requests at once.
   // Trusted TMDB keys usually handle this fine.
-  await Promise.all(items.map(async (item) => {
-    // If already has known ID, skip
-    if (item.imdb_id) return;
+  await Promise.all(
+    items.map(async (item) => {
+      // If already has known ID, skip
+      if (item.imdb_id) return;
 
-    const ids = await getExternalIds(apiKey, item.id, type);
-    if (ids?.imdb_id) {
-      item.imdb_id = ids.imdb_id;
-    }
-  }));
+      const ids = await getExternalIds(apiKey, item.id, type);
+      if (ids?.imdb_id) {
+        item.imdb_id = ids.imdb_id;
+      }
+    })
+  );
 
   return items;
 }
@@ -663,7 +671,9 @@ export async function getSeasonDetails(apiKey, tmdbId, seasonNumber, options = {
   try {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    /* ignore */
+  }
 
   const params = {};
   if (languageParam) params.language = languageParam;
@@ -672,7 +682,9 @@ export async function getSeasonDetails(apiKey, tmdbId, seasonNumber, options = {
     const data = await tmdbFetch(`/tv/${tmdbId}/season/${seasonNumber}`, apiKey, params);
     try {
       await cache.set(cacheKey, data, 86400); // Cache for 24 hours
-    } catch (e) { /* ignore cache errors */ }
+    } catch (e) {
+      /* ignore cache errors */
+    }
     return data;
   } catch (error) {
     log.warn('Failed to fetch season details', { tmdbId, seasonNumber, error: error.message });
@@ -697,14 +709,14 @@ export async function getSeriesEpisodes(apiKey, tmdbId, details, options = {}) {
   const videos = [];
 
   // Filter out specials (season 0) and get regular seasons
-  const regularSeasons = details.seasons.filter(s => s.season_number > 0);
+  const regularSeasons = details.seasons.filter((s) => s.season_number > 0);
 
   // Fetch all seasons in parallel (with reasonable limit)
   const seasonPromises = regularSeasons.slice(0, 50).map(async (season) => {
     const seasonData = await getSeasonDetails(apiKey, tmdbId, season.season_number, options);
     if (!seasonData?.episodes) return [];
 
-    return seasonData.episodes.map(ep => {
+    return seasonData.episodes.map((ep) => {
       // Build episode ID: prefer IMDb format for Cinemeta/stream compatibility
       const episodeId = imdbId
         ? `${imdbId}:${ep.season_number}:${ep.episode_number}`
@@ -759,9 +771,7 @@ export function formatRuntime(minutes) {
  * @returns {string}
  */
 export function generateSlug(type, title, id) {
-  const safeTitle = (title || '')
-    .toLowerCase()
-    .replace(/ /g, '-');
+  const safeTitle = (title || '').toLowerCase().replace(/ /g, '-');
   return `${type}/${safeTitle}-${id}`;
 }
 
@@ -774,7 +784,14 @@ export function generateSlug(type, title, id) {
  * @param {Array|null} videos - Optional array of Video objects for series episodes
  * @returns {Object} Stremio meta object
  */
-export async function toStremioFullMeta(details, type, imdbId = null, requestedId = null, posterOptions = null, videos = null) {
+export async function toStremioFullMeta(
+  details,
+  type,
+  imdbId = null,
+  requestedId = null,
+  posterOptions = null,
+  videos = null
+) {
   if (!details) return {};
   const isMovie = type === 'movie';
   const title = isMovie ? details.title : details.name;
@@ -814,61 +831,64 @@ export async function toStremioFullMeta(details, type, imdbId = null, requestedI
   // Age Rating / Certification
   let certification = null;
   if (isMovie && details.release_dates?.results) {
-    const usInfo = details.release_dates.results.find(r => r.iso_3166_1 === 'US');
+    const usInfo = details.release_dates.results.find((r) => r.iso_3166_1 === 'US');
     if (usInfo?.release_dates?.length > 0) {
       // Find optimal rating (theatrical preferred)
-      const rated = usInfo.release_dates.find(d => d.certification) || usInfo.release_dates[0];
+      const rated = usInfo.release_dates.find((d) => d.certification) || usInfo.release_dates[0];
       if (rated?.certification) certification = rated.certification;
     }
   } else if (!isMovie && details.content_ratings?.results) {
-    const usInfo = details.content_ratings.results.find(r => r.iso_3166_1 === 'US');
+    const usInfo = details.content_ratings.results.find((r) => r.iso_3166_1 === 'US');
     if (usInfo?.rating) certification = usInfo.rating;
   }
 
   // Format Release Info (Year + Rating)
   let releaseInfo = year;
-  if (!isMovie && (status === 'Returning Series' || status === 'In Production' || !details.last_air_date)) {
-      releaseInfo = `${year}-`;
+  if (
+    !isMovie &&
+    (status === 'Returning Series' || status === 'In Production' || !details.last_air_date)
+  ) {
+    releaseInfo = `${year}-`;
   }
 
   if (certification) {
-      releaseInfo = releaseInfo ? `${releaseInfo} • ${certification}` : certification;
+    releaseInfo = releaseInfo ? `${releaseInfo} • ${certification}` : certification;
   } else if (status && isMovie) {
-      // For series we usually prefer the year range or year- format
-      releaseInfo = releaseInfo ? `${releaseInfo} • ${status}` : status;
+    // For series we usually prefer the year range or year- format
+    releaseInfo = releaseInfo ? `${releaseInfo} • ${status}` : status;
   }
 
   // Trailer
   let trailer = null;
   if (details.videos?.results?.length > 0) {
     // Prefer official YouTube trailers
-    const trailerVideo = details.videos.results.find(v => 
-      v.site === 'YouTube' && v.type === 'Trailer'
-    ) || details.videos.results.find(v => v.site === 'YouTube');
-    
+    const trailerVideo =
+      details.videos.results.find((v) => v.site === 'YouTube' && v.type === 'Trailer') ||
+      details.videos.results.find((v) => v.site === 'YouTube');
+
     if (trailerVideo) {
       trailer = `yt:${trailerVideo.key}`;
     }
   }
 
-// Links
+  // Links
   const links = [];
-  
+
   // Try to get real IMDb rating if configured
-  let displayRating = typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null;
-  const rpdbKey = process.env.RPDB_API_KEY || 't0-free-rpdb'; 
+  let displayRating =
+    typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null;
+  const rpdbKey = process.env.RPDB_API_KEY || 't0-free-rpdb';
 
   // Make sure we have an IMDb ID before trying
   let actualImdbRating = null;
   if (effectiveImdbId && rpdbKey) {
-      try {
-          const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
-          if (realRating && realRating !== 'N/A') {
-              displayRating = realRating;
-              actualImdbRating = realRating;
-          }
-      } catch (e) {
+    try {
+      const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
+      if (realRating && realRating !== 'N/A') {
+        displayRating = realRating;
+        actualImdbRating = realRating;
       }
+    } catch (e) {}
   }
 
   if (effectiveImdbId) {
@@ -880,7 +900,7 @@ export async function toStremioFullMeta(details, type, imdbId = null, requestedI
   }
 
   // Genre Links
-  genres.forEach(genre => {
+  genres.forEach((genre) => {
     links.push({
       name: genre,
       category: 'Genres',
@@ -889,7 +909,7 @@ export async function toStremioFullMeta(details, type, imdbId = null, requestedI
   });
 
   // Cast Links
-  cast.slice(0, 5).forEach(name => {
+  cast.slice(0, 5).forEach((name) => {
     links.push({
       name: name,
       category: 'Cast',
@@ -898,7 +918,7 @@ export async function toStremioFullMeta(details, type, imdbId = null, requestedI
   });
 
   // Director Links
-  directors.forEach(name => {
+  directors.forEach((name) => {
     links.push({
       name: name,
       category: 'Directors',
@@ -907,13 +927,13 @@ export async function toStremioFullMeta(details, type, imdbId = null, requestedI
   });
 
   // Crew strings
-  const writers = crew.filter(p => ['Writer', 'Screenplay', 'Author'].includes(p.job));
-  const writerNames = writers.map(p => p.name);
+  const writers = crew.filter((p) => ['Writer', 'Screenplay', 'Author'].includes(p.job));
+  const writerNames = writers.map((p) => p.name);
   const writerString = writerNames.join(', ');
   const directorString = directors.join(', ');
 
   // Writer Links
-  writerNames.forEach(name => {
+  writerNames.forEach((name) => {
     links.push({
       name: name,
       category: 'Writers',
@@ -922,45 +942,56 @@ export async function toStremioFullMeta(details, type, imdbId = null, requestedI
   });
 
   // Share Link
-  const slugTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const slugTitle = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
   links.push({
     name: title,
     category: 'share',
-    url: `https://www.strem.io/s/${type}/${slugTitle}-${details.id}`
+    url: `https://www.strem.io/s/${type}/${slugTitle}-${details.id}`,
   });
 
   // Trailer Streams
   const trailerStreams = [];
   if (details.videos?.results) {
     details.videos.results
-      .filter(v => v.site === 'YouTube' && v.type === 'Trailer')
-      .forEach(v => {
+      .filter((v) => v.site === 'YouTube' && v.type === 'Trailer')
+      .forEach((v) => {
         trailerStreams.push({
           title: v.name,
           ytId: v.key,
-          lang: v.iso_639_1 || 'en'
+          lang: v.iso_639_1 || 'en',
         });
       });
   }
 
   // app_extras
   const app_extras = {
-    cast: Array.isArray(credits.cast) ? credits.cast.slice(0, 15).map(p => ({
+    cast: Array.isArray(credits.cast)
+      ? credits.cast.slice(0, 15).map((p) => ({
+          name: p.name,
+          character: p.character,
+          photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w276_and_h350_face${p.profile_path}` : null,
+        }))
+      : [],
+    directors: crew
+      .filter((p) => p.job === 'Director')
+      .map((p) => ({
+        name: p.name,
+        photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null,
+      })),
+    writers: writers.map((p) => ({
       name: p.name,
-      character: p.character,
-      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w276_and_h350_face${p.profile_path}` : null
-    })) : [],
-    directors: crew.filter(p => p.job === 'Director').map(p => ({
-      name: p.name,
-      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null
+      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null,
     })),
-    writers: writers.map(p => ({
-      name: p.name,
-      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null
-    })),
-    seasonPosters: Array.isArray(details.seasons) ? details.seasons.map(s => s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null).filter(Boolean) : [],
+    seasonPosters: Array.isArray(details.seasons)
+      ? details.seasons
+          .map((s) => (s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null))
+          .filter(Boolean)
+      : [],
     releaseDates: details.release_dates || details.content_ratings || null,
-    certification: certification
+    certification: certification,
   };
 
   /* behaviorHints */
@@ -971,7 +1002,9 @@ export async function toStremioFullMeta(details, type, imdbId = null, requestedI
 
   // Generate poster URL (use poster service if configured, fallback to TMDB)
   let poster = details.poster_path ? `${TMDB_IMAGE_BASE}/w500${details.poster_path}` : null;
-  let background = details.backdrop_path ? `${TMDB_IMAGE_BASE}/w1280${details.backdrop_path}` : null;
+  let background = details.backdrop_path
+    ? `${TMDB_IMAGE_BASE}/w1280${details.backdrop_path}`
+    : null;
 
   if (isValidPosterConfig(posterOptions)) {
     const enhancedPoster = generatePosterUrl({
@@ -999,7 +1032,11 @@ export async function toStremioFullMeta(details, type, imdbId = null, requestedI
     imdb_id: effectiveImdbId,
     type: type === 'series' ? 'series' : 'movie',
     name: title,
-    slug: generateSlug(type === 'series' ? 'series' : 'movie', title, effectiveImdbId || `tmdb:${details.id}`),
+    slug: generateSlug(
+      type === 'series' ? 'series' : 'movie',
+      title,
+      effectiveImdbId || `tmdb:${details.id}`
+    ),
     poster,
     posterShape: 'poster',
     background,

@@ -16,7 +16,7 @@ class Logger {
     if (LOG_LEVELS[level] >= CURRENT_LEVEL) {
       const timestamp = new Date().toLocaleTimeString();
       const prefix = `[${timestamp}] [${this.context}]`;
-      
+
       switch (level) {
         case 'debug':
           console.debug(prefix, message, ...args);

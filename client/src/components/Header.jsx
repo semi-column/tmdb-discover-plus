@@ -36,22 +36,22 @@ export function Header({ stats }) {
             </div>
 
             <div className="mobile-actions">
-              <a 
-                href="https://ko-fi.com/semicolumn" 
-                target="_blank" 
+              <a
+                href="https://ko-fi.com/semicolumn"
+                target="_blank"
                 rel="noreferrer"
                 className="action-icon-btn kofi-btn"
                 aria-label="Support on Ko-fi"
               >
-                <img 
-                  src="/Paypal.png" 
-                  alt="PayPal" 
+                <img
+                  src="/Paypal.png"
+                  alt="PayPal"
                   style={{ width: '24px', height: '24px', objectFit: 'contain' }}
                 />
               </a>
-              <a 
-                href="https://buymeacoffee.com/semi.column" 
-                target="_blank" 
+              <a
+                href="https://buymeacoffee.com/semi.column"
+                target="_blank"
                 rel="noreferrer"
                 className="action-icon-btn bmc-btn"
                 aria-label="Buy me a coffee"

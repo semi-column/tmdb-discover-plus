@@ -9,7 +9,7 @@ export function useAppController() {
     const searchParams = new URLSearchParams(window.location.search);
     const qsUserId = searchParams.get('userId');
     if (qsUserId) return qsUserId;
-    
+
     const pathParts = window.location.pathname.split('/').filter(Boolean);
     const last = pathParts[pathParts.length - 1];
     return last && last !== 'configure' ? last : null;
@@ -49,7 +49,7 @@ export function useAppController() {
   }, []);
   const loadUserConfigs = useCallback(async () => {
     if (loadingLockRef.current) return [];
-    
+
     loadingLockRef.current = true;
     setConfigsLoading(true);
     try {
@@ -74,17 +74,17 @@ export function useAppController() {
     if (config.isAuthenticated) {
       setIsSetup(false);
       setIsSessionExpired(false);
-      
+
       if (!currentUrlUserId && config.userId) {
         window.history.replaceState({}, '', `/?userId=${config.userId}`);
         setUrlUserId(config.userId);
       }
-      
+
       if (!configsLoadedRef.current) {
         configsLoadedRef.current = true;
         loadUserConfigs();
       }
-      
+
       setPageLoading(false);
     } else {
       if (currentUrlUserId) {
@@ -101,7 +101,7 @@ export function useAppController() {
   }, [isSetup]);
   useEffect(() => {
     if (!urlUserId || !config.authChecked) return;
-    
+
     if (isSetup) return;
 
     setPageLoading(true);
@@ -122,13 +122,13 @@ export function useAppController() {
         }
 
         logger.error('[App] Config load error, attempting fallback:', err);
-        
+
         try {
           const configs = await loadUserConfigs();
-          
+
           if (configs && configs.length > 0) {
             const latest = configs[0];
-            
+
             // Fix: Prevent infinite loop if the latest config is the one that just failed
             if (latest.userId === urlUserId) {
               logger.warn('[App] Latest config is same as failed config, aborting fallback loop');
@@ -144,7 +144,7 @@ export function useAppController() {
             setUrlUserId(latest.userId);
           } else {
             window.history.replaceState({}, '', '/');
-            setUrlUserId(null); 
+            setUrlUserId(null);
             setPageLoading(false);
           }
         } catch (fallbackErr) {
@@ -153,7 +153,16 @@ export function useAppController() {
           setPageLoading(false);
         }
       });
-  }, [urlUserId, config.authChecked, config.isAuthenticated, config.userId, config.loadConfig, isSetup, loadUserConfigs, addToast]);
+  }, [
+    urlUserId,
+    config.authChecked,
+    config.isAuthenticated,
+    config.userId,
+    config.loadConfig,
+    isSetup,
+    loadUserConfigs,
+    addToast,
+  ]);
 
   const handleLogin = async (userId, configs = []) => {
     if (loginHandledRef.current) return;
@@ -174,24 +183,24 @@ export function useAppController() {
       if (data.catalogs?.length > 0) {
         setActiveCatalog(data.catalogs[0]);
       }
-      
+
       window.history.replaceState({}, '', `/?userId=${userId}`);
       setUrlUserId(userId);
-      
+
       addToast('Logged in successfully');
       if (!configs || configs.length === 0) {
         configsLoadedRef.current = true; // Set lock before loading
         const loadedConfigs = await loadUserConfigs();
-        
+
         if (!loadedConfigs || loadedConfigs.length === 0) {
-             const newConfig = await api.saveConfig({
-                catalogs: [],
-                preferences: {},
-             });
-             // Update URL to new config
-             window.history.replaceState({}, '', `/?userId=${newConfig.userId}`);
-             setUrlUserId(newConfig.userId);
-             await config.loadConfig(newConfig.userId);
+          const newConfig = await api.saveConfig({
+            catalogs: [],
+            preferences: {},
+          });
+          // Update URL to new config
+          window.history.replaceState({}, '', `/?userId=${newConfig.userId}`);
+          setUrlUserId(newConfig.userId);
+          await config.loadConfig(newConfig.userId);
         }
       }
     } catch (err) {
@@ -315,7 +324,7 @@ export function useAppController() {
       id: crypto.randomUUID(),
       name: `${catalog.name} (Copy)`,
     };
-    
+
     config.setCatalogs((prev) => [...prev, newCatalog]);
     setActiveCatalog(newCatalog);
     addToast('Catalog duplicated');
@@ -337,21 +346,21 @@ export function useAppController() {
       }
 
       if (importedData.catalogs) {
-         const newCatalogs = importedData.catalogs.map(c => ({
-            ...c,
-            _id: c._id || crypto.randomUUID(),
-            id: c.id || crypto.randomUUID() 
-         }));
-         config.setCatalogs(newCatalogs);
-         if (newCatalogs.length > 0) {
-            setActiveCatalog(newCatalogs[0]);
-         }
+        const newCatalogs = importedData.catalogs.map((c) => ({
+          ...c,
+          _id: c._id || crypto.randomUUID(),
+          id: c.id || crypto.randomUUID(),
+        }));
+        config.setCatalogs(newCatalogs);
+        if (newCatalogs.length > 0) {
+          setActiveCatalog(newCatalogs[0]);
+        }
       }
 
       if (importedData.preferences) {
-        config.setPreferences(p => ({ ...p, ...importedData.preferences }));
+        config.setPreferences((p) => ({ ...p, ...importedData.preferences }));
       }
-      
+
       if (importedData.configName) {
         config.setConfigName(importedData.configName);
       }

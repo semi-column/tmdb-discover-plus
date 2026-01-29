@@ -1,10 +1,6 @@
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
-import {
-  generateToken,
-  verifyToken,
-  computeApiKeyId,
-} from '../utils/authMiddleware.js';
+import { generateToken, verifyToken, computeApiKeyId } from '../utils/authMiddleware.js';
 import { encrypt } from '../utils/encryption.js';
 import {
   getUserConfig,
@@ -80,7 +76,10 @@ router.post('/login', strictRateLimit, async (req, res) => {
       existingConfigs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
       const config = existingConfigs[0];
       const tokenData = generateToken(apiKey, rememberMe);
-      log.info('User authenticated', { userId: config.userId, totalConfigs: existingConfigs.length });
+      log.info('User authenticated', {
+        userId: config.userId,
+        totalConfigs: existingConfigs.length,
+      });
 
       const allConfigs = existingConfigs.map((c) => ({
         userId: c.userId,
