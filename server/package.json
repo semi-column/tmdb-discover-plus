@@ -1,6 +1,6 @@
 {
   "name": "tmdb-discover-plus",
-  "version": "2.6.4",
+  "version": "2.6.5",
   "description": "TMDB Discover+ - Custom Catalog Builder for Stremio",
   "main": "src/index.js",
   "type": "module",

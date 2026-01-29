@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.5](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.4...v2.6.5) (2026-01-29)
+
+
+### Bug Fixes
+
+* metadata not getting populated [#34](https://github.com/semi-column/tmdb-discover-plus/issues/34) ([5244a8d](https://github.com/semi-column/tmdb-discover-plus/commit/5244a8da9a0c8bb97f176a5a4e53749f57dc71c3))
+
 ## [2.6.4](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.3...v2.6.4) (2026-01-29)
 
 
