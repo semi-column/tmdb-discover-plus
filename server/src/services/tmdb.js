@@ -47,6 +47,41 @@ try {
   log.warn('Could not load static TMDB genre mapping', { error: err.message });
 }
 
+/**
+ * Fetch IMDb rating from Stremio's Cinemeta API (same as tmdb-addon)
+ */
+async function getCinemetaRating(imdbId, type) {
+  if (!imdbId) return null;
+  const cache = getCache();
+  const cacheKey = `cinemeta_rating_${imdbId}`;
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+  } catch (e) { /* ignore */ }
+
+  try {
+    const mediaType = type === 'series' ? 'series' : 'movie';
+    const response = await fetch(`https://v3-cinemeta.strem.io/meta/${mediaType}/${imdbId}.json`, {
+      agent: httpsAgent,
+      timeout: 5000,
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const rating = data?.meta?.imdbRating || null;
+    log.info('Cinemeta rating result', { imdbId, rating });
+
+    try {
+      await cache.set(cacheKey, rating, 86400); // 24 hours
+    } catch (e) { /* ignore */ }
+
+    return rating;
+  } catch (error) {
+    log.debug('Cinemeta rating fetch failed', { imdbId, error: error.message });
+    return null;
+  }
+}
+
 function redactTmdbUrl(urlString) {
   if (typeof urlString !== 'string') return urlString;
   return urlString.replace(/([?&]api_key=)[^&\s]+/gi, '$1[REDACTED]');
@@ -1019,24 +1054,43 @@ export async function toStremioFullMeta(
   // Links
   const links = [];
 
-  // Try to get real IMDb rating if configured
-  let displayRating =
-    typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null;
-  const rpdbKey =
-    posterOptions?.service === 'rpdb' && posterOptions.apiKey
-      ? posterOptions.apiKey
-      : process.env.RPDB_API_KEY;
-
-  // Make sure we have an IMDb ID before trying
+  // Try to get real IMDb rating from multiple sources (like tmdb-addon):
+  // Priority: Cinemeta (Stremio's DB) → RPDB → TMDB vote_average
+  let displayRating = null;
   let actualImdbRating = null;
-  if (effectiveImdbId && rpdbKey) {
+
+  // 1. Try Cinemeta first (most reliable for IMDb ratings)
+  if (effectiveImdbId) {
     try {
-      const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
-      if (realRating && realRating !== 'N/A') {
-        displayRating = realRating;
-        actualImdbRating = realRating;
+      const cinemetaRating = await getCinemetaRating(effectiveImdbId, type);
+      if (cinemetaRating) {
+        displayRating = cinemetaRating;
+        actualImdbRating = cinemetaRating;
       }
-    } catch (e) { }
+    } catch (e) { /* ignore */ }
+  }
+
+  // 2. Try RPDB if Cinemeta didn't have it
+  if (!actualImdbRating && effectiveImdbId) {
+    const rpdbKey =
+      posterOptions?.service === 'rpdb' && posterOptions.apiKey
+        ? posterOptions.apiKey
+        : process.env.RPDB_API_KEY;
+
+    if (rpdbKey) {
+      try {
+        const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
+        if (realRating && realRating !== 'N/A') {
+          displayRating = realRating;
+          actualImdbRating = realRating;
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  // 3. Fallback to TMDB vote_average
+  if (!displayRating && typeof details.vote_average === 'number' && details.vote_average > 0) {
+    displayRating = details.vote_average.toFixed(1);
   }
 
   if (effectiveImdbId) {
@@ -1216,10 +1270,12 @@ export async function toStremioFullMeta(
     description: details.overview || '',
     year: year || undefined,
     releaseInfo,
-    // Use actual IMDB rating from RPDB if available, fallback to TMDB vote_average
-    imdbRating:
-      actualImdbRating ||
-      (typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null),
+    // Use actual IMDB rating from Cinemeta/RPDB if available, fallback to TMDB vote_average
+    imdbRating: (() => {
+      const finalRating = actualImdbRating || (typeof details.vote_average === 'number' && details.vote_average > 0 ? details.vote_average.toFixed(1) : null);
+      log.info('Final imdbRating for meta', { actualImdbRating, voteAverage: details.vote_average, finalRating });
+      return finalRating;
+    })(),
     genres,
     cast: cast.length > 0 ? cast : undefined,
     director: directorString || undefined,
