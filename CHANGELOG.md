@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.3](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.2...v2.6.3) (2026-01-29)
+
+
+### Bug Fixes
+
+* fixed hardcoded manifest & logo url ([54a7a58](https://github.com/semi-column/tmdb-discover-plus/commit/54a7a58987e74c54fc7a0f6fd5d7bdd25dce7708))
+* Original Networks Dropdown Flickering Fixed ([9ff7898](https://github.com/semi-column/tmdb-discover-plus/commit/9ff789877e44854fe1475ba9ec3940ec97c85a47))
+* region filter now correctly excludes movies without regional release dates ([#33](https://github.com/semi-column/tmdb-discover-plus/issues/33)) ([28ecf39](https://github.com/semi-column/tmdb-discover-plus/commit/28ecf39a5dae894e5400ddfde2c26e44e60ec0fa))
+
 ## [2.6.2](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.1...v2.6.2) (2026-01-29)
 
 
