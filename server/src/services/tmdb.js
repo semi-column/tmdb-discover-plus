@@ -996,18 +996,35 @@ export async function toStremioFullMeta(
   const effectiveImdbId = imdbId || details?.external_ids?.imdb_id || null;
   const status = details.status || null;
 
-  // Age Rating / Certification
+  // Age Rating / Certification - use country from language setting, fallback to US
+  // Extract country code: "it" -> "IT", "en-US" -> "US", "pt-BR" -> "BR"
+  const countryCode = targetLanguage
+    ? (targetLanguage.includes('-')
+      ? targetLanguage.split('-')[1].toUpperCase()
+      : targetLanguage.toUpperCase())
+    : 'US';
+
+  log.info('Certification lookup', { targetLanguage, countryCode });
+
   let certification = null;
   if (isMovie && details.release_dates?.results) {
-    const usInfo = details.release_dates.results.find((r) => r.iso_3166_1 === 'US');
-    if (usInfo?.release_dates?.length > 0) {
+    // Try user's country first, then fallback to US
+    let countryInfo = details.release_dates.results.find((r) => r.iso_3166_1 === countryCode);
+    if (!countryInfo && countryCode !== 'US') {
+      countryInfo = details.release_dates.results.find((r) => r.iso_3166_1 === 'US');
+    }
+    if (countryInfo?.release_dates?.length > 0) {
       // Find optimal rating (theatrical preferred)
-      const rated = usInfo.release_dates.find((d) => d.certification) || usInfo.release_dates[0];
+      const rated = countryInfo.release_dates.find((d) => d.certification) || countryInfo.release_dates[0];
       if (rated?.certification) certification = rated.certification;
     }
   } else if (!isMovie && details.content_ratings?.results) {
-    const usInfo = details.content_ratings.results.find((r) => r.iso_3166_1 === 'US');
-    if (usInfo?.rating) certification = usInfo.rating;
+    // Try user's country first, then fallback to US
+    let countryInfo = details.content_ratings.results.find((r) => r.iso_3166_1 === countryCode);
+    if (!countryInfo && countryCode !== 'US') {
+      countryInfo = details.content_ratings.results.find((r) => r.iso_3166_1 === 'US');
+    }
+    if (countryInfo?.rating) certification = countryInfo.rating;
   }
 
   // Format Release Info (Year + Rating)
