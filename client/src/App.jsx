@@ -202,6 +202,7 @@ function App() {
               getPersonById={tmdb.getPersonById}
               getCompanyById={tmdb.getCompanyById}
               getKeywordById={tmdb.getKeywordById}
+              getNetworkById={tmdb.getNetworkById}
               getWatchProviders={tmdb.getWatchProviders}
             />
           </div>

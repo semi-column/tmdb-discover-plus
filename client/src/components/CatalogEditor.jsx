@@ -135,6 +135,7 @@ export function CatalogEditor({
   getPersonById,
   getCompanyById,
   getKeywordById,
+  getNetworkById,
   getWatchProviders,
 }) {
   const [localCatalog, setLocalCatalog] = useState(catalog || DEFAULT_CATALOG);
@@ -142,7 +143,13 @@ export function CatalogEditor({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
   const [selectedDatePreset, setSelectedDatePreset] = useState(null);
-  const [tvNetworkOptions, setTVNetworkOptions] = useState(tvNetworks);
+  const [tvNetworkOptions, setTVNetworkOptions] = useState(tvNetworks || []);
+
+  useEffect(() => {
+    if (tvNetworks && tvNetworks.length > 0) {
+      setTVNetworkOptions(tvNetworks);
+    }
+  }, [tvNetworks]);
   const [expandedSections, setExpandedSections] = useState({
     basic: false,
     genres: false,
@@ -160,11 +167,13 @@ export function CatalogEditor({
     selectedKeywords, setSelectedKeywords,
     excludeKeywords, setExcludeKeywords,
     excludeCompanies, setExcludeCompanies,
+    selectedNetworks,
   } = useResolvedFilters({
     catalog: catalog,
     getPersonById, searchPerson,
     getCompanyById, searchCompany,
     getKeywordById, searchKeyword,
+    getNetworkById,
   });
   const { watchProviders } = useWatchProviders({
       type: localCatalog?.type,
@@ -192,7 +201,8 @@ export function CatalogEditor({
         selectedCompanies, 
         selectedKeywords, 
         excludeKeywords, 
-        excludeCompanies
+        excludeCompanies,
+        selectedNetworks
       ]
   });
 
@@ -1334,6 +1344,7 @@ export function CatalogEditor({
               <StreamFilters
                 type={localCatalog?.type}
                 tvNetworks={tvNetworkOptions}
+                selectedNetworks={selectedNetworks}
                 watchRegions={watchRegions}
                 watchProviders={watchProviders}
                 monetizationTypes={monetizationTypes}

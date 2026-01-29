@@ -16,6 +16,7 @@ export function MultiSelect({
   onSearch,
   minSearchLength = 2,
   searchDebounceMs = 250,
+  hideUnselected = false,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -86,11 +87,14 @@ export function MultiSelect({
   const filteredOptions =
     isSearchEnabled && normalizedSearch
       ? options.filter((opt) =>
+          value.includes(opt[valueKey]) ||
           String(opt?.[labelKey] || '')
             .toLowerCase()
             .includes(normalizedSearch)
         )
-      : options;
+      : (hideUnselected && Array.isArray(value) && value.length > 0)
+        ? options.filter(opt => value.includes(opt[valueKey]))
+        : options;
 
   return (
     <div className={`multi-select ${isOpen ? 'open' : ''}`} ref={containerRef}>

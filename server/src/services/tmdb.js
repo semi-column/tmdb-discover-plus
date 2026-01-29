@@ -1271,6 +1271,23 @@ export async function getKeywordById(apiKey, id) {
 }
 
 /**
+ * Get a network by TMDB ID
+ */
+export async function getNetworkById(apiKey, id) {
+  if (!apiKey || !id) return null;
+  try {
+    const data = await tmdbFetch(`/network/${id}`, apiKey);
+    return {
+      id: data.id,
+      name: data.name,
+      logoPath: data.logo_path ? `${TMDB_IMAGE_BASE}/w185${data.logo_path}` : null,
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
  * Get TV networks list
  */
 export async function getNetworks(apiKey, query) {

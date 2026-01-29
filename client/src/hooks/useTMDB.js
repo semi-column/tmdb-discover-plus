@@ -168,6 +168,14 @@ export function useTMDB(apiKey) {
     [apiKey, hasAuth]
   );
 
+  const getNetworkById = useCallback(
+    async (id) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.getNetworkById(apiKey, id);
+    },
+    [apiKey, hasAuth]
+  );
+
   return {
     genres,
     languages,
@@ -194,5 +202,6 @@ export function useTMDB(apiKey) {
     getPersonById,
     getCompanyById,
     getKeywordById,
+    getNetworkById,
   };
 }

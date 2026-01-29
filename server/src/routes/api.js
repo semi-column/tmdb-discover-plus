@@ -216,6 +216,18 @@ router.get('/keyword/:id', requireAuth, resolveApiKey, async (req, res) => {
   }
 });
 
+router.get('/network/:id', requireAuth, resolveApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 'ID required' });
+    const network = await tmdb.getNetworkById(req.apiKey, id);
+    if (!network) return res.status(404).json({ error: 'Not found' });
+    res.json({ id: String(network.id), name: network.name, logo: network.logoPath });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/sort-options', (req, res) => {
   const { type } = req.query;
   if (type && tmdb.SORT_OPTIONS[type]) {

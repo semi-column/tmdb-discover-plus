@@ -8,18 +8,20 @@ export function useResolvedFilters({
   searchCompany,
   getKeywordById,
   searchKeyword,
+  getNetworkById,
 }) {
   const [selectedPeople, setSelectedPeople] = useState([]);
   const [selectedCompanies, setSelectedCompanies] = useState([]);
   const [selectedKeywords, setSelectedKeywords] = useState([]);
   const [excludeKeywords, setExcludeKeywords] = useState([]);
   const [excludeCompanies, setExcludeCompanies] = useState([]);
+  const [selectedNetworks, setSelectedNetworks] = useState([]);
 
   // Converts CSV ID strings (e.g., "123,456") to placeholder objects for initial display
-  const toPlaceholdersFromCsv = (csv) => {
+  const toPlaceholdersFromCsv = (csv, sep = ',') => {
     if (!csv) return [];
     return String(csv)
-      .split(',')
+      .split(sep)
       .filter(Boolean)
       .map((id) => ({ id, name: id }));
   };
@@ -39,12 +41,14 @@ export function useResolvedFilters({
         try {
           if (typeof fetchById === 'function') {
             const resp = await fetchById(item.id);
-            if (resp && (resp.name || resp.title)) return { id: item.id, name: resp.name || resp.title };
+            if (resp && (resp.name || resp.title)) {
+              return { id: item.id, name: resp.name || resp.title, logo: resp.logo };
+            }
           }
           if (typeof search === 'function') {
             const sres = await search(item.id);
             if (Array.isArray(sres) && sres.length > 0)
-              return { id: item.id, name: sres[0].name || sres[0].title || item.id };
+              return { id: item.id, name: sres[0].name || sres[0].title || item.id, logo: sres[0].logo };
           }
         } catch (e) {
           void e;
@@ -56,11 +60,12 @@ export function useResolvedFilters({
 
   useEffect(() => {
     if (!catalog) {
-      if (selectedPeople.length > 0) setSelectedPeople([]); // eslint-disable-line react-hooks/set-state-in-effect
+      if (selectedPeople.length > 0) setSelectedPeople([]);
       if (selectedCompanies.length > 0) setSelectedCompanies([]);
       if (selectedKeywords.length > 0) setSelectedKeywords([]);
       if (excludeKeywords.length > 0) setExcludeKeywords([]);
       if (excludeCompanies.length > 0) setExcludeCompanies([]);
+      if (selectedNetworks.length > 0) setSelectedNetworks([]);
       return;
     }
 
@@ -99,21 +104,30 @@ export function useResolvedFilters({
     setExcludeCompanies(excludeCompTotal);
     resolveItems(excludeCompTotal, getCompanyById, searchCompany).then(setExcludeCompanies);
 
-  }, [ // eslint-disable-next-line react-hooks/exhaustive-deps
-    catalog?._id,
-  ]);
+    // Network resolution
+    const initialNetworks = toPlaceholdersFromCsv(catalog.filters?.withNetworks, '|');
+    setSelectedNetworks(initialNetworks);
+    resolveItems(initialNetworks, getNetworkById).then(setSelectedNetworks);
+
+  }, [catalog?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     resolveItems(selectedPeople, getPersonById, searchPerson).then(res => {
         if (JSON.stringify(res) !== JSON.stringify(selectedPeople)) setSelectedPeople(res);
     });
-  }, [selectedPeople, getPersonById, searchPerson]);
+  }, [selectedPeople, getPersonById, searchPerson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     resolveItems(selectedCompanies, getCompanyById, searchCompany).then(res => {
          if (JSON.stringify(res) !== JSON.stringify(selectedCompanies)) setSelectedCompanies(res);
     });
-  }, [selectedCompanies, getCompanyById, searchCompany]);
+  }, [selectedCompanies, getCompanyById, searchCompany]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    resolveItems(selectedNetworks, getNetworkById).then(res => {
+      if (JSON.stringify(res) !== JSON.stringify(selectedNetworks)) setSelectedNetworks(res);
+    });
+  }, [selectedNetworks, getNetworkById]); // eslint-disable-line react-hooks/exhaustive-deps
   
   return {
     selectedPeople, setSelectedPeople,
@@ -121,5 +135,6 @@ export function useResolvedFilters({
     selectedKeywords, setSelectedKeywords,
     excludeKeywords, setExcludeKeywords,
     excludeCompanies, setExcludeCompanies,
+    selectedNetworks, setSelectedNetworks,
   };
 }

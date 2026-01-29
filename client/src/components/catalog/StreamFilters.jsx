@@ -13,6 +13,7 @@ export function StreamFilters({
   onNetworkSearch,
   filters,
   onFiltersChange,
+  selectedNetworks,
 }) {
   const [providerSearch, setProviderSearch] = useState('');
 
@@ -32,7 +33,7 @@ export function StreamFilters({
 
   return (
     <>
-      {type === 'series' && tvNetworks.length > 0 && (
+      {type === 'series' && tvNetworkOptions.length > 0 && (
         <div className="filter-group mb-4">
           <LabelWithTooltip
             label="Original Networks"
@@ -42,7 +43,14 @@ export function StreamFilters({
             Where the show originally aired (HBO, Netflix Originals, etc.)
           </span>
           <MultiSelect
-            options={tvNetworkOptions.map((n) => ({ code: String(n.id), name: n.name }))}
+            options={(() => {
+              const byId = new Map();
+              // First add curated networks
+              tvNetworkOptions.forEach(n => byId.set(String(n.id), { code: String(n.id), name: n.name }));
+              // Then add/overwrite with resolved selected networks (which might have better logos/names or be different networks)
+              (selectedNetworks || []).forEach(n => byId.set(String(n.id), { code: String(n.id), name: n.name }));
+              return Array.from(byId.values());
+            })()}
             value={(filters.withNetworks || '').split('|').filter(Boolean)}
             onChange={(values) => onFiltersChange('withNetworks', values.join('|'))}
             placeholder="Any network"
@@ -50,6 +58,7 @@ export function StreamFilters({
             onSearch={onNetworkSearch}
             labelKey="name"
             valueKey="code"
+            hideUnselected={true}
           />
         </div>
       )}

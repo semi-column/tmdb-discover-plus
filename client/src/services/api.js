@@ -291,6 +291,14 @@ class ApiService {
     return this.request(`/keyword/${encodeURIComponent(id)}?apiKey=${encodeURIComponent(apiKey)}`);
   }
 
+  async getNetworkById(apiKey, id) {
+    const token = this.getSessionToken();
+    if (token) {
+      return this.request(`/network/${encodeURIComponent(id)}`);
+    }
+    return this.request(`/network/${encodeURIComponent(id)}?apiKey=${encodeURIComponent(apiKey)}`);
+  }
+
   async saveConfig(config) {
     return this.request('/config', {
       method: 'POST',
