@@ -642,7 +642,7 @@ export async function getDetails(apiKey, tmdbId, type = 'movie') {
   const maybeOptions = arguments.length >= 4 ? arguments[3] : undefined;
   const languageParam = maybeOptions?.displayLanguage || maybeOptions?.language;
   return tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, {
-    append_to_response: 'external_ids,credits,videos,release_dates,content_ratings',
+    append_to_response: 'external_ids,credits,videos,release_dates,content_ratings,images',
     ...(languageParam ? { language: languageParam } : {}),
   });
 }
@@ -1011,8 +1011,8 @@ export async function toStremioFullMeta(details, type, imdbId = null, requestedI
     imdbRating: typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null,
     genres,
     cast: cast.length > 0 ? cast : undefined,
-    director: directorString || undefined,
-    writer: writerString || undefined,
+    director: directors.length > 0 ? directors : undefined,
+    writer: writerNames.length > 0 ? writerNames : undefined,
     runtime: formatRuntime(runtimeMin),
     language: details.original_language || undefined,
     country: Array.isArray(details.origin_country) ? details.origin_country.join(', ') : undefined,

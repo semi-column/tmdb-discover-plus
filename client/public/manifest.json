@@ -5,7 +5,11 @@
   "description": "Create custom movie and TV catalogs for Stremio with powerful TMDB filters",
   "resources": [
     "catalog",
-    "meta",
+    {
+      "name": "meta",
+      "types": ["movie", "series"],
+      "idPrefixes": ["tmdb:", "tt"]
+    },
     "stream",
     "subtitles"
   ],
@@ -14,9 +18,6 @@
     "series"
   ],
   "catalogs": [],
-  "idPrefixes": [
-    "tmdb-"
-  ],
   "logo": "/logo.png",
   "behaviorHints": {
     "configurable": true

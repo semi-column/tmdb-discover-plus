@@ -55,14 +55,19 @@ export function buildManifest(userConfig, baseUrl) {
     name: ADDON_NAME,
     description: ADDON_DESCRIPTION,
     version: ADDON_VERSION,
-    logo: `${baseUrl.replace(/^http:/, 'https:')}/logo.png`,
-    resources: ['catalog', 'meta'],
+    logo: `${baseUrl}/logo.png`,
+    resources: [
+      'catalog',
+      {
+        name: 'meta',
+        types: ['movie', 'series'],
+        idPrefixes: ['tmdb:', 'tt']
+      }
+    ],
     types: ['movie', 'series'],
     catalogs,
-    idPrefixes: ['tmdb-', 'tmdb:', 'tt'],
     behaviorHints: {
       configurable: true,
-      // Stremio will redirect to /configure/:userId when user clicks Configure
     },
   };
 }
