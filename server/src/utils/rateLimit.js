@@ -10,6 +10,7 @@ const baseOptions = {
   // Use a memory store as default
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: true, // Disable the `X-RateLimit-*` headers
+  validate: { trustProxy: false }, // Allow 'trust proxy' in Express without error
   skip: (req) => {
     // Skip rate limiting if disabled via env
     if (process.env.DISABLE_RATE_LIMIT === 'true') return true;
