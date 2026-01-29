@@ -1027,20 +1027,21 @@ export async function toStremioFullMeta(
     if (countryInfo?.rating) certification = countryInfo.rating;
   }
 
-  // Format Release Info (Year + Rating)
+  // Format Release Info - Year or Year Range (like Cinemeta)
+  // Ended series: "2016-2025", Ongoing: "2016-", Movies: "2016"
   let releaseInfo = year;
-  if (
-    !isMovie &&
-    (status === 'Returning Series' || status === 'In Production' || !details.last_air_date)
-  ) {
-    releaseInfo = `${year}-`;
+  if (!isMovie) {
+    const endYear = details.last_air_date ? String(details.last_air_date).split('-')[0] : null;
+    if (status === 'Ended' && endYear && endYear !== year) {
+      releaseInfo = `${year}-${endYear}`;
+    } else if (status === 'Returning Series' || status === 'In Production' || !details.last_air_date) {
+      releaseInfo = `${year}-`;
+    }
   }
 
+  // Add certification if present (separated with em-spaces for proper width)
   if (certification) {
-    releaseInfo = releaseInfo ? `${releaseInfo} • ${certification}` : certification;
-  } else if (status && isMovie) {
-    // For series we usually prefer the year range or year- format
-    releaseInfo = releaseInfo ? `${releaseInfo} • ${status}` : status;
+    releaseInfo = releaseInfo ? `${releaseInfo}\u2003\u2003${certification}` : certification;
   }
 
   // Trailer
