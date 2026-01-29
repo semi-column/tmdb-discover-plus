@@ -58,6 +58,6 @@
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,css,md}": "npx prettier --write",
-    "client/**/*.{js,jsx}": "npx eslint --fix --config client/eslint.config.js"
+    "client/src/**/*.{js,jsx}": "npx eslint --fix --config client/eslint.config.js"
   }
 }
