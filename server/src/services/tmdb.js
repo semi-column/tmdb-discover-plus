@@ -388,9 +388,12 @@ export async function discover(apiKey, options = {}) {
   }
 
   // Year filters (legacy - uses date filters internally)
+  // When region is set, use release_date to filter by regional release (TMDB behavior)
+  // Without region, use primary_release_date to filter by global release
   if (mediaType === 'movie') {
-    if (yearFrom && !releaseDateFrom) params['primary_release_date.gte'] = `${yearFrom}-01-01`;
-    if (yearTo && !releaseDateTo) params['primary_release_date.lte'] = `${yearTo}-12-31`;
+    const dateKey = region ? 'release_date' : 'primary_release_date';
+    if (yearFrom && !releaseDateFrom) params[`${dateKey}.gte`] = `${yearFrom}-01-01`;
+    if (yearTo && !releaseDateTo) params[`${dateKey}.lte`] = `${yearTo}-12-31`;
   } else {
     if (yearFrom && !airDateFrom) params['first_air_date.gte'] = `${yearFrom}-01-01`;
     if (yearTo && !airDateTo) params['first_air_date.lte'] = `${yearTo}-12-31`;
@@ -429,8 +432,11 @@ export async function discover(apiKey, options = {}) {
     if (region) params.region = region;
 
     // Release date filters
-    if (releaseDateFrom) params['primary_release_date.gte'] = releaseDateFrom;
-    if (releaseDateTo) params['primary_release_date.lte'] = releaseDateTo;
+    // When region is set, use release_date to filter by regional release
+    // Without region, use primary_release_date to filter by global/original release
+    const dateKey = region ? 'release_date' : 'primary_release_date';
+    if (releaseDateFrom) params[`${dateKey}.gte`] = releaseDateFrom;
+    if (releaseDateTo) params[`${dateKey}.lte`] = releaseDateTo;
 
     // Release type filter (1=Premiere, 2=Limited, 3=Theatrical, 4=Digital, 5=Physical, 6=TV)
     if (releaseType) {
