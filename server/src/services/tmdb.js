@@ -1097,7 +1097,7 @@ export async function toStremioFullMeta(
     links.push({
       name: displayRating || 'IMDb',
       category: 'imdb',
-      url: `https://www.imdb.com/title/${effectiveImdbId}/`,
+      url: `https://imdb.com/title/${effectiveImdbId}`,
     });
   }
 
