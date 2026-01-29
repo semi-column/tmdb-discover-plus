@@ -46,9 +46,14 @@ export async function getRpdbRating(apiKey, imdbId) {
     const response = await fetch(url);
 
     if (!response.ok) {
-      // 404 means not found, 403 means bad key/limit
+      // 404 means not found, 403 means bad key/limit/expired
       if (response.status === 404) {
         await cache.set(cacheKey, 'N/A', 86400); // Cache 'N/A' to avoid hitting 404s repeatedly
+        return null;
+      }
+      if (response.status === 403) {
+        // Invalid key or expired plan. Log at debug level to avoid spam.
+        log.debug(`RPDB 403 Forbidden (Invalid Key?): ${url}`);
         return null;
       }
       throw new Error(`RPDB Status ${response.status}`);
@@ -65,6 +70,11 @@ export async function getRpdbRating(apiKey, imdbId) {
 
     return null;
   } catch (error) {
+    if (error.message.includes('RPDB Status 403')) {
+      // Should have been caught above, but just in case
+      log.debug('Failed to fetch RPDB rating (403)', { imdbId });
+      return null;
+    }
     log.warn('Failed to fetch RPDB rating', { imdbId, error: error.message });
     return null;
   }

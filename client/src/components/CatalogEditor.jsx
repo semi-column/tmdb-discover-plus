@@ -111,7 +111,7 @@ export function CatalogEditor({
   catalog,
   genres = { movie: [], series: [] },
   genresLoading = false,
-  refreshGenres = () => {},
+  refreshGenres = () => { },
   languages = [],
   countries = [],
   sortOptions = { movie: [], series: [] },
@@ -488,6 +488,8 @@ export function CatalogEditor({
     }
 
     // Display language (localization)
+    // Display language (localization) - REMOVED (Global only)
+    /*
     if (filters.displayLanguage) {
       const lang = languages.find((l) => l.code === filters.displayLanguage);
       active.push({
@@ -496,6 +498,7 @@ export function CatalogEditor({
         section: 'filters',
       });
     }
+    */
 
     // Country
     if (filters.originCountry) {
@@ -594,6 +597,7 @@ export function CatalogEditor({
           }));
           break;
         case 'displayLanguage':
+          // REMOVED
           setLocalCatalog((prev) => ({
             ...prev,
             filters: { ...prev.filters, displayLanguage: undefined },
@@ -979,6 +983,8 @@ export function CatalogEditor({
                           />
                         </div>
 
+                        {/* Display Language REMOVED - Use Global Settings */}
+                        {/* 
                         <div className="filter-group">
                           <LabelWithTooltip
                             label="Display Language"
@@ -994,6 +1000,7 @@ export function CatalogEditor({
                             valueKey="code"
                           />
                         </div>
+                        */}
 
                         <div className="filter-group">
                           <LabelWithTooltip

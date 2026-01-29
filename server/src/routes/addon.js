@@ -40,10 +40,22 @@ function pickPreferredMetaLanguage(config) {
   if (uniq.length === 1) return uniq[0];
   // If there are multiple languages or none, pick the most common one or fall back to 'en'
   if (uniq.length > 1) {
-    const count = {};
-    langs.forEach((l) => (count[l] = (count[l] || 0) + 1));
-    const sorted = Object.entries(count).sort((a, b) => b[1] - a[1]);
-    return sorted[0][0]; // Most common language
+    // STREMIO ADDON LOGIC: Favor non-English languages.
+    // If a user has 20 English catalogs and 1 Italian, they likely want Italian metadata.
+    // 'en' is often a default/unconscious choice. Localized langs are deliberate.
+
+    const nonEnglish = langs.filter(l => l !== 'en');
+
+    if (nonEnglish.length > 0) {
+      const count = {};
+      nonEnglish.forEach((l) => (count[l] = (count[l] || 0) + 1));
+      const sorted = Object.entries(count).sort((a, b) => b[1] - a[1]);
+      log.debug('Language preferences (Non-English priority)', { counts: count, winner: sorted[0][0] });
+      return sorted[0][0];
+    }
+
+    // Fallback if only 'en' exists
+    return 'en';
   }
   return null;
 }
@@ -270,7 +282,9 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
         result = await tmdb.fetchSpecialList(apiKey, listType, type, {
           page,
           displayLanguage:
-            resolvedFilters?.displayLanguage || catalogConfig.filters?.displayLanguage,
+            resolvedFilters?.displayLanguage ||
+            catalogConfig.filters?.displayLanguage ||
+            config.preferences?.defaultLanguage,
           language: resolvedFilters?.language || catalogConfig.filters?.language,
           region: resolvedFilters?.originCountry || catalogConfig.filters?.originCountry,
           randomize,
@@ -279,6 +293,10 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
         result = await tmdb.discover(apiKey, {
           type,
           ...resolvedFilters,
+          displayLanguage:
+            resolvedFilters?.displayLanguage ||
+            catalogConfig.filters?.displayLanguage ||
+            config.preferences?.defaultLanguage,
           page,
           randomize,
         });
@@ -293,7 +311,10 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       log.warn('IMDb enrichment failed (continuing with TMDB IDs)', { error: e.message });
     }
 
-    const displayLanguage = resolvedFilters?.displayLanguage || catalogConfig.filters?.displayLanguage;
+    const displayLanguage =
+      resolvedFilters?.displayLanguage ||
+      catalogConfig.filters?.displayLanguage ||
+      config.preferences?.defaultLanguage;
     let genreMap = null;
 
     if (allItems.length > 0 && displayLanguage && displayLanguage !== 'en') {
@@ -364,6 +385,13 @@ async function handleMetaRequest(userId, type, id, extra, res) {
     const requestedId = String(id || '');
     const configuredLanguage = pickPreferredMetaLanguage(config);
     const language = extra?.displayLanguage || configuredLanguage || extra?.language || 'en';
+
+    log.info('Meta language resolution', {
+      configured: configuredLanguage,
+      extraDisplay: extra?.displayLanguage,
+      extraLang: extra?.language,
+      final: language
+    });
 
     let tmdbId = null;
     let imdbId = null;

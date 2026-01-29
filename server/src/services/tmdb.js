@@ -915,7 +915,10 @@ export async function toStremioFullMeta(
   // Try to get real IMDb rating if configured
   let displayRating =
     typeof details.vote_average === 'number' ? details.vote_average.toFixed(1) : null;
-  const rpdbKey = process.env.RPDB_API_KEY; // Default dead key removed to prevent errors
+  const rpdbKey =
+    posterOptions?.service === 'rpdb' && posterOptions.apiKey
+      ? posterOptions.apiKey
+      : process.env.RPDB_API_KEY;
 
   // Make sure we have an IMDb ID before trying
   let actualImdbRating = null;
