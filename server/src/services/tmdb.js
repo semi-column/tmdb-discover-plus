@@ -48,7 +48,7 @@ try {
 }
 
 /**
- * Fetch IMDb rating from Stremio's Cinemeta API (same as tmdb-addon)
+ * Fetch IMDb rating from Stremio's Cinemeta API
  */
 async function getCinemetaRating(imdbId, type) {
   if (!imdbId) return null;
@@ -1233,7 +1233,7 @@ export async function toStremioFullMeta(
   // Links
   const links = [];
 
-  // Try to get real IMDb rating from multiple sources (like tmdb-addon):
+  // Try to get real IMDb rating from multiple sources:
   // Priority: Cinemeta (Stremio's DB) → RPDB → TMDB vote_average
   let displayRating = null;
   let actualImdbRating = null;
@@ -1335,7 +1335,7 @@ export async function toStremioFullMeta(
 
   // Trailer Streams and Trailers array
   const trailerStreams = [];
-  const trailers = []; // tmdb-addon format: { source, type }
+  const trailers = []; // Stremio format: { source, type }
 
   if (details.videos?.results) {
     const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
@@ -1361,7 +1361,7 @@ export async function toStremioFullMeta(
         ytId: v.key,
         lang: v.iso_639_1 || 'en',
       });
-      // tmdb-addon format
+      // Stremio format
       trailers.push({
         source: v.key,
         type: v.type,
@@ -1487,7 +1487,7 @@ export async function toStremioFullMeta(
     released: releaseDate ? new Date(releaseDate).toISOString() : undefined,
     links: links.length > 0 ? links : undefined,
     trailer: trailer || undefined,
-    trailers: trailers.length > 0 ? trailers : undefined, // tmdb-addon format
+    trailers: trailers.length > 0 ? trailers : undefined, // Stremio format
     trailerStreams: trailerStreams.length > 0 ? trailerStreams : undefined,
     app_extras,
     behaviorHints,
