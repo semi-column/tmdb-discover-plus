@@ -7,15 +7,9 @@ import { computeApiKeyId } from '../utils/security.js';
 
 const log = createLogger('configService');
 
-/**
- * Extracts the API key from a config, handling both encrypted and legacy formats
- * @param {object} config - The user config object
- * @returns {string|null} - The decrypted API key or null
- */
 export function getApiKeyFromConfig(config) {
   if (!config) return null;
 
-  // New format: encrypted key
   if (config.tmdbApiKeyEncrypted) {
     const decrypted = decrypt(config.tmdbApiKeyEncrypted);
     if (decrypted) return decrypted;
@@ -24,19 +18,11 @@ export function getApiKeyFromConfig(config) {
   return null;
 }
 
-/**
- * Extracts the poster service API key from config preferences
- * @param {object} config - The user config object
- * @returns {string|null} - The decrypted poster API key or null
- */
 export function getPosterKeyFromConfig(config) {
   if (!config?.preferences?.posterApiKeyEncrypted) return null;
   return decrypt(config.preferences.posterApiKeyEncrypted);
 }
 
-/**
- * Get user config (from abstract storage)
- */
 export async function getUserConfig(userId, overrideApiKey = null) {
   log.debug('Getting user config', { userId });
 
@@ -55,26 +41,20 @@ export async function getUserConfig(userId, overrideApiKey = null) {
   }
 }
 
-/**
- * Save user config (to abstract storage)
- */
 export async function saveUserConfig(config) {
   log.debug('Saving user config', {
     userId: config.userId,
     catalogCount: config.catalogs?.length || 0,
   });
 
-  // Defensive: ensure values used are simple, validated strings.
   const safeUserId = sanitizeString(config?.userId, 64);
   if (!isValidUserId(safeUserId)) {
     throw new Error('Invalid user ID format');
   }
 
-  // Handle API key - prefer encrypted if provided, otherwise encrypt raw key
   let encryptedApiKey = config.tmdbApiKeyEncrypted || null;
   let rawApiKey = null;
   
-  // If raw key provided, validate and encrypt
   if (config.tmdbApiKey) {
      const safeKey = sanitizeString(config.tmdbApiKey, 64);
      if (!isValidApiKeyFormat(safeKey)) {
@@ -88,17 +68,14 @@ export async function saveUserConfig(config) {
      }
   }
 
-  // Ensure catalogs have proper _id fields
   const processedCatalogs = (config.catalogs || []).map((c) => ({
     ...c,
     _id: c._id || c.id || crypto.randomUUID(),
   }));
 
   try {
-    // Process preferences with poster API key encryption
     const processedPreferences = { ...(config.preferences || {}) };
     
-    // Handle poster API key encryption
     if (config.preferences?.posterApiKey) {
       const rawPosterKey = sanitizeString(config.preferences.posterApiKey, 128);
       if (rawPosterKey) {
@@ -108,7 +85,6 @@ export async function saveUserConfig(config) {
           log.error('Failed to encrypt poster API key', { error: encryptError.message });
         }
       }
-      // Remove raw key from preferences (should not be stored)
       delete processedPreferences.posterApiKey;
     }
 
@@ -121,17 +97,14 @@ export async function saveUserConfig(config) {
         updatedAt: new Date(),
     };
 
-    // Compute and store apiKeyId for fast lookups
     const apiKeyForHash = rawApiKey || (encryptedApiKey ? decrypt(encryptedApiKey) : null);
     if (apiKeyForHash) {
       updateData.apiKeyId = computeApiKeyId(apiKeyForHash);
     }
 
-    // Set encrypted key
     if (encryptedApiKey) {
       updateData.tmdbApiKeyEncrypted = encryptedApiKey;
     }
-    // Remove legacy raw key if present
     delete updateData.tmdbApiKey;
 
     const storage = getStorage();
@@ -148,9 +121,6 @@ export async function saveUserConfig(config) {
   }
 }
 
-/**
- * Updates genre IDs/names for specific catalogs (used for self-healing)
- */
 export async function updateCatalogGenres(userId, fixes) {
   if (!fixes || Object.keys(fixes).length === 0) return;
 
@@ -162,10 +132,8 @@ export async function updateCatalogGenres(userId, fixes) {
     if (!config) return;
 
     let changed = false;
-    // We must clone/modify the array as retrieved from storage
     const newCatalogs = config.catalogs.map((cat) => {
       if (fixes[cat.id]) {
-        // Return new object with updated filters
         const newCat = { 
             ...cat, 
             filters: {
@@ -191,19 +159,12 @@ export async function updateCatalogGenres(userId, fixes) {
   }
 }
 
-/**
- * Get all user configs by TMDB API key or apiKeyId (HMAC hash).
- * Uses indexed apiKeyId field for fast O(1) lookups.
- * @param {string|null} apiKey - The raw API key (optional)
- * @param {string|null} apiKeyId - The HMAC hash of the API key (optional)
- * @returns {Promise<Array>} - Array of configs
- */
+// Uses indexed apiKeyId for O(1) lookup instead of scanning all configs
 export async function getConfigsByApiKey(apiKey, apiKeyId = null) {
   log.debug('Getting configs by apiKey/apiKeyId');
 
   if (!apiKey && !apiKeyId) return [];
 
-  // Compute apiKeyId from raw key if provided
   const targetApiKeyId = apiKeyId || (apiKey ? computeApiKeyId(apiKey) : null);
   
   if (!targetApiKeyId) return [];
@@ -219,40 +180,26 @@ export async function getConfigsByApiKey(apiKey, apiKeyId = null) {
   }
 }
 
-/**
- * Delete a user config by userId
- * Requires matching apiKey for security
- */
 export async function deleteUserConfig(userId, apiKey) {
   log.info('Deleting user config', { userId });
 
-  // Validate userId
   const safeUserId = sanitizeString(userId, 64);
   if (!isValidUserId(safeUserId)) {
     throw new Error('Invalid user ID format');
   }
 
-  // Validate apiKey format
   if (!apiKey || !isValidApiKeyFormat(apiKey)) {
     throw new Error('Invalid API key format');
   }
 
   try {
     const storage = getStorage();
-    // First find the config to verify ownership
     const config = await storage.getUserConfig(safeUserId);
     if (!config) {
       log.warn('Config not found', { userId: safeUserId });
       throw new Error('Configuration not found');
     }
 
-    // Ownership check is usually done by middleware, but we can double check if needed.
-    // Here we assume the caller has authorized this action or we trust the input.
-    // Since this function signature takes an apiKey, we should probably check it against the stored one
-    // if the caller logic expects us to.
-    // However, existing logic seemed to rely on middleware for the check or decrypting stored key.
-    
-    // Let's check if the API key matches the stored one
     const storedKey = getApiKeyFromConfig(config);
     if (storedKey !== apiKey) {
         throw new Error('Access denied: API key mismatch');
@@ -268,9 +215,6 @@ export async function deleteUserConfig(userId, apiKey) {
   }
 }
 
-/**
- * Get public platform statistics (totals)
- */
 export async function getPublicStats() {
   try {
     const storage = getStorage();

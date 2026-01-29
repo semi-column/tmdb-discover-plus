@@ -20,11 +20,6 @@ import { isValidApiKeyFormat, isValidUserId } from '../utils/validation.js';
 const router = Router();
 const log = createLogger('auth');
 
-/**
- * POST /api/auth/login
- * Authenticates with TMDB API key and returns a session token.
- * Token is tied to the API key, not a specific config.
- */
 router.post('/login', strictRateLimit, async (req, res) => {
   try {
     const { apiKey, userId: requestedUserId, rememberMe = true } = req.body;
@@ -42,7 +37,6 @@ router.post('/login', strictRateLimit, async (req, res) => {
       return res.status(401).json({ error: 'Invalid TMDB API key' });
     }
 
-    // If a specific userId was requested, verify ownership
     if (requestedUserId) {
       if (!isValidUserId(requestedUserId)) {
         return res.status(400).json({ error: 'Invalid user ID format' });
@@ -57,7 +51,6 @@ router.post('/login', strictRateLimit, async (req, res) => {
           });
         }
 
-        // Fetch all configs for this API key to return full list
         const allConfigsRaw = await getConfigsByApiKey(apiKey);
         const allConfigs = allConfigsRaw.map((c) => ({
           userId: c.userId,
@@ -81,7 +74,6 @@ router.post('/login', strictRateLimit, async (req, res) => {
       }
     }
 
-    // Find all configs for this API key
     const existingConfigs = await getConfigsByApiKey(apiKey);
 
     if (existingConfigs.length > 0) {
@@ -108,7 +100,6 @@ router.post('/login', strictRateLimit, async (req, res) => {
       });
     }
 
-    // New user - create config with encrypted API key
     const newUserId = nanoid(10);
     const encryptedKey = encrypt(apiKey);
 
@@ -134,19 +125,10 @@ router.post('/login', strictRateLimit, async (req, res) => {
   }
 });
 
-/**
- * POST /api/auth/logout
- * Client-side token invalidation; server just acknowledges.
- */
 router.post('/logout', (req, res) => {
   return res.json({ success: true });
 });
 
-/**
- * GET /api/auth/verify
- * Verifies if the current token is valid.
- * Returns userId from the most recent config for this API key.
- */
 router.get('/verify', async (req, res) => {
   const bearerToken = req.headers.authorization?.replace('Bearer ', '');
 
@@ -160,7 +142,6 @@ router.get('/verify', async (req, res) => {
   }
 
   try {
-    // Find a config that matches this apiKeyId to return userId for client navigation
     const allConfigs = await getConfigsByApiKey(null, decoded.apiKeyId);
 
     if (!allConfigs || allConfigs.length === 0) {

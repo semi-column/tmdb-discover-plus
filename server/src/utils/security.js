@@ -15,19 +15,11 @@ function getJwtSecret() {
   return secret;
 }
 
-/**
- * Computes a deterministic, non-reversible identifier for an API key.
- * Uses HMAC-SHA256 keyed with JWT_SECRET.
- */
+// Non-reversible hash for indexing configs without storing raw API keys
 export function computeApiKeyId(apiKey) {
   return crypto.createHmac('sha256', getJwtSecret()).update(apiKey).digest('hex');
 }
 
-/**
- * Generates a JWT containing the apiKeyId.
- * @param {string} apiKey - The TMDB API key
- * @param {boolean} rememberMe - If true, token expires in 7 days; otherwise 24 hours
- */
 export function generateToken(apiKey, rememberMe = true) {
   const apiKeyId = computeApiKeyId(apiKey);
   const expiresIn = rememberMe ? JWT_EXPIRY_PERSISTENT : JWT_EXPIRY_SESSION;
@@ -35,10 +27,6 @@ export function generateToken(apiKey, rememberMe = true) {
   return { token, expiresIn };
 }
 
-/**
- * Verifies a JWT and returns the decoded payload.
- * @param {string} token - The JWT string
- */
 export function verifyToken(token) {
   try {
     return jwt.verify(token, getJwtSecret());

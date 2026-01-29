@@ -35,15 +35,12 @@ function App() {
     configsLoading,
   } = state;
 
-  // Lifted Stats State
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
-    // Fetch stats once for the whole app
     api.getStats().then(setStats).catch(() => {});
   }, []);
 
-  // Show loading until auth check completes and page is ready
   if (pageLoading || !config.authChecked) {
     return (
       <div className="app">
@@ -57,7 +54,6 @@ function App() {
     );
   }
 
-  // Show API key setup / login when isSetup is true
   if (isSetup) {
     return (
       <div className="app">
@@ -74,7 +70,6 @@ function App() {
     );
   }
 
-  // Show loading while TMDB data is being fetched
   if (tmdb.loading) {
     return (
       <div className="app">
@@ -95,7 +90,6 @@ function App() {
 
       <main className="main">
         <div className="container">
-          {/* Top Actions Bar */}
           <div
             style={{
               display: 'flex',
@@ -110,7 +104,6 @@ function App() {
                 Create and customize your Stremio catalogs with TMDB filters
               </p>
               
-              {/* Mobile Stats Pill */}
               {stats && (
                 <div className="mobile-stats-pill">
                   <span><strong>{stats.totalUsers.toLocaleString()}</strong> Users</span>
@@ -120,7 +113,6 @@ function App() {
               )}
             </div>
             <div className="actions-toolbar">
-              {/* Config Dropdown */}
               {userConfigs.length > 0 && (
                 <ConfigDropdown
                   configs={userConfigs}
@@ -155,7 +147,7 @@ function App() {
               <button
                 className="btn btn-secondary"
                 onClick={() => {
-                  config.logout(); // Clear session tokens
+                  config.logout();
                   state.setWantsToChangeKey(true);
                   state.setIsSetup(true);
                 }}
@@ -166,7 +158,6 @@ function App() {
             </div>
           </div>
 
-          {/* Builder Layout */}
           <div className="builder-layout">
             <CatalogSidebar
               catalogs={config.catalogs}
@@ -217,7 +208,6 @@ function App() {
         </div>
       </main>
 
-      {/* Modals */}
       <NewCatalogModal
         isOpen={showNewCatalogModal}
         onClose={() => state.setShowNewCatalogModal(false)}
@@ -244,7 +234,6 @@ function App() {
         }}
       />
 
-      {/* Toasts */}
       <ToastContainer toasts={toasts} removeToast={actions.removeToast} />
     </div>
   );

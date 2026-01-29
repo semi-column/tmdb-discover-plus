@@ -32,7 +32,6 @@ export function StreamFilters({
 
   return (
     <>
-      {/* TV Networks - only show for TV content */}
       {type === 'series' && tvNetworks.length > 0 && (
         <div className="filter-group mb-4">
           <LabelWithTooltip
@@ -55,7 +54,6 @@ export function StreamFilters({
         </div>
       )}
 
-      {/* Streaming availability filters */}
       <div className="filter-two-col">
         <div className="filter-group">
           <LabelWithTooltip

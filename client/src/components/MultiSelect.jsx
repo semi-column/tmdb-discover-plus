@@ -23,7 +23,6 @@ export function MultiSelect({
   const containerRef = useRef(null);
   const searchRequestIdRef = useRef(0);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
@@ -36,7 +35,6 @@ export function MultiSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Debounced remote search (optional)
   useEffect(() => {
     if (!isOpen) return;
     if (!onSearch) return;
@@ -50,7 +48,6 @@ export function MultiSelect({
       try {
         await onSearch(q);
       } finally {
-        // Only clear searching state if this is the latest request
         if (searchRequestIdRef.current === requestId) {
           setIsSearching(false);
         }

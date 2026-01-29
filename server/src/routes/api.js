@@ -26,14 +26,6 @@ const log = createLogger('api');
 
 router.use(apiRateLimit);
 
-// ============================================
-// TMDB Data Routes (require auth, use apiKey from any owned config)
-// ============================================
-
-/**
- * Helper middleware to resolve apiKey from an owned config for TMDB calls.
- * Finds a config matching the token's apiKeyId and sets req.apiKey.
- */
 async function resolveApiKey(req, res, next) {
   if (req.apiKey) return next();
 
@@ -224,7 +216,6 @@ router.get('/keyword/:id', requireAuth, resolveApiKey, async (req, res) => {
   }
 });
 
-// Static data routes (no auth required)
 router.get('/sort-options', (req, res) => {
   const { type } = req.query;
   if (type && tmdb.SORT_OPTIONS[type]) {
@@ -285,7 +276,6 @@ router.get('/tv-networks', optionalAuth, async (req, res) => {
   const searchLower = String(query).toLowerCase();
   const curatedMatches = curated.filter((n) => n.name.toLowerCase().includes(searchLower));
 
-  // Resolve apiKey if authenticated
   let apiKey = null;
   if (req.apiKeyId) {
     try {
@@ -293,8 +283,8 @@ router.get('/tv-networks', optionalAuth, async (req, res) => {
       if (configs.length > 0) {
         apiKey = getApiKeyFromConfig(configs[0]);
       }
-    } catch {
-      // Ignore
+    } catch (e) {
+      void e;
     }
   }
 
@@ -357,7 +347,6 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
 
 
     const metas = results.results.slice(0, 20).map((item) => {
-      // Direct mapping without extra fetching or filtering
       return tmdb.toStremioMeta(item, type, null);
     });
 
@@ -380,13 +369,6 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
   }
 });
 
-// ============================================
-// Public Stats Routes (no auth required)
-// ============================================
-
-/**
- * Get public platform statistics
- */
 router.get('/stats', async (req, res) => {
   try {
     const stats = await getPublicStats();
@@ -397,13 +379,6 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// ============================================
-// Config Routes (require auth + ownership for specific config access)
-// ============================================
-
-/**
- * Create new configuration
- */
 router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, res) => {
   try {
     const { catalogs, preferences, configName } = req.body;
@@ -443,9 +418,6 @@ router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, 
   }
 });
 
-/**
- * Get user configuration (requires ownership)
- */
 router.get('/config/:userId', requireAuth, requireConfigOwnership, async (req, res) => {
   try {
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -470,9 +442,6 @@ router.get('/config/:userId', requireAuth, requireConfigOwnership, async (req, r
   }
 });
 
-/**
- * Update user configuration (requires ownership)
- */
 router.put('/config/:userId', requireAuth, requireConfigOwnership, strictRateLimit, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -511,9 +480,6 @@ router.put('/config/:userId', requireAuth, requireConfigOwnership, strictRateLim
   }
 });
 
-/**
- * Delete user configuration (requires ownership)
- */
 router.delete('/config/:userId', requireAuth, requireConfigOwnership, strictRateLimit, async (req, res) => {
   try {
     const { userId } = req.params;

@@ -10,7 +10,7 @@ export function SearchInput({
   selectedItems = [],
   onRemove,
   placeholder = 'Search...',
-  type = 'person', // 'person' | 'company' | 'keyword'
+  type = 'person',
   multiple = true,
 }) {
   const [query, setQuery] = useState('');
@@ -23,7 +23,6 @@ export function SearchInput({
   const [dropdownStyle, setDropdownStyle] = useState(null);
   const searchTimeoutRef = useRef(null);
 
-  // Debounced search
   useEffect(() => {
     if (query.length < 2) {
       setResults([]);
@@ -57,13 +56,10 @@ export function SearchInput({
     };
   }, [query, onSearch]);
 
-  // Close dropdown when clicking outside (but ignore clicks inside the portal dropdown)
   useEffect(() => {
     const handleClickOutside = (event) => {
       const target = event.target;
-      // If click is within the component container (tags/input) keep open
       if (containerRef.current && containerRef.current.contains(target)) return;
-      // If click is within the portal dropdown, keep open
       if (dropdownRef.current && dropdownRef.current.contains(target)) return;
       setIsOpen(false);
     };
@@ -72,7 +68,6 @@ export function SearchInput({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Position dropdown in a portal so it can escape parent overflow/stacking contexts
   const updateDropdownPosition = useCallback(() => {
     const inputEl = inputRef.current;
     if (!inputEl) return setDropdownStyle(null);
@@ -96,7 +91,6 @@ export function SearchInput({
         window.removeEventListener('scroll', updateDropdownPosition, true);
       };
     }
-    // collapse style when closed
     setDropdownStyle(null);
     return undefined;
   }, [isOpen, results, updateDropdownPosition]);
@@ -137,7 +131,6 @@ export function SearchInput({
 
   return (
     <div className="search-input-container" ref={containerRef}>
-      {/* Selected items */}
       {multiple && selectedItems.length > 0 && (
         <div className="search-input-selected">
           {selectedItems.map((item) => (
@@ -156,7 +149,6 @@ export function SearchInput({
         </div>
       )}
 
-      {/* Search input */}
       <div className="search-input-wrapper">
         <Search size={14} className="search-input-icon" />
         <input
@@ -171,7 +163,6 @@ export function SearchInput({
         {loading && <Loader size={14} className="search-input-loader animate-spin" />}
       </div>
 
-      {/* Dropdown results - render in portal to avoid parent clipping */}
       {isOpen &&
         results.length > 0 &&
         dropdownStyle &&

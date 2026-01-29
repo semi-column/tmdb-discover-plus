@@ -32,7 +32,6 @@ import { StreamFilters } from './catalog/StreamFilters';
 import { PeopleFilters } from './catalog/PeopleFilters';
 import { CatalogPreview } from './catalog/CatalogPreview';
 
-// Hooks
 import { useResolvedFilters } from '../hooks/useResolvedFilters';
 import { useCatalogSync } from '../hooks/useCatalogSync';
 import { useWatchProviders } from '../hooks/useWatchProviders';
@@ -52,8 +51,6 @@ const DEFAULT_CATALOG = {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-// Date presets for quick selection
-// These store a preset key that the backend resolves dynamically
 const DATE_PRESETS = [
   { label: 'Last 30 days', value: 'last_30_days', days: 30 },
   { label: 'Last 90 days', value: 'last_90_days', days: 90 },
@@ -63,7 +60,6 @@ const DATE_PRESETS = [
   { label: 'Next 3 months', value: 'next_90_days', future: true },
 ];
 
-// Filter Templates for quick setup
 const FILTER_TEMPLATES = [
   {
     id: 'hidden_gems',
@@ -141,10 +137,6 @@ export function CatalogEditor({
   getKeywordById,
   getWatchProviders,
 }) {
-  // tmdb helper methods provided by parent via props (from useTMDB)
-  // parent passes searchPerson/searchCompany/searchKeyword and getWatchProviders
-  // but we also expect optional resolvers bound to the same hook if available
-  // (App passes useTMDB methods; ensure parent uses them)
   const [localCatalog, setLocalCatalog] = useState(catalog || DEFAULT_CATALOG);
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -162,10 +154,6 @@ export function CatalogEditor({
   });
 
   const prevCatalogIdRef = useRef(null);
-
-  // ----------------------------------------------------------------
-  // 1. Resolve Filter IDs to Objects (People, Companies, Keywords)
-  // ----------------------------------------------------------------
   const {
     selectedPeople, setSelectedPeople,
     selectedCompanies, setSelectedCompanies,
@@ -178,21 +166,11 @@ export function CatalogEditor({
     getCompanyById, searchCompany,
     getKeywordById, searchKeyword,
   });
-
-  // ----------------------------------------------------------------
-  // 2. Watch Providers (Streaming)
-  // ----------------------------------------------------------------
   const { watchProviders } = useWatchProviders({
       type: localCatalog?.type,
       region: localCatalog?.filters?.watchRegion,
       getWatchProviders
   });
-
-  // ----------------------------------------------------------------
-  // 3. Catalog Sync (Debounced Update to Parent)
-  // ----------------------------------------------------------------
-  // We need to merge the standalone state (selectedPeople etc) back into the catalog filters
-  // before syncing up.
   const mergedLocalCatalog = {
       ...localCatalog,
       filters: {
@@ -218,8 +196,6 @@ export function CatalogEditor({
       ]
   });
 
-
-  // Keep a growing union of known networks so previously selected IDs always have labels.
   useEffect(() => {
     setTVNetworkOptions((prev) => {
       const byId = new Map();
@@ -257,14 +233,14 @@ export function CatalogEditor({
           });
           return Array.from(byId.values());
         });
-      } catch {
-        // best effort: network search shouldn't break the editor
+      } catch (e) {
+        void e;
       }
     },
     [searchTVNetworks]
   );
 
-  // Tri-state genre click: neutral -> include -> exclude -> neutral
+
   const handleTriStateGenreClick = useCallback((genreId) => {
     setLocalCatalog((prev) => {
       const current = prev || DEFAULT_CATALOG;
@@ -277,15 +253,12 @@ export function CatalogEditor({
       let newIncluded, newExcluded;
 
       if (isIncluded) {
-        // include -> exclude
         newIncluded = included.filter((id) => id !== genreId);
         newExcluded = [...excluded, genreId];
       } else if (isExcluded) {
-        // exclude -> neutral
         newIncluded = included;
         newExcluded = excluded.filter((id) => id !== genreId);
       } else {
-        // neutral -> include
         newIncluded = [...included, genreId];
         newExcluded = excluded;
       }
@@ -305,16 +278,12 @@ export function CatalogEditor({
     if (catalog) {
       setLocalCatalog(catalog);
 
-      // Initialize date preset from stored filter
       if (catalog.filters?.datePreset) {
         const presetMatch = DATE_PRESETS.find((p) => p.value === catalog.filters.datePreset);
         setSelectedDatePreset(presetMatch ? presetMatch.label : null);
       } else {
         setSelectedDatePreset(null);
       }
-
-      // Only clear preview when switching to a different catalog (by id).
-      // Parent may re-create the same catalog object (new reference) which shouldn't clear preview.
       const prevId = prevCatalogIdRef.current;
       const newId = catalog._id || null;
       if (prevId !== newId) {
@@ -380,7 +349,6 @@ export function CatalogEditor({
             sortBy: 'popularity.desc',
           },
         };
-        // Immediately update parent so sidebar reflects the change
         if (catalog?._id) {
           onUpdate(catalog._id, updated);
         }
@@ -426,14 +394,10 @@ export function CatalogEditor({
   const handleDatePreset = useCallback(
     (preset) => {
       setSelectedDatePreset(preset.label);
-
-      // Store the dynamic preset value - backend will calculate actual dates at request time
       handleFiltersChange('datePreset', preset.value);
-
-      // Clear any manually set dates since we're using a dynamic preset
-      const isMovie = localCatalog?.type === 'movie';
-      handleFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', undefined);
-      handleFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', undefined);
+      const isMovieType = localCatalog?.type === 'movie';
+      handleFiltersChange(isMovieType ? 'releaseDateFrom' : 'airDateFrom', undefined);
+      handleFiltersChange(isMovieType ? 'releaseDateTo' : 'airDateTo', undefined);
     },
     [localCatalog?.type, handleFiltersChange]
   );

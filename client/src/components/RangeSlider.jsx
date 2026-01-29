@@ -1,50 +1,33 @@
 import { useState, useCallback } from 'react';
 import { LabelWithTooltip } from './Tooltip';
 
-/**
- * RangeSlider - Dual-value range selector with editable text inputs
- *
- * Key UX improvements:
- * - Stores input as STRING while editing (allows clearing/typing freely)
- * - Only converts to number and validates on blur/Enter
- * - Escape key cancels edit and restores previous value
- */
 export function RangeSlider({ label, min, max, step, value, onChange }) {
-  // Extract values for dependency arrays
   const minVal = value[0];
   const maxVal = value[1];
 
-  // Store as strings to allow free text editing (including empty)
   const [minInputValue, setMinInputValue] = useState(String(value[0]));
   const [maxInputValue, setMaxInputValue] = useState(String(value[1]));
   const [isEditingMin, setIsEditingMin] = useState(false);
   const [isEditingMax, setIsEditingMax] = useState(false);
 
-  // Sync local state when value prop changes (but not while editing)
-
-  // Handle min input change - store as string, allow empty
   const handleMinChange = useCallback((e) => {
     setMinInputValue(e.target.value);
   }, []);
 
-  // Handle max input change - store as string, allow empty
   const handleMaxChange = useCallback((e) => {
     setMaxInputValue(e.target.value);
   }, []);
 
-  // Commit min value - validate and apply
   const commitMinValue = useCallback(() => {
     setIsEditingMin(false);
 
     const parsed = parseFloat(minInputValue);
 
-    // If empty or invalid, restore to current prop value
     if (minInputValue === '' || isNaN(parsed)) {
       setMinInputValue(String(value[0]));
       return;
     }
 
-    // Clamp and round to step
     let newMin = Math.max(min, Math.min(parsed, value[1]));
     newMin = Math.round(newMin / step) * step;
 
@@ -52,19 +35,16 @@ export function RangeSlider({ label, min, max, step, value, onChange }) {
     onChange([newMin, value[1]]);
   }, [minInputValue, value, min, step, onChange]);
 
-  // Commit max value - validate and apply
   const commitMaxValue = useCallback(() => {
     setIsEditingMax(false);
 
     const parsed = parseFloat(maxInputValue);
 
-    // If empty or invalid, restore to current prop value
     if (maxInputValue === '' || isNaN(parsed)) {
       setMaxInputValue(String(value[1]));
       return;
     }
 
-    // Clamp and round to step
     let newMax = Math.min(max, Math.max(parsed, value[0]));
     newMax = Math.round(newMax / step) * step;
 
@@ -94,12 +74,10 @@ export function RangeSlider({ label, min, max, step, value, onChange }) {
     }
   };
 
-  // Select all text on focus for easy replacement
   const handleFocus = (e) => {
     e.target.select();
   };
 
-  // Calculate percentages for visual track
   const minPercent = ((value[0] - min) / (max - min)) * 100;
   const maxPercent = ((value[1] - min) / (max - min)) * 100;
 
@@ -108,7 +86,6 @@ export function RangeSlider({ label, min, max, step, value, onChange }) {
       <div className="range-slider-header">
         <span className="range-slider-label">{label}</span>
         <div className="range-slider-value-display">
-          {/* Min Input */}
           <input
             type="text"
             inputMode="numeric"
@@ -125,7 +102,6 @@ export function RangeSlider({ label, min, max, step, value, onChange }) {
             onKeyDown={handleMinKeyDown}
           />
           <span className="range-separator">—</span>
-          {/* Max Input */}
           <input
             type="text"
             inputMode="numeric"
@@ -144,7 +120,6 @@ export function RangeSlider({ label, min, max, step, value, onChange }) {
         </div>
       </div>
 
-      {/* Visual Track */}
       <div className="range-slider-track-container">
         <div className="range-slider-track">
           <div
@@ -155,7 +130,6 @@ export function RangeSlider({ label, min, max, step, value, onChange }) {
             }}
           />
         </div>
-        {/* Min Thumb */}
         <input
           type="range"
           className="range-slider-thumb"
@@ -168,7 +142,6 @@ export function RangeSlider({ label, min, max, step, value, onChange }) {
             onChange([newMin, value[1]]);
           }}
         />
-        {/* Max Thumb */}
         <input
           type="range"
           className="range-slider-thumb"
@@ -186,15 +159,9 @@ export function RangeSlider({ label, min, max, step, value, onChange }) {
   );
 }
 
-/**
- * SingleSlider - Single-value slider with editable text input
- */
 export function SingleSlider({ label, tooltip, min, max, step = 1, value = min, onChange }) {
-  // Store as string to allow free text editing
   const [inputValue, setInputValue] = useState(String(value));
   const [isEditing, setIsEditing] = useState(false);
-
-  // Sync from prop when not editing
 
   const handleInputChange = (e) => {
     setInputValue(e.target.value);
@@ -205,13 +172,11 @@ export function SingleSlider({ label, tooltip, min, max, step = 1, value = min, 
 
     const parsed = parseFloat(inputValue);
 
-    // If empty or invalid, restore to current prop value
     if (inputValue === '' || isNaN(parsed)) {
       setInputValue(String(value));
       return;
     }
 
-    // Clamp and round to step
     let newVal = Math.max(min, Math.min(max, parsed));
     newVal = Math.round(newVal / step) * step;
 

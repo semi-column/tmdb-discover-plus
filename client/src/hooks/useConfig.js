@@ -15,19 +15,16 @@ export function useConfig(initialUserId = null) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
-  // Track last saved state for dirty detection
   const savedStateRef = useRef({
     catalogs: [],
     configName: '',
     preferences: { showAdultContent: false, defaultLanguage: 'en' },
   });
 
-  // Set API key in memory only (not stored in localStorage anymore)
   const setApiKey = useCallback((key) => {
     setApiKeyState(key);
   }, []);
 
-  // Compute if current state differs from saved state
   const isDirty = useMemo(() => {
     const saved = savedStateRef.current;
     if (configName !== saved.configName) return true;
@@ -36,7 +33,6 @@ export function useConfig(initialUserId = null) {
     return false;
   }, [catalogs, configName, preferences]);
 
-  // Mark current state as saved
   const markAsSaved = useCallback(() => {
     savedStateRef.current = {
       catalogs: JSON.parse(JSON.stringify(catalogs)),
@@ -45,7 +41,6 @@ export function useConfig(initialUserId = null) {
     };
   }, [catalogs, configName, preferences]);
 
-  // Beforeunload warning when dirty
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (isDirty) {
@@ -59,10 +54,8 @@ export function useConfig(initialUserId = null) {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
 
-  // Check for existing session or migrate legacy key on mount
   useEffect(() => {
     const checkAuth = async () => {
-      // First, try existing session token
       const sessionResult = await api.verifySession();
       if (sessionResult.valid) {
         setIsAuthenticated(true);
@@ -71,7 +64,6 @@ export function useConfig(initialUserId = null) {
         return;
       }
 
-      // Try to migrate legacy API key from localStorage
       const legacyKey = api.getLegacyApiKey();
       if (legacyKey) {
         try {
@@ -81,8 +73,8 @@ export function useConfig(initialUserId = null) {
             setUserId(loginResult.userId);
           }
           api.clearLegacyApiKey();
-        } catch {
-          // Legacy key invalid, clear it
+        } catch (e) {
+          void e;
           api.clearLegacyApiKey();
         }
       }
@@ -93,7 +85,6 @@ export function useConfig(initialUserId = null) {
     checkAuth();
   }, [initialUserId]);
 
-  // Login with API key
   const login = useCallback(
     async (key, rememberMe = true) => {
       setLoading(true);
@@ -114,7 +105,6 @@ export function useConfig(initialUserId = null) {
     [userId]
   );
 
-  // Logout
   const logout = useCallback(async () => {
     await api.logout();
     setIsAuthenticated(false);

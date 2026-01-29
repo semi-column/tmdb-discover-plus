@@ -32,7 +32,6 @@ export function ConfigDropdown({
     reset: resetDelete,
   } = useConfirmDelete(onDeleteConfig);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -44,14 +43,12 @@ export function ConfigDropdown({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [resetDelete]);
 
-  // Get catalog count summary (e.g., "3 catalogs" or "1 catalog")
   const getCatalogCount = (catalogs) => {
     if (!catalogs || catalogs.length === 0) return 'Empty';
     const count = catalogs.length;
     return `${count} catalog${count !== 1 ? 's' : ''}`;
   };
 
-  // Get detailed catalog breakdown as object
   const getCatalogStats = (catalogs) => {
     if (!catalogs || catalogs.length === 0) return { movies: 0, series: 0 };
     return {
@@ -60,21 +57,17 @@ export function ConfigDropdown({
     };
   };
 
-  // Get friendly name for config (e.g., "Config 1", "Config 2")
   const getConfigName = (config, index, isCurrentLive = false) => {
-    // For current config, use live data
     if (isCurrentLive && currentConfigName) {
       return currentConfigName.length <= 20
         ? currentConfigName
         : currentConfigName.substring(0, 17) + '...';
     }
-    // Use configName if set
     if (config.configName) {
       return config.configName.length <= 20
         ? config.configName
         : config.configName.substring(0, 17) + '...';
     }
-    // Fall back to first catalog name if available and meaningful
     const catalogs = isCurrentLive ? currentCatalogs : config.catalogs;
     if (catalogs && catalogs.length > 0 && catalogs[0].name) {
       const firstName = catalogs[0].name;
@@ -83,7 +76,6 @@ export function ConfigDropdown({
       }
       return firstName.substring(0, 17) + '...';
     }
-    // Otherwise use numbered format
     return `Config ${index + 1}`;
   };
 

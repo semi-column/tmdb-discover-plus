@@ -14,19 +14,15 @@ import { createLogger } from './utils/logger.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const log = createLogger('server');
-// Default to 7000 to match Dokku/Beamup expected port
 const PORT = process.env.PORT || 7000;
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
 const SERVER_VERSION = pkg.version;
 
-// Track server state for graceful shutdown
 let server = null;
 let isShuttingDown = false;
 
-// Trust proxy for correct host/protocol behind reverse proxy (Beamup/Dokku)
 app.set('trust proxy', true);
 
-// CORS configuration
 const rawOrigins = process.env.CORS_ORIGIN || '*';
 const allowedOrigins =
   rawOrigins === '*'
@@ -38,7 +34,6 @@ const allowedOrigins =
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like curl, Postman, server-to-server)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
       return callback(null, true);
@@ -51,14 +46,11 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// Respond to preflight for all routes
 app.options('*', cors(corsOptions));
 app.use(express.json());
 
-// Determine client dist path (works for both local and deployed)
 const clientDistPath = path.join(__dirname, '../../client/dist');
 
-// Helpful startup diagnostics (do NOT log secret values)
 log.info('Environment status', {
   port: PORT,
   nodeEnv: process.env.NODE_ENV || 'undefined',
@@ -73,7 +65,6 @@ log.info('Client dist status', {
   exists: fs.existsSync(clientDistPath),
 });
 
-// Redirect legacy /configure routes to SPA root
 app.get(['/configure', '/configure/:userId'], (req, res) => {
   res.set('Cache-Control', 'no-store, must-revalidate');
   const { userId } = req.params;
@@ -83,18 +74,15 @@ app.get(['/configure', '/configure/:userId'], (req, res) => {
   return res.redirect(302, '/');
 });
 
-// Handle legacy /:userId/configure format
 app.get('/:userId/configure', (req, res) => {
   res.set('Cache-Control', 'no-store, must-revalidate');
   const { userId } = req.params;
-  // Basic validation to avoid capturing static files or other routes
   if (userId && !userId.includes('.')) {
     return res.redirect(302, `/?userId=${encodeURIComponent(userId)}`);
   }
   return res.status(404).send('Not Found');
 });
 
-// Serve static files with no-cache for HTML
 app.use(
   express.static(clientDistPath, {
     setHeaders: (res, filePath) => {
@@ -122,7 +110,7 @@ app.get('/health', (req, res) => {
       if (getStorage()) {
           dbStatus = 'connected';
       }
-  } catch (e) { /* ignore */ }
+  } catch (e) { void e; }
 
   const health = {
     status: 'ok',
@@ -140,15 +128,12 @@ app.get('/health', (req, res) => {
   res.json(health);
 });
 
-// Auth routes for session-based authentication
 app.use('/api/auth', authRouter);
 
-// API routes for frontend (rate limiting applied within the API router)
 app.use('/api', apiRouter);
 
 app.use('/', addonRouter);
 
-// SPA fallback - serve index.html for any unmatched routes
 app.get('*', (req, res) => {
   const indexPath = path.join(clientDistPath, 'index.html');
   if (fs.existsSync(indexPath)) {
@@ -158,20 +143,15 @@ app.get('*', (req, res) => {
   }
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
   log.error('Unhandled error', { error: err.message, stack: err.stack, url: req.url });
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ============================================
-// Graceful Shutdown Handler
-// ============================================
 function gracefulShutdown(signal) {
   log.info(`Received ${signal}, starting graceful shutdown...`);
   isShuttingDown = true;
 
-  // Give existing requests time to complete (max 30 seconds)
   const shutdownTimeout = setTimeout(() => {
     log.warn('Shutdown timeout reached, forcing exit');
     process.exit(1);
@@ -198,11 +178,9 @@ function gracefulShutdown(signal) {
   }
 }
 
-// Register shutdown handlers
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught errors
 process.on('uncaughtException', (err) => {
   log.error('Uncaught exception', { error: err.message, stack: err.stack });
   gracefulShutdown('uncaughtException');
@@ -212,9 +190,6 @@ process.on('unhandledRejection', (reason, promise) => {
   log.error('Unhandled rejection', { reason: String(reason) });
 });
 
-// ============================================
-// Server Startup
-// ============================================
 async function start() {
   try {
     await initCache();

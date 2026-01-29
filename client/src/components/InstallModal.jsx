@@ -18,8 +18,6 @@ export function InstallModal({ isOpen, onClose, installUrl }) {
   };
 
   const handleInstall = () => {
-    // In browsers, stremio:// deep-links are often blocked.
-    // Stremio Web supports installing an addon by opening the Addons page with the manifest URL.
     const manifestUrl = installUrl;
     const stremioWebInstallUrl = `https://web.stremio.com/#/addons?addon=${encodeURIComponent(manifestUrl)}`;
     window.open(stremioWebInstallUrl, '_blank', 'noopener,noreferrer');
@@ -43,7 +41,6 @@ export function InstallModal({ isOpen, onClose, installUrl }) {
             to Stremio.
           </p>
 
-          {/* One-Click Install */}
           <div style={{ marginBottom: '24px' }}>
             <button
               className="btn btn-primary w-full"
@@ -58,7 +55,6 @@ export function InstallModal({ isOpen, onClose, installUrl }) {
             </p>
           </div>
 
-          {/* Manual Install Link */}
           <div className="install-link-box">
             <div className="install-link-label">Addon Manifest URL</div>
             <div className="install-link">{manifestUrl}</div>
@@ -80,8 +76,6 @@ export function InstallModal({ isOpen, onClose, installUrl }) {
             </button>
           </div>
 
-
-
           <div
             style={{
               background: 'rgba(124, 58, 237, 0.1)',
@@ -93,7 +87,7 @@ export function InstallModal({ isOpen, onClose, installUrl }) {
           >
             <p className="text-sm">
               <strong>Tip:</strong> You can always return to your configuration page to edit your
-              catalogs. Stremio may cache addon data—if you don’t see changes, refresh the Addons
+              catalogs. Stremio may cache addon data—if you don't see changes, refresh the Addons
               page or restart Stremio.
             </p>
           </div>

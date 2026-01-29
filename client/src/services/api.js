@@ -24,8 +24,8 @@ class ApiService {
       sessionStorage.removeItem(TOKEN_KEY);
       const storage = rememberMe ? localStorage : sessionStorage;
       storage.setItem(TOKEN_KEY, token);
-    } catch {
-      // Storage not available
+    } catch (e) {
+      void e;
     }
   }
 
@@ -34,8 +34,8 @@ class ApiService {
     try {
       localStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(TOKEN_KEY);
-    } catch {
-      // Storage not available
+    } catch (e) {
+      void e;
     }
   }
 
@@ -50,8 +50,8 @@ class ApiService {
   clearLegacyApiKey() {
     try {
       localStorage.removeItem(LEGACY_KEY);
-    } catch {
-      // Storage not available
+    } catch (e) {
+      void e;
     }
   }
 
@@ -73,7 +73,6 @@ class ApiService {
     });
 
     if (response.status === 401) {
-      // Token expired or invalid - clear it
       this.clearSession();
       const error = new Error('Session expired');
       error.status = 401;
@@ -91,12 +90,11 @@ class ApiService {
     return response.json();
   }
 
-  // Authentication methods
   async login(apiKey, userId = null, rememberMe = true) {
     const result = await this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ apiKey, userId, rememberMe }),
-      headers: {}, // Don't send auth header for login
+      headers: {},
     });
 
     if (result.token) {
@@ -113,7 +111,8 @@ class ApiService {
 
     try {
       return await this.request('/auth/verify');
-    } catch {
+    } catch (e) {
+      void e;
       return { valid: false };
     }
   }
@@ -121,13 +120,12 @@ class ApiService {
   async logout() {
     try {
       await this.request('/auth/logout', { method: 'POST' });
-    } catch {
-      // Ignore logout errors
+    } catch (e) {
+      void e;
     }
     this.clearSession();
   }
 
-  // Validate TMDB API key (used during login flow)
   async validateApiKey(apiKey) {
     return this.request('/validate-key', {
       method: 'POST',
@@ -136,13 +134,9 @@ class ApiService {
     });
   }
 
-  // Platform statistics
   async getStats() {
     return this.request('/stats', { method: 'GET' });
   }
-
-  // The following methods now use session authentication
-  // Legacy apiKey parameter kept for backward compatibility during transition
 
   async getGenres(apiKey, type = 'movie') {
     const token = this.getSessionToken();
@@ -262,8 +256,6 @@ class ApiService {
   }
 
   async preview(apiKey, type, filters, page = 1) {
-    // When authenticated via session, apiKey may be null/empty
-    // Server gets API key from session; only include for legacy fallback
     const body = { type, filters, page };
     const token = this.getSessionToken();
     if (!token && apiKey) {

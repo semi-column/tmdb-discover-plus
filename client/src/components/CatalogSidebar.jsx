@@ -39,7 +39,6 @@ import {
 import { useIsMobile } from '../hooks/useIsMobile';
 import { SortableCatalogItem } from './SortableCatalogItem';
 
-// Icons for preset catalog types
 const presetIcons = {
   trending_day: Flame,
   trending_week: TrendingUp,
@@ -51,9 +50,6 @@ const presetIcons = {
   popular: Sparkles,
 };
 
-/**
- * Poster Settings Section - RPDB / Top Posters configuration
- */
 function PosterSettingsSection({ preferences, onPreferencesChange }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -203,13 +199,11 @@ export function CatalogSidebar({
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
   const [tvPresetsCollapsed, setTvPresetsCollapsed] = useState(isMobile);
 
-  // Update collapse state when screen size changes
   useEffect(() => {
     setMoviePresetsCollapsed(isMobile);
     setTvPresetsCollapsed(isMobile);
   }, [isMobile]);
 
-  // Check which presets are already added
   const addedPresets = new Set(
     catalogs
       .filter((c) => c.filters?.listType && c.filters.listType !== 'discover')
@@ -250,7 +244,6 @@ export function CatalogSidebar({
     onReorderCatalogs(reordered);
   };
 
-  // Get placeholder text - fallback to first catalog name
   const getPlaceholder = () => {
     if (catalogs.length > 0 && catalogs[0].name) {
       return catalogs[0].name;
@@ -330,7 +323,6 @@ export function CatalogSidebar({
                       if (onImportConfig) onImportConfig(imported);
                     } catch (err) {
                       console.error('Import failed', err);
-                      // Ideally toast here, but we can rely on parent handling mostly or alert
                       alert('Failed to parse JSON');
                     }
                     e.target.value = '';
@@ -369,7 +361,6 @@ export function CatalogSidebar({
         </label>
       </div>
 
-      {/* Poster Settings Section */}
       <PosterSettingsSection 
         preferences={preferences} 
         onPreferencesChange={onPreferencesChange} 
@@ -409,11 +400,9 @@ export function CatalogSidebar({
         )}
       </div>
 
-      {/* Preset Catalogs Section */}
       <div className="sidebar-section">
         <h4 className="sidebar-section-title">Quick Add Presets</h4>
 
-        {/* Movie Presets */}
         <div className={`preset-group ${moviePresetsCollapsed ? 'collapsed' : ''}`}>
           <div
             className="preset-group-header"
@@ -444,7 +433,6 @@ export function CatalogSidebar({
           </div>
         </div>
 
-        {/* TV Presets */}
         <div className={`preset-group ${tvPresetsCollapsed ? 'collapsed' : ''}`}>
           <div
             className="preset-group-header"

@@ -1,8 +1,3 @@
-/**
- * Client-side Logger Utility
- * Standardizes logging across the application and handles environment-specific behavior.
- */
-
 const LOG_LEVELS = {
   debug: 0,
   info: 1,
@@ -10,7 +5,6 @@ const LOG_LEVELS = {
   error: 3,
 };
 
-// Default to 'info' if not specified
 const CURRENT_LEVEL = import.meta.env.DEV ? LOG_LEVELS.debug : LOG_LEVELS.warn;
 
 class Logger {
@@ -61,5 +55,4 @@ class Logger {
 
 export const createLogger = (context) => new Logger(context);
 
-// Default logger instance
 export const logger = new Logger();

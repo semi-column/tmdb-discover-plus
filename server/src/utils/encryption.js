@@ -15,11 +15,6 @@ function getEncryptionKey() {
   return Buffer.from(key, 'hex');
 }
 
-/**
- * Encrypts a plaintext string using AES-256-GCM
- * @param {string} plaintext - The text to encrypt
- * @returns {string} - Base64 encoded encrypted data (iv:authTag:ciphertext)
- */
 export function encrypt(plaintext) {
   if (!plaintext) return null;
 
@@ -32,15 +27,10 @@ export function encrypt(plaintext) {
 
   const authTag = cipher.getAuthTag();
 
-  // Format: iv:authTag:ciphertext (all hex encoded)
+  // Format: iv:authTag:ciphertext (all hex-encoded, colon-separated)
   return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
 }
 
-/**
- * Decrypts an encrypted string using AES-256-GCM
- * @param {string} encryptedData - The encrypted data in format iv:authTag:ciphertext
- * @returns {string} - The decrypted plaintext
- */
 export function decrypt(encryptedData) {
   if (!encryptedData) return null;
 
@@ -70,11 +60,6 @@ export function decrypt(encryptedData) {
   }
 }
 
-/**
- * Checks if a string appears to be encrypted (has the expected format)
- * @param {string} value - The value to check
- * @returns {boolean} - True if the value appears to be encrypted
- */
 export function isEncrypted(value) {
   if (!value || typeof value !== 'string') return false;
   const parts = value.split(':');

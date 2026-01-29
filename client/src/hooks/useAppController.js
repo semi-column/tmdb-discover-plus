@@ -5,7 +5,6 @@ import { api } from '../services/api';
 import { logger } from '../utils/logger';
 
 export function useAppController() {
-  // Get userId from URL (read once per render)
   const getUrlUserId = () => {
     const searchParams = new URLSearchParams(window.location.search);
     const qsUserId = searchParams.get('userId');
@@ -21,11 +20,9 @@ export function useAppController() {
   const config = useConfig(urlUserId);
   const tmdb = useTMDB(config.apiKey);
 
-  // UI State - start with loading true, let auth effect decide what to show
   const [isSetup, setIsSetup] = useState(false);
   const [isSessionExpired, setIsSessionExpired] = useState(false);
   const [wantsToChangeKey, setWantsToChangeKey] = useState(false);
-  // Start with pageLoading true - we're always loading until auth is checked
   const [pageLoading, setPageLoading] = useState(true);
   const [activeCatalog, setActiveCatalog] = useState(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
@@ -36,13 +33,9 @@ export function useAppController() {
   const [userConfigs, setUserConfigs] = useState([]);
   const [configsLoading, setConfigsLoading] = useState(false);
   const [showMismatchModal, setShowMismatchModal] = useState(false);
-
-  // Guards to prevent duplicate operations
   const loginHandledRef = useRef(false);
   const configsLoadedRef = useRef(false);
   const loadingLockRef = useRef(false);
-
-  // Toast helpers
   const addToast = useCallback((message, type = 'success') => {
     setToasts((prev) => {
       const recentDupe = prev.find((t) => t.message === message && Date.now() - t.id < 2000);
@@ -54,8 +47,6 @@ export function useAppController() {
   const removeToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
-
-  // Load user configs - stable function with ref-based lock
   const loadUserConfigs = useCallback(async () => {
     if (loadingLockRef.current) return [];
     
@@ -73,27 +64,22 @@ export function useAppController() {
       setConfigsLoading(false);
       loadingLockRef.current = false;
     }
-  }, []); // Empty deps - uses ref for stability
+  }, []);
 
-  // SINGLE consolidated auth effect
   useEffect(() => {
-    // Wait for auth check to complete
     if (!config.authChecked) return;
 
     const currentUrlUserId = getUrlUserId();
 
     if (config.isAuthenticated) {
-      // User is authenticated
       setIsSetup(false);
       setIsSessionExpired(false);
       
-      // If no userId in URL, redirect to user's config
       if (!currentUrlUserId && config.userId) {
         window.history.replaceState({}, '', `/?userId=${config.userId}`);
         setUrlUserId(config.userId);
       }
       
-      // Load user configs once
       if (!configsLoadedRef.current) {
         configsLoadedRef.current = true;
         loadUserConfigs();
@@ -101,28 +87,21 @@ export function useAppController() {
       
       setPageLoading(false);
     } else {
-      // Not authenticated
       if (currentUrlUserId) {
-        // Has userId in URL but not authenticated - session expired
         setIsSessionExpired(true);
       }
       setIsSetup(true);
       setPageLoading(false);
     }
   }, [config.authChecked, config.isAuthenticated, config.userId, loadUserConfigs]);
-
-  // Reset login lock when entering setup mode
   useEffect(() => {
     if (isSetup) {
       loginHandledRef.current = false;
     }
   }, [isSetup]);
-
-  // Effect: Load config from server if userId in URL
   useEffect(() => {
     if (!urlUserId || !config.authChecked) return;
     
-    // Don't load if we're showing setup
     if (isSetup) return;
 
     setPageLoading(true);
@@ -144,7 +123,6 @@ export function useAppController() {
 
         logger.error('[App] Config load error, attempting fallback:', err);
         
-        // 404 or unknown 403 fallback logic
         try {
           const configs = await loadUserConfigs();
           
@@ -155,12 +133,8 @@ export function useAppController() {
             window.history.replaceState({}, '', `/?userId=${latest.userId}`);
             setUrlUserId(latest.userId);
           } else {
-            logger.info('[App] No configs found, prompting setup or creating new one');
-            // FIX: Don't automatically create a new config on load failure unless explicitly requested
-            // Just reset the URL to root so the user sees the setup/login screen or their list of configs
             window.history.replaceState({}, '', '/');
             setUrlUserId(null); 
-            // The auth effect will handle showing the right state based on userConfigs
             setPageLoading(false);
           }
         } catch (fallbackErr) {
@@ -169,11 +143,9 @@ export function useAppController() {
           setPageLoading(false);
         }
       });
-  }, [urlUserId, config.authChecked, isSetup]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [urlUserId, config.authChecked, isSetup]);
 
-  // Handle successful login from ApiKeySetup form
   const handleLogin = async (userId, configs = []) => {
-    // Prevent multiple login handling
     if (loginHandledRef.current) return;
     loginHandledRef.current = true;
 
@@ -182,11 +154,10 @@ export function useAppController() {
     setPageLoading(true);
 
     try {
-      // If configs were returned from login, use them immediately
       if (configs && configs.length > 0) {
         configs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
         setUserConfigs(configs);
-        configsLoadedRef.current = true; // Mark as loaded
+        configsLoadedRef.current = true;
       }
 
       const data = await config.loadConfig(userId);
@@ -194,20 +165,16 @@ export function useAppController() {
         setActiveCatalog(data.catalogs[0]);
       }
       
-      // Update URL
       window.history.replaceState({}, '', `/?userId=${userId}`);
       setUrlUserId(userId);
       
       addToast('Logged in successfully');
-
-      // If no configs were passed, load them
       if (!configs || configs.length === 0) {
         configsLoadedRef.current = true; // Set lock before loading
         const loadedConfigs = await loadUserConfigs();
         
         if (!loadedConfigs || loadedConfigs.length === 0) {
              const newConfig = await api.saveConfig({
-                // tmdbApiKey is optional for authenticated users as it's derived from session
                 catalogs: [],
                 preferences: {},
              });
@@ -220,7 +187,7 @@ export function useAppController() {
     } catch (err) {
       logger.error('Error loading config after login:', err);
       addToast('Failed to load configuration', 'error');
-      loginHandledRef.current = false; // Allow retry
+      loginHandledRef.current = false;
     } finally {
       setPageLoading(false);
     }
@@ -259,8 +226,7 @@ export function useAppController() {
         setUrlUserId(result.userId);
       }
 
-      // Reload configs list
-      loadingLockRef.current = false; // Reset lock
+      loadingLockRef.current = false;
       await loadUserConfigs();
 
       setInstallData({
@@ -336,7 +302,7 @@ export function useAppController() {
     const newCatalog = {
       ...JSON.parse(JSON.stringify(catalog)),
       _id: crypto.randomUUID(),
-      id: crypto.randomUUID(), // Ensure both ID fields are new
+      id: crypto.randomUUID(),
       name: `${catalog.name} (Copy)`,
     };
     
@@ -356,22 +322,13 @@ export function useAppController() {
         throw new Error('Invalid configuration file');
       }
 
-      // Basic validation
       if (importedData.catalogs && !Array.isArray(importedData.catalogs)) {
         throw new Error('Invalid catalogs format');
       }
 
-      // Apply changes
       if (importedData.catalogs) {
-         // Enhance catalogs with new IDs to prevent collisions if they are treated as new
-         // But here we are importing a whole config, so arguably we might want to keep IDs
-         // if we are restoring a backup. 
-         // However, if we import on top of existing, we might duplicate.
-         // "the whole exact config should be loaded" -> implies replacement
-         
          const newCatalogs = importedData.catalogs.map(c => ({
             ...c,
-            // Ensure they have valid IDs
             _id: c._id || crypto.randomUUID(),
             id: c.id || crypto.randomUUID() 
          }));

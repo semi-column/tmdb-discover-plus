@@ -6,11 +6,6 @@ export { computeApiKeyId, generateToken, verifyToken } from './security.js';
 
 const log = createLogger('auth');
 
-/**
- * Middleware: Requires a valid JWT.
- * Sets `req.apiKeyId` from the token.
- * Does NOT set `req.apiKey` - use `requireConfigOwnership` for config-specific routes.
- */
 export async function requireAuth(req, res, next) {
   const bearerToken = req.headers.authorization?.replace('Bearer ', '');
 
@@ -27,11 +22,6 @@ export async function requireAuth(req, res, next) {
   next();
 }
 
-/**
- * Middleware: Verifies that the authenticated user owns the config specified in `req.params.userId`.
- * Must be used AFTER `requireAuth`.
- * Sets `req.config` and `req.apiKey` on success.
- */
 export async function requireConfigOwnership(req, res, next) {
   const { userId } = req.params;
 
@@ -70,10 +60,6 @@ export async function requireConfigOwnership(req, res, next) {
   }
 }
 
-/**
- * Optional auth middleware - sets apiKeyId if token present, continues if not.
- * Used for endpoints that can work with or without authentication.
- */
 export async function optionalAuth(req, res, next) {
   const bearerToken = req.headers.authorization?.replace('Bearer ', '');
 

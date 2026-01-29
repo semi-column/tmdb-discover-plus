@@ -13,9 +13,6 @@ export function ApiKeySetup({
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
-  // NOTE: Session check removed - useConfig already handles auth verification
-  // This component now only handles manual login form submission
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!apiKey.trim()) {
@@ -29,7 +26,6 @@ export function ApiKeySetup({
     try {
       const result = await api.login(apiKey.trim(), returnUserId, rememberMe);
       if (result.token && onLogin) {
-        // Pass both userId and configs (if returned) to the login handler
         onLogin(result.userId, result.configs || []);
       }
     } catch (err) {

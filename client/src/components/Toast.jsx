@@ -2,7 +2,6 @@ import { useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, X } from 'lucide-react';
 
 export function Toast({ id, message, type = 'success', removeToast, duration = 2500 }) {
-  // Create stable callback reference
   const handleClose = useCallback(() => {
     removeToast(id);
   }, [id, removeToast]);

@@ -14,7 +14,6 @@ const router = Router();
 
 import { buildManifest, enrichManifestWithGenres } from '../services/manifestService.js';
 
-// Constants
 const TMDB_PAGE_SIZE = 20;
 
 function pickPreferredMetaLanguage(config) {
@@ -27,7 +26,6 @@ function pickPreferredMetaLanguage(config) {
     .filter(Boolean)
     .map(String);
 
-  // If user has a single displayLanguage across catalogs, treat that as preference.
   const uniq = Array.from(new Set(langs));
   if (uniq.length === 1) return uniq[0];
   return 'en';
@@ -41,14 +39,11 @@ router.get('/:userId/manifest.json', async (req, res) => {
 
     const manifest = buildManifest(config || {}, baseUrl);
 
-    // Enrich catalogs with dynamic genre choices (if applicable)
     if (config) {
       await enrichManifestWithGenres(manifest, config);
 
-      // Shuffle catalogs if enabled in preferences
       if (config.preferences?.shuffleCatalogs) {
         manifest.catalogs = shuffleArray(manifest.catalogs);
-        // Force no-store to ensure re-shuffling on reload
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         res.set('Pragma', 'no-cache');
         res.set('Expires', '0');
@@ -60,7 +55,6 @@ router.get('/:userId/manifest.json', async (req, res) => {
       }
     }
     
-    // Fallback headers if config not loaded (should generally not happen here if resolved)
     if (!res.headersSent) {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.set('Pragma', 'no-cache');
@@ -74,7 +68,6 @@ router.get('/:userId/manifest.json', async (req, res) => {
   }
 });
 
-/** Parse extra parameters from Stremio's path format */
 function parseExtra(extraString) {
   const params = {};
   if (!extraString) return params;
@@ -99,10 +92,6 @@ function extractGenreIds(item) {
 }
 
 
-
-/**
- * Catalog handler - shared logic for both route formats
- */
 async function handleCatalogRequest(userId, type, catalogId, extra, res) {
   try {
     const skip = parseInt(extra.skip) || 0;
@@ -137,12 +126,11 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       return id === catalogId;
     });
 
-    // Handle dedicated search catalogs
     if (!catalogConfig && (catalogId === 'tmdb-search-movie' || catalogId === 'tmdb-search-series')) {
       catalogConfig = {
         name: 'TMDB Search',
         type: catalogId === 'tmdb-search-movie' ? 'movie' : 'series',
-        filters: {} // Use defaults
+        filters: {}
       };
     }
 
@@ -276,7 +264,6 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
 
     const allItems = result?.results || [];
 
-    // Best-effort enrichment: Fetch IMDb IDs for consistent watch history
     try {
       await tmdb.enrichItemsWithImdbIds(apiKey, allItems, type);
     } catch (e) {
@@ -284,7 +271,6 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     }
 
     const metas = allItems.map((item) => {
-      // Direct mapping with optional poster service integration
       return tmdb.toStremioMeta(item, type, null, posterOptions);
     });
 
@@ -318,12 +304,6 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
   }
 }
 
-/**
- * Meta handler
- * Supports both IDs:
- * - IMDB: tt123...
- * - TMDB: tmdb:123
- */
 async function handleMetaRequest(userId, type, id, extra, res) {
   try {
     const config = await getUserConfig(userId);
@@ -353,7 +333,6 @@ async function handleMetaRequest(userId, type, id, extra, res) {
     } else if (requestedId.startsWith('tmdb:')) {
       tmdbId = Number(requestedId.replace('tmdb:', ''));
     } else if (/^\d+$/.test(requestedId)) {
-      // Fallback: allow raw numeric TMDB id
       tmdbId = Number(requestedId);
     }
 
@@ -363,7 +342,6 @@ async function handleMetaRequest(userId, type, id, extra, res) {
     const detailsImdb = details?.external_ids?.imdb_id || null;
     imdbId = imdbId || detailsImdb;
 
-    // Fetch episodes for series
     let videos = null;
     if (type === 'series') {
       videos = await tmdb.getSeriesEpisodes(apiKey, tmdbId, details, { language });
@@ -384,7 +362,6 @@ async function handleMetaRequest(userId, type, id, extra, res) {
   }
 }
 
-// Meta handler with extra args in path
 router.get('/:userId/meta/:type/:id/:extra.json', async (req, res) => {
   const { userId, type, id } = req.params;
   const original = req.originalUrl || req.url || '';
@@ -408,16 +385,13 @@ router.get('/:userId/meta/:type/:id/:extra.json', async (req, res) => {
   await handleMetaRequest(userId, type, id, extraParams, res);
 });
 
-// Meta handler without extra args
 router.get('/:userId/meta/:type/:id.json', async (req, res) => {
   const { userId, type, id } = req.params;
   await handleMetaRequest(userId, type, id, { ...req.query }, res);
 });
 
-/** Catalog handler with extra params in path */
 router.get('/:userId/catalog/:type/:catalogId/:extra.json', async (req, res) => {
   const { userId, type, catalogId } = req.params;
-  // Prefer original URL to preserve percent-encoded separators in the extra segment.
   const original = req.originalUrl || req.url || '';
   let rawExtra = req.params.extra || '';
   try {
@@ -439,7 +413,6 @@ router.get('/:userId/catalog/:type/:catalogId/:extra.json', async (req, res) => 
   await handleCatalogRequest(userId, type, catalogId, extraParams, res);
 });
 
-/** Catalog handler without extra params */
 router.get('/:userId/catalog/:type/:catalogId.json', async (req, res) => {
   const { userId, type, catalogId } = req.params;
   const extra = {

@@ -1,9 +1,5 @@
 import { useState, useEffect } from 'react';
 
-/**
- * Hook to resolve filter IDs (people, companies, keywords) into displayable objects with names.
- * Handles both initial load (from CSV string) and dynamic updates (from search inputs).
- */
 export function useResolvedFilters({
   catalog,
   getPersonById,
@@ -19,7 +15,7 @@ export function useResolvedFilters({
   const [excludeKeywords, setExcludeKeywords] = useState([]);
   const [excludeCompanies, setExcludeCompanies] = useState([]);
 
-  // Helper to parse CSV to initial placeholder objects
+  // Converts CSV ID strings (e.g., "123,456") to placeholder objects for initial display
   const toPlaceholdersFromCsv = (csv) => {
     if (!csv) return [];
     return String(csv)
@@ -28,21 +24,16 @@ export function useResolvedFilters({
       .map((id) => ({ id, name: id }));
   };
 
-  // Generic resolver function
   const resolveItems = async (items, fetchById, search) => {
     if (!items || items.length === 0) return items;
-    // Only resolve if we have numeric IDs that need names
-    // (If name is already text and not ID-like, or if we already have a name, skip)
     const needsResolution = items.some((item) => /^\d+$/.test(item.name) || item.name === item.id);
     
     if (!needsResolution && items.every(i => i.name)) return items;
 
-    // Use available API methods
     if (!fetchById && !search) return items;
 
     return await Promise.all(
       items.map(async (item) => {
-        // If we already have a good name (not just ID), keep it
         if (item.name && !/^\d+$/.test(item.name) && item.name !== item.id) return item;
         
         try {
@@ -55,15 +46,14 @@ export function useResolvedFilters({
             if (Array.isArray(sres) && sres.length > 0)
               return { id: item.id, name: sres[0].name || sres[0].title || item.id };
           }
-        } catch {
-          // ignore resolution errors; keep placeholder
+        } catch (e) {
+          void e;
         }
         return item;
       })
     );
   };
 
-  // Effect to sync state when catalog changes
   useEffect(() => {
     if (!catalog) {
       if (selectedPeople.length > 0) setSelectedPeople([]); // eslint-disable-line react-hooks/set-state-in-effect
@@ -74,17 +64,15 @@ export function useResolvedFilters({
       return;
     }
 
-    // 1. People
     const peopleResolved = catalog.filters?.withPeopleResolved || null;
     if (Array.isArray(peopleResolved) && peopleResolved.length > 0) {
       setSelectedPeople(peopleResolved.map((p) => ({ id: String(p.value), name: p.label })));
     } else {
       const initial = toPlaceholdersFromCsv(catalog.filters?.withPeople);
-      setSelectedPeople(initial); // Set immediate placeholders
+      setSelectedPeople(initial);
       resolveItems(initial, getPersonById, searchPerson).then(setSelectedPeople);
     }
 
-    // 2. Companies
     const companiesResolved = catalog.filters?.withCompaniesResolved || null;
     if (Array.isArray(companiesResolved) && companiesResolved.length > 0) {
       setSelectedCompanies(companiesResolved.map((c) => ({ id: String(c.value), name: c.label })));
@@ -94,7 +82,6 @@ export function useResolvedFilters({
       resolveItems(initial, getCompanyById, searchCompany).then(setSelectedCompanies);
     }
 
-    // 3. Keywords
     const keywordsResolved = catalog.filters?.withKeywordsResolved || null;
     if (Array.isArray(keywordsResolved) && keywordsResolved.length > 0) {
       setSelectedKeywords(keywordsResolved.map((k) => ({ id: String(k.value), name: k.label })));
@@ -104,25 +91,20 @@ export function useResolvedFilters({
       resolveItems(initial, getKeywordById, searchKeyword).then(setSelectedKeywords);
     }
 
-    // 4. Exclude Keywords
     const excludeKwTotal = toPlaceholdersFromCsv(catalog.filters?.excludeKeywords);
     setExcludeKeywords(excludeKwTotal);
     resolveItems(excludeKwTotal, getKeywordById, searchKeyword).then(setExcludeKeywords);
 
-    // 5. Exclude Companies
     const excludeCompTotal = toPlaceholdersFromCsv(catalog.filters?.excludeCompanies);
     setExcludeCompanies(excludeCompTotal);
     resolveItems(excludeCompTotal, getCompanyById, searchCompany).then(setExcludeCompanies);
 
-  }, [ // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ // eslint-disable-next-line react-hooks/exhaustive-deps
     catalog?._id,
   ]);
 
-  // Effect to resolve newly added items if they tend to be numeric IDs (e.g. from pasted text)
-  // This mimics the existing logic but more generically
   useEffect(() => {
     resolveItems(selectedPeople, getPersonById, searchPerson).then(res => {
-        // deep compare or just length check? simplified for now:
         if (JSON.stringify(res) !== JSON.stringify(selectedPeople)) setSelectedPeople(res);
     });
   }, [selectedPeople, getPersonById, searchPerson]);
@@ -133,7 +115,6 @@ export function useResolvedFilters({
     });
   }, [selectedCompanies, getCompanyById, searchCompany]);
   
-  // Return everything needed
   return {
     selectedPeople, setSelectedPeople,
     selectedCompanies, setSelectedCompanies,

@@ -19,16 +19,13 @@ export function SearchableSelect({
   const inputRef = useRef(null);
   const optionsRef = useRef(null);
 
-  // Find selected option label
   const selectedOption = options.find((opt) => opt[valueKey] === value);
   const displayValue = selectedOption ? selectedOption[labelKey] : '';
 
-  // Filter options based on search
   const filteredOptions = options.filter((opt) =>
     opt[labelKey]?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Combined options for keyboard navigation (including clear option if applicable)
   const allNavOptions = allowClear ? [{ isClear: true }, ...filteredOptions] : filteredOptions;
 
   const handleOpenToggle = () => {
@@ -44,7 +41,6 @@ export function SearchableSelect({
     setHighlightedIndex(-1);
   };
 
-  // Scroll highlighted item into view
   useEffect(() => {
     if (highlightedIndex >= 0 && optionsRef.current) {
       const highlightedEl = optionsRef.current.children[highlightedIndex];
@@ -54,7 +50,6 @@ export function SearchableSelect({
     }
   }, [highlightedIndex]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
@@ -67,7 +62,6 @@ export function SearchableSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Focus search input when dropdown opens
   useEffect(() => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();

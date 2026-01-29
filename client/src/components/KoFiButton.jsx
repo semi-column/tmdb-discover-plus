@@ -1,13 +1,6 @@
 export function KoFiButton() {
   const color = '#72a4f2';
-  const id = 'G2G81SVSVS'; // Linking to the user's provided ID (or 'semicolumn' based on first request, but snippet has 'G2G81SVSVS') - User snippet has G2G81SVSVS, but previously used semicolumn. 
-  // Wait, the previous request used 'semicolumn'. The new snippet uses 'G2G81SVSVS'. I should probably stick to 'semicolumn' OR the ID in the snippet.
-  // The snippet provided: kofiwidget2.init('Ko-fi Paypal', '#72a4f2', 'G2G81SVSVS');
-  // I will use 'G2G81SVSVS' as requested in the snippet, assuming it maps to the right account or is the User's ID.
-  
-  // Actually, checking previous: href='https://ko-fi.com/semicolumn'.
-  // 'G2G81SVSVS' looks like a random ID from the example or the user's generated ID.
-  // I will use the ID from the snippet 'G2G81SVSVS' and the text 'Ko-fi / Paypal'.
+  const id = 'G2G81SVSVS';
   
   return (
     <a 

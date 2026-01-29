@@ -29,16 +29,12 @@ export function Header({ stats }) {
             </div>
           )}
 
-
-
           <div className="header-actions">
-            {/* Desktop Buttons */}
             <div className="desktop-actions">
               <KoFiButton />
               <BuyMeACoffeeButton />
             </div>
 
-            {/* Mobile Icon Buttons */}
             <div className="mobile-actions">
               <a 
                 href="https://ko-fi.com/semicolumn" 

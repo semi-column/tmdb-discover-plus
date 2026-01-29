@@ -5,7 +5,6 @@ export function CatalogPreview({ loading, error, data, onRetry }) {
   const [showUpdated, setShowUpdated] = useState(false);
   const prevDataRef = useRef(null);
 
-  // Show "Results Updated" feedback when data changes
   useEffect(() => {
     if (data && data !== prevDataRef.current && prevDataRef.current !== null) {
       setTimeout(() => setShowUpdated(true), 0);
@@ -56,7 +55,6 @@ export function CatalogPreview({ loading, error, data, onRetry }) {
           {!loading && !error && data && (
             <div className="preview-grid">
               {data.metas.map((item) => {
-                // Build TMDB URL - use tmdbId if available, otherwise extract from id
                 const tmdbId =
                   item.tmdbId ||
                   (item.id?.startsWith('tmdb:') ? item.id.replace('tmdb:', '') : null);

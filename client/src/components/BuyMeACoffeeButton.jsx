@@ -2,13 +2,6 @@ import { useEffect, useRef } from 'react';
 
 const BMC_SCRIPT_SRC = 'https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js';
 
-/**
- * Buy Me a Coffee button embed.
- *
- * The official script uses document.writeln(), which is unsafe to execute dynamically in a SPA.
- * Instead we load the script (to get window.bmcBtnWidget) and then inject the generated markup
- * into a scoped container.
- */
 export function BuyMeACoffeeButton({
   slug = 'semi.column',
   text = 'Buy me a coffee',
@@ -33,8 +26,6 @@ export function BuyMeACoffeeButton({
       const widget = window.bmcBtnWidget;
       if (typeof widget !== 'function') return;
 
-      // The widget returns a string containing <style> and <link> tags + the button markup.
-      // We scope it to this component by inserting into a dedicated container.
       container.innerHTML = widget(
         text,
         slug,
@@ -67,7 +58,6 @@ export function BuyMeACoffeeButton({
         script.type = 'text/javascript';
         script.src = BMC_SCRIPT_SRC;
         script.async = true;
-        // Keep the official config as data-attributes for transparency/debugging.
         script.setAttribute('data-name', 'bmc-button');
         script.setAttribute('data-slug', slug);
         script.setAttribute('data-color', color);
@@ -91,10 +81,7 @@ export function BuyMeACoffeeButton({
 
     loadScript()
       .then(render)
-      .catch(() => {
-        // If the widget fails to load, we silently keep the UI clean (no broken icon).
-        // The sponsor button still provides a support option.
-      });
+      .catch(() => {});
 
     return () => {
       cancelled = true;
