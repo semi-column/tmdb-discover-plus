@@ -814,9 +814,12 @@ export async function getDetails(apiKey, tmdbId, type = 'movie') {
 
     // Include videos in target language + English fallback
     params.include_video_language = `${languageParam},en,null`;
+    // Include images (logos, posters, backdrops) in target language + English + null (textless)
+    params.include_image_language = `${languageParam},en,null`;
   } else {
-    // Default to English videos if no language specified
+    // Default to English videos/images if no language specified
     params.include_video_language = 'en,null';
+    params.include_image_language = 'en,null';
   }
 
   return tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, params);
@@ -1025,6 +1028,161 @@ export async function toStremioFullMeta(
       countryInfo = details.content_ratings.results.find((r) => r.iso_3166_1 === 'US');
     }
     if (countryInfo?.rating) certification = countryInfo.rating;
+  }
+
+  // Convert US ratings to local equivalents when using fallback
+  // Maps US Movie (MPAA) and TV ratings to local equivalents per country
+  const usToLocalRatings = {
+    'IT': { // Italy
+      'G': 'T', 'PG': '6+', 'PG-13': '12+', 'R': 'VM14', 'NC-17': 'VM18',
+      'TV-Y': 'T', 'TV-Y7': '6+', 'TV-G': 'T', 'TV-PG': '10+', 'TV-14': '14+', 'TV-MA': 'VM18'
+    },
+    'DE': { // Germany
+      'G': '0', 'PG': '6', 'PG-13': '12', 'R': '16', 'NC-17': '18',
+      'TV-Y': '0', 'TV-Y7': '6', 'TV-G': '0', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'AT': { // Austria (same as Germany)
+      'G': '0', 'PG': '6', 'PG-13': '12', 'R': '16', 'NC-17': '18',
+      'TV-Y': '0', 'TV-Y7': '6', 'TV-G': '0', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'FR': { // France
+      'G': 'U', 'PG': '10', 'PG-13': '12', 'R': '16', 'NC-17': '18',
+      'TV-Y': 'U', 'TV-Y7': '10', 'TV-G': 'U', 'TV-PG': '10', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'ES': { // Spain
+      'G': 'TP', 'PG': '7', 'PG-13': '12', 'R': '16', 'NC-17': '18',
+      'TV-Y': 'TP', 'TV-Y7': '7', 'TV-G': 'TP', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'PT': { // Portugal
+      'G': 'M/3', 'PG': 'M/6', 'PG-13': 'M/12', 'R': 'M/16', 'NC-17': 'M/18',
+      'TV-Y': 'M/3', 'TV-Y7': 'M/6', 'TV-G': 'M/3', 'TV-PG': 'M/12', 'TV-14': 'M/16', 'TV-MA': 'M/18'
+    },
+    'BR': { // Brazil
+      'G': 'L', 'PG': '10', 'PG-13': '12', 'R': '16', 'NC-17': '18',
+      'TV-Y': 'L', 'TV-Y7': '10', 'TV-G': 'L', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'MX': { // Mexico
+      'G': 'AA', 'PG': 'A', 'PG-13': 'B', 'R': 'B15', 'NC-17': 'C',
+      'TV-Y': 'AA', 'TV-Y7': 'A', 'TV-G': 'A', 'TV-PG': 'B', 'TV-14': 'B15', 'TV-MA': 'C'
+    },
+    'AR': { // Argentina
+      'G': 'ATP', 'PG': '+13', 'PG-13': '+13', 'R': '+16', 'NC-17': '+18',
+      'TV-Y': 'ATP', 'TV-Y7': '+13', 'TV-G': 'ATP', 'TV-PG': '+13', 'TV-14': '+16', 'TV-MA': '+18'
+    },
+    'NL': { // Netherlands
+      'G': 'AL', 'PG': '6', 'PG-13': '12', 'R': '16', 'NC-17': '18',
+      'TV-Y': 'AL', 'TV-Y7': '6', 'TV-G': 'AL', 'TV-PG': '9', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'GB': { // UK
+      'G': 'U', 'PG': 'PG', 'PG-13': '12A', 'R': '15', 'NC-17': '18',
+      'TV-Y': 'U', 'TV-Y7': 'PG', 'TV-G': 'U', 'TV-PG': '12', 'TV-14': '15', 'TV-MA': '18'
+    },
+    'AU': { // Australia
+      'G': 'G', 'PG': 'PG', 'PG-13': 'M', 'R': 'MA15+', 'NC-17': 'R18+',
+      'TV-Y': 'G', 'TV-Y7': 'PG', 'TV-G': 'G', 'TV-PG': 'PG', 'TV-14': 'MA15+', 'TV-MA': 'R18+'
+    },
+    'CA': { // Canada
+      'G': 'G', 'PG': 'PG', 'PG-13': '14A', 'R': '18A', 'NC-17': 'R',
+      'TV-Y': 'G', 'TV-Y7': 'PG', 'TV-G': 'G', 'TV-PG': 'PG', 'TV-14': '14+', 'TV-MA': '18+'
+    },
+    'RU': { // Russia
+      'G': '0+', 'PG': '6+', 'PG-13': '12+', 'R': '16+', 'NC-17': '18+',
+      'TV-Y': '0+', 'TV-Y7': '6+', 'TV-G': '0+', 'TV-PG': '12+', 'TV-14': '16+', 'TV-MA': '18+'
+    },
+    'JP': { // Japan
+      'G': 'G', 'PG': 'PG12', 'PG-13': 'PG12', 'R': 'R15+', 'NC-17': 'R18+',
+      'TV-Y': 'G', 'TV-Y7': 'PG12', 'TV-G': 'G', 'TV-PG': 'PG12', 'TV-14': 'R15+', 'TV-MA': 'R18+'
+    },
+    'KR': { // South Korea
+      'G': '전체', 'PG': '12세', 'PG-13': '15세', 'R': '청불', 'NC-17': '청불',
+      'TV-Y': '전체', 'TV-Y7': '12세', 'TV-G': '전체', 'TV-PG': '15세', 'TV-14': '15세', 'TV-MA': '청불'
+    },
+    'IN': { // India
+      'G': 'U', 'PG': 'U/A', 'PG-13': 'U/A', 'R': 'A', 'NC-17': 'A',
+      'TV-Y': 'U', 'TV-Y7': 'U/A 7+', 'TV-G': 'U', 'TV-PG': 'U/A 13+', 'TV-14': 'U/A 16+', 'TV-MA': 'A'
+    },
+    'PL': { // Poland
+      'G': 'bez ograniczeń', 'PG': '7', 'PG-13': '12', 'R': '16', 'NC-17': '18',
+      'TV-Y': 'bez ograniczeń', 'TV-Y7': '7', 'TV-G': 'bez ograniczeń', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'SE': { // Sweden
+      'G': 'Btl', 'PG': '7', 'PG-13': '11', 'R': '15', 'NC-17': '15',
+      'TV-Y': 'Btl', 'TV-Y7': '7', 'TV-G': 'Btl', 'TV-PG': '11', 'TV-14': '15', 'TV-MA': '15'
+    },
+    'NO': { // Norway
+      'G': 'A', 'PG': '6', 'PG-13': '12', 'R': '15', 'NC-17': '18',
+      'TV-Y': 'A', 'TV-Y7': '6', 'TV-G': 'A', 'TV-PG': '12', 'TV-14': '15', 'TV-MA': '18'
+    },
+    'DK': { // Denmark
+      'G': 'A', 'PG': '7', 'PG-13': '11', 'R': '15', 'NC-17': '15',
+      'TV-Y': 'A', 'TV-Y7': '7', 'TV-G': 'A', 'TV-PG': '11', 'TV-14': '15', 'TV-MA': '15'
+    },
+    'FI': { // Finland
+      'G': 'S', 'PG': '7', 'PG-13': '12', 'R': '16', 'NC-17': '18',
+      'TV-Y': 'S', 'TV-Y7': '7', 'TV-G': 'S', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'CZ': { // Czech Republic
+      'G': 'U', 'PG': '12', 'PG-13': '15', 'R': '18', 'NC-17': '18',
+      'TV-Y': 'U', 'TV-Y7': '12', 'TV-G': 'U', 'TV-PG': '12', 'TV-14': '15', 'TV-MA': '18'
+    },
+    'HU': { // Hungary
+      'G': 'KN', 'PG': '6', 'PG-13': '12', 'R': '16', 'NC-17': '18',
+      'TV-Y': 'KN', 'TV-Y7': '6', 'TV-G': 'KN', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'RO': { // Romania
+      'G': 'AG', 'PG': 'AP-12', 'PG-13': 'N-15', 'R': 'IM-18', 'NC-17': 'IM-18',
+      'TV-Y': 'AG', 'TV-Y7': 'AP-12', 'TV-G': 'AG', 'TV-PG': 'AP-12', 'TV-14': 'N-15', 'TV-MA': 'IM-18'
+    },
+    'TR': { // Turkey
+      'G': 'Genel', 'PG': '7+', 'PG-13': '13+', 'R': '18+', 'NC-17': '18+',
+      'TV-Y': 'Genel', 'TV-Y7': '7+', 'TV-G': 'Genel', 'TV-PG': '13+', 'TV-14': '18+', 'TV-MA': '18+'
+    },
+    'GR': { // Greece
+      'G': 'K', 'PG': '12', 'PG-13': '13', 'R': '17', 'NC-17': '18',
+      'TV-Y': 'K', 'TV-Y7': '12', 'TV-G': 'K', 'TV-PG': '13', 'TV-14': '17', 'TV-MA': '18'
+    },
+    'ID': { // Indonesia
+      'G': 'SU', 'PG': 'BO', 'PG-13': 'R13', 'R': 'D17', 'NC-17': 'D21',
+      'TV-Y': 'SU', 'TV-Y7': 'BO', 'TV-G': 'SU', 'TV-PG': 'BO', 'TV-14': 'D17', 'TV-MA': 'D21'
+    },
+    'TH': { // Thailand
+      'G': 'ท', 'PG': '13+', 'PG-13': '15+', 'R': '18+', 'NC-17': '20+',
+      'TV-Y': 'ท', 'TV-Y7': '13+', 'TV-G': 'ท', 'TV-PG': '13+', 'TV-14': '18+', 'TV-MA': '20+'
+    },
+    'PH': { // Philippines
+      'G': 'G', 'PG': 'PG', 'PG-13': 'R-13', 'R': 'R-16', 'NC-17': 'R-18',
+      'TV-Y': 'G', 'TV-Y7': 'PG', 'TV-G': 'G', 'TV-PG': 'SPG', 'TV-14': 'SPG', 'TV-MA': 'X'
+    },
+    'MY': { // Malaysia
+      'G': 'U', 'PG': 'P13', 'PG-13': 'P13', 'R': '18', 'NC-17': '18',
+      'TV-Y': 'U', 'TV-Y7': 'P13', 'TV-G': 'U', 'TV-PG': 'P13', 'TV-14': '18', 'TV-MA': '18'
+    },
+    'SG': { // Singapore
+      'G': 'G', 'PG': 'PG', 'PG-13': 'PG13', 'R': 'M18', 'NC-17': 'R21',
+      'TV-Y': 'G', 'TV-Y7': 'PG', 'TV-G': 'G', 'TV-PG': 'PG13', 'TV-14': 'M18', 'TV-MA': 'R21'
+    },
+    'ZA': { // South Africa
+      'G': 'A', 'PG': 'PG', 'PG-13': '13', 'R': '16', 'NC-17': '18',
+      'TV-Y': 'A', 'TV-Y7': 'PG', 'TV-G': 'A', 'TV-PG': 'PG', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'IL': { // Israel
+      'G': 'כל הגילאים', 'PG': '12', 'PG-13': '14', 'R': '16', 'NC-17': '18',
+      'TV-Y': 'כל הגילאים', 'TV-Y7': '12', 'TV-G': 'כל הגילאים', 'TV-PG': '14', 'TV-14': '16', 'TV-MA': '18'
+    },
+    'TW': { // Taiwan
+      'G': '普遍級', 'PG': '保護級', 'PG-13': '輔導級', 'R': '限制級', 'NC-17': '限制級',
+      'TV-Y': '普遍級', 'TV-Y7': '保護級', 'TV-G': '普遍級', 'TV-PG': '輔導級', 'TV-14': '輔導級', 'TV-MA': '限制級'
+    },
+    'HK': { // Hong Kong
+      'G': 'I', 'PG': 'IIA', 'PG-13': 'IIB', 'R': 'III', 'NC-17': 'III',
+      'TV-Y': 'I', 'TV-Y7': 'IIA', 'TV-G': 'I', 'TV-PG': 'IIB', 'TV-14': 'III', 'TV-MA': 'III'
+    }
+  };
+
+  // Apply conversion if using fallback US rating
+  const localMap = usToLocalRatings[countryCode];
+  if (certification && localMap && localMap[certification]) {
+    certification = localMap[certification];
   }
 
   // Format Release Info - Year or Year Range (like Cinemeta)
