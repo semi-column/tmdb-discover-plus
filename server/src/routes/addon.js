@@ -45,7 +45,7 @@ function pickPreferredMetaLanguage(config) {
     const sorted = Object.entries(count).sort((a, b) => b[1] - a[1]);
     return sorted[0][0]; // Most common language
   }
-  return 'en';
+  return null;
 }
 
 router.get('/:userId/manifest.json', async (req, res) => {
@@ -362,7 +362,8 @@ async function handleMetaRequest(userId, type, id, extra, res) {
         : null;
 
     const requestedId = String(id || '');
-    const language = extra?.displayLanguage || extra?.language || pickPreferredMetaLanguage(config);
+    const configuredLanguage = pickPreferredMetaLanguage(config);
+    const language = extra?.displayLanguage || configuredLanguage || extra?.language || 'en';
 
     let tmdbId = null;
     let imdbId = null;
