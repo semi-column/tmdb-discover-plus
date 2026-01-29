@@ -1026,7 +1026,7 @@ export async function toStremioFullMeta(
       : null;
 
   const meta = {
-    id: effectiveImdbId || requestedId || `tmdb:${details.id}`,
+    id: `tmdb:${details.id}`,
     tmdbId: details.id,
     imdbId: effectiveImdbId,
     imdb_id: effectiveImdbId,
@@ -1075,10 +1075,7 @@ export async function toStremioFullMeta(
  */
 export async function search(apiKey, query, type = 'movie', page = 1) {
   const mediaType = type === 'series' ? 'tv' : 'movie';
-  // TMDB supports language localization on search as well
   const params = { query, page };
-  // Backward-compatible: allow passing an options object as the 5th argument
-  // eslint-disable-next-line prefer-rest-params
   const maybeOptions = arguments.length >= 5 ? arguments[4] : undefined;
   const displayLanguage = maybeOptions?.displayLanguage;
   const language = maybeOptions?.language;
@@ -1101,13 +1098,10 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null) {
   const releaseDate = isMovie ? item.release_date : item.first_air_date;
   const year = releaseDate ? releaseDate.split('-')[0] : '';
 
-  // Map TMDB genre_ids (if present) to human-readable names using cached API results first,
-  // falling back to the static JSON mapping.
   const mappedGenres = [];
   const ids = item.genre_ids || item.genres?.map((g) => g.id) || [];
   const mediaKey = isMovie ? 'movie' : 'tv';
 
-  // Try cached genre list first
   const cachedList = genreCache[mediaKey];
   const staticList = staticGenreMap[mediaKey] || {};
 
@@ -1140,10 +1134,13 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null) {
     // if (enhancedBackdrop) background = enhancedBackdrop;
   }
 
-  return {
-    id: imdbId || item.imdb_id || `tmdb:${item.id}`,
+  const effectiveImdbId = imdbId || item.imdb_id || null;
+
+  const meta = {
+    id: `tmdb:${item.id}`,
     tmdbId: item.id,
-    imdbId: imdbId || item.imdb_id || null,
+    imdbId: effectiveImdbId,
+    imdb_id: effectiveImdbId, // Some addons/clients expect this format
     type: type === 'series' ? 'series' : 'movie',
     name: title,
     poster,
@@ -1154,7 +1151,12 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null) {
     releaseInfo: year,
     imdbRating: item.vote_average ? item.vote_average.toFixed(1) : null,
     genres: mappedGenres,
+    behaviorHints: {
+      defaultVideoId: effectiveImdbId || `tmdb:${item.id}`,
+    },
   };
+
+  return meta;
 }
 
 /**
