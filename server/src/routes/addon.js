@@ -40,24 +40,12 @@ function pickPreferredMetaLanguage(config) {
   if (uniq.length === 1) return uniq[0];
   // If there are multiple languages or none, pick the most common one or fall back to 'en'
   if (uniq.length > 1) {
-    // STREMIO ADDON LOGIC: Favor non-English languages.
-    // If a user has 20 English catalogs and 1 Italian, they likely want Italian metadata.
-    // 'en' is often a default/unconscious choice. Localized langs are deliberate.
-
-    const nonEnglish = langs.filter(l => l !== 'en');
-
-    if (nonEnglish.length > 0) {
-      const count = {};
-      nonEnglish.forEach((l) => (count[l] = (count[l] || 0) + 1));
-      const sorted = Object.entries(count).sort((a, b) => b[1] - a[1]);
-      log.debug('Language preferences (Non-English priority)', { counts: count, winner: sorted[0][0] });
-      return sorted[0][0];
-    }
-
-    // Fallback if only 'en' exists
-    return 'en';
+    const count = {};
+    langs.forEach((l) => (count[l] = (count[l] || 0) + 1));
+    const sorted = Object.entries(count).sort((a, b) => b[1] - a[1]);
+    return sorted[0][0]; // Most common language
   }
-  return null;
+  return 'en';
 }
 
 router.get('/:userId/manifest.json', async (req, res) => {
@@ -145,9 +133,9 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     const posterOptions =
       config.preferences?.posterService && config.preferences.posterService !== 'none'
         ? {
-          apiKey: getPosterKeyFromConfig(config),
-          service: config.preferences.posterService,
-        }
+            apiKey: getPosterKeyFromConfig(config),
+            service: config.preferences.posterService,
+          }
         : null;
 
     let catalogConfig = config.catalogs.find((c) => {
@@ -327,7 +315,11 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
           });
         }
       } catch (err) {
-        log.warn('Failed to fetch localized genres for catalog', { catalogId, displayLanguage, error: err.message });
+        log.warn('Failed to fetch localized genres for catalog', {
+          catalogId,
+          displayLanguage,
+          error: err.message,
+        });
       }
     }
 
@@ -377,20 +369,20 @@ async function handleMetaRequest(userId, type, id, extra, res) {
     const posterOptions =
       config.preferences?.posterService && config.preferences.posterService !== 'none'
         ? {
-          apiKey: getPosterKeyFromConfig(config),
-          service: config.preferences.posterService,
-        }
+            apiKey: getPosterKeyFromConfig(config),
+            service: config.preferences.posterService,
+          }
         : null;
 
     const requestedId = String(id || '');
     const configuredLanguage = pickPreferredMetaLanguage(config);
     const language = extra?.displayLanguage || configuredLanguage || extra?.language || 'en';
 
-    log.info('Meta language resolution', {
+    log.debug('Meta language resolution', {
       configured: configuredLanguage,
       extraDisplay: extra?.displayLanguage,
       extraLang: extra?.language,
-      final: language
+      final: language,
     });
 
     let tmdbId = null;

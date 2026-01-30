@@ -58,22 +58,29 @@ async function getCinemetaRating(imdbId, type) {
   try {
     const cached = await cache.get(cacheKey);
     if (cached !== undefined) return cached;
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    /* ignore */
+  }
 
   try {
     const mediaType = type === 'series' ? 'series' : 'movie';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(`https://v3-cinemeta.strem.io/meta/${mediaType}/${imdbId}.json`, {
       agent: httpsAgent,
-      timeout: 5000,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!response.ok) return null;
     const data = await response.json();
     const rating = data?.meta?.imdbRating || null;
-    log.info('Cinemeta rating result', { imdbId, rating });
+    log.debug('Cinemeta rating result', { imdbId, rating });
 
     try {
       await cache.set(cacheKey, rating, 86400); // 24 hours
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
 
     return rating;
   } catch (error) {
@@ -203,8 +210,6 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
   log.error('TMDB fetch error after retries', { error: redactTmdbUrl(lastError.message) });
   throw lastError;
 }
-
-
 
 function normalizeLoose(s) {
   return String(s || '')
@@ -977,9 +982,9 @@ export async function toStremioFullMeta(
   const credits = details.credits || {};
   const cast = Array.isArray(credits.cast)
     ? credits.cast
-      .slice(0, 20)
-      .map((p) => p?.name)
-      .filter(Boolean)
+        .slice(0, 20)
+        .map((p) => p?.name)
+        .filter(Boolean)
     : [];
 
   const crew = Array.isArray(credits.crew) ? credits.crew : [];
@@ -1002,12 +1007,12 @@ export async function toStremioFullMeta(
   // Age Rating / Certification - use country from language setting, fallback to US
   // Extract country code: "it" -> "IT", "en-US" -> "US", "pt-BR" -> "BR"
   const countryCode = targetLanguage
-    ? (targetLanguage.includes('-')
+    ? targetLanguage.includes('-')
       ? targetLanguage.split('-')[1].toUpperCase()
-      : targetLanguage.toUpperCase())
+      : targetLanguage.toUpperCase()
     : 'US';
 
-  log.info('Certification lookup', { targetLanguage, countryCode });
+  log.debug('Certification lookup', { targetLanguage, countryCode });
 
   let certification = null;
   if (isMovie && details.release_dates?.results) {
@@ -1018,7 +1023,8 @@ export async function toStremioFullMeta(
     }
     if (countryInfo?.release_dates?.length > 0) {
       // Find optimal rating (theatrical preferred)
-      const rated = countryInfo.release_dates.find((d) => d.certification) || countryInfo.release_dates[0];
+      const rated =
+        countryInfo.release_dates.find((d) => d.certification) || countryInfo.release_dates[0];
       if (rated?.certification) certification = rated.certification;
     }
   } else if (!isMovie && details.content_ratings?.results) {
@@ -1033,150 +1039,510 @@ export async function toStremioFullMeta(
   // Convert US ratings to local equivalents when using fallback
   // Maps US Movie (MPAA) and TV ratings to local equivalents per country
   const usToLocalRatings = {
-    'IT': { // Italy
-      'G': 'T', 'PG': '6+', 'PG-13': '12+', 'R': 'VM14', 'NC-17': 'VM18',
-      'TV-Y': 'T', 'TV-Y7': '6+', 'TV-G': 'T', 'TV-PG': '10+', 'TV-14': '14+', 'TV-MA': 'VM18'
+    IT: {
+      // Italy
+      G: 'T',
+      PG: '6+',
+      'PG-13': '12+',
+      R: 'VM14',
+      'NC-17': 'VM18',
+      'TV-Y': 'T',
+      'TV-Y7': '6+',
+      'TV-G': 'T',
+      'TV-PG': '10+',
+      'TV-14': '14+',
+      'TV-MA': 'VM18',
     },
-    'DE': { // Germany
-      'G': '0', 'PG': '6', 'PG-13': '12', 'R': '16', 'NC-17': '18',
-      'TV-Y': '0', 'TV-Y7': '6', 'TV-G': '0', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    DE: {
+      // Germany
+      G: '0',
+      PG: '6',
+      'PG-13': '12',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': '0',
+      'TV-Y7': '6',
+      'TV-G': '0',
+      'TV-PG': '12',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'AT': { // Austria (same as Germany)
-      'G': '0', 'PG': '6', 'PG-13': '12', 'R': '16', 'NC-17': '18',
-      'TV-Y': '0', 'TV-Y7': '6', 'TV-G': '0', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    AT: {
+      // Austria (same as Germany)
+      G: '0',
+      PG: '6',
+      'PG-13': '12',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': '0',
+      'TV-Y7': '6',
+      'TV-G': '0',
+      'TV-PG': '12',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'FR': { // France
-      'G': 'U', 'PG': '10', 'PG-13': '12', 'R': '16', 'NC-17': '18',
-      'TV-Y': 'U', 'TV-Y7': '10', 'TV-G': 'U', 'TV-PG': '10', 'TV-14': '16', 'TV-MA': '18'
+    FR: {
+      // France
+      G: 'U',
+      PG: '10',
+      'PG-13': '12',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': 'U',
+      'TV-Y7': '10',
+      'TV-G': 'U',
+      'TV-PG': '10',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'ES': { // Spain
-      'G': 'TP', 'PG': '7', 'PG-13': '12', 'R': '16', 'NC-17': '18',
-      'TV-Y': 'TP', 'TV-Y7': '7', 'TV-G': 'TP', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    ES: {
+      // Spain
+      G: 'TP',
+      PG: '7',
+      'PG-13': '12',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': 'TP',
+      'TV-Y7': '7',
+      'TV-G': 'TP',
+      'TV-PG': '12',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'PT': { // Portugal
-      'G': 'M/3', 'PG': 'M/6', 'PG-13': 'M/12', 'R': 'M/16', 'NC-17': 'M/18',
-      'TV-Y': 'M/3', 'TV-Y7': 'M/6', 'TV-G': 'M/3', 'TV-PG': 'M/12', 'TV-14': 'M/16', 'TV-MA': 'M/18'
+    PT: {
+      // Portugal
+      G: 'M/3',
+      PG: 'M/6',
+      'PG-13': 'M/12',
+      R: 'M/16',
+      'NC-17': 'M/18',
+      'TV-Y': 'M/3',
+      'TV-Y7': 'M/6',
+      'TV-G': 'M/3',
+      'TV-PG': 'M/12',
+      'TV-14': 'M/16',
+      'TV-MA': 'M/18',
     },
-    'BR': { // Brazil
-      'G': 'L', 'PG': '10', 'PG-13': '12', 'R': '16', 'NC-17': '18',
-      'TV-Y': 'L', 'TV-Y7': '10', 'TV-G': 'L', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    BR: {
+      // Brazil
+      G: 'L',
+      PG: '10',
+      'PG-13': '12',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': 'L',
+      'TV-Y7': '10',
+      'TV-G': 'L',
+      'TV-PG': '12',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'MX': { // Mexico
-      'G': 'AA', 'PG': 'A', 'PG-13': 'B', 'R': 'B15', 'NC-17': 'C',
-      'TV-Y': 'AA', 'TV-Y7': 'A', 'TV-G': 'A', 'TV-PG': 'B', 'TV-14': 'B15', 'TV-MA': 'C'
+    MX: {
+      // Mexico
+      G: 'AA',
+      PG: 'A',
+      'PG-13': 'B',
+      R: 'B15',
+      'NC-17': 'C',
+      'TV-Y': 'AA',
+      'TV-Y7': 'A',
+      'TV-G': 'A',
+      'TV-PG': 'B',
+      'TV-14': 'B15',
+      'TV-MA': 'C',
     },
-    'AR': { // Argentina
-      'G': 'ATP', 'PG': '+13', 'PG-13': '+13', 'R': '+16', 'NC-17': '+18',
-      'TV-Y': 'ATP', 'TV-Y7': '+13', 'TV-G': 'ATP', 'TV-PG': '+13', 'TV-14': '+16', 'TV-MA': '+18'
+    AR: {
+      // Argentina
+      G: 'ATP',
+      PG: '+13',
+      'PG-13': '+13',
+      R: '+16',
+      'NC-17': '+18',
+      'TV-Y': 'ATP',
+      'TV-Y7': '+13',
+      'TV-G': 'ATP',
+      'TV-PG': '+13',
+      'TV-14': '+16',
+      'TV-MA': '+18',
     },
-    'NL': { // Netherlands
-      'G': 'AL', 'PG': '6', 'PG-13': '12', 'R': '16', 'NC-17': '18',
-      'TV-Y': 'AL', 'TV-Y7': '6', 'TV-G': 'AL', 'TV-PG': '9', 'TV-14': '16', 'TV-MA': '18'
+    NL: {
+      // Netherlands
+      G: 'AL',
+      PG: '6',
+      'PG-13': '12',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': 'AL',
+      'TV-Y7': '6',
+      'TV-G': 'AL',
+      'TV-PG': '9',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'GB': { // UK
-      'G': 'U', 'PG': 'PG', 'PG-13': '12A', 'R': '15', 'NC-17': '18',
-      'TV-Y': 'U', 'TV-Y7': 'PG', 'TV-G': 'U', 'TV-PG': '12', 'TV-14': '15', 'TV-MA': '18'
+    GB: {
+      // UK
+      G: 'U',
+      PG: 'PG',
+      'PG-13': '12A',
+      R: '15',
+      'NC-17': '18',
+      'TV-Y': 'U',
+      'TV-Y7': 'PG',
+      'TV-G': 'U',
+      'TV-PG': '12',
+      'TV-14': '15',
+      'TV-MA': '18',
     },
-    'AU': { // Australia
-      'G': 'G', 'PG': 'PG', 'PG-13': 'M', 'R': 'MA15+', 'NC-17': 'R18+',
-      'TV-Y': 'G', 'TV-Y7': 'PG', 'TV-G': 'G', 'TV-PG': 'PG', 'TV-14': 'MA15+', 'TV-MA': 'R18+'
+    AU: {
+      // Australia
+      G: 'G',
+      PG: 'PG',
+      'PG-13': 'M',
+      R: 'MA15+',
+      'NC-17': 'R18+',
+      'TV-Y': 'G',
+      'TV-Y7': 'PG',
+      'TV-G': 'G',
+      'TV-PG': 'PG',
+      'TV-14': 'MA15+',
+      'TV-MA': 'R18+',
     },
-    'CA': { // Canada
-      'G': 'G', 'PG': 'PG', 'PG-13': '14A', 'R': '18A', 'NC-17': 'R',
-      'TV-Y': 'G', 'TV-Y7': 'PG', 'TV-G': 'G', 'TV-PG': 'PG', 'TV-14': '14+', 'TV-MA': '18+'
+    CA: {
+      // Canada
+      G: 'G',
+      PG: 'PG',
+      'PG-13': '14A',
+      R: '18A',
+      'NC-17': 'R',
+      'TV-Y': 'G',
+      'TV-Y7': 'PG',
+      'TV-G': 'G',
+      'TV-PG': 'PG',
+      'TV-14': '14+',
+      'TV-MA': '18+',
     },
-    'RU': { // Russia
-      'G': '0+', 'PG': '6+', 'PG-13': '12+', 'R': '16+', 'NC-17': '18+',
-      'TV-Y': '0+', 'TV-Y7': '6+', 'TV-G': '0+', 'TV-PG': '12+', 'TV-14': '16+', 'TV-MA': '18+'
+    RU: {
+      // Russia
+      G: '0+',
+      PG: '6+',
+      'PG-13': '12+',
+      R: '16+',
+      'NC-17': '18+',
+      'TV-Y': '0+',
+      'TV-Y7': '6+',
+      'TV-G': '0+',
+      'TV-PG': '12+',
+      'TV-14': '16+',
+      'TV-MA': '18+',
     },
-    'JP': { // Japan
-      'G': 'G', 'PG': 'PG12', 'PG-13': 'PG12', 'R': 'R15+', 'NC-17': 'R18+',
-      'TV-Y': 'G', 'TV-Y7': 'PG12', 'TV-G': 'G', 'TV-PG': 'PG12', 'TV-14': 'R15+', 'TV-MA': 'R18+'
+    JP: {
+      // Japan
+      G: 'G',
+      PG: 'PG12',
+      'PG-13': 'PG12',
+      R: 'R15+',
+      'NC-17': 'R18+',
+      'TV-Y': 'G',
+      'TV-Y7': 'PG12',
+      'TV-G': 'G',
+      'TV-PG': 'PG12',
+      'TV-14': 'R15+',
+      'TV-MA': 'R18+',
     },
-    'KR': { // South Korea
-      'G': '전체', 'PG': '12세', 'PG-13': '15세', 'R': '청불', 'NC-17': '청불',
-      'TV-Y': '전체', 'TV-Y7': '12세', 'TV-G': '전체', 'TV-PG': '15세', 'TV-14': '15세', 'TV-MA': '청불'
+    KR: {
+      // South Korea
+      G: '전체',
+      PG: '12세',
+      'PG-13': '15세',
+      R: '청불',
+      'NC-17': '청불',
+      'TV-Y': '전체',
+      'TV-Y7': '12세',
+      'TV-G': '전체',
+      'TV-PG': '15세',
+      'TV-14': '15세',
+      'TV-MA': '청불',
     },
-    'IN': { // India
-      'G': 'U', 'PG': 'U/A', 'PG-13': 'U/A', 'R': 'A', 'NC-17': 'A',
-      'TV-Y': 'U', 'TV-Y7': 'U/A 7+', 'TV-G': 'U', 'TV-PG': 'U/A 13+', 'TV-14': 'U/A 16+', 'TV-MA': 'A'
+    IN: {
+      // India
+      G: 'U',
+      PG: 'U/A',
+      'PG-13': 'U/A',
+      R: 'A',
+      'NC-17': 'A',
+      'TV-Y': 'U',
+      'TV-Y7': 'U/A 7+',
+      'TV-G': 'U',
+      'TV-PG': 'U/A 13+',
+      'TV-14': 'U/A 16+',
+      'TV-MA': 'A',
     },
-    'PL': { // Poland
-      'G': 'bez ograniczeń', 'PG': '7', 'PG-13': '12', 'R': '16', 'NC-17': '18',
-      'TV-Y': 'bez ograniczeń', 'TV-Y7': '7', 'TV-G': 'bez ograniczeń', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    PL: {
+      // Poland
+      G: 'bez ograniczeń',
+      PG: '7',
+      'PG-13': '12',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': 'bez ograniczeń',
+      'TV-Y7': '7',
+      'TV-G': 'bez ograniczeń',
+      'TV-PG': '12',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'SE': { // Sweden
-      'G': 'Btl', 'PG': '7', 'PG-13': '11', 'R': '15', 'NC-17': '15',
-      'TV-Y': 'Btl', 'TV-Y7': '7', 'TV-G': 'Btl', 'TV-PG': '11', 'TV-14': '15', 'TV-MA': '15'
+    SE: {
+      // Sweden
+      G: 'Btl',
+      PG: '7',
+      'PG-13': '11',
+      R: '15',
+      'NC-17': '15',
+      'TV-Y': 'Btl',
+      'TV-Y7': '7',
+      'TV-G': 'Btl',
+      'TV-PG': '11',
+      'TV-14': '15',
+      'TV-MA': '15',
     },
-    'NO': { // Norway
-      'G': 'A', 'PG': '6', 'PG-13': '12', 'R': '15', 'NC-17': '18',
-      'TV-Y': 'A', 'TV-Y7': '6', 'TV-G': 'A', 'TV-PG': '12', 'TV-14': '15', 'TV-MA': '18'
+    NO: {
+      // Norway
+      G: 'A',
+      PG: '6',
+      'PG-13': '12',
+      R: '15',
+      'NC-17': '18',
+      'TV-Y': 'A',
+      'TV-Y7': '6',
+      'TV-G': 'A',
+      'TV-PG': '12',
+      'TV-14': '15',
+      'TV-MA': '18',
     },
-    'DK': { // Denmark
-      'G': 'A', 'PG': '7', 'PG-13': '11', 'R': '15', 'NC-17': '15',
-      'TV-Y': 'A', 'TV-Y7': '7', 'TV-G': 'A', 'TV-PG': '11', 'TV-14': '15', 'TV-MA': '15'
+    DK: {
+      // Denmark
+      G: 'A',
+      PG: '7',
+      'PG-13': '11',
+      R: '15',
+      'NC-17': '15',
+      'TV-Y': 'A',
+      'TV-Y7': '7',
+      'TV-G': 'A',
+      'TV-PG': '11',
+      'TV-14': '15',
+      'TV-MA': '15',
     },
-    'FI': { // Finland
-      'G': 'S', 'PG': '7', 'PG-13': '12', 'R': '16', 'NC-17': '18',
-      'TV-Y': 'S', 'TV-Y7': '7', 'TV-G': 'S', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    FI: {
+      // Finland
+      G: 'S',
+      PG: '7',
+      'PG-13': '12',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': 'S',
+      'TV-Y7': '7',
+      'TV-G': 'S',
+      'TV-PG': '12',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'CZ': { // Czech Republic
-      'G': 'U', 'PG': '12', 'PG-13': '15', 'R': '18', 'NC-17': '18',
-      'TV-Y': 'U', 'TV-Y7': '12', 'TV-G': 'U', 'TV-PG': '12', 'TV-14': '15', 'TV-MA': '18'
+    CZ: {
+      // Czech Republic
+      G: 'U',
+      PG: '12',
+      'PG-13': '15',
+      R: '18',
+      'NC-17': '18',
+      'TV-Y': 'U',
+      'TV-Y7': '12',
+      'TV-G': 'U',
+      'TV-PG': '12',
+      'TV-14': '15',
+      'TV-MA': '18',
     },
-    'HU': { // Hungary
-      'G': 'KN', 'PG': '6', 'PG-13': '12', 'R': '16', 'NC-17': '18',
-      'TV-Y': 'KN', 'TV-Y7': '6', 'TV-G': 'KN', 'TV-PG': '12', 'TV-14': '16', 'TV-MA': '18'
+    HU: {
+      // Hungary
+      G: 'KN',
+      PG: '6',
+      'PG-13': '12',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': 'KN',
+      'TV-Y7': '6',
+      'TV-G': 'KN',
+      'TV-PG': '12',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'RO': { // Romania
-      'G': 'AG', 'PG': 'AP-12', 'PG-13': 'N-15', 'R': 'IM-18', 'NC-17': 'IM-18',
-      'TV-Y': 'AG', 'TV-Y7': 'AP-12', 'TV-G': 'AG', 'TV-PG': 'AP-12', 'TV-14': 'N-15', 'TV-MA': 'IM-18'
+    RO: {
+      // Romania
+      G: 'AG',
+      PG: 'AP-12',
+      'PG-13': 'N-15',
+      R: 'IM-18',
+      'NC-17': 'IM-18',
+      'TV-Y': 'AG',
+      'TV-Y7': 'AP-12',
+      'TV-G': 'AG',
+      'TV-PG': 'AP-12',
+      'TV-14': 'N-15',
+      'TV-MA': 'IM-18',
     },
-    'TR': { // Turkey
-      'G': 'Genel', 'PG': '7+', 'PG-13': '13+', 'R': '18+', 'NC-17': '18+',
-      'TV-Y': 'Genel', 'TV-Y7': '7+', 'TV-G': 'Genel', 'TV-PG': '13+', 'TV-14': '18+', 'TV-MA': '18+'
+    TR: {
+      // Turkey
+      G: 'Genel',
+      PG: '7+',
+      'PG-13': '13+',
+      R: '18+',
+      'NC-17': '18+',
+      'TV-Y': 'Genel',
+      'TV-Y7': '7+',
+      'TV-G': 'Genel',
+      'TV-PG': '13+',
+      'TV-14': '18+',
+      'TV-MA': '18+',
     },
-    'GR': { // Greece
-      'G': 'K', 'PG': '12', 'PG-13': '13', 'R': '17', 'NC-17': '18',
-      'TV-Y': 'K', 'TV-Y7': '12', 'TV-G': 'K', 'TV-PG': '13', 'TV-14': '17', 'TV-MA': '18'
+    GR: {
+      // Greece
+      G: 'K',
+      PG: '12',
+      'PG-13': '13',
+      R: '17',
+      'NC-17': '18',
+      'TV-Y': 'K',
+      'TV-Y7': '12',
+      'TV-G': 'K',
+      'TV-PG': '13',
+      'TV-14': '17',
+      'TV-MA': '18',
     },
-    'ID': { // Indonesia
-      'G': 'SU', 'PG': 'BO', 'PG-13': 'R13', 'R': 'D17', 'NC-17': 'D21',
-      'TV-Y': 'SU', 'TV-Y7': 'BO', 'TV-G': 'SU', 'TV-PG': 'BO', 'TV-14': 'D17', 'TV-MA': 'D21'
+    ID: {
+      // Indonesia
+      G: 'SU',
+      PG: 'BO',
+      'PG-13': 'R13',
+      R: 'D17',
+      'NC-17': 'D21',
+      'TV-Y': 'SU',
+      'TV-Y7': 'BO',
+      'TV-G': 'SU',
+      'TV-PG': 'BO',
+      'TV-14': 'D17',
+      'TV-MA': 'D21',
     },
-    'TH': { // Thailand
-      'G': 'ท', 'PG': '13+', 'PG-13': '15+', 'R': '18+', 'NC-17': '20+',
-      'TV-Y': 'ท', 'TV-Y7': '13+', 'TV-G': 'ท', 'TV-PG': '13+', 'TV-14': '18+', 'TV-MA': '20+'
+    TH: {
+      // Thailand
+      G: 'ท',
+      PG: '13+',
+      'PG-13': '15+',
+      R: '18+',
+      'NC-17': '20+',
+      'TV-Y': 'ท',
+      'TV-Y7': '13+',
+      'TV-G': 'ท',
+      'TV-PG': '13+',
+      'TV-14': '18+',
+      'TV-MA': '20+',
     },
-    'PH': { // Philippines
-      'G': 'G', 'PG': 'PG', 'PG-13': 'R-13', 'R': 'R-16', 'NC-17': 'R-18',
-      'TV-Y': 'G', 'TV-Y7': 'PG', 'TV-G': 'G', 'TV-PG': 'SPG', 'TV-14': 'SPG', 'TV-MA': 'X'
+    PH: {
+      // Philippines
+      G: 'G',
+      PG: 'PG',
+      'PG-13': 'R-13',
+      R: 'R-16',
+      'NC-17': 'R-18',
+      'TV-Y': 'G',
+      'TV-Y7': 'PG',
+      'TV-G': 'G',
+      'TV-PG': 'SPG',
+      'TV-14': 'SPG',
+      'TV-MA': 'X',
     },
-    'MY': { // Malaysia
-      'G': 'U', 'PG': 'P13', 'PG-13': 'P13', 'R': '18', 'NC-17': '18',
-      'TV-Y': 'U', 'TV-Y7': 'P13', 'TV-G': 'U', 'TV-PG': 'P13', 'TV-14': '18', 'TV-MA': '18'
+    MY: {
+      // Malaysia
+      G: 'U',
+      PG: 'P13',
+      'PG-13': 'P13',
+      R: '18',
+      'NC-17': '18',
+      'TV-Y': 'U',
+      'TV-Y7': 'P13',
+      'TV-G': 'U',
+      'TV-PG': 'P13',
+      'TV-14': '18',
+      'TV-MA': '18',
     },
-    'SG': { // Singapore
-      'G': 'G', 'PG': 'PG', 'PG-13': 'PG13', 'R': 'M18', 'NC-17': 'R21',
-      'TV-Y': 'G', 'TV-Y7': 'PG', 'TV-G': 'G', 'TV-PG': 'PG13', 'TV-14': 'M18', 'TV-MA': 'R21'
+    SG: {
+      // Singapore
+      G: 'G',
+      PG: 'PG',
+      'PG-13': 'PG13',
+      R: 'M18',
+      'NC-17': 'R21',
+      'TV-Y': 'G',
+      'TV-Y7': 'PG',
+      'TV-G': 'G',
+      'TV-PG': 'PG13',
+      'TV-14': 'M18',
+      'TV-MA': 'R21',
     },
-    'ZA': { // South Africa
-      'G': 'A', 'PG': 'PG', 'PG-13': '13', 'R': '16', 'NC-17': '18',
-      'TV-Y': 'A', 'TV-Y7': 'PG', 'TV-G': 'A', 'TV-PG': 'PG', 'TV-14': '16', 'TV-MA': '18'
+    ZA: {
+      // South Africa
+      G: 'A',
+      PG: 'PG',
+      'PG-13': '13',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': 'A',
+      'TV-Y7': 'PG',
+      'TV-G': 'A',
+      'TV-PG': 'PG',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'IL': { // Israel
-      'G': 'כל הגילאים', 'PG': '12', 'PG-13': '14', 'R': '16', 'NC-17': '18',
-      'TV-Y': 'כל הגילאים', 'TV-Y7': '12', 'TV-G': 'כל הגילאים', 'TV-PG': '14', 'TV-14': '16', 'TV-MA': '18'
+    IL: {
+      // Israel
+      G: 'כל הגילאים',
+      PG: '12',
+      'PG-13': '14',
+      R: '16',
+      'NC-17': '18',
+      'TV-Y': 'כל הגילאים',
+      'TV-Y7': '12',
+      'TV-G': 'כל הגילאים',
+      'TV-PG': '14',
+      'TV-14': '16',
+      'TV-MA': '18',
     },
-    'TW': { // Taiwan
-      'G': '普遍級', 'PG': '保護級', 'PG-13': '輔導級', 'R': '限制級', 'NC-17': '限制級',
-      'TV-Y': '普遍級', 'TV-Y7': '保護級', 'TV-G': '普遍級', 'TV-PG': '輔導級', 'TV-14': '輔導級', 'TV-MA': '限制級'
+    TW: {
+      // Taiwan
+      G: '普遍級',
+      PG: '保護級',
+      'PG-13': '輔導級',
+      R: '限制級',
+      'NC-17': '限制級',
+      'TV-Y': '普遍級',
+      'TV-Y7': '保護級',
+      'TV-G': '普遍級',
+      'TV-PG': '輔導級',
+      'TV-14': '輔導級',
+      'TV-MA': '限制級',
     },
-    'HK': { // Hong Kong
-      'G': 'I', 'PG': 'IIA', 'PG-13': 'IIB', 'R': 'III', 'NC-17': 'III',
-      'TV-Y': 'I', 'TV-Y7': 'IIA', 'TV-G': 'I', 'TV-PG': 'IIB', 'TV-14': 'III', 'TV-MA': 'III'
-    }
+    HK: {
+      // Hong Kong
+      G: 'I',
+      PG: 'IIA',
+      'PG-13': 'IIB',
+      R: 'III',
+      'NC-17': 'III',
+      'TV-Y': 'I',
+      'TV-Y7': 'IIA',
+      'TV-G': 'I',
+      'TV-PG': 'IIB',
+      'TV-14': 'III',
+      'TV-MA': 'III',
+    },
   };
 
   // Apply conversion if using fallback US rating
@@ -1192,7 +1558,11 @@ export async function toStremioFullMeta(
     const endYear = details.last_air_date ? String(details.last_air_date).split('-')[0] : null;
     if (status === 'Ended' && endYear && endYear !== year) {
       releaseInfo = `${year}-${endYear}`;
-    } else if (status === 'Returning Series' || status === 'In Production' || !details.last_air_date) {
+    } else if (
+      status === 'Returning Series' ||
+      status === 'In Production' ||
+      !details.last_air_date
+    ) {
       releaseInfo = `${year}-`;
     }
   }
@@ -1207,7 +1577,7 @@ export async function toStremioFullMeta(
   if (details.videos?.results?.length > 0) {
     const allVideos = details.videos.results.filter((v) => v.site === 'YouTube');
 
-    // Prioritize: 
+    // Prioritize:
     // 1. Language match + Trailer
     // 2. Language match + Teaser/Clip
     // 3. English + Trailer
@@ -1215,18 +1585,28 @@ export async function toStremioFullMeta(
 
     // Extract language code (e.g., 'it' from 'it-IT') since TMDB uses ISO 639-1
     const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
-    log.info('Trailer language search', { targetLanguage, lang, videoCount: allVideos.length, videoLangs: allVideos.map(v => v.iso_639_1) });
+    log.debug('Trailer language search', {
+      targetLanguage,
+      lang,
+      videoCount: allVideos.length,
+      videoLangs: allVideos.map((v) => v.iso_639_1),
+    });
 
     const trailerVideo =
-      allVideos.find(v => v.iso_639_1 === lang && v.type === 'Trailer') ||
-      allVideos.find(v => v.iso_639_1 === lang) ||
-      allVideos.find(v => v.iso_639_1 === 'en' && v.type === 'Trailer') ||
-      allVideos.find(v => v.type === 'Trailer') ||
+      allVideos.find((v) => v.iso_639_1 === lang && v.type === 'Trailer') ||
+      allVideos.find((v) => v.iso_639_1 === lang) ||
+      allVideos.find((v) => v.iso_639_1 === 'en' && v.type === 'Trailer') ||
+      allVideos.find((v) => v.type === 'Trailer') ||
       allVideos[0];
 
     if (trailerVideo) {
       trailer = `yt:${trailerVideo.key}`;
-      log.info('Trailer selected', { key: trailerVideo.key, lang: trailerVideo.iso_639_1, type: trailerVideo.type, name: trailerVideo.name });
+      log.debug('Trailer selected', {
+        key: trailerVideo.key,
+        lang: trailerVideo.iso_639_1,
+        type: trailerVideo.type,
+        name: trailerVideo.name,
+      });
     }
   }
 
@@ -1246,7 +1626,9 @@ export async function toStremioFullMeta(
         displayRating = cinemetaRating;
         actualImdbRating = cinemetaRating;
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   // 2. Try RPDB if Cinemeta didn't have it
@@ -1263,7 +1645,9 @@ export async function toStremioFullMeta(
           displayRating = realRating;
           actualImdbRating = realRating;
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        /* ignore */
+      }
     }
   }
 
@@ -1341,8 +1725,9 @@ export async function toStremioFullMeta(
     const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
 
     // Get all YouTube trailers
-    const youtubeTrailers = details.videos.results
-      .filter((v) => v.site === 'YouTube' && v.type === 'Trailer');
+    const youtubeTrailers = details.videos.results.filter(
+      (v) => v.site === 'YouTube' && v.type === 'Trailer'
+    );
 
     // Sort: target language first, then English, then others
     youtubeTrailers.sort((a, b) => {
@@ -1373,10 +1758,10 @@ export async function toStremioFullMeta(
   const app_extras = {
     cast: Array.isArray(credits.cast)
       ? credits.cast.slice(0, 15).map((p) => ({
-        name: p.name,
-        character: p.character,
-        photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w276_and_h350_face${p.profile_path}` : null,
-      }))
+          name: p.name,
+          character: p.character,
+          photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w276_and_h350_face${p.profile_path}` : null,
+        }))
       : [],
     directors: crew
       .filter((p) => p.job === 'Director')
@@ -1390,8 +1775,8 @@ export async function toStremioFullMeta(
     })),
     seasonPosters: Array.isArray(details.seasons)
       ? details.seasons
-        .map((s) => (s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null))
-        .filter(Boolean)
+          .map((s) => (s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null))
+          .filter(Boolean)
       : [],
     releaseDates: details.release_dates || details.content_ratings || null,
     certification: certification,
@@ -1431,10 +1816,10 @@ export async function toStremioFullMeta(
     const target = targetLanguage || 'en';
 
     const candidates = [
-      logos.find(l => l.iso_639_1 === target),
-      logos.find(l => l.iso_639_1 === 'en'),
-      logos.find(l => l.iso_639_1 === null), // Textless/Logo-only
-      logos[0] // Fallback to first available (e.g. original language)
+      logos.find((l) => l.iso_639_1 === target),
+      logos.find((l) => l.iso_639_1 === 'en'),
+      logos.find((l) => l.iso_639_1 === null), // Textless/Logo-only
+      logos[0], // Fallback to first available (e.g. original language)
     ];
 
     const best = candidates.find(Boolean);
@@ -1472,11 +1857,11 @@ export async function toStremioFullMeta(
     year: year || undefined,
     releaseInfo,
     // Use actual IMDB rating from Cinemeta/RPDB if available, fallback to TMDB vote_average
-    imdbRating: (() => {
-      const finalRating = actualImdbRating || (typeof details.vote_average === 'number' && details.vote_average > 0 ? details.vote_average.toFixed(1) : null);
-      log.info('Final imdbRating for meta', { actualImdbRating, voteAverage: details.vote_average, finalRating });
-      return finalRating;
-    })(),
+    imdbRating:
+      actualImdbRating ||
+      (typeof details.vote_average === 'number' && details.vote_average > 0
+        ? details.vote_average.toFixed(1)
+        : null),
     genres,
     cast: cast.length > 0 ? cast : undefined,
     director: directorString || undefined,
@@ -1515,17 +1900,6 @@ export async function search(apiKey, query, type = 'movie', page = 1) {
   if (languageParam) params.language = languageParam;
   return tmdbFetch(`/search/${mediaType}`, apiKey, params);
 }
-
-/**
- * Convert TMDB result to Stremio meta preview format
- * @param {Object} item - TMDB item object
- * @param {string} type - Content type ('movie' or 'series')
- * @param {string|null} imdbId - IMDb ID if available
- * @param {Object|null} posterOptions - Optional poster service config { apiKey, service }
- * @param {Object|null} genreMap - Optional map of ID -> Name for localized genres
- * @returns {Object} Stremio meta preview object
- */
-
 
 /**
  * Convert TMDB result to Stremio meta preview format
@@ -1643,7 +2017,7 @@ export async function findByImdbId(apiKey, imdbId, type = 'movie', options = {})
       const found = { tmdbId: result.id };
       try {
         await cache.set(cacheKey, found, 86400 * 7); // 7 days
-      } catch (e) { }
+      } catch (e) {}
       return found;
     }
     return null;
@@ -1663,8 +2037,6 @@ export async function validateApiKey(apiKey) {
     return { valid: false, error: error.message };
   }
 }
-
-
 
 /**
  * Search for a person (actor, director, etc.)
