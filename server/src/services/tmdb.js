@@ -899,7 +899,7 @@ export async function getSeriesEpisodes(apiKey, tmdbId, details, options = {}) {
         title: ep.name || `Episode ${ep.episode_number}`,
         released: ep.air_date ? new Date(ep.air_date).toISOString() : undefined,
         overview: ep.overview || undefined,
-        thumbnail: ep.still_path ? `${TMDB_IMAGE_BASE}/w500${ep.still_path}` : undefined,
+        thumbnail: ep.still_path ? `${TMDB_IMAGE_BASE}/original${ep.still_path}` : undefined,
         runtime: formatRuntime(ep.runtime),
       };
     });
@@ -1215,7 +1215,6 @@ export async function toStremioFullMeta(
 
     // Extract language code (e.g., 'it' from 'it-IT') since TMDB uses ISO 639-1
     const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
-    log.info('Trailer language search', { targetLanguage, lang, videoCount: allVideos.length, videoLangs: allVideos.map(v => v.iso_639_1) });
 
     const trailerVideo =
       allVideos.find(v => v.iso_639_1 === lang && v.type === 'Trailer') ||
@@ -1226,7 +1225,6 @@ export async function toStremioFullMeta(
 
     if (trailerVideo) {
       trailer = `yt:${trailerVideo.key}`;
-      log.info('Trailer selected', { key: trailerVideo.key, lang: trailerVideo.iso_639_1, type: trailerVideo.type, name: trailerVideo.name });
     }
   }
 
@@ -1382,15 +1380,15 @@ export async function toStremioFullMeta(
       .filter((p) => p.job === 'Director')
       .map((p) => ({
         name: p.name,
-        photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null,
+        photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w300${p.profile_path}` : null,
       })),
     writers: writers.map((p) => ({
       name: p.name,
-      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null,
+      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w300${p.profile_path}` : null,
     })),
     seasonPosters: Array.isArray(details.seasons)
       ? details.seasons
-        .map((s) => (s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null))
+        .map((s) => (s.poster_path ? `${TMDB_IMAGE_BASE}/w780${s.poster_path}` : null))
         .filter(Boolean)
       : [],
     releaseDates: details.release_dates || details.content_ratings || null,
@@ -1404,9 +1402,9 @@ export async function toStremioFullMeta(
   };
 
   // Generate poster URL (use poster service if configured, fallback to TMDB)
-  let poster = details.poster_path ? `${TMDB_IMAGE_BASE}/w500${details.poster_path}` : null;
+  let poster = details.poster_path ? `${TMDB_IMAGE_BASE}/w780${details.poster_path}` : null;
   let background = details.backdrop_path
-    ? `${TMDB_IMAGE_BASE}/w1280${details.backdrop_path}`
+    ? `${TMDB_IMAGE_BASE}/original${details.backdrop_path}`
     : null;
 
   if (isValidPosterConfig(posterOptions)) {
@@ -1443,10 +1441,10 @@ export async function toStremioFullMeta(
 
   // Fallbacks for Poster/Backdrop if main path is missing
   if (!poster && details.images?.posters?.length > 0) {
-    poster = `${TMDB_IMAGE_BASE}/w500${details.images.posters[0].file_path}`;
+    poster = `${TMDB_IMAGE_BASE}/w780${details.images.posters[0].file_path}`;
   }
   if (!background && details.images?.backdrops?.length > 0) {
-    background = `${TMDB_IMAGE_BASE}/w1280${details.images.backdrops[0].file_path}`;
+    background = `${TMDB_IMAGE_BASE}/original${details.images.backdrops[0].file_path}`;
   }
 
   const responseId = requestedId || `tmdb:${details.id}`;
@@ -1467,7 +1465,7 @@ export async function toStremioFullMeta(
     posterShape: 'poster',
     background,
     fanart: background, // Compatibility alias
-    logo: logo ? `${TMDB_IMAGE_BASE}/w300${logo}` : undefined,
+    logo: logo ? `${TMDB_IMAGE_BASE}/original${logo}` : undefined,
     description: details.overview || '',
     year: year || undefined,
     releaseInfo,
