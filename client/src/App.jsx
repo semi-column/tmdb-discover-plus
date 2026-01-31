@@ -201,6 +201,7 @@ function App() {
               certifications={tmdb.certifications}
               watchRegions={tmdb.watchRegions}
               tvNetworks={tmdb.tvNetworks}
+              preferences={config.preferences}
               onUpdate={actions.handleUpdateCatalog}
               onPreview={tmdb.preview}
               searchPerson={tmdb.searchPerson}

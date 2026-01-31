@@ -21,7 +21,7 @@ services:
       - NODE_ENV=production
       - PORT=7000
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/tmdb-discover-plus}
+      - MONGODB_URI=${MONGODB_URI}
       - POSTGRES_URI=${POSTGRES_URI}
       - DATABASE_DRIVER=${DATABASE_DRIVER}
       - CACHE_DRIVER=${CACHE_DRIVER}

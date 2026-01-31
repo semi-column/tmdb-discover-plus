@@ -124,6 +124,7 @@ export function CatalogEditor({
   tvNetworks = [],
   onUpdate,
   onPreview,
+  preferences = {},
   searchPerson,
   searchCompany,
   searchKeyword,
@@ -432,6 +433,7 @@ export function CatalogEditor({
     try {
       const filters = {
         ...localCatalog.filters,
+        displayLanguage: preferences?.defaultLanguage,
         withPeople: selectedPeople.map((p) => p.id).join(',') || undefined,
         withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
         withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,

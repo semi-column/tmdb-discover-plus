@@ -9,7 +9,10 @@ import { getApiKeyFromConfig, updateCatalogGenres } from './configService.js';
 const log = createLogger('manifestService');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const ADDON_ID = 'community.tmdb.discover.plus';
+const ADDON_VARIANT = process.env.ADDON_VARIANT || '';
+const ADDON_ID = ADDON_VARIANT
+  ? `community.tmdb.discover.plus.${ADDON_VARIANT}`
+  : 'community.tmdb.discover.plus';
 const ADDON_NAME = 'TMDB Discover+';
 const ADDON_DESCRIPTION = 'Create custom movie and TV catalogs with powerful TMDB filters';
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));

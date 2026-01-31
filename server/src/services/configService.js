@@ -68,10 +68,14 @@ export async function saveUserConfig(config) {
     }
   }
 
-  const processedCatalogs = (config.catalogs || []).map((c) => ({
-    ...c,
-    _id: c._id || c.id || crypto.randomUUID(),
-  }));
+  const processedCatalogs = (config.catalogs || []).map((c) => {
+    const { displayLanguage, ...cleanFilters } = c.filters || {};
+    return {
+      ...c,
+      _id: c._id || c.id || crypto.randomUUID(),
+      filters: cleanFilters,
+    };
+  });
 
   try {
     const processedPreferences = { ...(config.preferences || {}) };
