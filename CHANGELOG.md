@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.6](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.5...v2.6.6) (2026-01-31)
+
+
+### Bug Fixes
+
+* Added Global Dsiplay Language as per-catalog was not supported ([d0633a9](https://github.com/semi-column/tmdb-discover-plus/commit/d0633a916c523f99c691a70d02ae2b896fce13cf))
+* enforce alphabetical genre sorting and prioritize 'All' option [[#44](https://github.com/semi-column/tmdb-discover-plus/issues/44)] ([e91baff](https://github.com/semi-column/tmdb-discover-plus/commit/e91baffd02fa7a858c487996d4b30301dfc25553))
+* metdata localization is fixed with rich metadata ([d0633a9](https://github.com/semi-column/tmdb-discover-plus/commit/d0633a916c523f99c691a70d02ae2b896fce13cf))
+
 ## [2.6.5](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.4...v2.6.5) (2026-01-29)
 
 ### Bug Fixes
