@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.7](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.6...v2.6.7) (2026-01-31)
+
+
+### Bug Fixes
+
+* Fixes an issue where a catalog inherited "Discover Only" mode from another catalog with the same name. ([a628b44](https://github.com/semi-column/tmdb-discover-plus/commit/a628b4411f63d30587392edd56e36493ab97807e))
+
 ## [2.6.6](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.5...v2.6.6) (2026-01-31)
 
 
