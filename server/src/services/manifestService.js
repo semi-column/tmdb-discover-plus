@@ -127,9 +127,7 @@ export async function enrichManifestWithGenres(manifest, config) {
           const savedCatalog = (config.catalogs || []).find((c) => {
             const idFromStored = `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
             const idFromIdOnly = `tmdb-${String(c._id)}`;
-            const nameMatch =
-              c.name && catalog.name && c.name.toLowerCase() === catalog.name.toLowerCase();
-            return idFromStored === catalog.id || idFromIdOnly === catalog.id || nameMatch;
+            return idFromStored === catalog.id || idFromIdOnly === catalog.id;
           });
 
           if (savedCatalog) {
