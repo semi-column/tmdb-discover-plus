@@ -226,8 +226,11 @@ export async function enrichManifestWithGenres(manifest, config) {
           // If discoverOnly is enabled, we MUST have a genre selected (isRequired=true).
           // To allow the user to see "everything" (default view), we explicitly add "All".
           // The addon.js handler gracefully ignores "All" as it doesn't match a TMDB genre ID.
+          // Sort genres alphabetically for better UX
+          const sortedOptions = [...options].sort((a, b) => a.localeCompare(b));
+
           if (isDiscoverOnly) {
-            options.unshift('All');
+            sortedOptions.unshift('All');
           }
 
           catalog.extra = catalog.extra || [];
@@ -237,7 +240,7 @@ export async function enrichManifestWithGenres(manifest, config) {
           // because the Board does not provide required filters.
           catalog.extra.push({
             name: 'genre',
-            options,
+            options: sortedOptions,
             optionsLimit: 1,
             isRequired: isDiscoverOnly,
           });

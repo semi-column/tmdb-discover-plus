@@ -93,7 +93,7 @@ export function GenreSelector({
       )}
 
       <div className="genre-grid tristate">
-        {genres.map((genre) => {
+        {[...genres].sort((a, b) => a.name.localeCompare(b.name)).map((genre) => {
           const state = getGenreState(genre.id);
           return (
             <button
