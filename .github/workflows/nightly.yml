@@ -28,9 +28,9 @@ jobs:
       - name: Check commit message
         id: check
         run: |
-          if [[ "${{ github.event.head_commit.message }}" == "chore: release"* ]]; then
+          if [[ "${{ github.event.head_commit.message }}" =~ ^(chore:|docs:|ci:) ]]; then
             echo "should_run=false" >> $GITHUB_OUTPUT
-            echo "Skipping nightly build for release commit"
+            echo "Skipping nightly build for chore/docs/ci commit"
           else
             echo "should_run=true" >> $GITHUB_OUTPUT
           fi
