@@ -15,23 +15,26 @@ export function PeopleFilters({
   searchPerson,
   searchCompany,
   searchKeyword,
+  showPeople = true,
 }) {
   return (
     <div className="filter-stack">
-      <div className="filter-group">
-        <LabelWithTooltip
-          label="Cast & Crew"
-          tooltip="Find content featuring specific actors, directors, writers, or other crew members."
-        />
-        <SearchInput
-          type="person"
-          placeholder="Search actors, directors..."
-          onSearch={searchPerson}
-          selectedItems={selectedPeople}
-          onSelect={onSelectPeople}
-          onRemove={onSelectPeople}
-        />
-      </div>
+      {showPeople && (
+        <div className="filter-group">
+          <LabelWithTooltip
+            label="Cast & Crew"
+            tooltip="Find content featuring specific actors, directors, writers, or other crew members."
+          />
+          <SearchInput
+            type="person"
+            placeholder="Search actors, directors..."
+            onSearch={searchPerson}
+            selectedItems={selectedPeople}
+            onSelect={onSelectPeople}
+            onRemove={onSelectPeople}
+          />
+        </div>
+      )}
       <div className="filter-group">
         <LabelWithTooltip
           label="Studios / Companies"

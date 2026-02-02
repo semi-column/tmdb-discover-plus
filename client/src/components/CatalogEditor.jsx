@@ -363,6 +363,7 @@ export function CatalogEditor({
   const handleTypeChange = useCallback(
     (type) => {
       setLocalCatalog((prev) => {
+        const isNextMovie = type === 'movie';
         const updated = {
           ...prev,
           type,
@@ -371,6 +372,25 @@ export function CatalogEditor({
             genres: [],
             excludeGenres: [],
             sortBy: 'popularity.desc',
+            ...(isNextMovie
+              ? {
+                  airDateFrom: undefined,
+                  airDateTo: undefined,
+                  firstAirDateFrom: undefined,
+                  firstAirDateTo: undefined,
+                  firstAirDateYear: undefined,
+                  includeNullFirstAirDates: undefined,
+                  screenedTheatrically: undefined,
+                  timezone: undefined,
+                }
+              : {
+                  includeVideo: undefined,
+                  primaryReleaseYear: undefined,
+                  certifications: undefined,
+                  certificationMin: undefined,
+                  certificationMax: undefined,
+                  certificationCountry: undefined,
+                }),
           },
         };
         if (catalog?._id) {
@@ -504,10 +524,10 @@ export function CatalogEditor({
 
     // Country
     if (filters.originCountry) {
-      const country = countries.find((c) => c.code === filters.originCountry);
+      const country = countries.find((c) => c.iso_3166_1 === filters.originCountry);
       active.push({
         key: 'originCountry',
-        label: `Country: ${country?.name || filters.originCountry}`,
+        label: `Country: ${country?.english_name || filters.originCountry}`,
         section: 'filters',
       });
     }
@@ -550,6 +570,75 @@ export function CatalogEditor({
     ) {
       // Manual date range (only show if no preset is active)
       active.push({ key: 'releaseDate', label: 'Release date set', section: 'release' });
+    }
+
+    if (filters.firstAirDateYear) {
+      active.push({
+        key: 'firstAirDateYear',
+        label: `First air year: ${filters.firstAirDateYear}`,
+        section: 'release',
+      });
+    }
+
+    if (filters.primaryReleaseYear) {
+      active.push({
+        key: 'primaryReleaseYear',
+        label: `Primary release year: ${filters.primaryReleaseYear}`,
+        section: 'release',
+      });
+    }
+
+    if (filters.timezone) {
+      active.push({
+        key: 'timezone',
+        label: `Timezone: ${filters.timezone}`,
+        section: 'release',
+      });
+    }
+
+    if (filters.certificationMin || filters.certificationMax) {
+      const min = filters.certificationMin || 'Any';
+      const max = filters.certificationMax || 'Any';
+      active.push({
+        key: 'certificationRange',
+        label: `Age rating: ${min}-${max}`,
+        section: 'release',
+      });
+    }
+
+    if (filters.certificationCountry) {
+      const certCountryLabel =
+        countries.find((c) => c.iso_3166_1 === filters.certificationCountry)?.english_name ||
+        filters.certificationCountry;
+      active.push({
+        key: 'certificationCountry',
+        label: `Rating country: ${certCountryLabel}`,
+        section: 'release',
+      });
+    }
+
+    if (filters.includeNullFirstAirDates) {
+      active.push({
+        key: 'includeNullFirstAirDates',
+        label: 'Include unknown air dates',
+        section: 'options',
+      });
+    }
+
+    if (filters.screenedTheatrically) {
+      active.push({
+        key: 'screenedTheatrically',
+        label: 'Screened theatrically',
+        section: 'options',
+      });
+    }
+
+    if (filters.includeVideo) {
+      active.push({
+        key: 'includeVideo',
+        label: 'Include video content',
+        section: 'options',
+      });
     }
 
     // Streaming
@@ -629,6 +718,18 @@ export function CatalogEditor({
             filters: { ...prev.filters, runtimeMin: undefined, runtimeMax: undefined },
           }));
           break;
+        case 'primaryReleaseYear':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, primaryReleaseYear: undefined },
+          }));
+          break;
+        case 'certificationCountry':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, certificationCountry: undefined },
+          }));
+          break;
         case 'datePreset':
           setLocalCatalog((prev) => ({
             ...prev,
@@ -646,9 +747,39 @@ export function CatalogEditor({
               airDateFrom: undefined,
               airDateTo: undefined,
               datePreset: undefined,
+              firstAirDateYear: undefined,
+              primaryReleaseYear: undefined,
             },
           }));
           setSelectedDatePreset(null);
+          break;
+        case 'certificationRange':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: {
+              ...prev.filters,
+              certificationMin: undefined,
+              certificationMax: undefined,
+            },
+          }));
+          break;
+        case 'includeNullFirstAirDates':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, includeNullFirstAirDates: undefined },
+          }));
+          break;
+        case 'screenedTheatrically':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, screenedTheatrically: undefined },
+          }));
+          break;
+        case 'includeVideo':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, includeVideo: undefined },
+          }));
           break;
         case 'watchProviders':
           setLocalCatalog((prev) => ({
@@ -1272,6 +1403,50 @@ export function CatalogEditor({
                     </div>
                   )}
 
+                  {!isMovie && (
+                    <div className="filter-two-col" style={{ marginTop: '16px' }}>
+                      <div className="filter-group">
+                        <LabelWithTooltip
+                          label="First Air Year"
+                          tooltip="Filter by the year the show first aired (TMDB first_air_date_year)."
+                        />
+                        <input
+                          type="number"
+                          className="input"
+                          min="1900"
+                          max={CURRENT_YEAR + 1}
+                          placeholder="e.g. 2019"
+                          value={localCatalog?.filters?.firstAirDateYear || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            handleFiltersChange(
+                              'firstAirDateYear',
+                              value ? Number(value) : undefined
+                            );
+                          }}
+                        />
+                      </div>
+                      <div className="filter-group">
+                        <LabelWithTooltip
+                          label="Timezone"
+                          tooltip="Timezone for date calculations (e.g., America/New_York)."
+                        />
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="e.g. America/New_York"
+                          value={localCatalog?.filters?.timezone || ''}
+                          onChange={(e) =>
+                            handleFiltersChange(
+                              'timezone',
+                              e.target.value ? e.target.value.trim() : undefined
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {isMovie ? (
                     <>
                       <div className="filter-group" style={{ marginTop: '16px' }}>
@@ -1301,6 +1476,27 @@ export function CatalogEditor({
                         />
                       </div>
                       <div className="filter-two-col" style={{ marginTop: '16px' }}>
+                        <div className="filter-group">
+                          <LabelWithTooltip
+                            label="Primary Release Year"
+                            tooltip="Filter by the year of a movie's primary (worldwide) release."
+                          />
+                          <input
+                            type="number"
+                            className="input"
+                            min="1900"
+                            max={CURRENT_YEAR + 1}
+                            placeholder="e.g. 2015"
+                            value={localCatalog?.filters?.primaryReleaseYear || ''}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              handleFiltersChange(
+                                'primaryReleaseYear',
+                                value ? Number(value) : undefined
+                              );
+                            }}
+                          />
+                        </div>
                         <div className="filter-group">
                           <LabelWithTooltip
                             label="Release Type"
@@ -1336,6 +1532,75 @@ export function CatalogEditor({
                             value={localCatalog?.filters?.certifications || []}
                             onChange={(value) => handleFiltersChange('certifications', value)}
                             placeholder="Any"
+                            labelKey="label"
+                            valueKey="value"
+                          />
+                          <span className="filter-label-hint">
+                            Use this for exact certifications; use min/max below for ranges.
+                          </span>
+                        </div>
+                      </div>
+                      <div className="filter-group" style={{ marginTop: '16px' }}>
+                        <LabelWithTooltip
+                          label="Age Rating Country"
+                          tooltip="Pick the country rating system to use for certifications."
+                        />
+                        <SearchableSelect
+                          options={countries}
+                          value={localCatalog?.filters?.certificationCountry || 'US'}
+                          onChange={(value) => handleFiltersChange('certificationCountry', value)}
+                          placeholder="Select country"
+                          searchPlaceholder="Search countries..."
+                          labelKey="english_name"
+                          valueKey="iso_3166_1"
+                        />
+                        <span className="filter-label-hint">
+                          TMDB uses country-specific rating systems
+                        </span>
+                      </div>
+                      <div className="filter-two-col" style={{ marginTop: '16px' }}>
+                        <div className="filter-group">
+                          <LabelWithTooltip
+                            label="Age Rating Min"
+                            tooltip="Lower bound for certification. Uses the selected country rating system."
+                          />
+                          <SearchableSelect
+                            options={[
+                              { value: '', label: 'Any' },
+                              ...certOptions.map((c) => ({
+                                value: c.certification,
+                                label: c.certification,
+                              })),
+                            ]}
+                            value={localCatalog?.filters?.certificationMin || ''}
+                            onChange={(value) =>
+                              handleFiltersChange('certificationMin', value || undefined)
+                            }
+                            placeholder="Any"
+                            searchPlaceholder="Search..."
+                            labelKey="label"
+                            valueKey="value"
+                          />
+                        </div>
+                        <div className="filter-group">
+                          <LabelWithTooltip
+                            label="Age Rating Max"
+                            tooltip="Upper bound for certification. Uses the selected country rating system."
+                          />
+                          <SearchableSelect
+                            options={[
+                              { value: '', label: 'Any' },
+                              ...certOptions.map((c) => ({
+                                value: c.certification,
+                                label: c.certification,
+                              })),
+                            ]}
+                            value={localCatalog?.filters?.certificationMax || ''}
+                            onChange={(value) =>
+                              handleFiltersChange('certificationMax', value || undefined)
+                            }
+                            placeholder="Any"
+                            searchPlaceholder="Search..."
                             labelKey="label"
                             valueKey="value"
                           />
@@ -1436,8 +1701,12 @@ export function CatalogEditor({
           {supportsFullFilters && (
             <FilterSection
               id="people"
-              title="People & Studios"
-              description="Filter by cast, crew, or production company"
+              title={isMovie ? 'People & Studios' : 'Studios & Keywords'}
+              description={
+                isMovie
+                  ? 'Filter by cast, crew, or production company'
+                  : 'Filter by production companies and keywords'
+              }
               icon={Users}
               isOpen={expandedSections.people}
               onToggle={toggleSection}
@@ -1457,6 +1726,7 @@ export function CatalogEditor({
                 searchPerson={searchPerson}
                 searchCompany={searchCompany}
                 searchKeyword={searchKeyword}
+                showPeople={isMovie}
               />
             </FilterSection>
           )}
@@ -1469,7 +1739,7 @@ export function CatalogEditor({
                 <div className="filter-section-title-group">
                   <h4 className="filter-section-title">Options</h4>
                   <span className="filter-section-desc">
-                    Include adult, randomize, or discover-only results
+                    Include adult, video, randomize, or discover-only results
                   </span>
                 </div>
                 {expandedSections.options ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -1494,6 +1764,28 @@ export function CatalogEditor({
                         tooltip="Include adult/18+ rated content in results. Disabled by default."
                       />
                     </label>
+
+                    {isMovie && (
+                      <label
+                        className="checkbox-label-row"
+                        onClick={() =>
+                          handleFiltersChange('includeVideo', !localCatalog?.filters?.includeVideo)
+                        }
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div
+                          className={`checkbox ${
+                            localCatalog?.filters?.includeVideo ? 'checked' : ''
+                          }`}
+                        >
+                          {localCatalog?.filters?.includeVideo && <Check size={14} />}
+                        </div>
+                        <LabelWithTooltip
+                          label="Include video content"
+                          tooltip="Include titles marked as video content in TMDB."
+                        />
+                      </label>
+                    )}
 
                     <label
                       className="checkbox-label-row"
@@ -1530,6 +1822,56 @@ export function CatalogEditor({
                         tooltip="Hide this catalog from the Board (Home). It will only appear in the Discover tab."
                       />
                     </label>
+
+                    {!isMovie && (
+                      <label
+                        className="checkbox-label-row"
+                        onClick={() =>
+                          handleFiltersChange(
+                            'includeNullFirstAirDates',
+                            !localCatalog?.filters?.includeNullFirstAirDates
+                          )
+                        }
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div
+                          className={`checkbox ${
+                            localCatalog?.filters?.includeNullFirstAirDates ? 'checked' : ''
+                          }`}
+                        >
+                          {localCatalog?.filters?.includeNullFirstAirDates && <Check size={14} />}
+                        </div>
+                        <LabelWithTooltip
+                          label="Include unknown air dates"
+                          tooltip="Include shows with no recorded first air date."
+                        />
+                      </label>
+                    )}
+
+                    {!isMovie && (
+                      <label
+                        className="checkbox-label-row"
+                        onClick={() =>
+                          handleFiltersChange(
+                            'screenedTheatrically',
+                            !localCatalog?.filters?.screenedTheatrically
+                          )
+                        }
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div
+                          className={`checkbox ${
+                            localCatalog?.filters?.screenedTheatrically ? 'checked' : ''
+                          }`}
+                        >
+                          {localCatalog?.filters?.screenedTheatrically && <Check size={14} />}
+                        </div>
+                        <LabelWithTooltip
+                          label="Screened theatrically"
+                          tooltip="Include shows that were screened in theaters."
+                        />
+                      </label>
+                    )}
                   </div>
                 </div>
               )}

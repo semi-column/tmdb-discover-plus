@@ -165,6 +165,26 @@ export async function run() {
     assert(Array.isArray(data.metas), 'Should return metas array');
   });
 
+  await runTest(SUITE, 'TV first air year filter', async () => {
+    const data = await testPreview({ firstAirDateYear: 2019 }, 'series');
+    assert(Array.isArray(data.metas), 'Should return metas array');
+  });
+
+  await runTest(SUITE, 'TV include null first air dates', async () => {
+    const data = await testPreview({ includeNullFirstAirDates: true }, 'series');
+    assert(Array.isArray(data.metas), 'Should return metas array');
+  });
+
+  await runTest(SUITE, 'TV screened theatrically filter', async () => {
+    const data = await testPreview({ screenedTheatrically: true }, 'series');
+    assert(Array.isArray(data.metas), 'Should return metas array');
+  });
+
+  await runTest(SUITE, 'TV timezone filter', async () => {
+    const data = await testPreview({ timezone: 'America/New_York' }, 'series');
+    assert(Array.isArray(data.metas), 'Should return metas array');
+  });
+
   // ==========================================
   // Watch Providers
   // ==========================================
@@ -233,6 +253,25 @@ export async function run() {
       certificationCountry: 'US',
     });
     assertArray(data.metas, 1, 'Should return family-friendly movies');
+  });
+
+  await runTest(SUITE, 'Certification range filter (PG to R)', async () => {
+    const data = await testPreview({
+      certificationMin: 'PG',
+      certificationMax: 'R',
+      certificationCountry: 'US',
+    });
+    assert(Array.isArray(data.metas), 'Should return metas array');
+  });
+
+  await runTest(SUITE, 'Primary release year filter', async () => {
+    const data = await testPreview({ primaryReleaseYear: 2019 });
+    assert(Array.isArray(data.metas), 'Should return metas array');
+  });
+
+  await runTest(SUITE, 'Include video content', async () => {
+    const data = await testPreview({ includeVideo: true });
+    assert(Array.isArray(data.metas), 'Should return metas array');
   });
 
   await runTest(SUITE, 'Language filter (French original language)', async () => {

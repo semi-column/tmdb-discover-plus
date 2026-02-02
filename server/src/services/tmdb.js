@@ -500,6 +500,7 @@ export async function discover(apiKey, options = {}) {
     displayLanguage,
     originCountry,
     includeAdult = false,
+    includeVideo,
     voteCountMin = 0,
     page = 1,
     genreMatchMode = 'any', // 'any' (OR) or 'all' (AND)
@@ -511,7 +512,10 @@ export async function discover(apiKey, options = {}) {
     releaseType, // singular (new)
     certification,
     certifications = [], // multiple (new)
+    certificationMin,
+    certificationMax,
     certificationCountry,
+    primaryReleaseYear,
     runtimeMin,
     runtimeMax,
     withCast,
@@ -527,6 +531,10 @@ export async function discover(apiKey, options = {}) {
     airDateTo,
     firstAirDateFrom, // When show first premiered
     firstAirDateTo,
+    firstAirDateYear,
+    includeNullFirstAirDates,
+    screenedTheatrically,
+    timezone,
     withNetworks,
     tvStatus,
     tvType,
@@ -547,6 +555,8 @@ export async function discover(apiKey, options = {}) {
     'vote_count.gte': voteCountMin,
   };
 
+  if (mediaType === 'movie' && includeVideo) params.include_video = true;
+
   // Genres: use pipe-separated list for OR, comma for AND
   // TMDB accepts comma (,) for AND logic, pipe (|) for OR logic
   // Default to OR (pipe) for backward compatibility unless explicitly set to 'all'
@@ -566,6 +576,7 @@ export async function discover(apiKey, options = {}) {
     const dateKey = useRegionalRelease ? 'release_date' : 'primary_release_date';
     if (yearFrom && !releaseDateFrom) params[`${dateKey}.gte`] = `${yearFrom}-01-01`;
     if (yearTo && !releaseDateTo) params[`${dateKey}.lte`] = `${yearTo}-12-31`;
+    if (primaryReleaseYear) params.primary_release_year = primaryReleaseYear;
   } else {
     if (yearFrom && !airDateFrom) params['first_air_date.gte'] = `${yearFrom}-01-01`;
     if (yearTo && !airDateTo) params['first_air_date.lte'] = `${yearTo}-12-31`;
@@ -627,6 +638,12 @@ export async function discover(apiKey, options = {}) {
     } else if (certification) {
       params.certification = certification;
       params.certification_country = certificationCountry || 'US';
+    } else if (certificationMin || certificationMax) {
+      if (certificationMin) params['certification.gte'] = certificationMin;
+      if (certificationMax) params['certification.lte'] = certificationMax;
+      params.certification_country = certificationCountry || 'US';
+    } else if (certificationCountry) {
+      params.certification_country = certificationCountry;
     }
   }
 
@@ -639,6 +656,11 @@ export async function discover(apiKey, options = {}) {
     // First air date filters (when show premiered) - separate from episode air dates
     if (firstAirDateFrom) params['first_air_date.gte'] = firstAirDateFrom;
     if (firstAirDateTo) params['first_air_date.lte'] = firstAirDateTo;
+
+    if (firstAirDateYear) params.first_air_date_year = firstAirDateYear;
+    if (includeNullFirstAirDates) params.include_null_first_air_dates = true;
+    if (screenedTheatrically) params.screened_theatrically = true;
+    if (timezone) params.timezone = timezone;
 
     // Networks
     if (withNetworks) params.with_networks = withNetworks;
