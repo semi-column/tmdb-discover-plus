@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/github/v/release/semi-column/tmdb-discover-plus?style=flat-square&logo=github&label=stable" alt="GitHub Release" />
   </a>
   <a href="https://discord.gg/uJ8CY5Et2">
-    <img src="https://img.shields.io/discord/1234567890?style=flat-square&logo=discord&logoColor=white&label=Discord&color=5865F2" alt="Discord" />
+    <img src="https://img.shields.io/discord/1466384279717285961?style=flat-square&logo=discord&logoColor=white&label=Discord&color=5865F2" alt="Discord" />
   </a>
 </p>
 
