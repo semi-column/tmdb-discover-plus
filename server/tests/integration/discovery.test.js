@@ -329,6 +329,14 @@ export async function run() {
   // Region Filter (Release Region)
   // ==========================================
 
+  await runTest(SUITE, 'Release type without region uses regional release dates', async () => {
+    const data = await testPreview({
+      releaseType: 4, // Digital
+      datePreset: 'last_90_days',
+    });
+    assert(Array.isArray(data.metas), 'Should return metas array');
+  });
+
   await runTest(SUITE, 'Region filter - filters by regional release', async () => {
     // When region is set with date filters, only movies with that regional release should appear
     const data = await testPreview({
