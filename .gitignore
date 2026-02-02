@@ -12,6 +12,9 @@ dist/
 build/
 client/dist/
 
+# Generated files
+server/src/metadata.json
+
 # Logs
 *.log
 npm-debug.log*

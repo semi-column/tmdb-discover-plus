@@ -1,0 +1,20 @@
+# CODEOWNERS - Defines who is responsible for code review
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @semi-column
+
+# Frontend
+/client/ @semi-column
+
+# Backend
+/server/ @semi-column
+
+# Configuration and CI/CD
+/.github/ @semi-column
+/docker-compose.yml @semi-column
+/Dockerfile* @semi-column
+
+# Documentation
+/*.md @semi-column
+/docs/ @semi-column

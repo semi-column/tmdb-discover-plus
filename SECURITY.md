@@ -15,8 +15,9 @@ We take security seriously. If you discover a security vulnerability, please rep
 ### How to Report
 
 1. **DO NOT** open a public GitHub issue for security vulnerabilities
-2. Email the maintainers directly or use GitHub's private vulnerability reporting
-3. Include as much detail as possible:
+2. **Preferred**: Use [GitHub's private vulnerability reporting](https://github.com/semicolumn/tmdb-discover-plus/security/advisories/new)
+3. **Alternative**: Email the maintainers directly
+4. Include as much detail as possible:
    - Description of the vulnerability
    - Steps to reproduce
    - Potential impact

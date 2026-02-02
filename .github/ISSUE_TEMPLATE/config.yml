@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discord Community
+    url: https://discord.gg/mfg8FbmQf
+    about: Get real-time help and chat with the community
+  - name: 🗣️ GitHub Discussions
+    url: https://github.com/semi-column/tmdb-discover-plus/discussions
+    about: For questions, ideas, and general discussions
+  - name: 📖 Documentation
+    url: https://github.com/semi-column/tmdb-discover-plus#readme
+    about: Read the documentation before opening an issue
+  - name: ☕ Support Development
+    url: https://ko-fi.com/semicolumn
+    about: If you find this addon useful, consider buying me a coffee!

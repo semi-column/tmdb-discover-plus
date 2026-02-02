@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
+import { readFileSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import {
   getUserConfig,
   saveUserConfig,
@@ -21,10 +24,67 @@ import {
   computeApiKeyId,
 } from '../utils/authMiddleware.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const router = Router();
 const log = createLogger('api');
 
 router.use(apiRateLimit);
+
+// Load build metadata
+function getBuildMetadata() {
+  const defaultMetadata = {
+    version: process.env.npm_package_version || '2.6.7',
+    tag: 'unknown',
+    channel: 'unknown',
+    commitHash: 'unknown',
+    buildTime: null,
+  };
+
+  try {
+    const metadataPath = join(__dirname, '../metadata.json');
+    if (existsSync(metadataPath)) {
+      const data = readFileSync(metadataPath, 'utf8');
+      return { ...defaultMetadata, ...JSON.parse(data) };
+    }
+  } catch (error) {
+    log.debug('Could not load build metadata', { error: error.message });
+  }
+
+  return defaultMetadata;
+}
+
+// Status endpoint - no auth required
+router.get('/status', async (req, res) => {
+  try {
+    const metadata = getBuildMetadata();
+    const stats = await getPublicStats().catch(() => ({ users: 0, catalogs: 0 }));
+
+    // Determine database and cache type from environment
+    const databaseType = process.env.DATABASE_URL
+      ? 'postgres'
+      : process.env.MONGODB_URI
+        ? 'mongodb'
+        : 'memory';
+    const cacheType = process.env.REDIS_URL ? 'redis' : 'memory';
+
+    res.json({
+      ...metadata,
+      uptime: Math.floor(process.uptime()),
+      environment: process.env.NODE_ENV || 'production',
+      database: databaseType,
+      cache: cacheType,
+      stats: {
+        users: stats.users || 0,
+        catalogs: stats.catalogs || 0,
+      },
+    });
+  } catch (error) {
+    log.error('GET /status error', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
 
 async function resolveApiKey(req, res, next) {
   if (req.apiKey) return next();
@@ -360,7 +420,10 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
           });
         }
       } catch (err) {
-        log.warn('Failed to fetch localized genres for preview', { displayLanguage, error: err.message });
+        log.warn('Failed to fetch localized genres for preview', {
+          displayLanguage,
+          error: err.message,
+        });
       }
     }
 
