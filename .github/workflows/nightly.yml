@@ -15,6 +15,9 @@ concurrency:
   group: nightly-build
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   # Skip if this is a release-please commit
   check:
@@ -37,9 +40,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: check
     if: needs.check.outputs.should_run == 'true'
-    permissions:
-      contents: write
-      actions: write
     
     steps:
       - name: Checkout code
