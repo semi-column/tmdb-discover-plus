@@ -13,7 +13,7 @@
   <a href="https://github.com/semi-column/tmdb-discover-plus/releases/latest">
     <img src="https://img.shields.io/github/v/release/semi-column/tmdb-discover-plus?style=flat-square&logo=github&label=stable" alt="GitHub Release" />
   </a>
-  <a href="https://discord.gg/mfg8FbmQf">
+  <a href="https://discord.gg/uJ8CY5Et2">
     <img src="https://img.shields.io/discord/1234567890?style=flat-square&logo=discord&logoColor=white&label=Discord&color=5865F2" alt="Discord" />
   </a>
 </p>
@@ -654,7 +654,7 @@ We welcome contributions from everyone! Whether you're fixing bugs, adding featu
 
 ### Get Help
 
-- 💬 **[Discord Server](https://discord.gg/mfg8FbmQf)** - Real-time chat and support
+- 💬 **[Discord Server](https://discord.gg/uJ8CY5Et2)** - Real-time chat and support
 - 🗣️ **[GitHub Discussions](https://github.com/semi-column/tmdb-discover-plus/discussions)** - Q&A and ideas
 - 🐛 **[Issue Tracker](https://github.com/semi-column/tmdb-discover-plus/issues)** - Bug reports
 - 📖 **[Documentation](https://github.com/semi-column/tmdb-discover-plus#readme)** - This README

@@ -18,7 +18,7 @@ Your question might already be answered! Search the [existing issues](https://gi
 
 ### 3. Community Support
 
-- **Discord**: [Join our community](https://discord.gg/mfg8FbmQf) for real-time help and discussions
+- **Discord**: [Join our community](https://discord.gg/uJ8CY5Et2) for real-time help and discussions
 - **GitHub Discussions**: [Ask questions](https://github.com/semi-column/tmdb-discover-plus/discussions) and share ideas
 
 ## Reporting Issues
