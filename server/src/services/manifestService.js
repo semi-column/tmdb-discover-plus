@@ -26,6 +26,7 @@ const TMDB_PAGE_SIZE = 20;
  * @returns {Object}
  */
 export function buildManifest(userConfig, baseUrl) {
+  const resolvedBaseUrl = process.env.BASE_URL || baseUrl;
   const catalogs = (userConfig?.catalogs || [])
     .filter((c) => c.enabled !== false)
     .map((catalog) => ({
@@ -56,7 +57,7 @@ export function buildManifest(userConfig, baseUrl) {
     name: ADDON_NAME,
     description: ADDON_DESCRIPTION,
     version: ADDON_VERSION,
-    logo: `${baseUrl}/logo.png`,
+    logo: `${resolvedBaseUrl.replace(/\/$/, '')}/logo.png`,
     idPrefixes: ['tmdb:', 'tt'],
     resources: ['catalog', 'meta'],
     types: ['movie', 'series'],

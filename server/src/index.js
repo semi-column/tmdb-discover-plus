@@ -10,6 +10,7 @@ import { addonRouter } from './routes/addon.js';
 import { apiRouter } from './routes/api.js';
 import { authRouter } from './routes/auth.js';
 import { createLogger } from './utils/logger.js';
+import { getBaseUrl } from './utils/helpers.js';
 import { apiRateLimit } from './utils/rateLimit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,7 @@ app.use(express.json());
 app.use(apiRateLimit);
 
 const clientDistPath = path.join(__dirname, '../../client/dist');
+const clientManifestPath = path.join(__dirname, '../../client/public/manifest.json');
 
 log.info('Environment status', {
   port: PORT,
@@ -83,6 +85,20 @@ app.get('/:userId/configure', (req, res) => {
     return res.redirect(302, `/?userId=${encodeURIComponent(userId)}`);
   }
   return res.status(404).send('Not Found');
+});
+
+app.get('/manifest.json', (req, res) => {
+  try {
+    const raw = fs.readFileSync(clientManifestPath, 'utf8');
+    const manifest = JSON.parse(raw);
+    const baseUrl = process.env.BASE_URL || getBaseUrl(req);
+    manifest.logo = `${baseUrl.replace(/\/$/, '')}/logo.png`;
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
+    res.json(manifest);
+  } catch (error) {
+    log.warn('Failed to serve manifest.json', { error: error.message });
+    res.status(500).json({ error: 'Failed to load manifest' });
+  }
 });
 
 app.use(
