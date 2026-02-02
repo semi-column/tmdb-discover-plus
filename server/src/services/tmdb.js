@@ -559,10 +559,10 @@ export async function discover(apiKey, options = {}) {
   }
 
   // Year filters (legacy - uses date filters internally)
-  // When region or release type is set, use release_date to filter by regional release
-  // Without region/release type, use primary_release_date to filter by global release
+  // When region is set, use release_date to filter by regional release
+  // Without region, use primary_release_date to filter by global release
   if (mediaType === 'movie') {
-    const useRegionalRelease = Boolean(region || releaseType || releaseTypes.length > 0);
+    const useRegionalRelease = Boolean(region);
     const dateKey = useRegionalRelease ? 'release_date' : 'primary_release_date';
     if (yearFrom && !releaseDateFrom) params[`${dateKey}.gte`] = `${yearFrom}-01-01`;
     if (yearTo && !releaseDateTo) params[`${dateKey}.lte`] = `${yearTo}-12-31`;
@@ -604,17 +604,19 @@ export async function discover(apiKey, options = {}) {
     if (region) params.region = region;
 
     // Release date filters
-    // When region or release type is set, use release_date to filter by regional release
-    // Without region/release type, use primary_release_date to filter by global/original release
-    const useRegionalRelease = Boolean(region || releaseType || releaseTypes.length > 0);
+    // When region is set, use release_date to filter by regional release
+    // Without region, use primary_release_date to filter by global/original release
+    // Note: Release types only work with region parameter according to TMDB docs
+    const useRegionalRelease = Boolean(region);
     const dateKey = useRegionalRelease ? 'release_date' : 'primary_release_date';
     if (releaseDateFrom) params[`${dateKey}.gte`] = releaseDateFrom;
     if (releaseDateTo) params[`${dateKey}.lte`] = releaseDateTo;
 
     // Release type filter (1=Premiere, 2=Limited, 3=Theatrical, 4=Digital, 5=Physical, 6=TV)
-    if (releaseType) {
+    // Only apply release type filter when region is specified (TMDB API requirement)
+    if (region && releaseType) {
       params.with_release_type = releaseType;
-    } else if (releaseTypes.length > 0) {
+    } else if (region && releaseTypes.length > 0) {
       params.with_release_type = releaseTypes.join('|');
     }
 

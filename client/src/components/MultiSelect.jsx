@@ -17,6 +17,7 @@ export function MultiSelect({
   minSearchLength = 2,
   searchDebounceMs = 250,
   hideUnselected = false,
+  disabled = false,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -98,18 +99,22 @@ export function MultiSelect({
         : options;
 
   return (
-    <div className={`multi-select ${isOpen ? 'open' : ''}`} ref={containerRef}>
+    <div
+      className={`multi-select ${isOpen ? 'open' : ''} ${disabled ? 'disabled' : ''}`}
+      ref={containerRef}
+    >
       <div
-        className={`multi-select-trigger ${isOpen ? 'open' : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
+        className={`multi-select-trigger ${isOpen ? 'open' : ''} ${disabled ? 'disabled' : ''}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
         role="combobox"
         aria-expanded={isOpen}
-        tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && setIsOpen(!isOpen)}
+        aria-disabled={disabled}
+        tabIndex={disabled ? -1 : 0}
+        onKeyDown={(e) => !disabled && e.key === 'Enter' && setIsOpen(!isOpen)}
       >
         <span className={displayText ? '' : 'placeholder'}>{displayText || placeholder}</span>
         <div className="multi-select-icons">
-          {value.length > 0 && (
+          {value.length > 0 && !disabled && (
             <button
               className="multi-select-clear"
               onClick={handleClear}
@@ -123,7 +128,7 @@ export function MultiSelect({
         </div>
       </div>
 
-      {isOpen && (
+      {isOpen && !disabled && (
         <div className="multi-select-dropdown">
           {isSearchEnabled && (
             <div className="multi-select-search">

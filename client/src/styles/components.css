@@ -1184,6 +1184,15 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   color: var(--text-muted);
 }
 
+.filter-label-hint.warning {
+  color: var(--text-muted);
+  margin-top: 4px;
+  margin-bottom: 0;
+  display: block;
+  opacity: 0.85;
+  font-style: italic;
+}
+
 .select {
   padding: 10px 14px;
   min-height: 42px;
@@ -1661,6 +1670,15 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   font-size: 14px;
   color: var(--text-primary);
   min-height: 42px;
+}
+
+.multi-select-trigger.disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.multi-select.disabled .multi-select-trigger:hover {
+  border-color: var(--border-color);
 }
 
 .multi-select-trigger:hover {

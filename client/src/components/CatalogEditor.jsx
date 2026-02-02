@@ -111,7 +111,7 @@ export function CatalogEditor({
   catalog,
   genres = { movie: [], series: [] },
   genresLoading = false,
-  refreshGenres = () => { },
+  refreshGenres = () => {},
   languages = [],
   countries = [],
   sortOptions = { movie: [], series: [] },
@@ -1274,20 +1274,54 @@ export function CatalogEditor({
 
                   {isMovie ? (
                     <>
+                      <div className="filter-group" style={{ marginTop: '16px' }}>
+                        <LabelWithTooltip
+                          label="Release Region"
+                          tooltip="Filter by when content was released in a specific country. Useful since movies often premiere at different times worldwide."
+                        />
+                        <span className="filter-label-hint">
+                          Use regional release dates instead of worldwide premiere
+                        </span>
+                        <SearchableSelect
+                          options={[
+                            { iso_3166_1: '', english_name: 'Worldwide (default)' },
+                            ...countries,
+                          ]}
+                          value={localCatalog?.filters?.region || ''}
+                          onChange={(value) => {
+                            handleFiltersChange('region', value);
+                            if (!value) {
+                              handleFiltersChange('releaseTypes', []);
+                            }
+                          }}
+                          placeholder="Worldwide"
+                          searchPlaceholder="Search countries..."
+                          labelKey="english_name"
+                          valueKey="iso_3166_1"
+                        />
+                      </div>
                       <div className="filter-two-col" style={{ marginTop: '16px' }}>
                         <div className="filter-group">
                           <LabelWithTooltip
                             label="Release Type"
-                            tooltip="How the movie was released: Theatrical (cinemas), Digital (streaming/download), Physical (DVD/Blu-ray), TV broadcast, etc."
+                            tooltip="How the movie was released: Theatrical (cinemas), Digital (streaming/download), Physical (DVD/Blu-ray), TV broadcast, etc. Requires a region to be selected."
                           />
                           <MultiSelect
                             options={releaseTypes}
                             value={localCatalog?.filters?.releaseTypes || []}
                             onChange={(value) => handleFiltersChange('releaseTypes', value)}
-                            placeholder="All types"
+                            placeholder={
+                              !localCatalog?.filters?.region ? 'Select region first' : 'All types'
+                            }
                             labelKey="label"
                             valueKey="value"
+                            disabled={!localCatalog?.filters?.region}
                           />
+                          {!localCatalog?.filters?.region && (
+                            <span className="filter-label-hint warning">
+                              Select a region above to filter by release type
+                            </span>
+                          )}
                         </div>
                         <div className="filter-group">
                           <LabelWithTooltip
@@ -1306,24 +1340,6 @@ export function CatalogEditor({
                             valueKey="value"
                           />
                         </div>
-                      </div>
-                      <div className="filter-group" style={{ marginTop: '16px' }}>
-                        <LabelWithTooltip
-                          label="Release Region"
-                          tooltip="Filter by when content was released in a specific country. Useful since movies often premiere at different times worldwide."
-                        />
-                        <span className="filter-label-hint">
-                          Use regional release dates instead of worldwide premiere
-                        </span>
-                        <SearchableSelect
-                          options={[{ iso_3166_1: '', english_name: 'Worldwide (default)' }, ...countries]}
-                          value={localCatalog?.filters?.region || ''}
-                          onChange={(value) => handleFiltersChange('region', value)}
-                          placeholder="Worldwide"
-                          searchPlaceholder="Search countries..."
-                          labelKey="english_name"
-                          valueKey="iso_3166_1"
-                        />
                       </div>
                     </>
                   ) : (
