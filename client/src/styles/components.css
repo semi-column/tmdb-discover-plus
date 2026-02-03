@@ -157,6 +157,18 @@
   margin-top: 4px;
 }
 
+.nightly-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #ffdd00 0%, #ff813f 100%);
+  color: #000;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(255, 129, 63, 0.2);
+}
+
 .header-stats {
   position: absolute;
   left: 50%;

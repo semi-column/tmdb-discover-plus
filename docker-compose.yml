@@ -29,6 +29,7 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_SECRET=${JWT_SECRET}
+      - ADDON_VARIANT=${ADDON_VARIANT}
     healthcheck:
       test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:7000/health']
       interval: 30s

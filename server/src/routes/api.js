@@ -462,7 +462,10 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
 router.get('/stats', async (req, res) => {
   try {
     const stats = await getPublicStats();
-    res.json(stats);
+    res.json({
+      ...stats,
+      addonVariant: process.env.ADDON_VARIANT,
+    });
   } catch (error) {
     log.error('GET /stats error', { error: error.message });
     res.status(500).json({ error: error.message });
