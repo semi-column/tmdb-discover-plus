@@ -34,9 +34,6 @@ const TMDB_API_BASE_PATH = TMDB_API_URL.pathname.replace(/\/$/, ''); // /3
 const TMDB_SITE_URL = new URL(TMDB_WEBSITE_BASE_URL);
 const TMDB_SITE_ORIGIN = TMDB_SITE_URL.origin; // https://www.themoviedb.org
 
-const CINEMETA_API_ORIGIN = 'https://v3-cinemeta.strem.io';
-const CINEMETA_API_BASE_PATH = '/meta';
-
 // Genre mappings (will be populated from API)
 // Structure: { movie: { en: [...], it: [...] }, tv: { ... } }
 let genreCache = { movie: {}, tv: {} };
@@ -50,54 +47,513 @@ try {
   log.warn('Could not load static TMDB genre mapping', { error: err.message });
 }
 
-/**
- * Fetch IMDb rating from Stremio's Cinemeta API
- */
-async function getCinemetaRating(imdbId, type) {
-  if (!imdbId) return null;
-  const normalizedId = String(imdbId || '').trim();
-  if (!/^tt\d{7,10}$/.test(normalizedId)) return null;
-
-  const mediaType = type === 'series' ? 'series' : 'movie';
-  const cache = getCache();
-  const cacheKey = `cinemeta_rating_${normalizedId}`;
-
-  try {
-    const cached = await cache.get(cacheKey);
-    if (cached !== undefined) return cached;
-  } catch (e) {
-    /* ignore */
-  }
-
-  try {
-    const url = new URL(CINEMETA_API_ORIGIN);
-    url.pathname = `${CINEMETA_API_BASE_PATH}/${mediaType}/${normalizedId}.json`;
-    assertAllowedUrl(url, {
-      origin: CINEMETA_API_ORIGIN,
-      pathPrefix: `${CINEMETA_API_BASE_PATH}/`,
-    });
-
-    const response = await fetch(url.toString(), {
-      agent: httpsAgent,
-      timeout: 5000,
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    const rating = data?.meta?.imdbRating || null;
-    log.info('Cinemeta rating result', { imdbId, rating });
-
-    try {
-      await cache.set(cacheKey, rating, 86400); // 24 hours
-    } catch (e) {
-      /* ignore */
-    }
-
-    return rating;
-  } catch (error) {
-    log.debug('Cinemeta rating fetch failed', { imdbId, error: error.message });
-    return null;
-  }
-}
+// Maps US Movie (MPAA) and TV ratings to local equivalents per country
+export const US_TO_LOCAL_RATINGS = {
+  IT: {
+    // Italy
+    G: 'T',
+    PG: '6+',
+    'PG-13': '12+',
+    R: 'VM14',
+    'NC-17': 'VM18',
+    'TV-Y': 'T',
+    'TV-Y7': '6+',
+    'TV-G': 'T',
+    'TV-PG': '10+',
+    'TV-14': '14+',
+    'TV-MA': 'VM18',
+  },
+  DE: {
+    // Germany
+    G: '0',
+    PG: '6',
+    'PG-13': '12',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': '0',
+    'TV-Y7': '6',
+    'TV-G': '0',
+    'TV-PG': '12',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  AT: {
+    // Austria (same as Germany)
+    G: '0',
+    PG: '6',
+    'PG-13': '12',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': '0',
+    'TV-Y7': '6',
+    'TV-G': '0',
+    'TV-PG': '12',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  FR: {
+    // France
+    G: 'U',
+    PG: '10',
+    'PG-13': '12',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': 'U',
+    'TV-Y7': '10',
+    'TV-G': 'U',
+    'TV-PG': '10',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  ES: {
+    // Spain
+    G: 'TP',
+    PG: '7',
+    'PG-13': '12',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': 'TP',
+    'TV-Y7': '7',
+    'TV-G': 'TP',
+    'TV-PG': '12',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  PT: {
+    // Portugal
+    G: 'M/3',
+    PG: 'M/6',
+    'PG-13': 'M/12',
+    R: 'M/16',
+    'NC-17': 'M/18',
+    'TV-Y': 'M/3',
+    'TV-Y7': 'M/6',
+    'TV-G': 'M/3',
+    'TV-PG': 'M/12',
+    'TV-14': 'M/16',
+    'TV-MA': 'M/18',
+  },
+  BR: {
+    // Brazil
+    G: 'L',
+    PG: '10',
+    'PG-13': '12',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': 'L',
+    'TV-Y7': '10',
+    'TV-G': 'L',
+    'TV-PG': '12',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  MX: {
+    // Mexico
+    G: 'AA',
+    PG: 'A',
+    'PG-13': 'B',
+    R: 'B15',
+    'NC-17': 'C',
+    'TV-Y': 'AA',
+    'TV-Y7': 'A',
+    'TV-G': 'A',
+    'TV-PG': 'B',
+    'TV-14': 'B15',
+    'TV-MA': 'C',
+  },
+  AR: {
+    // Argentina
+    G: 'ATP',
+    PG: '+13',
+    'PG-13': '+13',
+    R: '+16',
+    'NC-17': '+18',
+    'TV-Y': 'ATP',
+    'TV-Y7': '+13',
+    'TV-G': 'ATP',
+    'TV-PG': '+13',
+    'TV-14': '+16',
+    'TV-MA': '+18',
+  },
+  NL: {
+    // Netherlands
+    G: 'AL',
+    PG: '6',
+    'PG-13': '12',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': 'AL',
+    'TV-Y7': '6',
+    'TV-G': 'AL',
+    'TV-PG': '9',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  GB: {
+    // UK
+    G: 'U',
+    PG: 'PG',
+    'PG-13': '12A',
+    R: '15',
+    'NC-17': '18',
+    'TV-Y': 'U',
+    'TV-Y7': 'PG',
+    'TV-G': 'U',
+    'TV-PG': '12',
+    'TV-14': '15',
+    'TV-MA': '18',
+  },
+  AU: {
+    // Australia
+    G: 'G',
+    PG: 'PG',
+    'PG-13': 'M',
+    R: 'MA15+',
+    'NC-17': 'R18+',
+    'TV-Y': 'G',
+    'TV-Y7': 'PG',
+    'TV-G': 'G',
+    'TV-PG': 'PG',
+    'TV-14': 'MA15+',
+    'TV-MA': 'R18+',
+  },
+  CA: {
+    // Canada
+    G: 'G',
+    PG: 'PG',
+    'PG-13': '14A',
+    R: '18A',
+    'NC-17': 'R',
+    'TV-Y': 'G',
+    'TV-Y7': 'PG',
+    'TV-G': 'G',
+    'TV-PG': 'PG',
+    'TV-14': '14+',
+    'TV-MA': '18+',
+  },
+  RU: {
+    // Russia
+    G: '0+',
+    PG: '6+',
+    'PG-13': '12+',
+    R: '16+',
+    'NC-17': '18+',
+    'TV-Y': '0+',
+    'TV-Y7': '6+',
+    'TV-G': '0+',
+    'TV-PG': '12+',
+    'TV-14': '16+',
+    'TV-MA': '18+',
+  },
+  JP: {
+    // Japan
+    G: 'G',
+    PG: 'PG12',
+    'PG-13': 'PG12',
+    R: 'R15+',
+    'NC-17': 'R18+',
+    'TV-Y': 'G',
+    'TV-Y7': 'PG12',
+    'TV-G': 'G',
+    'TV-PG': 'PG12',
+    'TV-14': 'R15+',
+    'TV-MA': 'R18+',
+  },
+  KR: {
+    // South Korea
+    G: '전체',
+    PG: '12세',
+    'PG-13': '15세',
+    R: '청불',
+    'NC-17': '청불',
+    'TV-Y': '전체',
+    'TV-Y7': '12세',
+    'TV-G': '전체',
+    'TV-PG': '15세',
+    'TV-14': '15세',
+    'TV-MA': '청불',
+  },
+  IN: {
+    // India
+    G: 'U',
+    PG: 'U/A',
+    'PG-13': 'U/A',
+    R: 'A',
+    'NC-17': 'A',
+    'TV-Y': 'U',
+    'TV-Y7': 'U/A 7+',
+    'TV-G': 'U',
+    'TV-PG': 'U/A 13+',
+    'TV-14': 'U/A 16+',
+    'TV-MA': 'A',
+  },
+  PL: {
+    // Poland
+    G: 'bez ograniczeń',
+    PG: '7',
+    'PG-13': '12',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': 'bez ograniczeń',
+    'TV-Y7': '7',
+    'TV-G': 'bez ograniczeń',
+    'TV-PG': '12',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  SE: {
+    // Sweden
+    G: 'Btl',
+    PG: '7',
+    'PG-13': '11',
+    R: '15',
+    'NC-17': '15',
+    'TV-Y': 'Btl',
+    'TV-Y7': '7',
+    'TV-G': 'Btl',
+    'TV-PG': '11',
+    'TV-14': '15',
+    'TV-MA': '15',
+  },
+  NO: {
+    // Norway
+    G: 'A',
+    PG: '6',
+    'PG-13': '12',
+    R: '15',
+    'NC-17': '18',
+    'TV-Y': 'A',
+    'TV-Y7': '6',
+    'TV-G': 'A',
+    'TV-PG': '12',
+    'TV-14': '15',
+    'TV-MA': '18',
+  },
+  DK: {
+    // Denmark
+    G: 'A',
+    PG: '7',
+    'PG-13': '11',
+    R: '15',
+    'NC-17': '15',
+    'TV-Y': 'A',
+    'TV-Y7': '7',
+    'TV-G': 'A',
+    'TV-PG': '11',
+    'TV-14': '15',
+    'TV-MA': '15',
+  },
+  FI: {
+    // Finland
+    G: 'S',
+    PG: '7',
+    'PG-13': '12',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': 'S',
+    'TV-Y7': '7',
+    'TV-G': 'S',
+    'TV-PG': '12',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  CZ: {
+    // Czech Republic
+    G: 'U',
+    PG: '12',
+    'PG-13': '15',
+    R: '18',
+    'NC-17': '18',
+    'TV-Y': 'U',
+    'TV-Y7': '12',
+    'TV-G': 'U',
+    'TV-PG': '12',
+    'TV-14': '15',
+    'TV-MA': '18',
+  },
+  HU: {
+    // Hungary
+    G: 'KN',
+    PG: '6',
+    'PG-13': '12',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': 'KN',
+    'TV-Y7': '6',
+    'TV-G': 'KN',
+    'TV-PG': '12',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  RO: {
+    // Romania
+    G: 'AG',
+    PG: 'AP-12',
+    'PG-13': 'N-15',
+    R: 'IM-18',
+    'NC-17': 'IM-18',
+    'TV-Y': 'AG',
+    'TV-Y7': 'AP-12',
+    'TV-G': 'AG',
+    'TV-PG': 'AP-12',
+    'TV-14': 'N-15',
+    'TV-MA': 'IM-18',
+  },
+  TR: {
+    // Turkey
+    G: 'Genel',
+    PG: '7+',
+    'PG-13': '13+',
+    R: '18+',
+    'NC-17': '18+',
+    'TV-Y': 'Genel',
+    'TV-Y7': '7+',
+    'TV-G': 'Genel',
+    'TV-PG': '13+',
+    'TV-14': '18+',
+    'TV-MA': '18+',
+  },
+  GR: {
+    // Greece
+    G: 'K',
+    PG: '12',
+    'PG-13': '13',
+    R: '17',
+    'NC-17': '18',
+    'TV-Y': 'K',
+    'TV-Y7': '12',
+    'TV-G': 'K',
+    'TV-PG': '13',
+    'TV-14': '17',
+    'TV-MA': '18',
+  },
+  ID: {
+    // Indonesia
+    G: 'SU',
+    PG: 'BO',
+    'PG-13': 'R13',
+    R: 'D17',
+    'NC-17': 'D21',
+    'TV-Y': 'SU',
+    'TV-Y7': 'BO',
+    'TV-G': 'SU',
+    'TV-PG': 'BO',
+    'TV-14': 'D17',
+    'TV-MA': 'D21',
+  },
+  TH: {
+    // Thailand
+    G: 'ท',
+    PG: '13+',
+    'PG-13': '15+',
+    R: '18+',
+    'NC-17': '20+',
+    'TV-Y': 'ท',
+    'TV-Y7': '13+',
+    'TV-G': 'ท',
+    'TV-PG': '13+',
+    'TV-14': '18+',
+    'TV-MA': '20+',
+  },
+  PH: {
+    // Philippines
+    G: 'G',
+    PG: 'PG',
+    'PG-13': 'R-13',
+    R: 'R-16',
+    'NC-17': 'R-18',
+    'TV-Y': 'G',
+    'TV-Y7': 'PG',
+    'TV-G': 'G',
+    'TV-PG': 'SPG',
+    'TV-14': 'SPG',
+    'TV-MA': 'X',
+  },
+  MY: {
+    // Malaysia
+    G: 'U',
+    PG: 'P13',
+    'PG-13': 'P13',
+    R: '18',
+    'NC-17': '18',
+    'TV-Y': 'U',
+    'TV-Y7': 'P13',
+    'TV-G': 'U',
+    'TV-PG': 'P13',
+    'TV-14': '18',
+    'TV-MA': '18',
+  },
+  SG: {
+    // Singapore
+    G: 'G',
+    PG: 'PG',
+    'PG-13': 'PG13',
+    R: 'M18',
+    'NC-17': 'R21',
+    'TV-Y': 'G',
+    'TV-Y7': 'PG',
+    'TV-G': 'G',
+    'TV-PG': 'PG13',
+    'TV-14': 'M18',
+    'TV-MA': 'R21',
+  },
+  ZA: {
+    // South Africa
+    G: 'A',
+    PG: 'PG',
+    'PG-13': '13',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': 'A',
+    'TV-Y7': 'PG',
+    'TV-G': 'A',
+    'TV-PG': 'PG',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  IL: {
+    // Israel
+    G: 'כל הגילאים',
+    PG: '12',
+    'PG-13': '14',
+    R: '16',
+    'NC-17': '18',
+    'TV-Y': 'כל הגילאים',
+    'TV-Y7': '12',
+    'TV-G': 'כל הגילאים',
+    'TV-PG': '14',
+    'TV-14': '16',
+    'TV-MA': '18',
+  },
+  TW: {
+    // Taiwan
+    G: '普遍級',
+    PG: '保護級',
+    'PG-13': '輔導級',
+    R: '限制級',
+    'NC-17': '限制級',
+    'TV-Y': '普遍級',
+    'TV-Y7': '保護級',
+    'TV-G': '普遍級',
+    'TV-PG': '輔導級',
+    'TV-14': '輔導級',
+    'TV-MA': '限制級',
+  },
+  HK: {
+    // Hong Kong
+    G: 'I',
+    PG: 'IIA',
+    'PG-13': 'IIB',
+    R: 'III',
+    'NC-17': 'III',
+    'TV-Y': 'I',
+    'TV-Y7': 'IIA',
+    'TV-G': 'I',
+    'TV-PG': 'IIB',
+    'TV-14': 'III',
+    'TV-MA': 'III',
+  },
+};
 
 function redactTmdbUrl(urlString) {
   if (typeof urlString !== 'string') return urlString;
@@ -624,6 +1080,13 @@ export async function discover(apiKey, options = {}) {
     if (releaseDateTo) params[`${dateKey}.lte`] = releaseDateTo;
 
     // Release type filter (1=Premiere, 2=Limited, 3=Theatrical, 4=Digital, 5=Physical, 6=TV)
+    // If region is set but no date filters provided, force a wide date range
+    // This ensures TMDB actually filters by the region's release dates
+    // Otherwise, the region parameter might be ignored or return inconsistent results
+    if (useRegionalRelease && !params[`${dateKey}.gte`] && !params[`${dateKey}.lte`]) {
+      params[`${dateKey}.gte`] = '1900-01-01';
+    }
+
     // Only apply release type filter when region is specified (TMDB API requirement)
     if (region && releaseType) {
       params.with_release_type = releaseType;
@@ -854,9 +1317,10 @@ export async function getDetails(apiKey, tmdbId, type = 'movie') {
     params.language = languageParam;
 
     // Include videos in target language + English fallback
-    params.include_video_language = `${languageParam},en,null`;
+    const shortLang = languageParam.split('-')[0];
+    params.include_video_language = `${languageParam},${shortLang},en,null`;
     // Include images (logos, posters, backdrops) in target language + English + null (textless)
-    params.include_image_language = `${languageParam},en,null`;
+    params.include_image_language = `${languageParam},${shortLang},en,null`;
   } else {
     // Default to English videos/images if no language specified
     params.include_video_language = 'en,null';
@@ -1002,7 +1466,9 @@ export async function toStremioFullMeta(
   requestedId = null,
   posterOptions = null,
   videos = null,
-  targetLanguage = null
+  targetLanguage = null,
+  manifestUrl = null,
+  catalogId = null
 ) {
   if (!details) return {};
   const isMovie = type === 'movie';
@@ -1010,17 +1476,50 @@ export async function toStremioFullMeta(
   const releaseDate = isMovie ? details.release_date : details.first_air_date;
   const year = releaseDate ? String(releaseDate).split('-')[0] : '';
 
-  const genres = Array.isArray(details.genres)
-    ? details.genres.map((g) => g?.name).filter(Boolean)
-    : [];
+  // Genres processing with English slug resolution
+  const genreData = [];
+  const mediaKey = isMovie ? 'movie' : 'tv';
+
+  if (Array.isArray(details.genres)) {
+    const cachedList = genreCache[mediaKey]?.['en'];
+    const staticList = staticGenreMap[mediaKey] || {};
+
+    details.genres.forEach((g) => {
+      if (!g || !g.name) return;
+
+      const idStr = String(g.id);
+      let localName = g.name;
+      let englishName = null;
+
+      // Resolve English Name (for slug/URL)
+      // 1. Try static map
+      if (staticList[idStr]) {
+        englishName = staticList[idStr];
+      }
+      // 2. Try cache
+      if (!englishName && cachedList) {
+        const hit = cachedList.find((x) => String(x.id) === idStr);
+        if (hit) englishName = hit.name;
+      }
+
+      // Fallback logic
+      if (!englishName) englishName = localName;
+
+      genreData.push({ name: localName, slug: englishName });
+    });
+  }
+  const genres = genreData.map((g) => g.name);
 
   // Credits (best-effort; Stremio warns these may be deprecated but still supported)
   const credits = details.credits || {};
   const cast = Array.isArray(credits.cast)
     ? credits.cast
-        .slice(0, 20)
-        .map((p) => p?.name)
-        .filter(Boolean)
+        .map((p) => ({
+          name: p.name,
+          character: p.character,
+          photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null,
+        }))
+        .filter((p) => p.name)
     : [];
 
   const crew = Array.isArray(credits.crew) ? credits.crew : [];
@@ -1035,6 +1534,15 @@ export async function toStremioFullMeta(
   if (!isMovie && Array.isArray(details.episode_run_time) && details.episode_run_time.length > 0) {
     const first = details.episode_run_time.find((v) => typeof v === 'number');
     if (typeof first === 'number') runtimeMin = first;
+  }
+
+  // Fallback for TV series if episode_run_time is empty
+  if (!isMovie && !runtimeMin) {
+    if (details.last_episode_to_air?.runtime) {
+      runtimeMin = details.last_episode_to_air.runtime;
+    } else if (details.next_episode_to_air?.runtime) {
+      runtimeMin = details.next_episode_to_air.runtime;
+    }
   }
 
   const effectiveImdbId = imdbId || details?.external_ids?.imdb_id || null;
@@ -1072,541 +1580,48 @@ export async function toStremioFullMeta(
     if (countryInfo?.rating) certification = countryInfo.rating;
   }
 
-  // Convert US ratings to local equivalents when using fallback
-  // Maps US Movie (MPAA) and TV ratings to local equivalents per country
-  const usToLocalRatings = {
-    IT: {
-      // Italy
-      G: 'T',
-      PG: '6+',
-      'PG-13': '12+',
-      R: 'VM14',
-      'NC-17': 'VM18',
-      'TV-Y': 'T',
-      'TV-Y7': '6+',
-      'TV-G': 'T',
-      'TV-PG': '10+',
-      'TV-14': '14+',
-      'TV-MA': 'VM18',
-    },
-    DE: {
-      // Germany
-      G: '0',
-      PG: '6',
-      'PG-13': '12',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': '0',
-      'TV-Y7': '6',
-      'TV-G': '0',
-      'TV-PG': '12',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    AT: {
-      // Austria (same as Germany)
-      G: '0',
-      PG: '6',
-      'PG-13': '12',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': '0',
-      'TV-Y7': '6',
-      'TV-G': '0',
-      'TV-PG': '12',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    FR: {
-      // France
-      G: 'U',
-      PG: '10',
-      'PG-13': '12',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': 'U',
-      'TV-Y7': '10',
-      'TV-G': 'U',
-      'TV-PG': '10',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    ES: {
-      // Spain
-      G: 'TP',
-      PG: '7',
-      'PG-13': '12',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': 'TP',
-      'TV-Y7': '7',
-      'TV-G': 'TP',
-      'TV-PG': '12',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    PT: {
-      // Portugal
-      G: 'M/3',
-      PG: 'M/6',
-      'PG-13': 'M/12',
-      R: 'M/16',
-      'NC-17': 'M/18',
-      'TV-Y': 'M/3',
-      'TV-Y7': 'M/6',
-      'TV-G': 'M/3',
-      'TV-PG': 'M/12',
-      'TV-14': 'M/16',
-      'TV-MA': 'M/18',
-    },
-    BR: {
-      // Brazil
-      G: 'L',
-      PG: '10',
-      'PG-13': '12',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': 'L',
-      'TV-Y7': '10',
-      'TV-G': 'L',
-      'TV-PG': '12',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    MX: {
-      // Mexico
-      G: 'AA',
-      PG: 'A',
-      'PG-13': 'B',
-      R: 'B15',
-      'NC-17': 'C',
-      'TV-Y': 'AA',
-      'TV-Y7': 'A',
-      'TV-G': 'A',
-      'TV-PG': 'B',
-      'TV-14': 'B15',
-      'TV-MA': 'C',
-    },
-    AR: {
-      // Argentina
-      G: 'ATP',
-      PG: '+13',
-      'PG-13': '+13',
-      R: '+16',
-      'NC-17': '+18',
-      'TV-Y': 'ATP',
-      'TV-Y7': '+13',
-      'TV-G': 'ATP',
-      'TV-PG': '+13',
-      'TV-14': '+16',
-      'TV-MA': '+18',
-    },
-    NL: {
-      // Netherlands
-      G: 'AL',
-      PG: '6',
-      'PG-13': '12',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': 'AL',
-      'TV-Y7': '6',
-      'TV-G': 'AL',
-      'TV-PG': '9',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    GB: {
-      // UK
-      G: 'U',
-      PG: 'PG',
-      'PG-13': '12A',
-      R: '15',
-      'NC-17': '18',
-      'TV-Y': 'U',
-      'TV-Y7': 'PG',
-      'TV-G': 'U',
-      'TV-PG': '12',
-      'TV-14': '15',
-      'TV-MA': '18',
-    },
-    AU: {
-      // Australia
-      G: 'G',
-      PG: 'PG',
-      'PG-13': 'M',
-      R: 'MA15+',
-      'NC-17': 'R18+',
-      'TV-Y': 'G',
-      'TV-Y7': 'PG',
-      'TV-G': 'G',
-      'TV-PG': 'PG',
-      'TV-14': 'MA15+',
-      'TV-MA': 'R18+',
-    },
-    CA: {
-      // Canada
-      G: 'G',
-      PG: 'PG',
-      'PG-13': '14A',
-      R: '18A',
-      'NC-17': 'R',
-      'TV-Y': 'G',
-      'TV-Y7': 'PG',
-      'TV-G': 'G',
-      'TV-PG': 'PG',
-      'TV-14': '14+',
-      'TV-MA': '18+',
-    },
-    RU: {
-      // Russia
-      G: '0+',
-      PG: '6+',
-      'PG-13': '12+',
-      R: '16+',
-      'NC-17': '18+',
-      'TV-Y': '0+',
-      'TV-Y7': '6+',
-      'TV-G': '0+',
-      'TV-PG': '12+',
-      'TV-14': '16+',
-      'TV-MA': '18+',
-    },
-    JP: {
-      // Japan
-      G: 'G',
-      PG: 'PG12',
-      'PG-13': 'PG12',
-      R: 'R15+',
-      'NC-17': 'R18+',
-      'TV-Y': 'G',
-      'TV-Y7': 'PG12',
-      'TV-G': 'G',
-      'TV-PG': 'PG12',
-      'TV-14': 'R15+',
-      'TV-MA': 'R18+',
-    },
-    KR: {
-      // South Korea
-      G: '전체',
-      PG: '12세',
-      'PG-13': '15세',
-      R: '청불',
-      'NC-17': '청불',
-      'TV-Y': '전체',
-      'TV-Y7': '12세',
-      'TV-G': '전체',
-      'TV-PG': '15세',
-      'TV-14': '15세',
-      'TV-MA': '청불',
-    },
-    IN: {
-      // India
-      G: 'U',
-      PG: 'U/A',
-      'PG-13': 'U/A',
-      R: 'A',
-      'NC-17': 'A',
-      'TV-Y': 'U',
-      'TV-Y7': 'U/A 7+',
-      'TV-G': 'U',
-      'TV-PG': 'U/A 13+',
-      'TV-14': 'U/A 16+',
-      'TV-MA': 'A',
-    },
-    PL: {
-      // Poland
-      G: 'bez ograniczeń',
-      PG: '7',
-      'PG-13': '12',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': 'bez ograniczeń',
-      'TV-Y7': '7',
-      'TV-G': 'bez ograniczeń',
-      'TV-PG': '12',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    SE: {
-      // Sweden
-      G: 'Btl',
-      PG: '7',
-      'PG-13': '11',
-      R: '15',
-      'NC-17': '15',
-      'TV-Y': 'Btl',
-      'TV-Y7': '7',
-      'TV-G': 'Btl',
-      'TV-PG': '11',
-      'TV-14': '15',
-      'TV-MA': '15',
-    },
-    NO: {
-      // Norway
-      G: 'A',
-      PG: '6',
-      'PG-13': '12',
-      R: '15',
-      'NC-17': '18',
-      'TV-Y': 'A',
-      'TV-Y7': '6',
-      'TV-G': 'A',
-      'TV-PG': '12',
-      'TV-14': '15',
-      'TV-MA': '18',
-    },
-    DK: {
-      // Denmark
-      G: 'A',
-      PG: '7',
-      'PG-13': '11',
-      R: '15',
-      'NC-17': '15',
-      'TV-Y': 'A',
-      'TV-Y7': '7',
-      'TV-G': 'A',
-      'TV-PG': '11',
-      'TV-14': '15',
-      'TV-MA': '15',
-    },
-    FI: {
-      // Finland
-      G: 'S',
-      PG: '7',
-      'PG-13': '12',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': 'S',
-      'TV-Y7': '7',
-      'TV-G': 'S',
-      'TV-PG': '12',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    CZ: {
-      // Czech Republic
-      G: 'U',
-      PG: '12',
-      'PG-13': '15',
-      R: '18',
-      'NC-17': '18',
-      'TV-Y': 'U',
-      'TV-Y7': '12',
-      'TV-G': 'U',
-      'TV-PG': '12',
-      'TV-14': '15',
-      'TV-MA': '18',
-    },
-    HU: {
-      // Hungary
-      G: 'KN',
-      PG: '6',
-      'PG-13': '12',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': 'KN',
-      'TV-Y7': '6',
-      'TV-G': 'KN',
-      'TV-PG': '12',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    RO: {
-      // Romania
-      G: 'AG',
-      PG: 'AP-12',
-      'PG-13': 'N-15',
-      R: 'IM-18',
-      'NC-17': 'IM-18',
-      'TV-Y': 'AG',
-      'TV-Y7': 'AP-12',
-      'TV-G': 'AG',
-      'TV-PG': 'AP-12',
-      'TV-14': 'N-15',
-      'TV-MA': 'IM-18',
-    },
-    TR: {
-      // Turkey
-      G: 'Genel',
-      PG: '7+',
-      'PG-13': '13+',
-      R: '18+',
-      'NC-17': '18+',
-      'TV-Y': 'Genel',
-      'TV-Y7': '7+',
-      'TV-G': 'Genel',
-      'TV-PG': '13+',
-      'TV-14': '18+',
-      'TV-MA': '18+',
-    },
-    GR: {
-      // Greece
-      G: 'K',
-      PG: '12',
-      'PG-13': '13',
-      R: '17',
-      'NC-17': '18',
-      'TV-Y': 'K',
-      'TV-Y7': '12',
-      'TV-G': 'K',
-      'TV-PG': '13',
-      'TV-14': '17',
-      'TV-MA': '18',
-    },
-    ID: {
-      // Indonesia
-      G: 'SU',
-      PG: 'BO',
-      'PG-13': 'R13',
-      R: 'D17',
-      'NC-17': 'D21',
-      'TV-Y': 'SU',
-      'TV-Y7': 'BO',
-      'TV-G': 'SU',
-      'TV-PG': 'BO',
-      'TV-14': 'D17',
-      'TV-MA': 'D21',
-    },
-    TH: {
-      // Thailand
-      G: 'ท',
-      PG: '13+',
-      'PG-13': '15+',
-      R: '18+',
-      'NC-17': '20+',
-      'TV-Y': 'ท',
-      'TV-Y7': '13+',
-      'TV-G': 'ท',
-      'TV-PG': '13+',
-      'TV-14': '18+',
-      'TV-MA': '20+',
-    },
-    PH: {
-      // Philippines
-      G: 'G',
-      PG: 'PG',
-      'PG-13': 'R-13',
-      R: 'R-16',
-      'NC-17': 'R-18',
-      'TV-Y': 'G',
-      'TV-Y7': 'PG',
-      'TV-G': 'G',
-      'TV-PG': 'SPG',
-      'TV-14': 'SPG',
-      'TV-MA': 'X',
-    },
-    MY: {
-      // Malaysia
-      G: 'U',
-      PG: 'P13',
-      'PG-13': 'P13',
-      R: '18',
-      'NC-17': '18',
-      'TV-Y': 'U',
-      'TV-Y7': 'P13',
-      'TV-G': 'U',
-      'TV-PG': 'P13',
-      'TV-14': '18',
-      'TV-MA': '18',
-    },
-    SG: {
-      // Singapore
-      G: 'G',
-      PG: 'PG',
-      'PG-13': 'PG13',
-      R: 'M18',
-      'NC-17': 'R21',
-      'TV-Y': 'G',
-      'TV-Y7': 'PG',
-      'TV-G': 'G',
-      'TV-PG': 'PG13',
-      'TV-14': 'M18',
-      'TV-MA': 'R21',
-    },
-    ZA: {
-      // South Africa
-      G: 'A',
-      PG: 'PG',
-      'PG-13': '13',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': 'A',
-      'TV-Y7': 'PG',
-      'TV-G': 'A',
-      'TV-PG': 'PG',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    IL: {
-      // Israel
-      G: 'כל הגילאים',
-      PG: '12',
-      'PG-13': '14',
-      R: '16',
-      'NC-17': '18',
-      'TV-Y': 'כל הגילאים',
-      'TV-Y7': '12',
-      'TV-G': 'כל הגילאים',
-      'TV-PG': '14',
-      'TV-14': '16',
-      'TV-MA': '18',
-    },
-    TW: {
-      // Taiwan
-      G: '普遍級',
-      PG: '保護級',
-      'PG-13': '輔導級',
-      R: '限制級',
-      'NC-17': '限制級',
-      'TV-Y': '普遍級',
-      'TV-Y7': '保護級',
-      'TV-G': '普遍級',
-      'TV-PG': '輔導級',
-      'TV-14': '輔導級',
-      'TV-MA': '限制級',
-    },
-    HK: {
-      // Hong Kong
-      G: 'I',
-      PG: 'IIA',
-      'PG-13': 'IIB',
-      R: 'III',
-      'NC-17': 'III',
-      'TV-Y': 'I',
-      'TV-Y7': 'IIA',
-      'TV-G': 'I',
-      'TV-PG': 'IIB',
-      'TV-14': 'III',
-      'TV-MA': 'III',
-    },
-  };
-
   // Apply conversion if using fallback US rating
-  const localMap = usToLocalRatings[countryCode];
+  const localMap = US_TO_LOCAL_RATINGS[countryCode];
   if (certification && localMap && localMap[certification]) {
     certification = localMap[certification];
   }
 
   // Format Release Info - Year or Year Range (like Cinemeta)
   // Ended series: "2016-2025", Ongoing: "2016-", Movies: "2016"
-  let releaseInfo = year;
+  let yearInfo = year;
   if (!isMovie) {
     const endYear = details.last_air_date ? String(details.last_air_date).split('-')[0] : null;
     if (status === 'Ended' && endYear && endYear !== year) {
-      releaseInfo = `${year}-${endYear}`;
+      yearInfo = `${year}-${endYear}`;
     } else if (
       status === 'Returning Series' ||
       status === 'In Production' ||
       !details.last_air_date
     ) {
-      releaseInfo = `${year}-`;
+      yearInfo = `${year}-`;
     }
   }
 
-  // Add certification if present (separated with em-spaces for proper width)
-  if (certification) {
-    releaseInfo = releaseInfo ? `${releaseInfo}\u2003\u2003${certification}` : certification;
+  const infoParts = [];
+
+  // 1. Durata - Removed from releaseInfo because it is already shown by native runtime field
+  // if (runtimeMin) {
+  //   infoParts.push(`${runtimeMin} min`);
+  // }
+
+  // 2. Data (Year/Range)
+  if (yearInfo) {
+    infoParts.push(yearInfo);
   }
+
+  // 3. Age Rating
+  if (certification) {
+    infoParts.push(certification);
+  }
+
+  // 4. Rating (TMDB vote average) removed
+
+  const releaseInfo = infoParts.join('\u2003\u2003');
 
   // Trailer
   let trailer = null;
@@ -1638,25 +1653,12 @@ export async function toStremioFullMeta(
   const links = [];
 
   // Try to get real IMDb rating from multiple sources:
-  // Priority: Cinemeta (Stremio's DB) → RPDB → TMDB vote_average
+  // Priority: RPDB → TMDB vote_average
   let displayRating = null;
   let actualImdbRating = null;
 
-  // 1. Try Cinemeta first (most reliable for IMDb ratings)
+  // 1. Try RPDB if configured
   if (effectiveImdbId) {
-    try {
-      const cinemetaRating = await getCinemetaRating(effectiveImdbId, type);
-      if (cinemetaRating) {
-        displayRating = cinemetaRating;
-        actualImdbRating = cinemetaRating;
-      }
-    } catch (e) {
-      /* ignore */
-    }
-  }
-
-  // 2. Try RPDB if Cinemeta didn't have it
-  if (!actualImdbRating && effectiveImdbId) {
     const rpdbKey =
       posterOptions?.service === 'rpdb' && posterOptions.apiKey
         ? posterOptions.apiKey
@@ -1675,7 +1677,7 @@ export async function toStremioFullMeta(
     }
   }
 
-  // 3. Fallback to TMDB vote_average
+  // 2. Fallback to TMDB vote_average
   if (!displayRating && typeof details.vote_average === 'number' && details.vote_average > 0) {
     displayRating = details.vote_average.toFixed(1);
   }
@@ -1689,20 +1691,23 @@ export async function toStremioFullMeta(
   }
 
   // Genre Links
-  genres.forEach((genre) => {
-    links.push({
-      name: genre,
-      category: 'Genres',
-      url: `stremio:///search?search=${encodeURIComponent(genre)}`,
-    });
+  genreData.forEach((g) => {
+    if (manifestUrl) {
+      const targetCatalog = catalogId || 'tmdb.top';
+      links.push({
+        name: g.name,
+        category: 'Genres',
+        url: `stremio:///discover/${encodeURIComponent(manifestUrl)}/${type}/${targetCatalog}?genre=${encodeURIComponent(g.slug)}`,
+      });
+    }
   });
 
   // Cast Links
-  cast.slice(0, 5).forEach((name) => {
+  cast.slice(0, 5).forEach((c) => {
     links.push({
-      name: name,
+      name: c.name,
       category: 'Cast',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      url: `stremio:///search?search=${encodeURIComponent(c.name)}`,
     });
   });
 
@@ -1838,9 +1843,11 @@ export async function toStremioFullMeta(
   if (details.images?.logos?.length > 0) {
     const logos = details.images.logos;
     const target = targetLanguage || 'en';
+    const shortTarget = target.split('-')[0];
 
     const candidates = [
       logos.find((l) => l.iso_639_1 === target),
+      logos.find((l) => l.iso_639_1 === shortTarget),
       logos.find((l) => l.iso_639_1 === 'en'),
       logos.find((l) => l.iso_639_1 === null), // Textless/Logo-only
       logos[0], // Fallback to first available (e.g. original language)
@@ -1877,7 +1884,15 @@ export async function toStremioFullMeta(
     background,
     fanart: background, // Compatibility alias
     logo: logo ? `${TMDB_IMAGE_BASE}/original${logo}` : undefined,
-    description: details.overview || '',
+    description:
+      (cast.length > 0
+        ? `Cast: ${cast
+            .map((c) => c.name)
+            .slice(0, 10)
+            .join(', ')}\n\n`
+        : '') +
+      (directors.length > 0 ? `Directors: ${directors.join(', ')}\n\n` : '') +
+      (details.overview || ''),
     year: year || undefined,
     releaseInfo,
     // Use actual IMDB rating from Cinemeta/RPDB if available, fallback to TMDB vote_average
@@ -1895,10 +1910,11 @@ export async function toStremioFullMeta(
       return finalRating;
     })(),
     genres,
+    genre: genres,
     cast: cast.length > 0 ? cast : undefined,
-    director: directorString || undefined,
-    writer: writerString || undefined,
-    runtime: formatRuntime(runtimeMin),
+    director: directors.length > 0 ? directors : undefined,
+    writer: writerNames.length > 0 ? writerNames : undefined,
+    runtime: runtimeMin ? `${runtimeMin} min` : undefined, // Force "90 min" format instead of native "1h 30min"
     language: details.original_language || undefined,
     country: Array.isArray(details.origin_country) ? details.origin_country.join(', ') : undefined,
     released: releaseDate ? new Date(releaseDate).toISOString() : undefined,
@@ -1952,39 +1968,117 @@ export async function search(apiKey, query, type = 'movie', page = 1) {
  * @param {Object|null} genreMap - Optional map of ID -> Name for localized genres
  * @returns {Object} Stremio meta preview object
  */
-export function toStremioMeta(item, type, imdbId = null, posterOptions = null, genreMap = null) {
+export function toStremioMeta(
+  item,
+  type,
+  imdbId = null,
+  posterOptions = null,
+  genreMap = null,
+  certification = null,
+  runtime = null,
+  logo = null,
+  yearRange = null,
+  cast = [],
+  directors = [],
+  language = 'en',
+  manifestUrl = null,
+  catalogId = null
+) {
   const isMovie = type === 'movie';
   const title = isMovie ? item.title : item.name;
-  const releaseDate = isMovie ? item.release_date : item.first_air_date;
-  const year = releaseDate ? releaseDate.split('-')[0] : '';
 
-  const mappedGenres = [];
-  const ids = item.genre_ids || item.genres?.map((g) => g.id) || [];
+  let yearInfo = '';
+  if (yearRange) {
+    // Only show start year (remove end date/range)
+    yearInfo = yearRange.split(/[-–]/)[0].trim();
+  } else {
+    const releaseDate = isMovie ? item.release_date : item.first_air_date;
+    yearInfo = releaseDate ? releaseDate.split('-')[0] : '';
+  }
+
+  const infoParts = [];
+
+  // 1. Durata
+  if (runtime) {
+    infoParts.push(`${runtime} min`);
+  }
+
+  // 2. Data
+  if (yearInfo) {
+    infoParts.push(yearInfo);
+  }
+
+  // 3. Age Rating
+  // if (certification) {
+  //   infoParts.push(certification);
+  // }
+
+  // 4. Rating
+  // if (typeof item.vote_average === 'number' && item.vote_average > 0) {
+  //   infoParts.push(item.vote_average.toFixed(1));
+  // }
+
+  const separator = '\u2003\u2003\u2003\u2003';
+  const releaseInfo = infoParts.join(separator);
+
+  const genreData = [];
   const mediaKey = isMovie ? 'movie' : 'tv';
 
-  const cachedList = genreCache[mediaKey]?.['en']; // Default fallback
+  // Collect all genre IDs and known names
+  const ids = new Set();
+  const knownNames = {}; // id -> name (from item.genres if available)
+
+  if (item.genres && Array.isArray(item.genres)) {
+    item.genres.forEach((g) => {
+      if (g.id) {
+        ids.add(g.id);
+        if (g.name) knownNames[g.id] = g.name;
+      }
+    });
+  }
+
+  if (item.genre_ids && Array.isArray(item.genre_ids)) {
+    item.genre_ids.forEach((id) => ids.add(id));
+  }
+
+  const cachedList = genreCache[mediaKey]?.['en'];
   const staticList = staticGenreMap[mediaKey] || {};
 
   ids.forEach((id) => {
     const key = String(id);
-    let name = null;
+    let localName = null;
+    let englishName = null;
 
-    // 1. Try provided localized map first
+    // Resolve Local Name
     if (genreMap && genreMap[key]) {
-      name = genreMap[key];
+      localName = genreMap[key];
+    } else if (knownNames[id]) {
+      localName = knownNames[id];
     }
 
-    // 2. Try cached English list
-    if (!name && cachedList) {
+    // Resolve English Name (for slug/URL)
+    // 1. Try static map (fastest)
+    if (staticList[key]) {
+      englishName = staticList[key];
+    }
+    // 2. Try cache
+    if (!englishName && cachedList) {
       const hit = cachedList.find((g) => String(g.id) === key);
-      if (hit) name = hit.name;
+      if (hit) englishName = hit.name;
     }
 
-    // 3. Try static fallback
-    if (!name && staticList[key]) name = staticList[key];
+    // If local name is missing, fallback to English
+    if (!localName) localName = englishName;
 
-    if (name) mappedGenres.push(name);
+    // If English name is missing (rare), fallback to local
+    if (!englishName) englishName = localName;
+
+    if (localName) {
+      genreData.push({ name: localName, slug: englishName });
+    }
   });
+
+  const mappedGenres = genreData.map((g) => g.name);
 
   // Generate poster URL (use poster service if configured, fallback to TMDB)
   let poster = item.poster_path ? `${TMDB_IMAGE_BASE}/w500${item.poster_path}` : null;
@@ -2007,6 +2101,58 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
   const effectiveImdbId = imdbId || item.imdb_id || null;
   const primaryId = effectiveImdbId || `tmdb:${item.id}`;
 
+  // Process Cast and Directors
+  const castNames = Array.isArray(cast)
+    ? cast.map((c) => (typeof c === 'object' ? c.name : c))
+    : [];
+
+  const links = [];
+
+  // IMDb Link (Critical for Logo)
+  if (effectiveImdbId) {
+    links.push({
+      name: typeof item.vote_average === 'number' ? item.vote_average.toFixed(1) : 'IMDb',
+      category: 'imdb',
+      url: `https://imdb.com/title/${effectiveImdbId}`,
+    });
+  }
+
+  // Genres
+  if (genreData.length > 0) {
+    genreData.forEach((g) => {
+      if (manifestUrl) {
+        // Use provided catalogId or fallback to 'tmdb.top' (though it might not exist)
+        // If catalogId is provided, it allows filtering within the current catalog context
+        const targetCatalog = catalogId || 'tmdb.top';
+        links.push({
+          name: g.name,
+          category: 'Genres',
+          url: `stremio:///discover/${encodeURIComponent(manifestUrl)}/${type}/${targetCatalog}?genre=${encodeURIComponent(g.slug)}`,
+        });
+      }
+    });
+  }
+
+  // Cast Links
+  castNames.forEach((name) => {
+    links.push({
+      name: name,
+      category: 'Cast',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
+  });
+
+  // Director Links
+  if (directors && directors.length > 0) {
+    directors.forEach((name) => {
+      links.push({
+        name: name,
+        category: 'Directors',
+        url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      });
+    });
+  }
+
   const meta = {
     id: primaryId,
     tmdbId: item.id,
@@ -2014,14 +2160,24 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
     imdb_id: effectiveImdbId, // Some addons/clients expect this format
     type: type === 'series' ? 'series' : 'movie',
     name: title,
+    runtime: null, // Suppress native runtime display
     poster,
     posterShape: 'poster',
     background,
     fanart: background, // Compatibility alias
-    description: item.overview || '',
-    releaseInfo: year,
+    logo: logo ? `${TMDB_IMAGE_BASE}/original${logo}` : undefined,
+    description:
+      (castNames.length > 0 ? `Cast: ${castNames.join(', ')}\n\n` : '') +
+      (directors && directors.length > 0 ? `Directors: ${directors.join(', ')}\n\n` : '') +
+      (item.overview || ''),
+    releaseInfo: releaseInfo,
     imdbRating: typeof item.vote_average === 'number' ? item.vote_average.toFixed(1) : null,
     genres: mappedGenres,
+    genre: mappedGenres,
+    cast: castNames.length > 0 ? castNames : undefined,
+    director: directors && directors.length > 0 ? directors : undefined,
+    links: links.length > 0 ? links : undefined,
+    app_extras: cast && cast.length > 0 ? { cast: cast } : undefined,
     behaviorHints: {},
   };
 
@@ -2083,8 +2239,8 @@ export async function validateApiKey(apiKey) {
 /**
  * Search for a person (actor, director, etc.)
  */
-export async function searchPerson(apiKey, query) {
-  const data = await tmdbFetch('/search/person', apiKey, { query });
+export async function searchPerson(apiKey, query, language = 'en-US') {
+  const data = await tmdbFetch('/search/person', apiKey, { query, language });
   return (
     data.results?.slice(0, 10).map((person) => ({
       id: person.id,
@@ -2093,6 +2249,15 @@ export async function searchPerson(apiKey, query) {
       knownFor: person.known_for_department,
     })) || []
   );
+}
+
+/**
+ * Get credits for a person (cast and crew)
+ */
+export async function getPersonCredits(apiKey, personId, type = 'movie', language = 'en-US') {
+  const mediaType = type === 'series' ? 'tv' : 'movie';
+  const endpoint = `/person/${personId}/${mediaType}_credits`;
+  return tmdbFetch(endpoint, apiKey, { language });
 }
 
 /**
@@ -2135,6 +2300,234 @@ export async function getPersonById(apiKey, id) {
       profilePath: data.profile_path ? `${TMDB_IMAGE_BASE}/w185${data.profile_path}` : null,
     };
   } catch (err) {
+    return null;
+  }
+}
+
+export async function getEnrichedData(apiKey, item, type, countryCode = 'US', language = 'en') {
+  if (!item || !item.id) return { certification: null, runtime: null, logo: null, yearRange: null };
+  const mediaType = type === 'series' ? 'tv' : 'movie';
+
+  try {
+    let certification = null;
+    let runtime = null;
+    let logo = null;
+    let yearRange = null;
+
+    // Prepare params for images and credits
+    const safeLang = language || 'en';
+    const shortLang = safeLang.split('-')[0];
+    const params = {
+      append_to_response: 'images,credits',
+      include_image_language: `${safeLang},${shortLang},en,null`,
+    };
+
+    let cast = [];
+    let directors = [];
+
+    if (mediaType === 'movie') {
+      params.append_to_response += ',release_dates';
+      const data = await tmdbFetch(`/movie/${item.id}`, apiKey, params);
+
+      // Cast & Directors
+      if (data.credits?.cast) {
+        // Return full cast objects for app_extras, limit to 5
+        cast = data.credits.cast.slice(0, 5).map((p) => ({
+          name: p.name,
+          character: p.character,
+          photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null,
+        }));
+      }
+      if (data.credits?.crew) {
+        directors = data.credits.crew
+          .filter((p) => p.job === 'Director')
+          .map((p) => p.name)
+          .slice(0, 1);
+      }
+
+      // Runtime
+      if (data.runtime) runtime = data.runtime;
+
+      // Certification
+      const releases = data.release_dates?.results || [];
+      let countryInfo = releases.find((r) => r.iso_3166_1 === countryCode);
+      if (!countryInfo && countryCode !== 'US') {
+        countryInfo = releases.find((r) => r.iso_3166_1 === 'US');
+      }
+
+      if (countryInfo?.release_dates?.length > 0) {
+        // Prefer theatrical certification, otherwise first available
+        const rated =
+          countryInfo.release_dates.find((d) => d.certification && d.type === 3) ||
+          countryInfo.release_dates.find((d) => d.certification) ||
+          countryInfo.release_dates[0];
+        if (rated?.certification) certification = rated.certification;
+      }
+
+      // Logo
+      if (data.images?.logos?.length > 0) {
+        const logos = data.images.logos;
+        const candidates = [
+          logos.find((l) => l.iso_639_1 === language),
+          logos.find((l) => l.iso_639_1 === shortLang),
+          logos.find((l) => l.iso_639_1 === 'en'),
+          logos.find((l) => l.iso_639_1 === null),
+          logos[0],
+        ];
+        const best = candidates.find(Boolean);
+        if (best) logo = best.file_path;
+      }
+    } else {
+      params.append_to_response += ',content_ratings';
+      const data = await tmdbFetch(`/tv/${item.id}`, apiKey, params);
+
+      // Cast & Creators/Directors
+      if (data.credits?.cast) {
+        // Return full cast objects for app_extras, limit to 5
+        cast = data.credits.cast.slice(0, 5).map((p) => ({
+          name: p.name,
+          character: p.character,
+          photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w185${p.profile_path}` : null,
+        }));
+      }
+      // For TV, use Created By or Executive Producers as "directors" for preview
+      if (data.created_by?.length > 0) {
+        directors = data.created_by.map((p) => p.name).slice(0, 1);
+      } else if (data.credits?.crew) {
+        directors = data.credits.crew
+          .filter((p) => p.job === 'Executive Producer' || p.job === 'Director')
+          .map((p) => p.name)
+          .slice(0, 1);
+      }
+
+      // Runtime (average of episode run times)
+      if (data.episode_run_time && data.episode_run_time.length > 0) {
+        runtime = Math.round(
+          data.episode_run_time.reduce((a, b) => a + b, 0) / data.episode_run_time.length
+        );
+      } else if (data.last_episode_to_air?.runtime) {
+        runtime = data.last_episode_to_air.runtime;
+      } else if (data.next_episode_to_air?.runtime) {
+        runtime = data.next_episode_to_air.runtime;
+      }
+
+      // Year Range (YYYY-YYYY or YYYY-)
+      if (data.first_air_date) {
+        const start = data.first_air_date.split('-')[0];
+        const end =
+          data.status === 'Ended' && data.last_air_date
+            ? data.last_air_date.split('-')[0]
+            : data.in_production
+              ? ''
+              : ''; // If ended but no last date, just start. If in prod, just start (or start-?)
+
+        // Stremio style: "2016-2025" or "2016–"
+        if (data.status === 'Ended' && end && start !== end) {
+          yearRange = `${start}-${end}`;
+        } else if (data.in_production) {
+          yearRange = `${start}–`; // En dash for ongoing
+        } else {
+          yearRange = start;
+        }
+      }
+
+      // Certification
+      const ratings = data.content_ratings?.results || [];
+      let countryInfo = ratings.find((r) => r.iso_3166_1 === countryCode);
+      if (!countryInfo && countryCode !== 'US') {
+        countryInfo = ratings.find((r) => r.iso_3166_1 === 'US');
+      }
+      if (countryInfo?.rating) certification = countryInfo.rating;
+
+      // Logo
+      if (data.images?.logos?.length > 0) {
+        const logos = data.images.logos;
+        const candidates = [
+          logos.find((l) => l.iso_639_1 === language),
+          logos.find((l) => l.iso_639_1 === shortLang),
+          logos.find((l) => l.iso_639_1 === 'en'),
+          logos.find((l) => l.iso_639_1 === null),
+          logos[0],
+        ];
+        const best = candidates.find(Boolean);
+        if (best) logo = best.file_path;
+      }
+    }
+
+    // Map to local rating if needed
+    const localMap = US_TO_LOCAL_RATINGS[countryCode];
+    if (certification && localMap && localMap[certification]) {
+      certification = localMap[certification];
+    }
+
+    return { certification, runtime, logo, yearRange, cast, directors };
+  } catch (err) {
+    // Log the error to debug why enrichment is failing
+    log.error('Enrichment failed', {
+      itemId: item?.id,
+      type,
+      error: err.message,
+      stack: err.stack,
+    });
+    // Silently fail for enrichment
+    return {
+      certification: null,
+      runtime: null,
+      logo: null,
+      yearRange: null,
+      cast: [],
+      directors: [],
+    };
+  }
+}
+
+/**
+ * Get certification for a single item (lightweight)
+ */
+export async function getCertification(apiKey, item, type, countryCode = 'US') {
+  if (!item || !item.id) return null;
+  const mediaType = type === 'series' ? 'tv' : 'movie';
+
+  try {
+    const append = mediaType === 'movie' ? 'release_dates' : 'content_ratings';
+    // Use cache with short TTL if possible, but here we just fetch
+    // We only need the append, not full details, but TMDB doesn't support only-append
+    // So we use the specific endpoint
+
+    let certification = null;
+
+    if (mediaType === 'movie') {
+      const data = await tmdbFetch(`/movie/${item.id}/release_dates`, apiKey);
+      if (data && data.results) {
+        let countryInfo = data.results.find((r) => r.iso_3166_1 === countryCode);
+        if (!countryInfo && countryCode !== 'US') {
+          countryInfo = data.results.find((r) => r.iso_3166_1 === 'US');
+        }
+        if (countryInfo?.release_dates?.length > 0) {
+          const rated =
+            countryInfo.release_dates.find((d) => d.certification) || countryInfo.release_dates[0];
+          if (rated?.certification) certification = rated.certification;
+        }
+      }
+    } else {
+      const data = await tmdbFetch(`/tv/${item.id}/content_ratings`, apiKey);
+      if (data && data.results) {
+        let countryInfo = data.results.find((r) => r.iso_3166_1 === countryCode);
+        if (!countryInfo && countryCode !== 'US') {
+          countryInfo = data.results.find((r) => r.iso_3166_1 === 'US');
+        }
+        if (countryInfo?.rating) certification = countryInfo.rating;
+      }
+    }
+
+    // Map to local rating if needed (reusing the logic from getDetails)
+    const localMap = US_TO_LOCAL_RATINGS[countryCode];
+    if (certification && localMap && localMap[certification]) {
+      certification = localMap[certification];
+    }
+
+    return { certification, runtime };
+  } catch (e) {
     return null;
   }
 }

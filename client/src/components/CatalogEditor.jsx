@@ -617,6 +617,16 @@ export function CatalogEditor({
       });
     }
 
+    if (filters.region) {
+      const regionLabel =
+        countries.find((c) => c.iso_3166_1 === filters.region)?.english_name || filters.region;
+      active.push({
+        key: 'region',
+        label: `Release Region: ${regionLabel}`,
+        section: 'release',
+      });
+    }
+
     if (filters.includeNullFirstAirDates) {
       active.push({
         key: 'includeNullFirstAirDates',
@@ -728,6 +738,12 @@ export function CatalogEditor({
           setLocalCatalog((prev) => ({
             ...prev,
             filters: { ...prev.filters, certificationCountry: undefined },
+          }));
+          break;
+        case 'region':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, region: undefined, releaseTypes: [] },
           }));
           break;
         case 'datePreset':

@@ -26,7 +26,6 @@ function pickPreferredMetaLanguage(config) {
   return config?.preferences?.defaultLanguage || 'en';
 }
 
-
 router.get('/:userId/manifest.json', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -87,8 +86,9 @@ function extractGenreIds(item) {
   return ids.map(String);
 }
 
-async function handleCatalogRequest(userId, type, catalogId, extra, res) {
+async function handleCatalogRequest(req, res, userId, type, catalogId, extra) {
   try {
+    const baseUrl = getBaseUrl(req);
     const skip = parseInt(extra.skip) || 0;
     const search = extra.search || null;
 
@@ -112,9 +112,9 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
     const posterOptions =
       config.preferences?.posterService && config.preferences.posterService !== 'none'
         ? {
-          apiKey: getPosterKeyFromConfig(config),
-          service: config.preferences.posterService,
-        }
+            apiKey: getPosterKeyFromConfig(config),
+            service: config.preferences.posterService,
+          }
         : null;
 
     let catalogConfig = config.catalogs.find((c) => {
@@ -241,9 +241,87 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       resolvedFilters?.sortBy === 'random';
 
     if (search) {
-      result = await tmdb.search(apiKey, search, type, page, {
+      // 1. Standard content search
+      const contentPromise = tmdb.search(apiKey, search, type, page, {
         displayLanguage: config.preferences?.defaultLanguage,
       });
+
+      // 2. Person search (only on first page to prioritize best matches)
+      const personPromise =
+        page === 1
+          ? tmdb.searchPerson(apiKey, search, config.preferences?.defaultLanguage)
+          : Promise.resolve([]);
+
+      const [contentResults, personResults] = await Promise.all([contentPromise, personPromise]);
+
+      let finalResults = contentResults.results || [];
+
+      // 3. If people found, fetch their credits and merge
+      if (personResults && personResults.length > 0) {
+        // Use the top match
+        const topPerson = personResults[0];
+
+        try {
+          const credits = await tmdb.getPersonCredits(
+            apiKey,
+            topPerson.id,
+            type,
+            config.preferences?.defaultLanguage
+          );
+
+          let works = [];
+
+          // Add cast works
+          if (credits.cast) {
+            works = works.concat(credits.cast);
+          }
+
+          // Add crew works (Director, etc.)
+          if (credits.crew) {
+            const importantJobs = [
+              'Director',
+              'Screenplay',
+              'Writer',
+              'Creator',
+              'Executive Producer',
+            ];
+            const crewWorks = credits.crew.filter((w) => importantJobs.includes(w.job));
+            works = works.concat(crewWorks);
+          }
+
+          // Deduplicate works
+          const seenIds = new Set();
+          const uniqueWorks = [];
+          works.forEach((w) => {
+            if (!seenIds.has(w.id)) {
+              seenIds.add(w.id);
+              uniqueWorks.push(w);
+            }
+          });
+
+          // Sort by popularity
+          uniqueWorks.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+          // Merge with content results (avoiding duplicates)
+          const contentIds = new Set(finalResults.map((i) => i.id));
+          const newWorks = uniqueWorks.filter((w) => !contentIds.has(w.id));
+
+          // Prepend person's works to the results
+          finalResults = [...newWorks, ...finalResults];
+
+          log.debug('Enriched search with person credits', {
+            person: topPerson.name,
+            worksAdded: newWorks.length,
+          });
+        } catch (err) {
+          log.warn('Failed to fetch person credits', { error: err.message });
+        }
+      }
+
+      result = {
+        ...contentResults,
+        results: finalResults,
+      };
     } else {
       if (listType && listType !== 'discover') {
         result = await tmdb.fetchSpecialList(apiKey, listType, type, {
@@ -272,7 +350,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       log.warn('IMDb enrichment failed (continuing with TMDB IDs)', { error: e.message });
     }
 
-    const displayLanguage = config.preferences?.defaultLanguage;
+    const displayLanguage = config.preferences?.defaultLanguage || 'en';
     let genreMap = null;
 
     if (allItems.length > 0 && displayLanguage && displayLanguage !== 'en') {
@@ -285,12 +363,137 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
           });
         }
       } catch (err) {
-        log.warn('Failed to fetch localized genres for catalog', { catalogId, displayLanguage, error: err.message });
+        log.warn('Failed to fetch localized genres for catalog', {
+          catalogId,
+          displayLanguage,
+          error: err.message,
+        });
+      }
+    }
+
+    // Parallel fetch for certifications and runtime to ensure immediate display
+    const enrichedData = {};
+    if (allItems.length > 0) {
+      try {
+        // Default country mapping for common languages when no region is provided
+        const LANGUAGE_TO_COUNTRY = {
+          // Europe
+          it: 'IT',
+          fr: 'FR',
+          de: 'DE',
+          es: 'ES',
+          pt: 'PT',
+          nl: 'NL',
+          pl: 'PL',
+          ru: 'RU',
+          uk: 'UA',
+          tr: 'TR',
+          el: 'GR',
+          sv: 'SE',
+          da: 'DK',
+          fi: 'FI',
+          no: 'NO',
+          cs: 'CZ',
+          hu: 'HU',
+          ro: 'RO',
+          bg: 'BG',
+          sk: 'SK',
+          hr: 'HR',
+          sr: 'RS',
+          sl: 'SI',
+          et: 'EE',
+          lv: 'LV',
+          lt: 'LT',
+
+          // Asia
+          ja: 'JP',
+          ko: 'KR',
+          zh: 'CN',
+          hi: 'IN',
+          th: 'TH',
+          id: 'ID',
+          vi: 'VN',
+          ms: 'MY',
+          tl: 'PH',
+
+          // Middle East
+          he: 'IL',
+          ar: 'SA',
+          fa: 'IR',
+
+          // Americas (defaulting es/pt to Spain/Portugal, but listing defaults if needed)
+          // en defaults to US via fallback logic below
+        };
+
+        // Determine country from config or default to US
+        // We can't easily get the user's IP-based country here, so we rely on config or default
+        let countryCode = 'US';
+
+        if (displayLanguage) {
+          if (displayLanguage.includes('-')) {
+            countryCode = displayLanguage.split('-')[1];
+          } else if (LANGUAGE_TO_COUNTRY[displayLanguage]) {
+            countryCode = LANGUAGE_TO_COUNTRY[displayLanguage];
+          }
+        }
+
+        const targetCountry = countryCode;
+
+        // Use chunks to avoid rate limiting or timeouts
+        const CHUNK_SIZE = 5;
+        for (let i = 0; i < allItems.length; i += CHUNK_SIZE) {
+          const chunk = allItems.slice(i, i + CHUNK_SIZE);
+          await Promise.all(
+            chunk.map(async (item) => {
+              try {
+                const data = await tmdb.getEnrichedData(
+                  apiKey,
+                  item,
+                  type,
+                  targetCountry,
+                  displayLanguage
+                );
+                if (data) {
+                  enrichedData[item.id] = data;
+                  if (data.cast && data.cast.length > 0) {
+                    // log.debug('Enrichment success', { id: item.id, cast: data.cast.length });
+                  } else {
+                    log.debug('Enrichment missing cast', {
+                      id: item.id,
+                      name: item.name || item.title,
+                    });
+                  }
+                }
+              } catch (err) {
+                // ignore individual errors
+              }
+            })
+          );
+        }
+      } catch (e) {
+        log.warn('Failed to fetch enriched data', { error: e.message });
       }
     }
 
     const metas = allItems.map((item) => {
-      return tmdb.toStremioMeta(item, type, null, posterOptions, genreMap);
+      const data = enrichedData[item.id] || {};
+      const manifestUrl = `${baseUrl}/${userId}/manifest.json`;
+      return tmdb.toStremioMeta(
+        item,
+        type,
+        null,
+        posterOptions,
+        genreMap,
+        data.certification,
+        data.runtime,
+        data.logo,
+        data.yearRange,
+        data.cast,
+        data.directors,
+        displayLanguage,
+        manifestUrl,
+        catalogId
+      );
     });
 
     const filteredMetas = metas.filter((m) => m !== null);
@@ -323,7 +526,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
   }
 }
 
-async function handleMetaRequest(userId, type, id, extra, res) {
+async function handleMetaRequest(userId, type, id, extra, res, req) {
   try {
     const config = await getUserConfig(userId);
     if (!config) return res.json({ meta: {} });
@@ -335,9 +538,9 @@ async function handleMetaRequest(userId, type, id, extra, res) {
     const posterOptions =
       config.preferences?.posterService && config.preferences.posterService !== 'none'
         ? {
-          apiKey: getPosterKeyFromConfig(config),
-          service: config.preferences.posterService,
-        }
+            apiKey: getPosterKeyFromConfig(config),
+            service: config.preferences.posterService,
+          }
         : null;
 
     const requestedId = String(id || '');
@@ -348,7 +551,7 @@ async function handleMetaRequest(userId, type, id, extra, res) {
       configured: configuredLanguage,
       extraDisplay: extra?.displayLanguage,
       extraLang: extra?.language,
-      final: language
+      final: language,
     });
 
     let tmdbId = null;
@@ -376,6 +579,20 @@ async function handleMetaRequest(userId, type, id, extra, res) {
       log.debug('Fetched series episodes', { tmdbId, episodeCount: videos?.length || 0 });
     }
 
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const manifestUrl = `${baseUrl}/${userId}/manifest.json`;
+
+    // Find a valid catalog ID to use for genre links
+    // We prefer the first enabled catalog of the same type
+    let catalogId = 'tmdb.top';
+    if (config.catalogs && Array.isArray(config.catalogs)) {
+      const validCatalog = config.catalogs.find((c) => c.type === type && c.enabled !== false);
+      if (validCatalog) {
+        // Replicate manifest ID generation logic
+        catalogId = `tmdb-${validCatalog._id || validCatalog.name.toLowerCase().replace(/\s+/g, '-')}`;
+      }
+    }
+
     const meta = await tmdb.toStremioFullMeta(
       details,
       type,
@@ -383,7 +600,9 @@ async function handleMetaRequest(userId, type, id, extra, res) {
       requestedId,
       posterOptions,
       videos,
-      language
+      language,
+      manifestUrl,
+      catalogId
     );
 
     res.json({
@@ -418,12 +637,12 @@ router.get('/:userId/meta/:type/:id/:extra.json', async (req, res) => {
   }
 
   const extraParams = parseExtra(rawExtra);
-  await handleMetaRequest(userId, type, id, extraParams, res);
+  await handleMetaRequest(userId, type, id, extraParams, res, req);
 });
 
 router.get('/:userId/meta/:type/:id.json', async (req, res) => {
   const { userId, type, id } = req.params;
-  await handleMetaRequest(userId, type, id, { ...req.query }, res);
+  await handleMetaRequest(userId, type, id, { ...req.query }, res, req);
 });
 
 router.get('/:userId/catalog/:type/:catalogId/:extra.json', async (req, res) => {
@@ -446,7 +665,7 @@ router.get('/:userId/catalog/:type/:catalogId/:extra.json', async (req, res) => 
   }
 
   const extraParams = parseExtra(rawExtra);
-  await handleCatalogRequest(userId, type, catalogId, extraParams, res);
+  await handleCatalogRequest(req, res, userId, type, catalogId, extraParams);
 });
 
 router.get('/:userId/catalog/:type/:catalogId.json', async (req, res) => {
@@ -455,7 +674,7 @@ router.get('/:userId/catalog/:type/:catalogId.json', async (req, res) => {
     skip: req.query.skip || '0',
     search: req.query.search || null,
   };
-  await handleCatalogRequest(userId, type, catalogId, extra, res);
+  await handleCatalogRequest(req, res, userId, type, catalogId, extra);
 });
 
 export { router as addonRouter };
