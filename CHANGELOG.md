@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.7...v2.7.0) (2026-02-03)
+
+
+### Features
+
+* add status endpoint and nightly build metadata ([7650974](https://github.com/semi-column/tmdb-discover-plus/commit/76509742740d05af026f739e7ba9ec2ddddcb847))
+* Added Discord Button on the website ([daf8fe4](https://github.com/semi-column/tmdb-discover-plus/commit/daf8fe4860902c1bd687dc82d2762fc87442352d))
+* Added Nightly indicator and switch to stable button on beamup ([daf8fe4](https://github.com/semi-column/tmdb-discover-plus/commit/daf8fe4860902c1bd687dc82d2762fc87442352d))
+
+
+### Bug Fixes
+
+* align discover filters with TMDB tv/movie params and UI ([7338824](https://github.com/semi-column/tmdb-discover-plus/commit/733882475698fe3652db28e2edf0755344695c6c))
+* honor release type with regional release dates ([813bc35](https://github.com/semi-column/tmdb-discover-plus/commit/813bc358a225480993f569f41f70d7bc0fcfcd8a))
+* require region for release type filtering and disable UI control without it ([62e2319](https://github.com/semi-column/tmdb-discover-plus/commit/62e2319e82739f5aeb61e2c32e824d646198ebd7))
+
 ## [2.6.7](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.6...v2.6.7) (2026-01-31)
 
 
