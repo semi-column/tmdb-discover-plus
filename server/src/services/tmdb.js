@@ -316,9 +316,25 @@ async function getNetworksViaWebsite(query) {
   return Array.from(byId.values());
 }
 
-/**
- * Get available languages
- */
+const REGIONAL_LANGUAGE_VARIANTS = [
+  { iso_639_1: 'pt-BR', english_name: 'Portuguese (Brazil)', name: 'Português (Brasil)' },
+  { iso_639_1: 'pt-PT', english_name: 'Portuguese (Portugal)', name: 'Português (Portugal)' },
+  { iso_639_1: 'zh-CN', english_name: 'Chinese (Simplified)', name: '简体中文' },
+  { iso_639_1: 'zh-TW', english_name: 'Chinese (Traditional)', name: '繁體中文' },
+  { iso_639_1: 'zh-HK', english_name: 'Chinese (Hong Kong)', name: '香港中文' },
+  { iso_639_1: 'es-MX', english_name: 'Spanish (Mexico)', name: 'Español (México)' },
+  { iso_639_1: 'es-ES', english_name: 'Spanish (Spain)', name: 'Español (España)' },
+  { iso_639_1: 'fr-CA', english_name: 'French (Canada)', name: 'Français (Canada)' },
+  { iso_639_1: 'fr-FR', english_name: 'French (France)', name: 'Français (France)' },
+  { iso_639_1: 'en-US', english_name: 'English (US)', name: 'English (US)' },
+  { iso_639_1: 'en-GB', english_name: 'English (UK)', name: 'English (UK)' },
+  { iso_639_1: 'de-DE', english_name: 'German (Germany)', name: 'Deutsch (Deutschland)' },
+  { iso_639_1: 'de-AT', english_name: 'German (Austria)', name: 'Deutsch (Österreich)' },
+  { iso_639_1: 'it-IT', english_name: 'Italian (Italy)', name: 'Italiano (Italia)' },
+];
+
+const REPLACED_BASE_CODES = new Set(['pt', 'zh', 'es', 'fr', 'en', 'de', 'it']);
+
 export async function getLanguages(apiKey) {
   const cacheKey = 'tmdb_languages';
   const cache = getCache();
@@ -331,10 +347,12 @@ export async function getLanguages(apiKey) {
   }
 
   const data = await tmdbFetch('/configuration/languages', apiKey);
-  const sorted = data.sort((a, b) => a.english_name.localeCompare(b.english_name));
+  const filtered = data.filter((lang) => !REPLACED_BASE_CODES.has(lang.iso_639_1));
+  const combined = [...filtered, ...REGIONAL_LANGUAGE_VARIANTS];
+  const sorted = combined.sort((a, b) => a.english_name.localeCompare(b.english_name));
 
   try {
-    await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
+    await cache.set(cacheKey, sorted, 86400 * 7);
   } catch (e) {
     /* ignore */
   }
