@@ -349,10 +349,10 @@ export function useAppController() {
       if (importedData.catalogs) {
         const newCatalogs = importedData.catalogs.map((c) => ({
           ...c,
-          _id: c._id || crypto.randomUUID(),
-          id: c.id || crypto.randomUUID(),
+          _id: crypto.randomUUID(),
+          id: crypto.randomUUID(),
         }));
-        config.setCatalogs(newCatalogs);
+        config.setCatalogs((prev) => [...prev, ...newCatalogs]);
         if (newCatalogs.length > 0) {
           setActiveCatalog(newCatalogs[0]);
         }
