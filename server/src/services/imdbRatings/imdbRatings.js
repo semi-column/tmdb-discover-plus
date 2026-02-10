@@ -1,6 +1,5 @@
 import { createGunzip } from 'zlib';
 import { createInterface } from 'readline';
-import { Readable } from 'stream';
 import fetch from 'node-fetch';
 import { createLogger } from '../../utils/logger.js';
 
@@ -114,9 +113,8 @@ async function downloadAndCacheRatings() {
     await adapter.clear();
 
     const gunzip = createGunzip();
-    const bodyStream = Readable.fromWeb(response.body);
     const rl = createInterface({
-      input: bodyStream.pipe(gunzip),
+      input: response.body.pipe(gunzip),
       crlfDelay: Infinity,
     });
 
