@@ -16,6 +16,7 @@ import { warmEssentialCaches } from './services/cacheWarmer.js';
 import { getMetrics, destroyMetrics } from './services/metrics.js';
 import { destroyTmdbThrottle, getTmdbThrottle } from './services/tmdbThrottle.js';
 import { getConfigCache } from './services/configCache.js';
+import { initImdbRatings, getImdbRatingsStats, destroyImdbRatings } from './services/imdbRatings/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -199,6 +200,7 @@ app.get('/health', (req, res) => {
     cache: cacheStatus,
     configCache: configCacheStats,
     tmdbThrottle: throttleStats,
+    imdbRatings: getImdbRatingsStats(),
     cacheWarming: serverStatus.cacheWarming,
     metrics: metricsData,
     memory: {
@@ -244,6 +246,7 @@ function gracefulShutdown(signal) {
   // Cleanup singletons
   destroyTmdbThrottle();
   destroyMetrics();
+  destroyImdbRatings().catch(() => {});
 
   if (server) {
     server.close(async (err) => {
@@ -315,6 +318,15 @@ async function start() {
       })
       .catch((err) => {
         log.warn('Background cache warming failed (non-critical)', { error: err.message });
+      });
+
+    // IMDb ratings dataset — download in background, non-blocking.
+    initImdbRatings()
+      .then(() => {
+        log.info('IMDb ratings initialized', getImdbRatingsStats());
+      })
+      .catch((err) => {
+        log.warn('IMDb ratings initialization failed (non-critical)', { error: err.message });
       });
   } catch (error) {
     log.error('Failed to start server', { error: error.message });

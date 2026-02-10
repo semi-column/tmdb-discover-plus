@@ -2,7 +2,7 @@ import { createLogger } from '../../utils/logger.js';
 import { generatePosterUrl, generateBackdropUrl, isValidPosterConfig } from '../posterService.js';
 import { getRpdbRating } from '../rpdb.js';
 import { TMDB_IMAGE_BASE } from './constants.js';
-import { getCinemetaRating } from './ratings.js';
+import { getImdbRatingString } from '../imdbRatings/index.js';
 import { genreCache, staticGenreMap } from './genres.js';
 import { usToLocalRatings } from './certificationMappings.js';
 
@@ -192,19 +192,19 @@ export async function toStremioFullMeta(
 
   let actualImdbRating = null;
 
-  // 1. Try Cinemeta first (most reliable for IMDb ratings)
+  // 1. Try IMDb dataset (bulk-loaded on startup — instant, offline, near-100% coverage)
   if (effectiveImdbId) {
     try {
-      const cinemetaRating = await getCinemetaRating(effectiveImdbId, type);
-      if (cinemetaRating) {
-        actualImdbRating = cinemetaRating;
+      const datasetRating = await getImdbRatingString(effectiveImdbId);
+      if (datasetRating) {
+        actualImdbRating = datasetRating;
       }
     } catch (e) {
       /* ignore */
     }
   }
 
-  // 2. Try RPDB if Cinemeta didn't have it
+  // 2. Fallback: try RPDB if the dataset didn't have it
   if (!actualImdbRating && effectiveImdbId) {
     const rpdbKey =
       posterOptions?.service === 'rpdb' && posterOptions.apiKey

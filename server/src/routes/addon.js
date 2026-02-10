@@ -321,14 +321,14 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
       }
     }
 
-    // Batch-fetch real IMDb ratings from Cinemeta for non-search catalogs
+    // Batch-fetch real IMDb ratings from the IMDb dataset for non-search catalogs
     // (search skips IMDb enrichment, so no imdb_ids to look up)
     let ratingsMap = null;
     if (!search) {
       try {
         ratingsMap = await tmdb.batchGetCinemetaRatings(allItems, type);
       } catch (e) {
-        log.warn('Batch Cinemeta ratings failed (using TMDB ratings)', { error: e.message });
+        log.warn('Batch IMDb ratings failed', { error: e.message });
       }
     }
 
