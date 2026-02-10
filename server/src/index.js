@@ -29,7 +29,6 @@ let isShuttingDown = false;
 
 /**
  * Server status — tracks startup state, degradation, and readiness.
- * Inspired by AIOMetadata's critical/non-critical init classification.
  */
 const serverStatus = {
   healthy: false,

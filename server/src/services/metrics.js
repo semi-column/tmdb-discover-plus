@@ -4,7 +4,6 @@ const log = createLogger('Metrics');
 
 /**
  * Lightweight request & provider metrics tracker.
- * Inspired by AIOMetadata's requestTracker.js and timing-metrics.js.
  *
  * Tracks:
  * - Per-endpoint request counts and latency

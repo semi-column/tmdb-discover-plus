@@ -7,7 +7,6 @@ const log = createLogger('TmdbThrottle');
  * Prevents burning through TMDB's ~40 req/s rate limit when many users
  * are active simultaneously.
  *
- * Inspired by AIOMetadata's per-provider adaptive rate limiting.
  */
 class TokenBucket {
   /**

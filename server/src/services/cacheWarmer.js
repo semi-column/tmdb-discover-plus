@@ -5,7 +5,6 @@ const log = createLogger('CacheWarmer');
 
 /**
  * Pre-fetches commonly needed data on startup so first users don't hit cold cache.
- * Inspired by AIOMetadata's cacheWarmer.js.
  *
  * Warms: genre lists, languages, countries, certifications, watch regions.
  * These are 7-day TTL items that every user needs.

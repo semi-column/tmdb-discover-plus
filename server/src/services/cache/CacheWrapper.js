@@ -4,7 +4,7 @@ import crypto from 'crypto';
 const log = createLogger('CacheWrapper');
 
 /**
- * Error-type-specific TTLs (in seconds) — inspired by AIOMetadata's getCache.js
+ * Error-type-specific TTLs (in seconds)
  * Prevents thundering herd on failed resources and protects API quota.
  */
 const ERROR_TTLS = {

@@ -4,7 +4,6 @@ const log = createLogger('ConfigCache');
 
 /**
  * In-memory LRU config cache with stampede protection.
- * Inspired by AIOMetadata's configCache.js.
  *
  * - LRU eviction when maxSize is exceeded
  * - TTL-based expiration
