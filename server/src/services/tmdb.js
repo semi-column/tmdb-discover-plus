@@ -54,7 +54,6 @@ try {
 }
 
 /**
- * Fetch IMDb rating from Stremio's Cinemeta API
  */
 async function getCinemetaRating(imdbId, type) {
   if (!imdbId) return null;
@@ -66,46 +65,49 @@ async function getCinemetaRating(imdbId, type) {
   const cacheKey = `cinemeta_rating_${normalizedId}`;
 
   try {
-    const cached = await cache.get(cacheKey);
-    if (cached !== undefined) return cached;
-  } catch (e) {
-    /* ignore */
-  }
+    const result = await cache.wrap(
+      cacheKey,
+      async () => {
+        const url = new URL(CINEMETA_API_ORIGIN);
+        url.pathname = `${CINEMETA_API_BASE_PATH}/${mediaType}/${normalizedId}.json`;
+        assertAllowedUrl(url, {
+          origin: CINEMETA_API_ORIGIN,
+          pathPrefix: `${CINEMETA_API_BASE_PATH}/`,
+        });
 
-  try {
-    const url = new URL(CINEMETA_API_ORIGIN);
-    url.pathname = `${CINEMETA_API_BASE_PATH}/${mediaType}/${normalizedId}.json`;
-    assertAllowedUrl(url, {
-      origin: CINEMETA_API_ORIGIN,
-      pathPrefix: `${CINEMETA_API_BASE_PATH}/`,
-    });
+        const response = await fetch(url.toString(), {
+          agent: httpsAgent,
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!response.ok) {
+          const err = new Error(`Cinemeta HTTP ${response.status}`);
+          err.status = response.status;
+          throw err;
+        }
+        const data = await response.json();
+        const rating = data?.meta?.imdbRating || null;
 
-    const response = await fetch(url.toString(), {
-      agent: httpsAgent,
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) {
-      log.warn('Cinemeta non-OK response', { imdbId, status: response.status });
-      return null;
-    }
-    const data = await response.json();
-    const rating = data?.meta?.imdbRating || null;
-    if (rating) {
-      log.info('Cinemeta rating fetched', { imdbId, rating });
-    }
+        if (!rating) {
+          // Throw so cache.wrap() applies EMPTY_RESULT TTL (1 min) instead of
+          // caching null for 7 days. Title may get a rating later.
+          const err = new Error('No rating in Cinemeta response');
+          err.status = 404;
+          throw err;
+        }
 
-    // Only cache actual ratings; avoid caching null for 24h
-    if (rating) {
-      try {
-        await cache.set(cacheKey, rating, 86400); // 24 hours
-      } catch (e) {
-        /* ignore */
-      }
-    }
+        log.info('Cinemeta rating fetched', { imdbId: normalizedId, rating });
+        return rating;
+      },
+      604800, // 7 days — IMDb ratings rarely change
+      { allowStale: true }
+    );
 
-    return rating;
+    return result;
   } catch (error) {
-    log.warn('Cinemeta rating fetch failed', { imdbId, error: error.message });
+    // CachedError or fresh fetch error — either way, no rating available
+    if (error.name !== 'CachedError') {
+      log.warn('Cinemeta rating unavailable', { imdbId: normalizedId, error: error.message });
+    }
     return null;
   }
 }
@@ -1150,12 +1152,19 @@ export async function toStremioFullMeta(
     .map((p) => p?.name)
     .filter(Boolean);
 
-  // Runtime: movie.runtime (minutes) or tv.episode_run_time (array)
   let runtimeMin = null;
   if (isMovie && typeof details.runtime === 'number') runtimeMin = details.runtime;
-  if (!isMovie && Array.isArray(details.episode_run_time) && details.episode_run_time.length > 0) {
-    const first = details.episode_run_time.find((v) => typeof v === 'number');
-    if (typeof first === 'number') runtimeMin = first;
+  if (!isMovie) {
+    if (Array.isArray(details.episode_run_time) && details.episode_run_time.length > 0) {
+      const first = details.episode_run_time.find((v) => typeof v === 'number');
+      if (typeof first === 'number') runtimeMin = first;
+    }
+    if (!runtimeMin && details.last_episode_to_air?.runtime) {
+      runtimeMin = details.last_episode_to_air.runtime;
+    }
+    if (!runtimeMin && details.next_episode_to_air?.runtime) {
+      runtimeMin = details.next_episode_to_air.runtime;
+    }
   }
 
   const effectiveImdbId = imdbId || details?.external_ids?.imdb_id || null;
@@ -1758,9 +1767,6 @@ export async function toStremioFullMeta(
   // Links
   const links = [];
 
-  // Try to get real IMDb rating from multiple sources:
-  // Priority: Cinemeta (Stremio's DB) → RPDB → TMDB vote_average
-  let displayRating = null;
   let actualImdbRating = null;
 
   // 1. Try Cinemeta first (most reliable for IMDb ratings)
@@ -1768,7 +1774,6 @@ export async function toStremioFullMeta(
     try {
       const cinemetaRating = await getCinemetaRating(effectiveImdbId, type);
       if (cinemetaRating) {
-        displayRating = cinemetaRating;
         actualImdbRating = cinemetaRating;
       }
     } catch (e) {
@@ -1787,7 +1792,6 @@ export async function toStremioFullMeta(
       try {
         const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
         if (realRating && realRating !== 'N/A') {
-          displayRating = realRating;
           actualImdbRating = realRating;
         }
       } catch (e) {
@@ -1796,14 +1800,9 @@ export async function toStremioFullMeta(
     }
   }
 
-  // 3. Fallback to TMDB vote_average
-  if (!displayRating && typeof details.vote_average === 'number' && details.vote_average > 0) {
-    displayRating = details.vote_average.toFixed(1);
-  }
-
   if (effectiveImdbId) {
     links.push({
-      name: displayRating || 'IMDb',
+      name: actualImdbRating || 'IMDb',
       category: 'imdb',
       url: `https://imdb.com/title/${effectiveImdbId}`,
     });
@@ -1845,6 +1844,12 @@ export async function toStremioFullMeta(
   const writerString = writerNames.join(', ');
   const directorString = directors.join(', ');
 
+  // Creator string for series (from TMDB created_by field)
+  const creators = !isMovie && Array.isArray(details.created_by)
+    ? details.created_by.map((p) => p?.name).filter(Boolean)
+    : [];
+  const creatorString = creators.join(', ');
+
   // Writer Links
   writerNames.forEach((name) => {
     links.push({
@@ -1853,6 +1858,40 @@ export async function toStremioFullMeta(
       url: `stremio:///search?search=${encodeURIComponent(name)}`,
     });
   });
+
+  // Creator Links (series only — "Created By" credit)
+  creators.forEach((name) => {
+    // Avoid duplicate if creator is also a writer
+    if (!writerNames.includes(name)) {
+      links.push({
+        name: name,
+        category: 'Writers',
+        url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      });
+    }
+  });
+
+  // Network Links (series) / Studio Links (movies)
+  if (!isMovie && Array.isArray(details.networks) && details.networks.length > 0) {
+    const network = details.networks[0];
+    if (network?.name) {
+      links.push({
+        name: network.name,
+        category: 'Networks',
+        url: `stremio:///search?search=${encodeURIComponent(network.name)}`,
+      });
+    }
+  }
+  if (isMovie && Array.isArray(details.production_companies) && details.production_companies.length > 0) {
+    const studio = details.production_companies[0];
+    if (studio?.name) {
+      links.push({
+        name: studio.name,
+        category: 'Studios',
+        url: `stremio:///search?search=${encodeURIComponent(studio.name)}`,
+      });
+    }
+  }
 
   // Share Link
   const slugTitle = title
@@ -2005,24 +2044,11 @@ export async function toStremioFullMeta(
     description: details.overview || '',
     year: year || undefined,
     releaseInfo,
-    // Use actual IMDB rating from Cinemeta/RPDB if available, fallback to TMDB vote_average
-    imdbRating: (() => {
-      const finalRating =
-        actualImdbRating ||
-        (typeof details.vote_average === 'number' && details.vote_average > 0
-          ? details.vote_average.toFixed(1)
-          : null);
-      log.debug('Final imdbRating for meta', {
-        actualImdbRating,
-        voteAverage: details.vote_average,
-        finalRating,
-      });
-      return finalRating;
-    })(),
+    imdbRating: actualImdbRating || undefined,
     genres,
     cast: cast.length > 0 ? cast : undefined,
     director: directorString || undefined,
-    writer: writerString || undefined,
+    writer: isMovie ? (writerString || undefined) : (creatorString || writerString || undefined),
     runtime: formatRuntime(runtimeMin),
     language: details.original_language || undefined,
     country: Array.isArray(details.origin_country) ? details.origin_country.join(', ') : undefined,
@@ -2143,17 +2169,13 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
     posterShape: 'poster',
     background,
     fanart: background, // Compatibility alias
+    landscapePoster: background, // Landscape preview for TV clients
     description: item.overview || '',
     releaseInfo: year,
-    imdbRating: (() => {
-      // Prefer real IMDb rating from Cinemeta if available
-      if (ratingsMap && effectiveImdbId && ratingsMap.has(effectiveImdbId)) {
-        return ratingsMap.get(effectiveImdbId);
-      }
-      return typeof item.vote_average === 'number' && item.vote_average > 0
-        ? item.vote_average.toFixed(1)
-        : null;
-    })(),
+    // Only genuine IMDb ratings — never show TMDB vote_average as imdbRating
+    imdbRating: ratingsMap && effectiveImdbId && ratingsMap.has(effectiveImdbId)
+      ? ratingsMap.get(effectiveImdbId)
+      : undefined,
     genres: mappedGenres,
     behaviorHints: {},
   };
