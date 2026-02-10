@@ -33,7 +33,7 @@ export { discover, fetchSpecialList } from './discover.js';
 export { getDetails, getSeasonDetails, getSeriesEpisodes } from './details.js';
 
 // Search
-export { search, searchPerson, searchCompany, searchKeyword } from './search.js';
+export { search, searchPerson, searchCompany, searchKeyword, comprehensiveSearch } from './search.js';
 
 // Lookup (TMDB ↔ IMDb)
 export { getExternalIds, enrichItemsWithImdbIds, findByImdbId } from './lookup.js';

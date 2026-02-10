@@ -267,8 +267,9 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
       }
 
       if (!result) {
-        result = await tmdb.search(apiKey, search, type, page, {
+        result = await tmdb.comprehensiveSearch(apiKey, search, type, page, {
           displayLanguage: config.preferences?.defaultLanguage,
+          includeAdult: config.preferences?.includeAdult,
         });
       }
     } else {

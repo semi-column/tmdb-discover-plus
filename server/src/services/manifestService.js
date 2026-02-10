@@ -42,13 +42,13 @@ export function buildManifest(userConfig, baseUrl) {
       id: 'tmdb-search-movie',
       type: 'movie',
       name: 'TMDB Search',
-      extra: [{ name: 'search', isRequired: true }],
+      extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
     });
     catalogs.push({
       id: 'tmdb-search-series',
       type: 'series',
       name: 'TMDB Search',
-      extra: [{ name: 'search', isRequired: true }],
+      extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
     });
   }
 
