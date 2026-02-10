@@ -10,12 +10,10 @@ import {
   Loader,
   Play,
   Settings,
-  Shuffle,
   Sparkles,
   Tv,
   Users,
   X,
-  Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MultiSelect } from './MultiSelect';
@@ -56,56 +54,7 @@ const DATE_PRESETS = [
   { label: 'Next 3 months', value: 'next_90_days', future: true },
 ];
 
-const FILTER_TEMPLATES = [
-  {
-    id: 'hidden_gems',
-    name: 'Hidden Gems',
-    icon: 'gem',
-    description: 'Underrated high-quality content',
-    filters: {
-      sortBy: 'vote_average.desc',
-      voteCountMin: 50,
-      ratingMin: 7.5,
-      ratingMax: 10,
-    },
-  },
-  {
-    id: 'recent_hits',
-    name: 'Recent Hits',
-    icon: 'trending',
-    description: 'Popular content from this year',
-    filters: {
-      sortBy: 'popularity.desc',
-      yearFrom: CURRENT_YEAR,
-      yearTo: CURRENT_YEAR,
-      ratingMin: 6,
-    },
-  },
-  {
-    id: 'classics',
-    name: 'Classics',
-    icon: 'classic',
-    description: 'Timeless favorites before 2000',
-    filters: {
-      sortBy: 'vote_average.desc',
-      yearFrom: 1950,
-      yearTo: 1999,
-      voteCountMin: 500,
-      ratingMin: 7.5,
-    },
-  },
-  {
-    id: 'family_night',
-    name: 'Family Night',
-    icon: 'family',
-    description: 'Fun for all ages',
-    filters: {
-      sortBy: 'popularity.desc',
-      certifications: ['G', 'PG'],
-      ratingMin: 6,
-    },
-  },
-];
+
 
 export function CatalogEditor({
   catalog,
@@ -473,6 +422,18 @@ export function CatalogEditor({
   const getActiveFilters = useCallback(() => {
     const filters = localCatalog?.filters || {};
     const active = [];
+    const isMovieType = localCatalog?.type === 'movie';
+
+    // Sort By (non-default)
+    if (filters.sortBy && filters.sortBy !== 'popularity.desc') {
+      const sortOpts = sortOptions[localCatalog?.type] || sortOptions.movie || [];
+      const match = sortOpts.find((s) => s.value === filters.sortBy);
+      active.push({
+        key: 'sortBy',
+        label: `Sort: ${match?.label || filters.sortBy}`,
+        section: 'filters',
+      });
+    }
 
     // Genres
     if (filters.genres?.length > 0) {
@@ -492,35 +453,38 @@ export function CatalogEditor({
 
     // Excluded Genres
     if (filters.excludeGenres?.length > 0) {
+      const excNames = filters.excludeGenres
+        .map((id) => {
+          const genre = (genres[localCatalog?.type] || []).find((g) => g.id === id);
+          return genre?.name || id;
+        })
+        .slice(0, 2);
+      const extra = filters.excludeGenres.length > 2 ? ` +${filters.excludeGenres.length - 2}` : '';
       active.push({
         key: 'excludeGenres',
-        label: `Excluding ${filters.excludeGenres.length} genre(s)`,
+        label: `Exclude: ${excNames.join(', ')}${extra}`,
         section: 'genres',
       });
     }
 
-    // Original language (filter)
-    if (filters.language) {
-      const lang = languages.find((l) => l.code === filters.language);
+    // Genre Match Mode
+    if (filters.genreMatchMode === 'all' && filters.genres?.length > 1) {
       active.push({
-        key: 'language',
-        label: `Original language: ${lang?.name || filters.language}`,
-        section: 'filters',
+        key: 'genreMatchMode',
+        label: 'Genre match: ALL',
+        section: 'genres',
       });
     }
 
-    // Display language (localization)
-    // Display language (localization) - REMOVED (Global only)
-    /*
-    if (filters.displayLanguage) {
-      const lang = languages.find((l) => l.code === filters.displayLanguage);
+    // Original language
+    if (filters.language) {
+      const lang = languages.find((l) => l.iso_639_1 === filters.language);
       active.push({
-        key: 'displayLanguage',
-        label: `Display language: ${lang?.name || filters.displayLanguage}`,
+        key: 'language',
+        label: `Language: ${lang?.english_name || filters.language}`,
         section: 'filters',
       });
     }
-    */
 
     // Country
     if (filters.originCountry) {
@@ -536,14 +500,14 @@ export function CatalogEditor({
     if (filters.yearFrom || filters.yearTo) {
       const from = filters.yearFrom || 'Any';
       const to = filters.yearTo || 'Now';
-      active.push({ key: 'year', label: `Year: ${from}-${to}`, section: 'filters' });
+      active.push({ key: 'year', label: `Year: ${from}–${to}`, section: 'filters' });
     }
 
     // Rating
-    if (filters.ratingMin > 0 || filters.ratingMax < 10) {
+    if (filters.ratingMin > 0 || (filters.ratingMax != null && filters.ratingMax < 10)) {
       active.push({
         key: 'rating',
-        label: `Rating: ${filters.ratingMin || 0}-${filters.ratingMax || 10}`,
+        label: `Rating: ${filters.ratingMin || 0}–${filters.ratingMax ?? 10}`,
         section: 'filters',
       });
     }
@@ -552,7 +516,16 @@ export function CatalogEditor({
     if (filters.runtimeMin || filters.runtimeMax) {
       active.push({
         key: 'runtime',
-        label: `Runtime: ${filters.runtimeMin || 0}-${filters.runtimeMax || '∞'}min`,
+        label: `Runtime: ${filters.runtimeMin || 0}–${filters.runtimeMax || '∞'}min`,
+        section: 'filters',
+      });
+    }
+
+    // Minimum Votes
+    if (filters.voteCountMin > 0) {
+      active.push({
+        key: 'voteCountMin',
+        label: `Min votes: ${filters.voteCountMin.toLocaleString()}`,
         section: 'filters',
       });
     }
@@ -568,8 +541,24 @@ export function CatalogEditor({
       filters.airDateFrom ||
       filters.airDateTo
     ) {
-      // Manual date range (only show if no preset is active)
-      active.push({ key: 'releaseDate', label: 'Release date set', section: 'release' });
+      const from = filters.releaseDateFrom || filters.airDateFrom || '…';
+      const to = filters.releaseDateTo || filters.airDateTo || '…';
+      active.push({
+        key: 'releaseDate',
+        label: `${isMovieType ? 'Release' : 'Air'}: ${from} – ${to}`,
+        section: 'release',
+      });
+    }
+
+    // First Air Date range (TV)
+    if (!isMovieType && (filters.firstAirDateFrom || filters.firstAirDateTo)) {
+      const from = filters.firstAirDateFrom || '…';
+      const to = filters.firstAirDateTo || '…';
+      active.push({
+        key: 'firstAirDate',
+        label: `Premiered: ${from} – ${to}`,
+        section: 'release',
+      });
     }
 
     if (filters.firstAirDateYear) {
@@ -583,7 +572,57 @@ export function CatalogEditor({
     if (filters.primaryReleaseYear) {
       active.push({
         key: 'primaryReleaseYear',
-        label: `Primary release year: ${filters.primaryReleaseYear}`,
+        label: `Release year: ${filters.primaryReleaseYear}`,
+        section: 'release',
+      });
+    }
+
+    // Region
+    if (isMovieType && filters.region) {
+      const regionLabel =
+        countries.find((c) => c.iso_3166_1 === filters.region)?.english_name || filters.region;
+      active.push({
+        key: 'region',
+        label: `Release region: ${regionLabel}`,
+        section: 'release',
+      });
+    }
+
+    // Release Types
+    if (isMovieType && filters.releaseTypes?.length > 0) {
+      active.push({
+        key: 'releaseTypes',
+        label: `${filters.releaseTypes.length} release type(s)`,
+        section: 'release',
+      });
+    }
+
+    // Certifications (specific values)
+    if (filters.certifications?.length > 0) {
+      active.push({
+        key: 'certifications',
+        label: `Rating: ${filters.certifications.join(', ')}`,
+        section: 'release',
+      });
+    }
+
+    if (filters.certificationMin || filters.certificationMax) {
+      const min = filters.certificationMin || 'Any';
+      const max = filters.certificationMax || 'Any';
+      active.push({
+        key: 'certificationRange',
+        label: `Age range: ${min}–${max}`,
+        section: 'release',
+      });
+    }
+
+    if (filters.certificationCountry && filters.certificationCountry !== 'US') {
+      const certCountryLabel =
+        countries.find((c) => c.iso_3166_1 === filters.certificationCountry)?.english_name ||
+        filters.certificationCountry;
+      active.push({
+        key: 'certificationCountry',
+        label: `Rating country: ${certCountryLabel}`,
         section: 'release',
       });
     }
@@ -596,31 +635,136 @@ export function CatalogEditor({
       });
     }
 
-    if (filters.certificationMin || filters.certificationMax) {
-      const min = filters.certificationMin || 'Any';
-      const max = filters.certificationMax || 'Any';
+    // TV Status
+    if (!isMovieType && filters.tvStatus) {
+      const statusMatch = tvStatuses.find((s) => s.value === filters.tvStatus);
       active.push({
-        key: 'certificationRange',
-        label: `Age rating: ${min}-${max}`,
+        key: 'tvStatus',
+        label: `Status: ${statusMatch?.label || filters.tvStatus}`,
         section: 'release',
       });
     }
 
-    if (filters.certificationCountry) {
-      const certCountryLabel =
-        countries.find((c) => c.iso_3166_1 === filters.certificationCountry)?.english_name ||
-        filters.certificationCountry;
+    // TV Type
+    if (!isMovieType && filters.tvType) {
+      const typeMatch = tvTypes.find((t) => t.value === filters.tvType);
       active.push({
-        key: 'certificationCountry',
-        label: `Rating country: ${certCountryLabel}`,
+        key: 'tvType',
+        label: `Type: ${typeMatch?.label || filters.tvType}`,
         section: 'release',
       });
+    }
+
+    // Streaming
+    if (filters.watchRegion) {
+      const regionLabel =
+        watchRegions.find((r) => r.iso_3166_1 === filters.watchRegion)?.english_name ||
+        filters.watchRegion;
+      active.push({
+        key: 'watchRegion',
+        label: `Stream region: ${regionLabel}`,
+        section: 'streaming',
+      });
+    }
+
+    if (filters.watchProviders?.length > 0) {
+      active.push({
+        key: 'watchProviders',
+        label: `${filters.watchProviders.length} streaming service(s)`,
+        section: 'streaming',
+      });
+    }
+
+    if (filters.watchMonetizationTypes) {
+      active.push({
+        key: 'watchMonetizationTypes',
+        label: `Monetization: ${filters.watchMonetizationTypes}`,
+        section: 'streaming',
+      });
+    }
+
+    // TV Networks
+    if (filters.withNetworks) {
+      const count = filters.withNetworks.split('|').filter(Boolean).length;
+      active.push({
+        key: 'withNetworks',
+        label: `${count} network(s)`,
+        section: 'streaming',
+      });
+    }
+
+    // People
+    if (selectedPeople.length > 0) {
+      const names = selectedPeople.slice(0, 2).map((p) => p.name);
+      const extra = selectedPeople.length > 2 ? ` +${selectedPeople.length - 2}` : '';
+      active.push({
+        key: 'people',
+        label: `Cast/Crew: ${names.join(', ')}${extra}`,
+        section: 'people',
+      });
+    }
+
+    // Companies
+    if (selectedCompanies.length > 0) {
+      const names = selectedCompanies.slice(0, 2).map((c) => c.name);
+      const extra = selectedCompanies.length > 2 ? ` +${selectedCompanies.length - 2}` : '';
+      active.push({
+        key: 'companies',
+        label: `Studio: ${names.join(', ')}${extra}`,
+        section: 'people',
+      });
+    }
+
+    // Excluded Companies
+    if (excludeCompanies.length > 0) {
+      active.push({
+        key: 'excludeCompanies',
+        label: `Exclude ${excludeCompanies.length} studio(s)`,
+        section: 'people',
+      });
+    }
+
+    // Keywords
+    if (selectedKeywords.length > 0) {
+      const names = selectedKeywords.slice(0, 2).map((k) => k.name);
+      const extra = selectedKeywords.length > 2 ? ` +${selectedKeywords.length - 2}` : '';
+      active.push({
+        key: 'keywords',
+        label: `Keywords: ${names.join(', ')}${extra}`,
+        section: 'people',
+      });
+    }
+
+    // Excluded Keywords
+    if (excludeKeywords.length > 0) {
+      active.push({
+        key: 'excludeKeywords',
+        label: `Exclude ${excludeKeywords.length} keyword(s)`,
+        section: 'people',
+      });
+    }
+
+    // Options
+    if (filters.includeAdult) {
+      active.push({ key: 'includeAdult', label: 'Adult content', section: 'options' });
+    }
+
+    if (filters.includeVideo) {
+      active.push({ key: 'includeVideo', label: 'Include video', section: 'options' });
+    }
+
+    if (filters.randomize) {
+      active.push({ key: 'randomize', label: 'Randomized', section: 'options' });
+    }
+
+    if (filters.discoverOnly) {
+      active.push({ key: 'discoverOnly', label: 'Discover only', section: 'options' });
     }
 
     if (filters.includeNullFirstAirDates) {
       active.push({
         key: 'includeNullFirstAirDates',
-        label: 'Include unknown air dates',
+        label: 'Unknown air dates',
         section: 'options',
       });
     }
@@ -633,65 +777,49 @@ export function CatalogEditor({
       });
     }
 
-    if (filters.includeVideo) {
-      active.push({
-        key: 'includeVideo',
-        label: 'Include video content',
-        section: 'options',
-      });
-    }
-
-    // Streaming
-    if (filters.watchProviders?.length > 0) {
-      active.push({
-        key: 'watchProviders',
-        label: `${filters.watchProviders.length} streaming service(s)`,
-        section: 'streaming',
-      });
-    }
-
-    // People
-    if (selectedPeople.length > 0) {
-      active.push({
-        key: 'people',
-        label: `${selectedPeople.length} cast/crew`,
-        section: 'people',
-      });
-    }
-
-    // Keywords
-    if (selectedKeywords.length > 0) {
-      active.push({
-        key: 'keywords',
-        label: `${selectedKeywords.length} keyword(s)`,
-        section: 'people',
-      });
-    }
-
     return active;
-  }, [localCatalog, genres, languages, countries, selectedPeople, selectedKeywords]);
+  }, [
+    localCatalog,
+    genres,
+    sortOptions,
+    languages,
+    countries,
+    tvStatuses,
+    tvTypes,
+    watchRegions,
+    selectedPeople,
+    selectedCompanies,
+    selectedKeywords,
+    excludeKeywords,
+    excludeCompanies,
+  ]);
 
   // Clear a specific filter
   const clearFilter = useCallback(
     (filterKey) => {
       switch (filterKey) {
+        case 'sortBy':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, sortBy: 'popularity.desc' },
+          }));
+          break;
         case 'genres':
           setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, genres: [] } }));
           break;
         case 'excludeGenres':
           setLocalCatalog((prev) => ({ ...prev, filters: { ...prev.filters, excludeGenres: [] } }));
           break;
+        case 'genreMatchMode':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, genreMatchMode: 'any' },
+          }));
+          break;
         case 'language':
           setLocalCatalog((prev) => ({
             ...prev,
             filters: { ...prev.filters, language: undefined },
-          }));
-          break;
-        case 'displayLanguage':
-          // REMOVED
-          setLocalCatalog((prev) => ({
-            ...prev,
-            filters: { ...prev.filters, displayLanguage: undefined },
           }));
           break;
         case 'originCountry':
@@ -718,16 +846,10 @@ export function CatalogEditor({
             filters: { ...prev.filters, runtimeMin: undefined, runtimeMax: undefined },
           }));
           break;
-        case 'primaryReleaseYear':
+        case 'voteCountMin':
           setLocalCatalog((prev) => ({
             ...prev,
-            filters: { ...prev.filters, primaryReleaseYear: undefined },
-          }));
-          break;
-        case 'certificationCountry':
-          setLocalCatalog((prev) => ({
-            ...prev,
-            filters: { ...prev.filters, certificationCountry: undefined },
+            filters: { ...prev.filters, voteCountMin: 0 },
           }));
           break;
         case 'datePreset':
@@ -746,12 +868,48 @@ export function CatalogEditor({
               releaseDateTo: undefined,
               airDateFrom: undefined,
               airDateTo: undefined,
-              datePreset: undefined,
-              firstAirDateYear: undefined,
-              primaryReleaseYear: undefined,
             },
           }));
-          setSelectedDatePreset(null);
+          break;
+        case 'firstAirDate':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: {
+              ...prev.filters,
+              firstAirDateFrom: undefined,
+              firstAirDateTo: undefined,
+            },
+          }));
+          break;
+        case 'firstAirDateYear':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, firstAirDateYear: undefined },
+          }));
+          break;
+        case 'primaryReleaseYear':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, primaryReleaseYear: undefined },
+          }));
+          break;
+        case 'region':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, region: undefined, releaseTypes: [] },
+          }));
+          break;
+        case 'releaseTypes':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, releaseTypes: [] },
+          }));
+          break;
+        case 'certifications':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, certifications: [] },
+          }));
           break;
         case 'certificationRange':
           setLocalCatalog((prev) => ({
@@ -761,6 +919,93 @@ export function CatalogEditor({
               certificationMin: undefined,
               certificationMax: undefined,
             },
+          }));
+          break;
+        case 'certificationCountry':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, certificationCountry: undefined },
+          }));
+          break;
+        case 'timezone':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, timezone: undefined },
+          }));
+          break;
+        case 'tvStatus':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, tvStatus: undefined },
+          }));
+          break;
+        case 'tvType':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, tvType: undefined },
+          }));
+          break;
+        case 'watchRegion':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, watchRegion: undefined },
+          }));
+          break;
+        case 'watchProviders':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, watchProviders: [] },
+          }));
+          break;
+        case 'watchMonetizationTypes':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, watchMonetizationTypes: undefined },
+          }));
+          break;
+        case 'withNetworks':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, withNetworks: undefined },
+          }));
+          break;
+        case 'people':
+          setSelectedPeople([]);
+          break;
+        case 'companies':
+          setSelectedCompanies([]);
+          break;
+        case 'excludeCompanies':
+          setExcludeCompanies([]);
+          break;
+        case 'keywords':
+          setSelectedKeywords([]);
+          break;
+        case 'excludeKeywords':
+          setExcludeKeywords([]);
+          break;
+        case 'includeAdult':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, includeAdult: undefined },
+          }));
+          break;
+        case 'includeVideo':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, includeVideo: undefined },
+          }));
+          break;
+        case 'randomize':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, randomize: undefined },
+          }));
+          break;
+        case 'discoverOnly':
+          setLocalCatalog((prev) => ({
+            ...prev,
+            filters: { ...prev.filters, discoverOnly: undefined },
           }));
           break;
         case 'includeNullFirstAirDates':
@@ -775,29 +1020,17 @@ export function CatalogEditor({
             filters: { ...prev.filters, screenedTheatrically: undefined },
           }));
           break;
-        case 'includeVideo':
-          setLocalCatalog((prev) => ({
-            ...prev,
-            filters: { ...prev.filters, includeVideo: undefined },
-          }));
-          break;
-        case 'watchProviders':
-          setLocalCatalog((prev) => ({
-            ...prev,
-            filters: { ...prev.filters, watchProviders: [] },
-          }));
-          break;
-        case 'people':
-          setSelectedPeople([]);
-          break;
-        case 'keywords':
-          setSelectedKeywords([]);
-          break;
         default:
           break;
       }
     },
-    [setSelectedKeywords, setSelectedPeople]
+    [
+      setSelectedPeople,
+      setSelectedCompanies,
+      setSelectedKeywords,
+      setExcludeKeywords,
+      setExcludeCompanies,
+    ]
   );
 
   // Clear all filters
@@ -806,7 +1039,6 @@ export function CatalogEditor({
       ...prev,
       filters: {
         ...DEFAULT_CATALOG.filters,
-        sortBy: prev.filters?.sortBy || 'popularity.desc',
       },
     }));
     setSelectedPeople([]);
@@ -823,46 +1055,7 @@ export function CatalogEditor({
     setSelectedPeople,
   ]);
 
-  // Apply a filter template
-  const applyTemplate = useCallback((template) => {
-    setLocalCatalog((prev) => ({
-      ...prev,
-      filters: {
-        ...prev.filters,
-        ...template.filters,
-      },
-    }));
-  }, []);
 
-  // Surprise Me - random sensible filters
-  const handleSurpriseMe = useCallback(() => {
-    const currentGenreList = genres[localCatalog?.type] || [];
-    if (currentGenreList.length === 0) return;
-
-    // Pick 1-2 random genres
-    const shuffled = [...currentGenreList].sort(() => Math.random() - 0.5);
-    const randomGenres = shuffled.slice(0, Math.floor(Math.random() * 2) + 1).map((g) => g.id);
-
-    // Random decade
-    const decades = [1980, 1990, 2000, 2010, 2020];
-    const randomDecade = decades[Math.floor(Math.random() * decades.length)];
-
-    // Random minimum rating
-    const ratings = [6, 6.5, 7, 7.5];
-    const randomRating = ratings[Math.floor(Math.random() * ratings.length)];
-
-    setLocalCatalog((prev) => ({
-      ...prev,
-      filters: {
-        ...prev.filters,
-        genres: randomGenres,
-        yearFrom: randomDecade,
-        yearTo: randomDecade + 9,
-        ratingMin: randomRating,
-        sortBy: Math.random() > 0.5 ? 'vote_average.desc' : 'popularity.desc',
-      },
-    }));
-  }, [genres, localCatalog?.type]);
 
   // Early return if no catalog selected
   if (!catalog) {
@@ -1005,34 +1198,6 @@ export function CatalogEditor({
               TV Shows
             </button>
           </div>
-
-          {/* Quick Actions Bar */}
-          {supportsFullFilters && (
-            <div className="quick-actions-bar">
-              <div className="quick-actions-row">
-                <button
-                  className="quick-action-btn surprise-btn"
-                  onClick={handleSurpriseMe}
-                  title="Apply random filters for discovery"
-                >
-                  <Shuffle size={16} />
-                  Surprise Me
-                </button>
-                <div className="template-divider" />
-                {FILTER_TEMPLATES.map((template) => (
-                  <button
-                    key={template.id}
-                    className="quick-action-btn template-btn"
-                    onClick={() => applyTemplate(template)}
-                    title={template.description}
-                  >
-                    <Zap size={14} />
-                    {template.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Active Filters Summary */}
           {activeFilters.length > 0 && (

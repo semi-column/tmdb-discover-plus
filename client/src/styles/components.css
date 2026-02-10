@@ -3115,61 +3115,6 @@ input[type='date'] {
 }
 
 /* Quick Actions Bar */
-.quick-actions-bar {
-  margin-bottom: 16px;
-  padding: 12px;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-}
-
-.quick-actions-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.quick-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.quick-action-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--accent-primary);
-}
-
-.quick-action-btn.surprise-btn {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  color: white;
-  border: none;
-}
-
-.quick-action-btn.surprise-btn:hover {
-  opacity: 0.9;
-  transform: scale(1.02);
-}
-
-.template-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--border-color);
-  margin: 0 4px;
-}
-
 /* Active Filters Bar */
 .active-filters-bar {
   display: flex;
