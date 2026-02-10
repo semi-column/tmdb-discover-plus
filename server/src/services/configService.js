@@ -4,6 +4,7 @@ import { createLogger } from '../utils/logger.js';
 import { sanitizeString, isValidUserId, isValidApiKeyFormat } from '../utils/validation.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import { computeApiKeyId } from '../utils/security.js';
+import { getConfigCache } from './configCache.js';
 
 const log = createLogger('configService');
 
@@ -26,13 +27,17 @@ export function getPosterKeyFromConfig(config) {
 export async function getUserConfig(userId, overrideApiKey = null) {
   log.debug('Getting user config', { userId });
 
-  const storage = getStorage();
+  const configCache = getConfigCache();
   try {
-    const config = await storage.getUserConfig(userId);
-    log.debug('Storage query result', {
-      found: !!config,
-      userId: config?.userId,
-      catalogCount: config?.catalogs?.length || 0,
+    const config = await configCache.getOrLoad(userId, async () => {
+      const storage = getStorage();
+      const result = await storage.getUserConfig(userId);
+      log.debug('Storage query result', {
+        found: !!result,
+        userId: result?.userId,
+        catalogCount: result?.catalogs?.length || 0,
+      });
+      return result;
     });
     return config;
   } catch (err) {
@@ -113,6 +118,11 @@ export async function saveUserConfig(config) {
 
     const storage = getStorage();
     const result = await storage.saveUserConfig(updateData);
+
+    // Invalidate config cache so next read picks up the new data
+    const configCache = getConfigCache();
+    configCache.invalidate(safeUserId);
+    if (result) configCache.set(safeUserId, result);
 
     log.debug('Config saved to storage', {
       userId: result?.userId,
@@ -213,6 +223,10 @@ export async function deleteUserConfig(userId, apiKey) {
     }
 
     await storage.deleteUserConfig(safeUserId);
+
+    // Invalidate config cache
+    const configCache = getConfigCache();
+    configCache.invalidate(safeUserId);
 
     log.info('Config deleted from storage', { userId: safeUserId });
     return { deleted: true, userId: safeUserId };

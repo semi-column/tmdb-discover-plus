@@ -12,11 +12,13 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { addonRateLimit } from '../utils/rateLimit.js';
+import { etagMiddleware } from '../utils/etag.js';
 
 const log = createLogger('addon');
 
 const router = Router();
 router.use(addonRateLimit);
+router.use(etagMiddleware);
 
 import { buildManifest, enrichManifestWithGenres } from '../services/manifestService.js';
 
@@ -57,7 +59,7 @@ router.get('/:userId/manifest.json', async (req, res) => {
       res.set('Expires', '0');
     }
 
-    res.json(manifest);
+    res.etagJson(manifest, { extra: userId });
   } catch (error) {
     log.error('Manifest error', { error: error.message });
     res.status(500).json({ error: error.message });
@@ -312,11 +314,11 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       cacheHeader: res.get('Cache-Control'),
     });
 
-    res.json({
+    res.etagJson({
       metas: filteredMetas,
       cacheMaxAge: randomize ? 0 : 300,
       staleRevalidate: randomize ? 0 : 600,
-    });
+    }, { extra: `${userId}:${catalogId}:${skip}` });
   } catch (error) {
     log.error('Catalog error', { error: error.message });
     res.json({ metas: [] });
@@ -386,12 +388,12 @@ async function handleMetaRequest(userId, type, id, extra, res) {
       language
     );
 
-    res.json({
+    res.etagJson({
       meta,
       cacheMaxAge: 3600,
       staleRevalidate: 86400,
       staleError: 86400,
-    });
+    }, { extra: `${userId}:${id}` });
   } catch (error) {
     log.error('Meta error', { error: error.message });
     res.json({ meta: {} });

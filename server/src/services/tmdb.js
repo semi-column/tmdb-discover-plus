@@ -4,9 +4,12 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getCache } from './cache/index.js';
+import { CachedError, classifyError } from './cache/CacheWrapper.js';
 import { shuffleArray } from '../utils/helpers.js';
 import { createLogger } from '../utils/logger.js';
 import { generatePosterUrl, generateBackdropUrl, isValidPosterConfig } from './posterService.js';
+import { getTmdbThrottle } from './tmdbThrottle.js';
+import { getMetrics } from './metrics.js';
 
 import { getRpdbRating } from './rpdb.js';
 
@@ -152,11 +155,25 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
 
   const cacheKey = url.toString();
   const cache = getCache();
+  const metrics = getMetrics();
 
+  // Check cache — CacheWrapper handles self-healing, stale-while-revalidate,
+  // and returns cached errors as { __errorType } markers
   try {
     const cached = await cache.get(cacheKey);
-    if (cached) return cached;
+    if (cached !== null && cached !== undefined) {
+      // Cached error — throw so caller sees it as a recent failure
+      if (cached.__errorType) {
+        throw new CachedError(cached.__errorType, cached.__errorMessage);
+      }
+      // Wrapped data from CacheWrapper
+      if (cached.__cacheWrapper) return cached.data;
+      // Legacy unwrapped data
+      return cached;
+    }
   } catch (err) {
+    // Re-throw CachedErrors so callers can handle them
+    if (err instanceof CachedError) throw err;
     log.warn('Cache get failed', { error: err.message });
   }
 
@@ -168,26 +185,42 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
         log.debug(`TMDB request (attempt ${attempt + 1})`, { url: redactTmdbUrl(url.toString()) });
       }
 
+      // Outbound rate limiting — wait for token before calling TMDB
+      const throttle = getTmdbThrottle();
+      await throttle.acquire();
+
+      const fetchStart = Date.now();
       const response = await fetch(url.toString(), { agent: httpsAgent });
+      const fetchDuration = Date.now() - fetchStart;
 
       if (!response.ok) {
-        // If 429 (Too Many Requests), we might want to respect Retry-After header,
-        // but typically standard backoff is enough for loose rate limits.
-        // For 5xx errors, we retry. For 4xx (except maybe 429), we generally don't retry.
+        metrics.trackProviderCall('tmdb', fetchDuration, true);
+
         if (response.status >= 500 || response.status === 429) {
+          // Respect Retry-After header for 429s
+          if (response.status === 429) {
+            const retryAfter = response.headers.get('Retry-After');
+            if (retryAfter) {
+              const waitMs = Math.min(parseInt(retryAfter) * 1000, 10000) || 1000;
+              log.warn('TMDB 429 — respecting Retry-After', { retryAfter, waitMs });
+              await new Promise((resolve) => setTimeout(resolve, waitMs));
+            }
+          }
           throw new Error(`TMDB API retryable error: ${response.status}`);
         }
 
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.status_message || `TMDB API error: ${response.status}`);
+        const err = new Error(error.status_message || `TMDB API error: ${response.status}`);
+        err.statusCode = response.status;
+        throw err;
       }
 
+      metrics.trackProviderCall('tmdb', fetchDuration, false);
       const data = await response.json();
 
       try {
         await cache.set(cacheKey, data, 3600); // 1 hour TTL
       } catch (cacheErr) {
-        // If cache is full or errors, just log it and proceed. Don't crash the request.
         log.warn('Failed to cache TMDB response', { key: cacheKey, error: cacheErr.message });
       }
 
@@ -218,6 +251,16 @@ async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
   }
 
   log.error('TMDB fetch error after retries', { error: redactTmdbUrl(lastError.message) });
+
+  // Cache the error with type-specific TTL to prevent thundering herd
+  const errorType = classifyError(lastError, lastError.statusCode);
+  try {
+    await cache.setError(cacheKey, errorType, lastError.message);
+    metrics.trackError(errorType);
+  } catch {
+    /* best effort */
+  }
+
   throw lastError;
 }
 

@@ -5,13 +5,17 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initStorage, getStorage } from './services/storage/index.js';
-import { initCache } from './services/cache/index.js';
+import { initCache, getCacheStatus } from './services/cache/index.js';
 import { addonRouter } from './routes/addon.js';
 import { apiRouter } from './routes/api.js';
 import { authRouter } from './routes/auth.js';
 import { createLogger } from './utils/logger.js';
 import { getBaseUrl } from './utils/helpers.js';
 import { apiRateLimit } from './utils/rateLimit.js';
+import { warmEssentialCaches } from './services/cacheWarmer.js';
+import { getMetrics, destroyMetrics } from './services/metrics.js';
+import { destroyTmdbThrottle, getTmdbThrottle } from './services/tmdbThrottle.js';
+import { getConfigCache } from './services/configCache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -22,6 +26,18 @@ const SERVER_VERSION = pkg.version;
 
 let server = null;
 let isShuttingDown = false;
+
+/**
+ * Server status — tracks startup state, degradation, and readiness.
+ * Inspired by AIOMetadata's critical/non-critical init classification.
+ */
+const serverStatus = {
+  healthy: false,
+  degraded: false,
+  reason: '',
+  startedAt: null,
+  cacheWarming: { warmed: 0, failed: 0, skipped: false },
+};
 
 app.set('trust proxy', true);
 
@@ -53,6 +69,10 @@ app.use(express.json());
 
 // Global generic rate limit for all routes
 app.use(apiRateLimit);
+
+// Request metrics tracking
+const metrics = getMetrics();
+app.use(metrics.middleware());
 
 const clientDistPath = path.join(__dirname, '../../client/dist');
 const clientManifestPath = path.join(__dirname, '../../client/public/manifest.json');
@@ -112,7 +132,7 @@ app.use(
 );
 
 // ============================================
-// Health Check Endpoint
+// Enhanced Health Check Endpoint
 // ============================================
 app.get('/health', (req, res) => {
   // Return 503 if shutting down
@@ -132,12 +152,29 @@ app.get('/health', (req, res) => {
     void e;
   }
 
+  // Determine overall status
+  let status = 'ok';
+  if (!serverStatus.healthy) status = 'starting';
+  else if (serverStatus.degraded) status = 'degraded';
+
+  const cacheStatus = getCacheStatus();
+  const metricsData = getMetrics().getSummary();
+  const throttleStats = getTmdbThrottle().getStats();
+  const configCacheStats = getConfigCache().getStats();
+
   const health = {
-    status: 'ok',
+    status,
+    degradedReason: serverStatus.degraded ? serverStatus.reason : undefined,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    startedAt: serverStatus.startedAt,
     version: SERVER_VERSION,
     database: dbStatus,
+    cache: cacheStatus,
+    configCache: configCacheStats,
+    tmdbThrottle: throttleStats,
+    cacheWarming: serverStatus.cacheWarming,
+    metrics: metricsData,
     memory: {
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
@@ -145,7 +182,8 @@ app.get('/health', (req, res) => {
     },
   };
 
-  res.json(health);
+  const httpStatus = status === 'ok' || status === 'degraded' ? 200 : 503;
+  res.status(httpStatus).json(health);
 });
 
 app.use('/api/auth', authRouter);
@@ -176,6 +214,10 @@ function gracefulShutdown(signal) {
     log.warn('Shutdown timeout reached, forcing exit');
     process.exit(1);
   }, 30000);
+
+  // Cleanup singletons
+  destroyTmdbThrottle();
+  destroyMetrics();
 
   if (server) {
     server.close(async (err) => {
@@ -214,14 +256,40 @@ process.on('unhandledRejection', (reason, promise) => {
 
 async function start() {
   try {
-    await initCache();
+    // ---- Critical initialization ----
+    // Cache and storage are critical — if both fail, we can't serve users.
+    try {
+      await initCache();
+    } catch (cacheErr) {
+      // Cache failure is degraded, not fatal (memory fallback already handled in initCache)
+      log.warn('Cache initialization issue (degraded mode)', { error: cacheErr.message });
+      serverStatus.degraded = true;
+      serverStatus.reason = 'Cache initialization failed — using memory fallback';
+    }
+
     await initStorage();
+
+    // Mark server as healthy (can serve requests)
+    serverStatus.healthy = true;
+    serverStatus.startedAt = new Date().toISOString();
 
     server = app.listen(PORT, '0.0.0.0', () => {
       log.info(`TMDB Discover+ running at http://0.0.0.0:${PORT}`);
       log.info(`Configure at http://localhost:${PORT}/configure`);
       log.info(`Health check at http://localhost:${PORT}/health`);
     });
+
+    // ---- Non-critical initialization (background, fire-and-forget) ----
+    // Cache warming runs after server is already listening so it doesn't block startup.
+    const defaultApiKey = process.env.TMDB_API_KEY;
+    warmEssentialCaches(defaultApiKey)
+      .then((result) => {
+        serverStatus.cacheWarming = result;
+        log.info('Background cache warming finished', result);
+      })
+      .catch((err) => {
+        log.warn('Background cache warming failed (non-critical)', { error: err.message });
+      });
   } catch (error) {
     log.error('Failed to start server', { error: error.message });
     process.exit(1);
