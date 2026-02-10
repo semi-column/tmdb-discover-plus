@@ -53,12 +53,16 @@ class MetricsTracker {
         this.activeUsers.set(userId, Date.now());
       }
 
-      // Track on response finish
+      // Track on response finish — wrapped in try-catch so metrics never crash the server
       const onFinish = () => {
         res.removeListener('finish', onFinish);
-        const duration = Date.now() - start;
-        const route = this._normalizeRoute(req);
-        this._recordEndpoint(route, duration, res.statusCode >= 400);
+        try {
+          const duration = Date.now() - start;
+          const route = this._normalizeRoute(req);
+          this._recordEndpoint(route, duration, res.statusCode >= 400);
+        } catch {
+          /* metrics are non-critical — never crash the process */
+        }
       };
 
       res.on('finish', onFinish);
@@ -140,7 +144,8 @@ class MetricsTracker {
   /** @private */
   _normalizeRoute(req) {
     // Normalize /:userId/ to /:userId/ without revealing actual ID
-    const path = req.route?.path || req.path || req.url;
+    const raw = req.route?.path || req.path || req.url || '/unknown';
+    const path = typeof raw === 'string' ? raw : String(raw);
     return path
       .replace(/\/[a-zA-Z0-9_-]{6,30}\//g, '/:userId/')
       .replace(/\/tt\d+/g, '/:imdbId')
