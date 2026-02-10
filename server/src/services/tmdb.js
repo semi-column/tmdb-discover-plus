@@ -82,7 +82,7 @@ async function getCinemetaRating(imdbId, type) {
 
     const response = await fetch(url.toString(), {
       agent: httpsAgent,
-      timeout: 8000,
+      signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) {
       log.warn('Cinemeta non-OK response', { imdbId, status: response.status });
@@ -90,7 +90,9 @@ async function getCinemetaRating(imdbId, type) {
     }
     const data = await response.json();
     const rating = data?.meta?.imdbRating || null;
-    log.debug('Cinemeta rating result', { imdbId, rating });
+    if (rating) {
+      log.info('Cinemeta rating fetched', { imdbId, rating });
+    }
 
     // Only cache actual ratings; avoid caching null for 24h
     if (rating) {
