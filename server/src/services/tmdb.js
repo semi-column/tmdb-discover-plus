@@ -82,22 +82,28 @@ async function getCinemetaRating(imdbId, type) {
 
     const response = await fetch(url.toString(), {
       agent: httpsAgent,
-      timeout: 5000,
+      timeout: 8000,
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      log.warn('Cinemeta non-OK response', { imdbId, status: response.status });
+      return null;
+    }
     const data = await response.json();
     const rating = data?.meta?.imdbRating || null;
-    log.info('Cinemeta rating result', { imdbId, rating });
+    log.debug('Cinemeta rating result', { imdbId, rating });
 
-    try {
-      await cache.set(cacheKey, rating, 86400); // 24 hours
-    } catch (e) {
-      /* ignore */
+    // Only cache actual ratings; avoid caching null for 24h
+    if (rating) {
+      try {
+        await cache.set(cacheKey, rating, 86400); // 24 hours
+      } catch (e) {
+        /* ignore */
+      }
     }
 
     return rating;
   } catch (error) {
-    log.debug('Cinemeta rating fetch failed', { imdbId, error: error.message });
+    log.warn('Cinemeta rating fetch failed', { imdbId, error: error.message });
     return null;
   }
 }
@@ -1161,7 +1167,7 @@ export async function toStremioFullMeta(
       : targetLanguage.toUpperCase()
     : 'US';
 
-  log.info('Certification lookup', { targetLanguage, countryCode });
+  log.debug('Certification lookup', { targetLanguage, countryCode });
 
   let certification = null;
   if (isMovie && details.release_dates?.results) {
@@ -2004,7 +2010,7 @@ export async function toStremioFullMeta(
         (typeof details.vote_average === 'number' && details.vote_average > 0
           ? details.vote_average.toFixed(1)
           : null);
-      log.info('Final imdbRating for meta', {
+      log.debug('Final imdbRating for meta', {
         actualImdbRating,
         voteAverage: details.vote_average,
         finalRating,

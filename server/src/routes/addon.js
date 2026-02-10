@@ -394,7 +394,7 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
     const configuredLanguage = pickPreferredMetaLanguage(config);
     const language = extra?.displayLanguage || configuredLanguage || extra?.language || 'en';
 
-    log.info('Meta language resolution', {
+    log.debug('Meta language resolution', {
       configured: configuredLanguage,
       extraDisplay: extra?.displayLanguage,
       extraLang: extra?.language,
