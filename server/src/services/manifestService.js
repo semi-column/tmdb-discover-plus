@@ -64,6 +64,8 @@ export function buildManifest(userConfig, baseUrl) {
     catalogs,
     behaviorHints: {
       configurable: true,
+      configurationRequired: false,
+      newEpisodeNotifications: true,
     },
   };
 }

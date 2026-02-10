@@ -132,6 +132,33 @@ app.use(
 );
 
 // ============================================
+// Fallback Placeholder Images
+// ============================================
+const PLACEHOLDER_POSTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
+  <rect width="300" height="450" fill="#1a1a2e"/>
+  <text x="150" y="210" text-anchor="middle" fill="#555" font-family="sans-serif" font-size="40">🎬</text>
+  <text x="150" y="260" text-anchor="middle" fill="#444" font-family="sans-serif" font-size="14">No Poster</text>
+</svg>`;
+
+const PLACEHOLDER_THUMB_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="281" viewBox="0 0 500 281">
+  <rect width="500" height="281" fill="#1a1a2e"/>
+  <text x="250" y="130" text-anchor="middle" fill="#555" font-family="sans-serif" font-size="36">🎬</text>
+  <text x="250" y="170" text-anchor="middle" fill="#444" font-family="sans-serif" font-size="13">No Thumbnail</text>
+</svg>`;
+
+app.get('/placeholder-poster.svg', (req, res) => {
+  res.set('Content-Type', 'image/svg+xml');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.send(PLACEHOLDER_POSTER_SVG);
+});
+
+app.get('/placeholder-thumbnail.svg', (req, res) => {
+  res.set('Content-Type', 'image/svg+xml');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.send(PLACEHOLDER_THUMB_SVG);
+});
+
+// ============================================
 // Enhanced Health Check Endpoint
 // ============================================
 app.get('/health', (req, res) => {

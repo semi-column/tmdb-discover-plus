@@ -102,6 +102,38 @@ async function getCinemetaRating(imdbId, type) {
   }
 }
 
+/**
+ * Batch-fetch Cinemeta ratings for a list of items.
+ * Returns a Map of imdbId → rating string.
+ * Non-blocking: individual failures are silently skipped.
+ */
+export async function batchGetCinemetaRatings(items, type) {
+  const ratingsMap = new Map();
+  const imdbIds = items
+    .map((item) => item.imdb_id)
+    .filter((id) => id && /^tt\d{7,10}$/.test(id));
+
+  if (imdbIds.length === 0) return ratingsMap;
+
+  // Deduplicate
+  const unique = [...new Set(imdbIds)];
+
+  const results = await Promise.allSettled(
+    unique.map(async (imdbId) => {
+      const rating = await getCinemetaRating(imdbId, type);
+      return { imdbId, rating };
+    })
+  );
+
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.rating) {
+      ratingsMap.set(r.value.imdbId, r.value.rating);
+    }
+  }
+
+  return ratingsMap;
+}
+
 function redactTmdbUrl(urlString) {
   if (typeof urlString !== 'string') return urlString;
   return urlString.replace(/([?&]api_key=)[^&\s]+/gi, '$1[REDACTED]');
@@ -983,6 +1015,19 @@ export async function getSeriesEpisodes(apiKey, tmdbId, details, options = {}) {
   // Filter out specials (season 0) and get regular seasons
   const regularSeasons = details.seasons.filter((s) => s.season_number > 0);
 
+  // Series backdrop for episode thumbnail fallback
+  const seriesBackdrop = details.backdrop_path
+    ? `${TMDB_IMAGE_BASE}/w500${details.backdrop_path}`
+    : null;
+
+  // Build a season poster map for episode thumbnail fallback
+  const seasonPosterMap = {};
+  for (const s of regularSeasons) {
+    if (s.poster_path) {
+      seasonPosterMap[s.season_number] = `${TMDB_IMAGE_BASE}/w500${s.poster_path}`;
+    }
+  }
+
   // Fetch all seasons in parallel (with reasonable limit)
   const seasonPromises = regularSeasons.slice(0, 50).map(async (season) => {
     const seasonData = await getSeasonDetails(apiKey, tmdbId, season.season_number, options);
@@ -994,6 +1039,11 @@ export async function getSeriesEpisodes(apiKey, tmdbId, details, options = {}) {
         ? `${imdbId}:${ep.season_number}:${ep.episode_number}`
         : `tmdb:${tmdbId}:${ep.season_number}:${ep.episode_number}`;
 
+      // Thumbnail fallback chain: episode still → season poster → series backdrop
+      const thumbnail = ep.still_path
+        ? `${TMDB_IMAGE_BASE}/w500${ep.still_path}`
+        : seasonPosterMap[ep.season_number] || seriesBackdrop || undefined;
+
       return {
         id: episodeId,
         season: ep.season_number,
@@ -1001,7 +1051,8 @@ export async function getSeriesEpisodes(apiKey, tmdbId, details, options = {}) {
         title: ep.name || `Episode ${ep.episode_number}`,
         released: ep.air_date ? new Date(ep.air_date).toISOString() : undefined,
         overview: ep.overview || undefined,
-        thumbnail: ep.still_path ? `${TMDB_IMAGE_BASE}/original${ep.still_path}` : undefined,
+        thumbnail,
+        available: ep.air_date ? new Date(ep.air_date) <= new Date() : undefined,
         runtime: formatRuntime(ep.runtime),
       };
     });
@@ -1063,7 +1114,8 @@ export async function toStremioFullMeta(
   requestedId = null,
   posterOptions = null,
   videos = null,
-  targetLanguage = null
+  targetLanguage = null,
+  { manifestUrl = null, genreCatalogId = null } = {}
 ) {
   if (!details) return {};
   const isMovie = type === 'movie';
@@ -1749,12 +1801,15 @@ export async function toStremioFullMeta(
     });
   }
 
-  // Genre Links
+  // Genre Links — deep-link to own discover catalog when manifestUrl is available, fallback to search
   genres.forEach((genre) => {
+    const genreUrl = manifestUrl && genreCatalogId
+      ? `stremio:///discover/${encodeURIComponent(manifestUrl)}/${type}/${genreCatalogId}?genre=${encodeURIComponent(genre)}`
+      : `stremio:///search?search=${encodeURIComponent(genre)}`;
     links.push({
       name: genre,
       category: 'Genres',
-      url: `stremio:///search?search=${encodeURIComponent(genre)}`,
+      url: genreUrl,
     });
   });
 
@@ -1937,6 +1992,7 @@ export async function toStremioFullMeta(
     posterShape: 'poster',
     background,
     fanart: background, // Compatibility alias
+    landscapePoster: background, // Landscape preview for TV clients
     logo: logo ? `${TMDB_IMAGE_BASE}/original${logo}` : undefined,
     description: details.overview || '',
     year: year || undefined,
@@ -2013,7 +2069,7 @@ export async function search(apiKey, query, type = 'movie', page = 1) {
  * @param {Object|null} genreMap - Optional map of ID -> Name for localized genres
  * @returns {Object} Stremio meta preview object
  */
-export function toStremioMeta(item, type, imdbId = null, posterOptions = null, genreMap = null) {
+export function toStremioMeta(item, type, imdbId = null, posterOptions = null, genreMap = null, ratingsMap = null) {
   const isMovie = type === 'movie';
   const title = isMovie ? item.title : item.name;
   const releaseDate = isMovie ? item.release_date : item.first_air_date;
@@ -2051,12 +2107,14 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
   let poster = item.poster_path ? `${TMDB_IMAGE_BASE}/w500${item.poster_path}` : null;
   let background = item.backdrop_path ? `${TMDB_IMAGE_BASE}/w1280${item.backdrop_path}` : null;
 
+  const effectiveImdbId = imdbId || item.imdb_id || null;
+
   if (isValidPosterConfig(posterOptions)) {
     const enhancedPoster = generatePosterUrl({
       ...posterOptions,
       tmdbId: item.id,
       type,
-      imdbId,
+      imdbId: effectiveImdbId,
     });
     if (enhancedPoster) poster = enhancedPoster;
 
@@ -2064,8 +2122,6 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
     // const enhancedBackdrop = generateBackdropUrl({ ... });
     // if (enhancedBackdrop) background = enhancedBackdrop;
   }
-
-  const effectiveImdbId = imdbId || item.imdb_id || null;
   const primaryId = effectiveImdbId || `tmdb:${item.id}`;
 
   const meta = {
@@ -2081,7 +2137,15 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
     fanart: background, // Compatibility alias
     description: item.overview || '',
     releaseInfo: year,
-    imdbRating: typeof item.vote_average === 'number' ? item.vote_average.toFixed(1) : null,
+    imdbRating: (() => {
+      // Prefer real IMDb rating from Cinemeta if available
+      if (ratingsMap && effectiveImdbId && ratingsMap.has(effectiveImdbId)) {
+        return ratingsMap.get(effectiveImdbId);
+      }
+      return typeof item.vote_average === 'number' && item.vote_average > 0
+        ? item.vote_average.toFixed(1)
+        : null;
+    })(),
     genres: mappedGenres,
     behaviorHints: {},
   };

@@ -72,7 +72,10 @@ function parseExtra(extraString) {
 
   const parts = extraString.split('&');
   for (const part of parts) {
-    const [key, value] = part.split('=');
+    const eqIdx = part.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = part.substring(0, eqIdx);
+    const value = part.substring(eqIdx + 1);
     if (key && value !== undefined) {
       params[key] = decodeURIComponent(value);
     }
@@ -89,7 +92,7 @@ function extractGenreIds(item) {
   return ids.map(String);
 }
 
-async function handleCatalogRequest(userId, type, catalogId, extra, res) {
+async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
   try {
     const skip = parseInt(extra.skip) || 0;
     const search = extra.search || null;
@@ -243,9 +246,31 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       resolvedFilters?.sortBy === 'random';
 
     if (search) {
-      result = await tmdb.search(apiKey, search, type, page, {
-        displayLanguage: config.preferences?.defaultLanguage,
-      });
+      // Direct IMDb ID lookup: users sometimes paste tt1234567 in search
+      if (/^tt\d+$/i.test(search.trim())) {
+        try {
+          const found = await tmdb.findByImdbId(apiKey, search.trim(), type, {
+            language: config.preferences?.defaultLanguage,
+          });
+          if (found?.tmdbId) {
+            const details = await tmdb.getDetails(apiKey, found.tmdbId, type, {
+              displayLanguage: config.preferences?.defaultLanguage,
+            });
+            if (details) {
+              details.imdb_id = details.external_ids?.imdb_id || search.trim();
+              result = { results: [details] };
+            }
+          }
+        } catch (e) {
+          log.warn('IMDb direct lookup failed, falling back to search', { search, error: e.message });
+        }
+      }
+
+      if (!result) {
+        result = await tmdb.search(apiKey, search, type, page, {
+          displayLanguage: config.preferences?.defaultLanguage,
+        });
+      }
     } else {
       if (listType && listType !== 'discover') {
         result = await tmdb.fetchSpecialList(apiKey, listType, type, {
@@ -268,10 +293,15 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
 
     const allItems = result?.results || [];
 
-    try {
-      await tmdb.enrichItemsWithImdbIds(apiKey, allItems, type);
-    } catch (e) {
-      log.warn('IMDb enrichment failed (continuing with TMDB IDs)', { error: e.message });
+    // Skip IMDb enrichment for search results — it fires 20 parallel API calls
+    // and makes search noticeably slow. TMDB IDs work fine for catalog previews;
+    // full IMDb resolution happens when user opens the meta detail page.
+    if (!search) {
+      try {
+        await tmdb.enrichItemsWithImdbIds(apiKey, allItems, type);
+      } catch (e) {
+        log.warn('IMDb enrichment failed (continuing with TMDB IDs)', { error: e.message });
+      }
     }
 
     const displayLanguage = config.preferences?.defaultLanguage;
@@ -291,9 +321,27 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
       }
     }
 
+    // Batch-fetch real IMDb ratings from Cinemeta for non-search catalogs
+    // (search skips IMDb enrichment, so no imdb_ids to look up)
+    let ratingsMap = null;
+    if (!search) {
+      try {
+        ratingsMap = await tmdb.batchGetCinemetaRatings(allItems, type);
+      } catch (e) {
+        log.warn('Batch Cinemeta ratings failed (using TMDB ratings)', { error: e.message });
+      }
+    }
+
     const metas = allItems.map((item) => {
-      return tmdb.toStremioMeta(item, type, null, posterOptions, genreMap);
+      return tmdb.toStremioMeta(item, type, null, posterOptions, genreMap, ratingsMap);
     });
+
+    // Apply fallback images for items missing poster/thumbnail
+    const baseUrl = (process.env.BASE_URL || getBaseUrl(req)).replace(/\/$/, '');
+    for (const m of metas) {
+      if (!m) continue;
+      if (!m.poster) m.poster = `${baseUrl}/placeholder-poster.svg`;
+    }
 
     const filteredMetas = metas.filter((m) => m !== null);
 
@@ -325,7 +373,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res) {
   }
 }
 
-async function handleMetaRequest(userId, type, id, extra, res) {
+async function handleMetaRequest(userId, type, id, extra, res, req) {
   try {
     const config = await getUserConfig(userId);
     if (!config) return res.json({ meta: {} });
@@ -378,6 +426,16 @@ async function handleMetaRequest(userId, type, id, extra, res) {
       log.debug('Fetched series episodes', { tmdbId, episodeCount: videos?.length || 0 });
     }
 
+    // Build the manifest URL for genre deep-links
+    const baseUrl = getBaseUrl(req);
+    const manifestUrl = `${baseUrl}/${userId}/manifest.json`;
+
+    // Find the first user catalog of this type that has genre support for deep-linking
+    const genreCatalogId = (config.catalogs || [])
+      .filter((c) => c.enabled !== false && (c.type === type || (!c.type && type === 'movie')))
+      .map((c) => `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`)
+      [0] || null;
+
     const meta = await tmdb.toStremioFullMeta(
       details,
       type,
@@ -385,8 +443,18 @@ async function handleMetaRequest(userId, type, id, extra, res) {
       requestedId,
       posterOptions,
       videos,
-      language
+      language,
+      { manifestUrl, genreCatalogId }
     );
+
+    // Apply fallback images for missing poster/thumbnail
+    const resolvedBaseUrl = (process.env.BASE_URL || baseUrl).replace(/\/$/, '');
+    if (meta && !meta.poster) meta.poster = `${resolvedBaseUrl}/placeholder-poster.svg`;
+    if (meta?.videos) {
+      for (const v of meta.videos) {
+        if (!v.thumbnail) v.thumbnail = `${resolvedBaseUrl}/placeholder-thumbnail.svg`;
+      }
+    }
 
     res.etagJson({
       meta,
@@ -420,12 +488,12 @@ router.get('/:userId/meta/:type/:id/:extra.json', async (req, res) => {
   }
 
   const extraParams = parseExtra(rawExtra);
-  await handleMetaRequest(userId, type, id, extraParams, res);
+  await handleMetaRequest(userId, type, id, extraParams, res, req);
 });
 
 router.get('/:userId/meta/:type/:id.json', async (req, res) => {
   const { userId, type, id } = req.params;
-  await handleMetaRequest(userId, type, id, { ...req.query }, res);
+  await handleMetaRequest(userId, type, id, { ...req.query }, res, req);
 });
 
 router.get('/:userId/catalog/:type/:catalogId/:extra.json', async (req, res) => {
@@ -448,7 +516,7 @@ router.get('/:userId/catalog/:type/:catalogId/:extra.json', async (req, res) => 
   }
 
   const extraParams = parseExtra(rawExtra);
-  await handleCatalogRequest(userId, type, catalogId, extraParams, res);
+  await handleCatalogRequest(userId, type, catalogId, extraParams, res, req);
 });
 
 router.get('/:userId/catalog/:type/:catalogId.json', async (req, res) => {
@@ -457,7 +525,7 @@ router.get('/:userId/catalog/:type/:catalogId.json', async (req, res) => {
     skip: req.query.skip || '0',
     search: req.query.search || null,
   };
-  await handleCatalogRequest(userId, type, catalogId, extra, res);
+  await handleCatalogRequest(userId, type, catalogId, extra, res, req);
 });
 
 export { router as addonRouter };
