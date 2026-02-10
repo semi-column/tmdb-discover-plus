@@ -155,8 +155,9 @@ export class CacheWrapper {
         __ttl: ttlSeconds,
         data: value,
       };
-      // Store with 2x TTL so stale-while-revalidate has a grace window
-      await this.adapter.set(key, wrapped, ttlSeconds * 2);
+      // Store with 1.3x TTL for a brief stale-while-revalidate grace window
+      // (keeps memory usage reasonable vs. 2x)
+      await this.adapter.set(key, wrapped, Math.ceil(ttlSeconds * 1.3));
     } catch (err) {
       this.stats.errors++;
       log.warn('Cache set failed', { key, error: err.message });
