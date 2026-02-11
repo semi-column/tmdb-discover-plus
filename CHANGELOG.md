@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.7...v2.7.0) (2026-02-11)
+
+
+### Features
+
+* add multi-layer cache resilience, request deduplication, and observability ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* add status endpoint and nightly build metadata ([7650974](https://github.com/semi-column/tmdb-discover-plus/commit/76509742740d05af026f739e7ba9ec2ddddcb847))
+* Added Discord Button on the website ([daf8fe4](https://github.com/semi-column/tmdb-discover-plus/commit/daf8fe4860902c1bd687dc82d2762fc87442352d))
+* Added Nightly indicator and switch to stable button on beamup ([daf8fe4](https://github.com/semi-column/tmdb-discover-plus/commit/daf8fe4860902c1bd687dc82d2762fc87442352d))
+* bulk IMDb ratings from official dataset + modular tmdb refactor ([3f56b96](https://github.com/semi-column/tmdb-discover-plus/commit/3f56b96e2419c1d71fb35dbc4abb141330b59375))
+* cache warming on startup — pre-fetch genres, languages, countries, certifications in background ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* cast and crew search is now avilaible in stremio ([ac43635](https://github.com/semi-column/tmdb-discover-plus/commit/ac4363516104f8ff32b5a82db50281f2c98f809e))
+* config cache with stampede protection — in-memory LRU (1000 entries, 5min TTL) with promise coalescing ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* enhanced /health endpoint — cache stats, throttle stats, config cache, metrics, degraded state ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* error-aware cache TTLs — cache failed TMDB lookups with type-specific TTLs (60s-30min) to prevent thundering herd ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* ETag conditional responses — return 304 Not Modified for unchanged manifest/catalog/meta data ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* graceful startup with degraded mode — critical vs non-critical init, Redis fallback to memory ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* IMDb rating & meta improvements inspired by aiometadata ([928bb28](https://github.com/semi-column/tmdb-discover-plus/commit/928bb28b3e233cb68081b581d4cdb89dcb401873))
+* improve active filters UX & fix IMDb ratings streaming ([eeec0b1](https://github.com/semi-column/tmdb-discover-plus/commit/eeec0b1c0bc07568e3e37fdeb882baf442eb9268))
+* improve search, Stremio metadata quality, and catalog ratings ([5f7622d](https://github.com/semi-column/tmdb-discover-plus/commit/5f7622d4b43a1821562dd9597cc525dd26f047ff))
+* outbound TMDB token-bucket rate limiter — prevent 429 cascades under load (~35 req/s) ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* request and provider metrics tracking — per-endpoint latency, per-provider API stats, error counts ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* request deduplication — coalesce concurrent requests for same cache key into single API call ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* self-healing cache — auto-detect and remove corrupted cache entries ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* **server:** add regional language variants to language selector ([25a551b](https://github.com/semi-column/tmdb-discover-plus/commit/25a551b8d3e87cff311fd5ca19a1cac3eb86e935))
+* stale-while-revalidate at cache level — serve stale data while refreshing in background ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+
+
+### Bug Fixes
+
+* add cache stats (keys, maxKeys, hits, misses, evictions) to MemoryAdapter for /health visibility ([6307ba8](https://github.com/semi-column/tmdb-discover-plus/commit/6307ba8ea17c01933e19660255acb39ba31c159d))
+* add LRU-style eviction when cache is full instead of throwing — flushes expired keys first, then evicts 10% with shortest remaining TTL ([6307ba8](https://github.com/semi-column/tmdb-discover-plus/commit/6307ba8ea17c01933e19660255acb39ba31c159d))
+* align discover filters with TMDB tv/movie params and UI ([7338824](https://github.com/semi-column/tmdb-discover-plus/commit/733882475698fe3652db28e2edf0755344695c6c))
+* **client:** merge imported catalogs instead of replacing existing ones ([6e1aa87](https://github.com/semi-column/tmdb-discover-plus/commit/6e1aa8798234a62b5599bea29206181360631b9e))
+* Fixed a Client side error causing crashes to safely handle null/non-array values. ([867e7e4](https://github.com/semi-column/tmdb-discover-plus/commit/867e7e4a850bc0ed490f5373f46297590d973370))
+* Fixed Active Filters issues ([43e06cc](https://github.com/semi-column/tmdb-discover-plus/commit/43e06cc650c9a96643f90374ef88e3c2aca2e6d1))
+* honor release type with regional release dates ([813bc35](https://github.com/semi-column/tmdb-discover-plus/commit/813bc358a225480993f569f41f70d7bc0fcfcd8a))
+* IMDB dataset downloading ([dae7642](https://github.com/semi-column/tmdb-discover-plus/commit/dae7642683e51da4c8da1fd9c6234e4715928876))
+* improve Cinemeta rating diagnostics and reduce log noise ([920a18c](https://github.com/semi-column/tmdb-discover-plus/commit/920a18c1366206744696ba60a4eeb59f8baf2114))
+* increase memory cache maxKeys from 5000 to 50000 (configurable via CACHE_MAX_KEYS env var) ([6307ba8](https://github.com/semi-column/tmdb-discover-plus/commit/6307ba8ea17c01933e19660255acb39ba31c159d))
+* prevent metrics middleware from crashing server on route normalization failure ([d2da824](https://github.com/semi-column/tmdb-discover-plus/commit/d2da8245c2acce463bc74ac23f62be07d6abef92))
+* reduce stale-while-revalidate grace window from 2x to 1.3x TTL to reduce memory pressure ([6307ba8](https://github.com/semi-column/tmdb-discover-plus/commit/6307ba8ea17c01933e19660255acb39ba31c159d))
+* require region for release type filtering and disable UI control without it ([62e2319](https://github.com/semi-column/tmdb-discover-plus/commit/62e2319e82739f5aeb61e2c32e824d646198ebd7))
+* resolve memory cache exhaustion (maxKeys exceeded) in production ([6307ba8](https://github.com/semi-column/tmdb-discover-plus/commit/6307ba8ea17c01933e19660255acb39ba31c159d))
+* respect TMDB Retry-After header on 429 responses ([eaf9f9f](https://github.com/semi-column/tmdb-discover-plus/commit/eaf9f9ff99795ff165665a2dc59a4da263832806))
+* use AbortSignal.timeout for node-fetch v3 compatibility ([b9d7298](https://github.com/semi-column/tmdb-discover-plus/commit/b9d7298d7099dae2cfed1b9c5b4383810ba99b01))
+
 ## [2.6.7](https://github.com/semi-column/tmdb-discover-plus/compare/v2.6.6...v2.6.7) (2026-01-31)
 
 
