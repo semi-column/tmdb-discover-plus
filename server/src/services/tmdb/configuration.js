@@ -49,6 +49,36 @@ export async function getLanguages(apiKey) {
 }
 
 /**
+ * Get languages valid for the "Original Language" discover filter.
+ * TMDB's with_original_language only accepts base ISO 639-1 codes (e.g. "en", "pt"),
+ * NOT regional variants like "en-GB" or "pt-BR".
+ */
+export async function getOriginalLanguages(apiKey) {
+  const cacheKey = 'tmdb_original_languages';
+  const cache = getCache();
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore */
+  }
+
+  const data = await tmdbFetch('/configuration/languages', apiKey);
+  const sorted = data
+    .filter((lang) => lang.iso_639_1 && lang.english_name)
+    .sort((a, b) => a.english_name.localeCompare(b.english_name));
+
+  try {
+    await cache.set(cacheKey, sorted, 86400 * 7);
+  } catch (e) {
+    /* ignore */
+  }
+
+  return sorted;
+}
+
+/**
  * Get available countries
  */
 export async function getCountries(apiKey) {

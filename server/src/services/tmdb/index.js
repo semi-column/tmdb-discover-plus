@@ -20,6 +20,7 @@ export { getGenres, getCachedGenres } from './genres.js';
 // Configuration (languages, countries, certifications, watch providers)
 export {
   getLanguages,
+  getOriginalLanguages,
   getCountries,
   getCertifications,
   getWatchRegions,

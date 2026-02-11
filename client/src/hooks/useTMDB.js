@@ -4,6 +4,7 @@ import { api } from '../services/api';
 export function useTMDB(apiKey) {
   const [genres, setGenres] = useState({ movie: [], series: [] });
   const [languages, setLanguages] = useState([]);
+  const [originalLanguages, setOriginalLanguages] = useState([]);
   const [countries, setCountries] = useState([]);
   const [sortOptions, setSortOptions] = useState({ movie: [], series: [] });
   const [listTypes, setListTypes] = useState({ movie: [], series: [] });
@@ -27,10 +28,11 @@ export function useTMDB(apiKey) {
     setError(null);
 
     try {
-      const [movieGenres, tvGenres, langs, ctries, sorts, presets] = await Promise.all([
+      const [movieGenres, tvGenres, langs, origLangs, ctries, sorts, presets] = await Promise.all([
         api.getGenres(apiKey, 'movie'),
         api.getGenres(apiKey, 'series'),
         api.getLanguages(apiKey),
+        api.getOriginalLanguages(apiKey),
         api.getCountries(apiKey),
         api.getSortOptions(),
         api.getPresetCatalogs(),
@@ -38,6 +40,7 @@ export function useTMDB(apiKey) {
 
       setGenres({ movie: movieGenres || [], series: tvGenres || [] });
       setLanguages(langs || []);
+      setOriginalLanguages(origLangs || []);
       setCountries(ctries || []);
       setSortOptions(sorts || { movie: [], series: [] });
       setPresetCatalogs(presets || { movie: [], series: [] });
@@ -162,6 +165,7 @@ export function useTMDB(apiKey) {
   return {
     genres,
     languages,
+    originalLanguages,
     countries,
     sortOptions,
     listTypes,

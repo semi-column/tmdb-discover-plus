@@ -154,6 +154,14 @@ class ApiService {
     return this.request(`/languages?apiKey=${encodeURIComponent(apiKey)}`);
   }
 
+  async getOriginalLanguages(apiKey) {
+    const token = this.getSessionToken();
+    if (token) {
+      return this.request('/original-languages');
+    }
+    return this.request(`/original-languages?apiKey=${encodeURIComponent(apiKey)}`);
+  }
+
   async getCountries(apiKey) {
     const token = this.getSessionToken();
     if (token) {

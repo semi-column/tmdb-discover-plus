@@ -192,6 +192,7 @@ function App() {
               genresLoading={tmdb.loading}
               refreshGenres={tmdb.refresh}
               languages={tmdb.languages}
+              originalLanguages={tmdb.originalLanguages}
               countries={tmdb.countries}
               sortOptions={tmdb.sortOptions}
               releaseTypes={tmdb.releaseTypes}

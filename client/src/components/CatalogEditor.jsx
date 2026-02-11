@@ -62,6 +62,7 @@ export function CatalogEditor({
   genresLoading = false,
   refreshGenres = () => {},
   languages = [],
+  originalLanguages = [],
   countries = [],
   sortOptions = { movie: [], series: [] },
   releaseTypes = [],
@@ -86,6 +87,7 @@ export function CatalogEditor({
 }) {
   const safeGenres = genres && typeof genres === 'object' && !Array.isArray(genres) ? genres : { movie: [], series: [] };
   const safeLanguages = Array.isArray(languages) ? languages : [];
+  const safeOriginalLanguages = Array.isArray(originalLanguages) ? originalLanguages : [];
   const safeCountries = Array.isArray(countries) ? countries : [];
   const safeSortOptions = sortOptions && typeof sortOptions === 'object' && !Array.isArray(sortOptions) ? sortOptions : { movie: [], series: [] };
   const safeReleaseTypes = Array.isArray(releaseTypes) ? releaseTypes : [];
@@ -489,7 +491,7 @@ export function CatalogEditor({
 
     // Original language
     if (filters.language) {
-      const lang = safeLanguages.find((l) => l.iso_639_1 === filters.language);
+      const lang = safeOriginalLanguages.find((l) => l.iso_639_1 === filters.language);
       active.push({
         key: 'language',
         label: `Language: ${lang?.english_name || filters.language}`,
@@ -796,6 +798,7 @@ export function CatalogEditor({
     localCatalog,
     safeGenres,
     safeSortOptions,
+    safeOriginalLanguages,
     safeLanguages,
     safeCountries,
     safeTvStatuses,
@@ -1286,7 +1289,7 @@ export function CatalogEditor({
                             tooltip="Filter by the original language of the content (e.g., select 'Japanese' for anime, 'Korean' for K-dramas)."
                           />
                           <SearchableSelect
-                            options={safeLanguages}
+                            options={safeOriginalLanguages}
                             value={localCatalog?.filters?.language || ''}
                             onChange={(value) => handleFiltersChange('language', value)}
                             placeholder="Any"

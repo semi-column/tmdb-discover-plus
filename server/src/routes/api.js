@@ -162,6 +162,15 @@ router.get('/languages', requireAuth, resolveApiKey, async (req, res) => {
   }
 });
 
+router.get('/original-languages', requireAuth, resolveApiKey, async (req, res) => {
+  try {
+    const languages = await tmdb.getOriginalLanguages(req.apiKey);
+    res.json(languages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/countries', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const countries = await tmdb.getCountries(req.apiKey);
