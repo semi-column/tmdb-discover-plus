@@ -19,6 +19,8 @@ export function MultiSelect({
   hideUnselected = false,
   disabled = false,
 }) {
+  const safeOptions = Array.isArray(options) ? options : [];
+  const safeValue = Array.isArray(value) ? value : [];
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -60,9 +62,9 @@ export function MultiSelect({
   }, [isOpen, onSearch, search, minSearchLength, searchDebounceMs]);
 
   const handleToggle = (optionValue) => {
-    const newValue = value.includes(optionValue)
-      ? value.filter((v) => v !== optionValue)
-      : [...value, optionValue];
+    const newValue = safeValue.includes(optionValue)
+      ? safeValue.filter((v) => v !== optionValue)
+      : [...safeValue, optionValue];
     onChange(newValue);
   };
 
@@ -73,7 +75,7 @@ export function MultiSelect({
   };
 
   const getSelectedLabels = () => {
-    const selected = options.filter((opt) => value.includes(opt[valueKey]));
+    const selected = safeOptions.filter((opt) => safeValue.includes(opt[valueKey]));
     if (selected.length === 0) return null;
     if (selected.length <= maxDisplay) {
       return selected.map((s) => s[labelKey]).join(', ');
@@ -87,16 +89,16 @@ export function MultiSelect({
   const normalizedSearch = String(search || '').toLowerCase();
   const filteredOptions =
     isSearchEnabled && normalizedSearch
-      ? options.filter(
+      ? safeOptions.filter(
           (opt) =>
-            value.includes(opt[valueKey]) ||
+            safeValue.includes(opt[valueKey]) ||
             String(opt?.[labelKey] || '')
               .toLowerCase()
               .includes(normalizedSearch)
         )
-      : hideUnselected && Array.isArray(value) && value.length > 0
-        ? options.filter((opt) => value.includes(opt[valueKey]))
-        : options;
+      : hideUnselected && Array.isArray(safeValue) && safeValue.length > 0
+        ? safeOptions.filter((opt) => safeValue.includes(opt[valueKey]))
+        : safeOptions;
 
   return (
     <div
@@ -114,7 +116,7 @@ export function MultiSelect({
       >
         <span className={displayText ? '' : 'placeholder'}>{displayText || placeholder}</span>
         <div className="multi-select-icons">
-          {value.length > 0 && !disabled && (
+          {safeValue.length > 0 && !disabled && (
             <button
               className="multi-select-clear"
               onClick={handleClear}
@@ -165,7 +167,7 @@ export function MultiSelect({
             )}
             {!isSearching &&
               filteredOptions.map((option) => {
-                const isSelected = value.includes(option[valueKey]);
+                const isSelected = safeValue.includes(option[valueKey]);
                 return (
                   <div
                     key={option[valueKey]}

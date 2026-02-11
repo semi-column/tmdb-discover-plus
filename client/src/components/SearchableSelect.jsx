@@ -19,10 +19,11 @@ export function SearchableSelect({
   const inputRef = useRef(null);
   const optionsRef = useRef(null);
 
-  const selectedOption = options.find((opt) => opt[valueKey] === value);
+  const safeOptions = Array.isArray(options) ? options : [];
+  const selectedOption = safeOptions.find((opt) => opt[valueKey] === value);
   const displayValue = selectedOption ? selectedOption[labelKey] : '';
 
-  const filteredOptions = options.filter((opt) =>
+  const filteredOptions = safeOptions.filter((opt) =>
     opt[labelKey]?.toLowerCase().includes(search.toLowerCase())
   );
 
