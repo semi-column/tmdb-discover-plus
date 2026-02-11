@@ -37,6 +37,33 @@ export async function getDetails(apiKey, tmdbId, type = 'movie') {
   return tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, params);
 }
 
+export async function getLogos(apiKey, tmdbId, type = 'movie') {
+  const mediaType = type === 'series' ? 'tv' : 'movie';
+  const cacheKey = `logos_${mediaType}_${tmdbId}`;
+  const cache = getCache();
+
+  try {
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+  } catch (e) {
+    /* ignore */
+  }
+
+  try {
+    const data = await tmdbFetch(`/${mediaType}/${tmdbId}/images`, apiKey);
+    const logos = data?.logos || [];
+    try {
+      await cache.set(cacheKey, logos, 86400 * 7);
+    } catch (e) {
+      /* ignore */
+    }
+    return logos;
+  } catch (e) {
+    log.warn('Failed to fetch logos', { tmdbId, type, error: e.message });
+    return [];
+  }
+}
+
 /**
  * Get season details including episodes
  * @param {string} apiKey - TMDB API key

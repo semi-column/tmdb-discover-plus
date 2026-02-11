@@ -57,7 +57,7 @@ export async function toStremioFullMeta(
   posterOptions = null,
   videos = null,
   targetLanguage = null,
-  { manifestUrl = null, genreCatalogId = null } = {}
+  { manifestUrl = null, genreCatalogId = null, allLogos = null } = {}
 ) {
   if (!details) return {};
   const isMovie = type === 'movie';
@@ -418,18 +418,21 @@ export async function toStremioFullMeta(
     // if (enhancedBackdrop) background = enhancedBackdrop;
   }
 
-  // Logo selection: Prioritize Target Lang > English > Null > Any
-  // We need to resort because the API might have returned a mix
   let logo = null;
-  if (details.images?.logos?.length > 0) {
-    const logos = details.images.logos;
-    const target = targetLanguage || 'en';
+  const logoSources = details.images?.logos?.length > 0
+    ? details.images.logos
+    : (Array.isArray(allLogos) && allLogos.length > 0 ? allLogos : []);
+
+  if (logoSources.length > 0) {
+    const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
+    const originalLang = details.original_language || null;
 
     const candidates = [
-      logos.find((l) => l.iso_639_1 === target),
-      logos.find((l) => l.iso_639_1 === 'en'),
-      logos.find((l) => l.iso_639_1 === null), // Textless/Logo-only
-      logos[0], // Fallback to first available (e.g. original language)
+      logoSources.find((l) => l.iso_639_1 === lang),
+      originalLang && originalLang !== lang ? logoSources.find((l) => l.iso_639_1 === originalLang) : null,
+      lang !== 'en' ? logoSources.find((l) => l.iso_639_1 === 'en') : null,
+      logoSources.find((l) => l.iso_639_1 === null),
+      logoSources[0],
     ];
 
     const best = candidates.find(Boolean);

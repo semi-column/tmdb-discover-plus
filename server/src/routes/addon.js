@@ -422,8 +422,17 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
     imdbId = imdbId || detailsImdb;
 
     let videos = null;
-    if (type === 'series') {
-      videos = await tmdb.getSeriesEpisodes(apiKey, tmdbId, details, { language });
+    const hasLogos = details?.images?.logos?.length > 0;
+    const [episodesResult, allLogos] = await Promise.all([
+      type === 'series'
+        ? tmdb.getSeriesEpisodes(apiKey, tmdbId, details, { language })
+        : Promise.resolve(null),
+      !hasLogos
+        ? tmdb.getLogos(apiKey, tmdbId, type)
+        : Promise.resolve(null),
+    ]);
+    videos = episodesResult;
+    if (videos) {
       log.debug('Fetched series episodes', { tmdbId, episodeCount: videos?.length || 0 });
     }
 
@@ -445,7 +454,7 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
       posterOptions,
       videos,
       language,
-      { manifestUrl, genreCatalogId }
+      { manifestUrl, genreCatalogId, allLogos }
     );
 
     // Apply fallback images for missing poster/thumbnail

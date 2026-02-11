@@ -31,7 +31,7 @@ export {
 export { discover, fetchSpecialList } from './discover.js';
 
 // Details
-export { getDetails, getSeasonDetails, getSeriesEpisodes } from './details.js';
+export { getDetails, getLogos, getSeasonDetails, getSeriesEpisodes } from './details.js';
 
 // Search
 export { search, searchPerson, searchCompany, searchKeyword, comprehensiveSearch } from './search.js';
