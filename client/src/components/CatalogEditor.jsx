@@ -675,10 +675,13 @@ export function CatalogEditor({
       });
     }
 
-    if (filters.watchMonetizationTypes) {
+    if (filters.watchMonetizationTypes?.length > 0) {
+      const labels = filters.watchMonetizationTypes
+        .map((v) => monetizationTypes.find((m) => m.value === v)?.label || v)
+        .join(', ');
       active.push({
         key: 'watchMonetizationTypes',
-        label: `Monetization: ${filters.watchMonetizationTypes}`,
+        label: `Monetization: ${labels}`,
         section: 'streaming',
       });
     }
