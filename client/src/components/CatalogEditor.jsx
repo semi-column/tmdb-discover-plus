@@ -84,6 +84,17 @@ export function CatalogEditor({
   getNetworkById,
   getWatchProviders,
 }) {
+  const safeGenres = genres && typeof genres === 'object' && !Array.isArray(genres) ? genres : { movie: [], series: [] };
+  const safeLanguages = Array.isArray(languages) ? languages : [];
+  const safeCountries = Array.isArray(countries) ? countries : [];
+  const safeSortOptions = sortOptions && typeof sortOptions === 'object' && !Array.isArray(sortOptions) ? sortOptions : { movie: [], series: [] };
+  const safeReleaseTypes = Array.isArray(releaseTypes) ? releaseTypes : [];
+  const safeTvStatuses = Array.isArray(tvStatuses) ? tvStatuses : [];
+  const safeTvTypes = Array.isArray(tvTypes) ? tvTypes : [];
+  const safeMonetizationTypes = Array.isArray(monetizationTypes) ? monetizationTypes : [];
+  const safeCertifications = certifications && typeof certifications === 'object' && !Array.isArray(certifications) ? certifications : { movie: {}, series: {} };
+  const safeWatchRegions = Array.isArray(watchRegions) ? watchRegions : [];
+
   const [localCatalog, setLocalCatalog] = useState(catalog || DEFAULT_CATALOG);
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -426,7 +437,7 @@ export function CatalogEditor({
 
     // Sort By (non-default)
     if (filters.sortBy && filters.sortBy !== 'popularity.desc') {
-      const sortOpts = sortOptions[localCatalog?.type] || sortOptions.movie || [];
+      const sortOpts = safeSortOptions[localCatalog?.type] || safeSortOptions.movie || [];
       const match = sortOpts.find((s) => s.value === filters.sortBy);
       active.push({
         key: 'sortBy',
@@ -439,7 +450,7 @@ export function CatalogEditor({
     if (filters.genres?.length > 0) {
       const genreNames = filters.genres
         .map((id) => {
-          const genre = (genres[localCatalog?.type] || []).find((g) => g.id === id);
+          const genre = (safeGenres[localCatalog?.type] || []).find((g) => g.id === id);
           return genre?.name || id;
         })
         .slice(0, 2);
@@ -455,7 +466,7 @@ export function CatalogEditor({
     if (filters.excludeGenres?.length > 0) {
       const excNames = filters.excludeGenres
         .map((id) => {
-          const genre = (genres[localCatalog?.type] || []).find((g) => g.id === id);
+          const genre = (safeGenres[localCatalog?.type] || []).find((g) => g.id === id);
           return genre?.name || id;
         })
         .slice(0, 2);
@@ -478,7 +489,7 @@ export function CatalogEditor({
 
     // Original language
     if (filters.language) {
-      const lang = languages.find((l) => l.iso_639_1 === filters.language);
+      const lang = safeLanguages.find((l) => l.iso_639_1 === filters.language);
       active.push({
         key: 'language',
         label: `Language: ${lang?.english_name || filters.language}`,
@@ -488,7 +499,7 @@ export function CatalogEditor({
 
     // Country
     if (filters.originCountry) {
-      const country = countries.find((c) => c.iso_3166_1 === filters.originCountry);
+      const country = safeCountries.find((c) => c.iso_3166_1 === filters.originCountry);
       active.push({
         key: 'originCountry',
         label: `Country: ${country?.english_name || filters.originCountry}`,
@@ -580,7 +591,7 @@ export function CatalogEditor({
     // Region
     if (isMovieType && filters.region) {
       const regionLabel =
-        countries.find((c) => c.iso_3166_1 === filters.region)?.english_name || filters.region;
+        safeCountries.find((c) => c.iso_3166_1 === filters.region)?.english_name || filters.region;
       active.push({
         key: 'region',
         label: `Release region: ${regionLabel}`,
@@ -618,7 +629,7 @@ export function CatalogEditor({
 
     if (filters.certificationCountry && filters.certificationCountry !== 'US') {
       const certCountryLabel =
-        countries.find((c) => c.iso_3166_1 === filters.certificationCountry)?.english_name ||
+        safeCountries.find((c) => c.iso_3166_1 === filters.certificationCountry)?.english_name ||
         filters.certificationCountry;
       active.push({
         key: 'certificationCountry',
@@ -637,7 +648,7 @@ export function CatalogEditor({
 
     // TV Status
     if (!isMovieType && filters.tvStatus) {
-      const statusMatch = tvStatuses.find((s) => s.value === filters.tvStatus);
+      const statusMatch = safeTvStatuses.find((s) => s.value === filters.tvStatus);
       active.push({
         key: 'tvStatus',
         label: `Status: ${statusMatch?.label || filters.tvStatus}`,
@@ -647,7 +658,7 @@ export function CatalogEditor({
 
     // TV Type
     if (!isMovieType && filters.tvType) {
-      const typeMatch = tvTypes.find((t) => t.value === filters.tvType);
+      const typeMatch = safeTvTypes.find((t) => t.value === filters.tvType);
       active.push({
         key: 'tvType',
         label: `Type: ${typeMatch?.label || filters.tvType}`,
@@ -658,7 +669,7 @@ export function CatalogEditor({
     // Streaming
     if (filters.watchRegion) {
       const regionLabel =
-        watchRegions.find((r) => r.iso_3166_1 === filters.watchRegion)?.english_name ||
+        safeWatchRegions.find((r) => r.iso_3166_1 === filters.watchRegion)?.english_name ||
         filters.watchRegion;
       active.push({
         key: 'watchRegion',
@@ -677,7 +688,7 @@ export function CatalogEditor({
 
     if (filters.watchMonetizationTypes?.length > 0) {
       const labels = filters.watchMonetizationTypes
-        .map((v) => monetizationTypes.find((m) => m.value === v)?.label || v)
+        .map((v) => safeMonetizationTypes.find((m) => m.value === v)?.label || v)
         .join(', ');
       active.push({
         key: 'watchMonetizationTypes',
@@ -783,13 +794,14 @@ export function CatalogEditor({
     return active;
   }, [
     localCatalog,
-    genres,
-    sortOptions,
-    languages,
-    countries,
-    tvStatuses,
-    tvTypes,
-    watchRegions,
+    safeGenres,
+    safeSortOptions,
+    safeLanguages,
+    safeCountries,
+    safeTvStatuses,
+    safeTvTypes,
+    safeWatchRegions,
+    safeMonetizationTypes,
     selectedPeople,
     selectedCompanies,
     selectedKeywords,
@@ -1077,10 +1089,10 @@ export function CatalogEditor({
 
   const catalogType = localCatalog?.type || 'movie';
   const isMovie = catalogType === 'movie';
-  const currentGenres = genres[catalogType] || [];
+  const currentGenres = safeGenres[catalogType] || [];
   const selectedGenres = localCatalog?.filters?.genres || [];
   const excludedGenres = localCatalog?.filters?.excludeGenres || [];
-  const currentCertifications = certifications[catalogType] || {};
+  const currentCertifications = safeCertifications[catalogType] || {};
   const certCountry = localCatalog?.filters?.certificationCountry || 'US';
   const certOptions = currentCertifications[certCountry] || [];
 
@@ -1257,7 +1269,7 @@ export function CatalogEditor({
                             tooltip="How to order your results. Popular shows what's trending now, while rating shows critically acclaimed content."
                           />
                           <SearchableSelect
-                            options={sortOptions[localCatalog?.type] || sortOptions.movie || []}
+                            options={safeSortOptions[localCatalog?.type] || safeSortOptions.movie || []}
                             value={localCatalog?.filters?.sortBy || 'popularity.desc'}
                             onChange={(value) => handleFiltersChange('sortBy', value)}
                             placeholder="Most Popular"
@@ -1274,7 +1286,7 @@ export function CatalogEditor({
                             tooltip="Filter by the original language of the content (e.g., select 'Japanese' for anime, 'Korean' for K-dramas)."
                           />
                           <SearchableSelect
-                            options={languages}
+                            options={safeLanguages}
                             value={localCatalog?.filters?.language || ''}
                             onChange={(value) => handleFiltersChange('language', value)}
                             placeholder="Any"
@@ -1292,7 +1304,7 @@ export function CatalogEditor({
                             tooltip="Localize titles and overviews (when available) to this language. Tip: set Display Language to English while keeping Original Language set to Japanese/Korean/etc."
                           />
                           <SearchableSelect
-                            options={languages}
+                            options={safeLanguages}
                             value={localCatalog?.filters?.displayLanguage || ''}
                             onChange={(value) => handleFiltersChange('displayLanguage', value)}
                             placeholder="Default"
@@ -1309,7 +1321,7 @@ export function CatalogEditor({
                             tooltip="Filter by country of origin. Useful for finding British shows, Bollywood movies, etc."
                           />
                           <SearchableSelect
-                            options={countries}
+                            options={safeCountries}
                             value={localCatalog?.filters?.originCountry || ''}
                             onChange={(value) => handleFiltersChange('originCountry', value)}
                             placeholder="Any"
@@ -1628,7 +1640,7 @@ export function CatalogEditor({
                         <SearchableSelect
                           options={[
                             { iso_3166_1: '', english_name: 'Worldwide (default)' },
-                            ...countries,
+                            ...safeCountries,
                           ]}
                           value={localCatalog?.filters?.region || ''}
                           onChange={(value) => {
@@ -1671,7 +1683,7 @@ export function CatalogEditor({
                             tooltip="How the movie was released: Theatrical (cinemas), Digital (streaming/download), Physical (DVD/Blu-ray), TV broadcast, etc. Requires a region to be selected."
                           />
                           <MultiSelect
-                            options={releaseTypes}
+                            options={safeReleaseTypes}
                             value={localCatalog?.filters?.releaseTypes || []}
                             onChange={(value) => handleFiltersChange('releaseTypes', value)}
                             placeholder={
@@ -1714,7 +1726,7 @@ export function CatalogEditor({
                           tooltip="Pick the country rating system to use for certifications."
                         />
                         <SearchableSelect
-                          options={countries}
+                          options={safeCountries}
                           value={localCatalog?.filters?.certificationCountry || 'US'}
                           onChange={(value) => handleFiltersChange('certificationCountry', value)}
                           placeholder="Select country"
@@ -1784,7 +1796,7 @@ export function CatalogEditor({
                             tooltip="Whether the TV show is currently Returning Series, Ended, Canceled, In Production, or Pilot status."
                           />
                           <SearchableSelect
-                            options={[{ value: '', label: 'Any' }, ...tvStatuses]}
+                            options={[{ value: '', label: 'Any' }, ...safeTvStatuses]}
                             value={localCatalog?.filters?.tvStatus || ''}
                             onChange={(value) => handleFiltersChange('tvStatus', value)}
                             placeholder="Any"
@@ -1799,7 +1811,7 @@ export function CatalogEditor({
                             tooltip="Format of TV show: Scripted (regular series), Reality, Documentary, Talk Show, News, Miniseries, etc."
                           />
                           <SearchableSelect
-                            options={[{ value: '', label: 'Any' }, ...tvTypes]}
+                            options={[{ value: '', label: 'Any' }, ...safeTvTypes]}
                             value={localCatalog?.filters?.tvType || ''}
                             onChange={(value) => handleFiltersChange('tvType', value)}
                             placeholder="Any"
@@ -1829,9 +1841,9 @@ export function CatalogEditor({
                 type={localCatalog?.type}
                 tvNetworks={tvNetworkOptions}
                 selectedNetworks={selectedNetworks}
-                watchRegions={watchRegions}
+                watchRegions={safeWatchRegions}
                 watchProviders={watchProviders}
-                monetizationTypes={monetizationTypes}
+                monetizationTypes={safeMonetizationTypes}
                 onNetworkSearch={handleTVNetworkSearch}
                 filters={localCatalog?.filters || {}}
                 onFiltersChange={handleFiltersChange}

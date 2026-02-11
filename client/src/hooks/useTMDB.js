@@ -36,11 +36,11 @@ export function useTMDB(apiKey) {
         api.getPresetCatalogs(),
       ]);
 
-      setGenres({ movie: movieGenres, series: tvGenres });
-      setLanguages(langs);
-      setCountries(ctries);
-      setSortOptions(sorts);
-      setPresetCatalogs(presets);
+      setGenres({ movie: movieGenres || [], series: tvGenres || [] });
+      setLanguages(langs || []);
+      setCountries(ctries || []);
+      setSortOptions(sorts || { movie: [], series: [] });
+      setPresetCatalogs(presets || { movie: [], series: [] });
 
       setLoading(false);
 
@@ -57,14 +57,14 @@ export function useTMDB(apiKey) {
           api.getTVNetworks(null, ''),
         ]);
 
-      setListTypes(lists);
-      setReleaseTypes(relTypes);
-      setTVStatuses(tvStats);
-      setTVTypes(tvTyps);
-      setMonetizationTypes(monTypes);
-      setCertifications({ movie: movieCerts, series: tvCerts });
-      setWatchRegions(regions);
-      setTVNetworks(networks);
+      setListTypes(lists || { movie: [], series: [] });
+      setReleaseTypes(relTypes || []);
+      setTVStatuses(tvStats || []);
+      setTVTypes(tvTyps || []);
+      setMonetizationTypes(monTypes || []);
+      setCertifications({ movie: movieCerts || {}, series: tvCerts || {} });
+      setWatchRegions(regions || []);
+      setTVNetworks(networks || []);
     } catch (err) {
       setError(err.message);
       setLoading(false);

@@ -294,6 +294,8 @@ export function CatalogSidebar({
   onImportConfig,
   languages = [],
 }) {
+  const safeCatalogs = Array.isArray(catalogs) ? catalogs : [];
+  const safePresetCatalogs = presetCatalogs && typeof presetCatalogs === 'object' && !Array.isArray(presetCatalogs) ? presetCatalogs : { movie: [], series: [] };
   const isMobile = useIsMobile();
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
   const [tvPresetsCollapsed, setTvPresetsCollapsed] = useState(isMobile);
@@ -304,7 +306,7 @@ export function CatalogSidebar({
   }, [isMobile]);
 
   const addedPresets = new Set(
-    catalogs
+    safeCatalogs
       .filter((c) => c.filters?.listType && c.filters.listType !== 'discover')
       .map((c) => `${c.type}-${c.filters.listType}`)
   );
@@ -335,17 +337,17 @@ export function CatalogSidebar({
     if (active.id === over.id) return;
     if (typeof onReorderCatalogs !== 'function') return;
 
-    const oldIndex = catalogs.findIndex((c) => getCatalogKey(c) === String(active.id));
-    const newIndex = catalogs.findIndex((c) => getCatalogKey(c) === String(over.id));
+    const oldIndex = safeCatalogs.findIndex((c) => getCatalogKey(c) === String(active.id));
+    const newIndex = safeCatalogs.findIndex((c) => getCatalogKey(c) === String(over.id));
     if (oldIndex < 0 || newIndex < 0) return;
 
-    const reordered = arrayMove(catalogs, oldIndex, newIndex);
+    const reordered = arrayMove(safeCatalogs, oldIndex, newIndex);
     onReorderCatalogs(reordered);
   };
 
   const getPlaceholder = () => {
-    if (catalogs.length > 0 && catalogs[0].name) {
-      return catalogs[0].name;
+    if (safeCatalogs.length > 0 && safeCatalogs[0].name) {
+      return safeCatalogs[0].name;
     }
     return 'Untitled Config';
   };
@@ -473,7 +475,7 @@ export function CatalogSidebar({
       <PosterSettingsSection preferences={preferences} onPreferencesChange={onPreferencesChange} />
 
       <div className="catalog-list">
-        {catalogs.length === 0 ? (
+        {safeCatalogs.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">
               <Film size={32} />
@@ -488,10 +490,10 @@ export function CatalogSidebar({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={catalogs.map(getCatalogKey)}
+              items={safeCatalogs.map(getCatalogKey)}
               strategy={verticalListSortingStrategy}
             >
-              {catalogs.map((catalog) => (
+              {safeCatalogs.map((catalog) => (
                 <SortableCatalogItem
                   key={getCatalogKey(catalog)}
                   catalog={catalog}
@@ -519,7 +521,7 @@ export function CatalogSidebar({
             <ChevronDown size={14} className="chevron" />
           </div>
           <div className="preset-list">
-            {(presetCatalogs.movie || []).map((preset) => {
+            {(safePresetCatalogs.movie || []).map((preset) => {
               const isAdded = addedPresets.has(`movie-${preset.value}`);
               const IconComponent = presetIcons[preset.value] || Star;
               return (
@@ -549,7 +551,7 @@ export function CatalogSidebar({
             <ChevronDown size={14} className="chevron" />
           </div>
           <div className="preset-list">
-            {(presetCatalogs.series || []).map((preset) => {
+            {(safePresetCatalogs.series || []).map((preset) => {
               const isAdded = addedPresets.has(`series-${preset.value}`);
               const IconComponent = presetIcons[preset.value] || Star;
               return (

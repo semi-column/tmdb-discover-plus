@@ -15,6 +15,8 @@ export function StreamFilters({
   onFiltersChange,
   selectedNetworks,
 }) {
+  const safeWatchRegions = Array.isArray(watchRegions) ? watchRegions : [];
+  const safeWatchProviders = Array.isArray(watchProviders) ? watchProviders : [];
   const [providerSearch, setProviderSearch] = useState('');
 
   const tvNetworkOptions = useMemo(() => tvNetworks || [], [tvNetworks]);
@@ -92,7 +94,7 @@ export function StreamFilters({
             tooltip="Choose your country to see which streaming services have this content available."
           />
           <SearchableSelect
-            options={watchRegions.map((r) => ({ code: r.iso_3166_1, name: r.english_name }))}
+            options={safeWatchRegions.map((r) => ({ code: r.iso_3166_1, name: r.english_name }))}
             value={filters.watchRegion || ''}
             onChange={(value) => onFiltersChange('watchRegion', value)}
             placeholder="Select your region"
@@ -123,11 +125,11 @@ export function StreamFilters({
           tooltip="Filter by specific streaming platforms."
         />
         <span className="filter-label-hint">
-          {filters.watchRegion && watchProviders.length > 0
+          {filters.watchRegion && safeWatchProviders.length > 0
             ? 'Where you can currently watch in your region'
             : 'Select your region to see available services'}
         </span>
-        {filters.watchRegion && watchProviders.length > 0 ? (
+        {filters.watchRegion && safeWatchProviders.length > 0 ? (
           <>
             <div className="provider-search">
               <input
@@ -153,10 +155,10 @@ export function StreamFilters({
               <div className="provider-grid">
                 {(() => {
                   const filtered = providerSearch
-                    ? watchProviders.filter((p) =>
+                    ? safeWatchProviders.filter((p) =>
                         p?.name?.toLowerCase().includes(providerSearch.trim().toLowerCase())
                       )
-                    : watchProviders;
+                    : safeWatchProviders;
 
                   if (filtered.length === 0) {
                     return (

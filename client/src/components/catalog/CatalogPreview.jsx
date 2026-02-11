@@ -54,7 +54,7 @@ export function CatalogPreview({ loading, error, data, onRetry }) {
 
           {!loading && !error && data && (
             <div className="preview-grid">
-              {data.metas.map((item) => {
+              {(Array.isArray(data.metas) ? data.metas : []).map((item) => {
                 const tmdbId =
                   item.tmdbId ||
                   (item.id?.startsWith('tmdb:') ? item.id.replace('tmdb:', '') : null);
