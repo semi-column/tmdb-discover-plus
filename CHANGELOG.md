@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.2](https://github.com/semi-column/tmdb-discover-plus/compare/v2.7.1...v2.7.2) (2026-02-11)
+
+
+### Bug Fixes
+
+* don't save the cache on request failures! ([a80276e](https://github.com/semi-column/tmdb-discover-plus/commit/a80276eba87fc40ca374d5e5d695c6c6959a08c6))
+* **logo:** improve TMDB logo coverage with fallback image fetch ([8f1f182](https://github.com/semi-column/tmdb-discover-plus/commit/8f1f182ce89d62f57e4260a6de94da44ba241a7c))
+* Remove regional language variants from original language ([fd2b9ee](https://github.com/semi-column/tmdb-discover-plus/commit/fd2b9eee032fb7f88a60b961985d2819002020f0))
+
 ## [2.7.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.7.0...v2.7.1) (2026-02-11)
 
 
