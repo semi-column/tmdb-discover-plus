@@ -39,10 +39,12 @@ export async function getLanguages(apiKey) {
   const combined = [...filtered, ...REGIONAL_LANGUAGE_VARIANTS];
   const sorted = combined.sort((a, b) => a.english_name.localeCompare(b.english_name));
 
-  try {
-    await cache.set(cacheKey, sorted, 86400 * 7);
-  } catch (e) {
-    /* ignore */
+  if (sorted.length > 0) {
+    try {
+      await cache.set(cacheKey, sorted, 86400 * 7);
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   return sorted;
@@ -66,13 +68,15 @@ export async function getOriginalLanguages(apiKey) {
 
   const data = await tmdbFetch('/configuration/languages', apiKey);
   const sorted = data
-    .filter((lang) => lang.iso_639_1 && lang.english_name)
+    .filter((lang) => lang.iso_639_1 && lang.english_name && !lang.iso_639_1.includes('-'))
     .sort((a, b) => a.english_name.localeCompare(b.english_name));
 
-  try {
-    await cache.set(cacheKey, sorted, 86400 * 7);
-  } catch (e) {
-    /* ignore */
+  if (sorted.length > 0) {
+    try {
+      await cache.set(cacheKey, sorted, 86400 * 7);
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   return sorted;
@@ -95,10 +99,12 @@ export async function getCountries(apiKey) {
   const data = await tmdbFetch('/configuration/countries', apiKey);
   const sorted = data.sort((a, b) => a.english_name.localeCompare(b.english_name));
 
-  try {
-    await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
-  } catch (e) {
-    /* ignore */
+  if (sorted.length > 0) {
+    try {
+      await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   return sorted;
@@ -122,10 +128,12 @@ export async function getCertifications(apiKey, type = 'movie') {
   const data = await tmdbFetch(`/certification/${mediaType}/list`, apiKey);
   const certs = data.certifications || {};
 
-  try {
-    await cache.set(cacheKey, certs, 86400 * 7); // 7 days
-  } catch (e) {
-    /* ignore */
+  if (Object.keys(certs).length > 0) {
+    try {
+      await cache.set(cacheKey, certs, 86400 * 7); // 7 days
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   return certs;
@@ -149,10 +157,12 @@ export async function getWatchRegions(apiKey) {
   const results = data.results || [];
   const sorted = results.sort((a, b) => a.english_name.localeCompare(b.english_name));
 
-  try {
-    await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
-  } catch (e) {
-    /* ignore */
+  if (sorted.length > 0) {
+    try {
+      await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   return sorted;
@@ -178,10 +188,12 @@ export async function getWatchProviders(apiKey, type = 'movie', region = 'US') {
   const results = data.results || [];
   const sorted = results.sort((a, b) => a.provider_name.localeCompare(b.provider_name));
 
-  try {
-    await cache.set(cacheKey, sorted, 86400); // 24 hours
-  } catch (e) {
-    /* ignore */
+  if (sorted.length > 0) {
+    try {
+      await cache.set(cacheKey, sorted, 86400); // 24 hours
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   return sorted;
