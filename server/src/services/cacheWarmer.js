@@ -1,5 +1,5 @@
-import { getCache } from './cache/index.js';
 import { createLogger } from '../utils/logger.js';
+import * as tmdb from './tmdb.js';
 
 const log = createLogger('CacheWarmer');
 
@@ -19,13 +19,13 @@ export async function warmEssentialCaches(apiKey) {
   log.info('Starting essential cache warming...');
 
   const tasks = [
-    { name: 'movie_genres', fn: () => warmGenres(apiKey, 'movie') },
-    { name: 'tv_genres', fn: () => warmGenres(apiKey, 'tv') },
-    { name: 'languages', fn: () => warmLanguages(apiKey) },
-    { name: 'countries', fn: () => warmCountries(apiKey) },
-    { name: 'movie_certifications', fn: () => warmCertifications(apiKey, 'movie') },
-    { name: 'tv_certifications', fn: () => warmCertifications(apiKey, 'tv') },
-    { name: 'watch_regions', fn: () => warmWatchRegions(apiKey) },
+    { name: 'movie_genres', fn: () => tmdb.getGenres(apiKey, 'movie') },
+    { name: 'tv_genres', fn: () => tmdb.getGenres(apiKey, 'tv') },
+    { name: 'languages', fn: () => tmdb.getLanguages(apiKey) },
+    { name: 'countries', fn: () => tmdb.getCountries(apiKey) },
+    { name: 'movie_certifications', fn: () => tmdb.getCertifications(apiKey, 'movie') },
+    { name: 'tv_certifications', fn: () => tmdb.getCertifications(apiKey, 'tv') },
+    { name: 'watch_regions', fn: () => tmdb.getWatchRegions(apiKey) },
   ];
 
   const results = await Promise.allSettled(tasks.map((t) => t.fn()));
@@ -49,65 +49,3 @@ export async function warmEssentialCaches(apiKey) {
   return { warmed, failed, elapsedMs: elapsed };
 }
 
-// Individual warmer functions — they call the TMDB API and store results in cache
-
-async function warmGenres(apiKey, mediaType) {
-  const { default: fetch } = await import('node-fetch');
-  const url = `https://api.themoviedb.org/3/genre/${mediaType}/list?api_key=${apiKey}&language=en`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = await response.json();
-
-  const cache = getCache();
-  // Cache with the same key format tmdbFetch uses
-  await cache.set(url, data, 3600);
-  return data;
-}
-
-async function warmLanguages(apiKey) {
-  const { default: fetch } = await import('node-fetch');
-  const url = `https://api.themoviedb.org/3/configuration/languages?api_key=${apiKey}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = await response.json();
-
-  const cache = getCache();
-  await cache.set('tmdb_languages', data, 86400 * 7);
-  return data;
-}
-
-async function warmCountries(apiKey) {
-  const { default: fetch } = await import('node-fetch');
-  const url = `https://api.themoviedb.org/3/configuration/countries?api_key=${apiKey}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = await response.json();
-
-  const cache = getCache();
-  await cache.set('tmdb_countries', data, 86400 * 7);
-  return data;
-}
-
-async function warmCertifications(apiKey, mediaType) {
-  const { default: fetch } = await import('node-fetch');
-  const url = `https://api.themoviedb.org/3/certification/${mediaType}/list?api_key=${apiKey}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = await response.json();
-
-  const cache = getCache();
-  await cache.set(`tmdb_certifications_${mediaType}`, data.certifications || {}, 86400 * 7);
-  return data;
-}
-
-async function warmWatchRegions(apiKey) {
-  const { default: fetch } = await import('node-fetch');
-  const url = `https://api.themoviedb.org/3/watch/providers/regions?api_key=${apiKey}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const data = await response.json();
-
-  const cache = getCache();
-  await cache.set('tmdb_watch_regions', data.results || [], 86400 * 7);
-  return data;
-}

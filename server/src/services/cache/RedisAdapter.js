@@ -19,7 +19,18 @@ export class RedisAdapter extends CacheInterface {
   async get(key) {
     try {
       const val = await this.client.get(key);
-      return val ? JSON.parse(val) : null;
+      if (val) {
+        // Trace what exactly we are getting from Redis
+        if (key.includes('tmdb_')) {
+          log.debug(`Redis GET ${key}:`, {
+            type: typeof val,
+            length: val.length,
+            preview: val.substring(0, 100),
+          });
+        }
+        return JSON.parse(val);
+      }
+      return null;
     } catch (err) {
       log.warn('Redis get error', { key, error: err.message });
       return null;
@@ -28,7 +39,15 @@ export class RedisAdapter extends CacheInterface {
 
   async set(key, value, ttlSeconds) {
     try {
-      await this.client.set(key, JSON.stringify(value), { EX: ttlSeconds });
+      const stringified = JSON.stringify(value);
+      if (key.includes('tmdb_')) {
+        log.debug(`Redis SET ${key}:`, {
+          originalType: typeof value,
+          stringLength: stringified.length,
+          ttl: ttlSeconds,
+        });
+      }
+      await this.client.set(key, stringified, { EX: ttlSeconds });
     } catch (err) {
       log.warn('Redis set error', { key, error: err.message });
     }

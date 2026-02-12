@@ -79,10 +79,15 @@ const metrics = getMetrics();
 app.use(metrics.middleware());
 
 const clientDistPath = path.join(__dirname, '../../client/dist');
-const clientManifestPath =
-  process.env.NODE_ENV === 'production'
-    ? path.join(clientDistPath, 'manifest.json')
-    : path.join(__dirname, '../../client/public/manifest.json');
+const distManifest = path.join(clientDistPath, 'manifest.json');
+const publicManifest = path.join(__dirname, '../../client/public/manifest.json');
+
+let clientManifestPath = publicManifest;
+if (process.env.NODE_ENV === 'production') {
+  clientManifestPath = distManifest;
+} else if (process.env.NODE_ENV === 'nightly') {
+  clientManifestPath = fs.existsSync(distManifest) ? distManifest : publicManifest;
+}
 
 log.info('Environment status', {
   port: PORT,
