@@ -1641,13 +1641,14 @@ export function CatalogEditor({
                           Use regional release dates instead of worldwide premiere
                         </span>
                         <SearchableSelect
-                          options={[
-                            { iso_3166_1: '', english_name: 'Worldwide (default)' },
-                            ...safeCountries,
-                          ]}
+                          options={safeCountries}
                           value={localCatalog?.filters?.region || ''}
                           onChange={(value) => {
                             handleFiltersChange('region', value);
+                            if (value) {
+                              // Auto-select the corresponding certification country
+                              handleFiltersChange('certificationCountry', value);
+                            }
                             if (!value) {
                               handleFiltersChange('releaseTypes', []);
                             }
@@ -1719,74 +1720,8 @@ export function CatalogEditor({
                             valueKey="value"
                           />
                           <span className="filter-label-hint">
-                            Use this for exact certifications; use min/max below for ranges.
+                            Use this for exact certifications.
                           </span>
-                        </div>
-                      </div>
-                      <div className="filter-group" style={{ marginTop: '16px' }}>
-                        <LabelWithTooltip
-                          label="Age Rating Country"
-                          tooltip="Pick the country rating system to use for certifications."
-                        />
-                        <SearchableSelect
-                          options={safeCountries}
-                          value={localCatalog?.filters?.certificationCountry || 'US'}
-                          onChange={(value) => handleFiltersChange('certificationCountry', value)}
-                          placeholder="Select country"
-                          searchPlaceholder="Search countries..."
-                          labelKey="english_name"
-                          valueKey="iso_3166_1"
-                        />
-                        <span className="filter-label-hint">
-                          TMDB uses country-specific rating systems
-                        </span>
-                      </div>
-                      <div className="filter-two-col" style={{ marginTop: '16px' }}>
-                        <div className="filter-group">
-                          <LabelWithTooltip
-                            label="Age Rating Min"
-                            tooltip="Lower bound for certification. Uses the selected country rating system."
-                          />
-                          <SearchableSelect
-                            options={[
-                              { value: '', label: 'Any' },
-                              ...certOptions.map((c) => ({
-                                value: c.certification,
-                                label: c.certification,
-                              })),
-                            ]}
-                            value={localCatalog?.filters?.certificationMin || ''}
-                            onChange={(value) =>
-                              handleFiltersChange('certificationMin', value || undefined)
-                            }
-                            placeholder="Any"
-                            searchPlaceholder="Search..."
-                            labelKey="label"
-                            valueKey="value"
-                          />
-                        </div>
-                        <div className="filter-group">
-                          <LabelWithTooltip
-                            label="Age Rating Max"
-                            tooltip="Upper bound for certification. Uses the selected country rating system."
-                          />
-                          <SearchableSelect
-                            options={[
-                              { value: '', label: 'Any' },
-                              ...certOptions.map((c) => ({
-                                value: c.certification,
-                                label: c.certification,
-                              })),
-                            ]}
-                            value={localCatalog?.filters?.certificationMax || ''}
-                            onChange={(value) =>
-                              handleFiltersChange('certificationMax', value || undefined)
-                            }
-                            placeholder="Any"
-                            searchPlaceholder="Search..."
-                            labelKey="label"
-                            valueKey="value"
-                          />
                         </div>
                       </div>
                     </>

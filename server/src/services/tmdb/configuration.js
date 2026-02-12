@@ -24,7 +24,7 @@ const REPLACED_BASE_CODES = new Set(['pt', 'zh', 'es', 'fr', 'en', 'de', 'it']);
  * Get available languages
  */
 export async function getLanguages(apiKey) {
-  const cacheKey = 'tmdb_languages';
+  const cacheKey = 'tmdb_languages_v2';
   const cache = getCache();
 
   try {
@@ -56,7 +56,7 @@ export async function getLanguages(apiKey) {
  * NOT regional variants like "en-GB" or "pt-BR".
  */
 export async function getOriginalLanguages(apiKey) {
-  const cacheKey = 'tmdb_original_languages';
+  const cacheKey = 'tmdb_original_languages_v2';
   const cache = getCache();
 
   try {
@@ -86,7 +86,7 @@ export async function getOriginalLanguages(apiKey) {
  * Get available countries
  */
 export async function getCountries(apiKey) {
-  const cacheKey = 'tmdb_countries';
+  const cacheKey = 'tmdb_countries_v2';
   const cache = getCache();
 
   try {
@@ -115,7 +115,7 @@ export async function getCountries(apiKey) {
  */
 export async function getCertifications(apiKey, type = 'movie') {
   const mediaType = type === 'series' ? 'tv' : 'movie';
-  const cacheKey = `tmdb_certifications_${mediaType}`;
+  const cacheKey = `tmdb_certifications_${mediaType}_v2`;
   const cache = getCache();
 
   try {
@@ -143,7 +143,7 @@ export async function getCertifications(apiKey, type = 'movie') {
  * Get watch provider regions
  */
 export async function getWatchRegions(apiKey) {
-  const cacheKey = 'tmdb_watch_regions';
+  const cacheKey = 'tmdb_watch_regions_v2';
   const cache = getCache();
 
   try {

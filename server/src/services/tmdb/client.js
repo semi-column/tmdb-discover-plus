@@ -89,7 +89,7 @@ export async function tmdbFetch(endpoint, apiKey, params = {}, retries = 3) {
   // Check cache — CacheWrapper handles self-healing, stale-while-revalidate,
   // and returns cached errors as { __errorType } markers
   try {
-    const cached = await cache.get(cacheKey);
+    const cached = await cache.getEntry(cacheKey);
     if (cached !== null && cached !== undefined) {
       // Cached error — throw so caller sees it as a recent failure
       if (cached.__errorType) {

@@ -86,7 +86,31 @@ export class CacheWrapper {
    * Get a value from cache with self-healing.
    * Returns { value, isStale, isCachedError } or null.
    */
+  /**
+   * Get a value from cache (unwrapped).
+   * returns the actual data, or null if miss/error.
+   */
   async get(key) {
+    const entry = await this.getEntry(key);
+    
+    // If it's a wrapped entry, return the data
+    if (entry && typeof entry === 'object' && entry.__cacheWrapper) {
+      // If it's a cached error, we might want to return null or throw?
+      // Standard get() consumers expects data or null.
+      // If they want to handle cached errors explicitly, they should use getEntry().
+      if (entry.__errorType) return null;
+      
+      return entry.data;
+    }
+    
+    return entry;
+  }
+
+  /**
+   * Get the raw cache entry (with wrapper metadata).
+   * Returns { value, isStale, isCachedError } or null.
+   */
+  async getEntry(key) {
     try {
       const raw = await this.adapter.get(key);
       if (raw === null || raw === undefined) {
@@ -215,7 +239,7 @@ export class CacheWrapper {
     const { allowStale = true } = options;
 
     // 1. Check cache
-    const cached = await this.get(key);
+    const cached = await this.getEntry(key);
 
     if (cached !== null) {
       // Cached error — re-throw so caller knows it failed recently
