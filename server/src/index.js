@@ -16,7 +16,11 @@ import { warmEssentialCaches } from './services/cacheWarmer.js';
 import { getMetrics, destroyMetrics } from './services/metrics.js';
 import { destroyTmdbThrottle, getTmdbThrottle } from './services/tmdbThrottle.js';
 import { getConfigCache } from './services/configCache.js';
-import { initImdbRatings, getImdbRatingsStats, destroyImdbRatings } from './services/imdbRatings/index.js';
+import {
+  initImdbRatings,
+  getImdbRatingsStats,
+  destroyImdbRatings,
+} from './services/imdbRatings/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -75,7 +79,10 @@ const metrics = getMetrics();
 app.use(metrics.middleware());
 
 const clientDistPath = path.join(__dirname, '../../client/dist');
-const clientManifestPath = path.join(__dirname, '../../client/public/manifest.json');
+const clientManifestPath =
+  process.env.NODE_ENV === 'production'
+    ? path.join(clientDistPath, 'manifest.json')
+    : path.join(__dirname, '../../client/public/manifest.json');
 
 log.info('Environment status', {
   port: PORT,
@@ -109,6 +116,9 @@ app.get('/:userId/configure', (req, res) => {
 
 app.get('/manifest.json', (req, res) => {
   try {
+    if (!fs.existsSync(clientManifestPath)) {
+      log.warn('Manifest file not found', { path: clientManifestPath });
+    }
     const raw = fs.readFileSync(clientManifestPath, 'utf8');
     const manifest = JSON.parse(raw);
     const baseUrl = process.env.BASE_URL || getBaseUrl(req);
