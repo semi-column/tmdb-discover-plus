@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.3](https://github.com/semi-column/tmdb-discover-plus/compare/v2.7.2...v2.7.3) (2026-02-12)
+
+
+### Bug Fixes
+
+* Age rating mapping to Region/Country set by the user ([d9008fd](https://github.com/semi-column/tmdb-discover-plus/commit/d9008fd04ff6fe16325071acd2895584daf5ab3a))
+* cache warmer fix for redis ([ca37fbb](https://github.com/semi-column/tmdb-discover-plus/commit/ca37fbb49419f2b7a5919c392e1d1396342c32a2))
+* ensure cache.get() returns unwrapped data to prevent metadata leakage ([a4127f5](https://github.com/semi-column/tmdb-discover-plus/commit/a4127f5a330d1802dc8bfba078e44423fd356d69))
+* manifest path fix for docker environments ([17233d0](https://github.com/semi-column/tmdb-discover-plus/commit/17233d0eb1c2882a48811c51192f4d4f4daffe6a))
+* remove duplicate 'Any' and 'Worldwide' options from filter dropdowns ([a4127f5](https://github.com/semi-column/tmdb-discover-plus/commit/a4127f5a330d1802dc8bfba078e44423fd356d69))
+* remove redundant age rating country and range selectors from UI ([a4127f5](https://github.com/semi-column/tmdb-discover-plus/commit/a4127f5a330d1802dc8bfba078e44423fd356d69))
+* sync age rating country with release region in catalog editor ([a4127f5](https://github.com/semi-column/tmdb-discover-plus/commit/a4127f5a330d1802dc8bfba078e44423fd356d69))
+* update TMDB cache keys to _v2 to force regional data refresh ([a4127f5](https://github.com/semi-column/tmdb-discover-plus/commit/a4127f5a330d1802dc8bfba078e44423fd356d69))
+
 ## [2.7.2](https://github.com/semi-column/tmdb-discover-plus/compare/v2.7.1...v2.7.2) (2026-02-11)
 
 
