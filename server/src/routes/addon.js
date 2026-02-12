@@ -446,6 +446,20 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
       .map((c) => `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`)
       [0] || null;
 
+    let userRegion = config.preferences?.region || config.preferences?.originCountry || null;
+    
+    if (!userRegion && Array.isArray(config.catalogs)) {
+        const certCatalog = config.catalogs.find(c => c.filters?.certificationCountry && c.filters.certificationCountry !== 'US');
+        if (certCatalog) {
+            userRegion = certCatalog.filters.certificationCountry;
+        } else {
+            const originCatalog = config.catalogs.find(c => c.filters?.originCountry);
+            if (originCatalog) {
+                 userRegion = originCatalog.filters.originCountry;
+            }
+        }
+    }
+
     const meta = await tmdb.toStremioFullMeta(
       details,
       type,
@@ -454,7 +468,7 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
       posterOptions,
       videos,
       language,
-      { manifestUrl, genreCatalogId, allLogos }
+      { manifestUrl, genreCatalogId, allLogos, userRegion }
     );
 
     // Apply fallback images for missing poster/thumbnail

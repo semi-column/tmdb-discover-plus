@@ -57,7 +57,7 @@ export async function toStremioFullMeta(
   posterOptions = null,
   videos = null,
   targetLanguage = null,
-  { manifestUrl = null, genreCatalogId = null, allLogos = null } = {}
+  { manifestUrl = null, genreCatalogId = null, allLogos = null, userRegion = null } = {}
 ) {
   if (!details) return {};
   const isMovie = type === 'movie';
@@ -102,13 +102,14 @@ export async function toStremioFullMeta(
   const effectiveImdbId = imdbId || details?.external_ids?.imdb_id || null;
   const status = details.status || null;
 
-  // Age Rating / Certification - use country from language setting, fallback to US
-  // Extract country code: "it" -> "IT", "en-US" -> "US", "pt-BR" -> "BR"
-  const countryCode = targetLanguage
-    ? targetLanguage.includes('-')
+  let countryCode = userRegion ? userRegion.toUpperCase() : 'US';
+  
+  if (!userRegion && targetLanguage) {
+    countryCode = targetLanguage.includes('-')
       ? targetLanguage.split('-')[1].toUpperCase()
-      : targetLanguage.toUpperCase()
-    : 'US';
+      : targetLanguage.toUpperCase();
+     if (countryCode.length !== 2 || countryCode === 'EN') countryCode = 'US';
+  }
 
   log.debug('Certification lookup', { targetLanguage, countryCode });
 
