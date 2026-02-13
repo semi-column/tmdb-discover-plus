@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { createLogger } from '../../utils/logger.js';
-import { tmdbFetch } from './client.js';
+import { createLogger } from '../../utils/logger.ts';
+import { tmdbFetch } from './client.ts';
 
 const log = createLogger('tmdb:genres');
 
@@ -11,9 +11,7 @@ export let genreCache = { movie: {}, tv: {} };
 
 export let staticGenreMap = { movie: {}, tv: {} };
 try {
-  // __dirname equivalent: genres.js is in server/src/services/tmdb/
-  // tmdb_genres.json is in server/src/services/
-  const genresPath = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1')), '..', 'tmdb_genres.json');
+  const genresPath = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1')), '..', '..', 'data', 'tmdb_genres.json');
   const raw = fs.readFileSync(genresPath, 'utf8');
   staticGenreMap = JSON.parse(raw);
 } catch (err) {

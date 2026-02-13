@@ -5,10 +5,10 @@
   "main": "server/src/index.js",
   "type": "module",
   "engines": {
-    "node": "18.x"
+    "node": ">=22"
   },
   "scripts": {
-    "start": "node server/src/index.js",
+    "start": "node --experimental-strip-types server/src/index.js",
     "build": "cd client && npm install && npm run build",
     "heroku-postbuild": "cd server && npm install && cd ../client && npm install --include=dev && npm run build",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",

@@ -1,8 +1,8 @@
-import { createLogger } from './logger.js';
+import { createLogger } from './logger.ts';
 import { getUserConfig, getApiKeyFromConfig } from '../services/configService.js';
-import { verifyToken, computeApiKeyId } from './security.js';
+import { verifyToken, computeApiKeyId } from './security.ts';
 
-export { computeApiKeyId, generateToken, verifyToken } from './security.js';
+export { computeApiKeyId, generateToken, verifyToken } from './security.ts';
 
 const log = createLogger('auth');
 

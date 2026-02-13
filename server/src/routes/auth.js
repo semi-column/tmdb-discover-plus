@@ -1,17 +1,18 @@
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { generateToken, verifyToken, computeApiKeyId } from '../utils/authMiddleware.js';
-import { encrypt } from '../utils/encryption.js';
+import { revokeToken } from '../utils/security.ts';
+import { encrypt } from '../utils/encryption.ts';
 import {
   getUserConfig,
   saveUserConfig,
   getConfigsByApiKey,
   getApiKeyFromConfig,
 } from '../services/configService.js';
-import * as tmdb from '../services/tmdb.js';
-import { createLogger } from '../utils/logger.js';
+import * as tmdb from '../services/tmdb/index.js';
+import { createLogger } from '../utils/logger.ts';
 import { strictRateLimit } from '../utils/rateLimit.js';
-import { isValidApiKeyFormat, isValidUserId } from '../utils/validation.js';
+import { isValidApiKeyFormat, isValidUserId } from '../utils/validation.ts';
 
 const router = Router();
 const log = createLogger('auth');
@@ -125,6 +126,10 @@ router.post('/login', strictRateLimit, async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
+  const bearerToken = req.headers.authorization?.replace('Bearer ', '');
+  if (bearerToken) {
+    revokeToken(bearerToken);
+  }
   return res.json({ success: true });
 });
 

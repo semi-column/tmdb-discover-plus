@@ -1,7 +1,9 @@
 import { RedisAdapter } from './RedisAdapter.js';
 import { MemoryAdapter } from './MemoryAdapter.js';
 import { CacheWrapper } from './CacheWrapper.js';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../utils/logger.ts';
+import { config } from '../../config.ts';
+import { ADDON_VERSION } from '../../version.ts';
 
 const log = createLogger('CacheFactory');
 
@@ -17,8 +19,8 @@ let degraded = false;
 export async function initCache() {
   if (cacheInstance) return cacheInstance;
 
-  const redisUrl = process.env.REDIS_URL;
-  const driver = process.env.CACHE_DRIVER; // 'redis', 'memory'
+  const redisUrl = config.cache.redisUrl;
+  const driver = config.cache.driver;
 
   let adapter = null;
 
@@ -56,9 +58,8 @@ export async function initCache() {
     activeDriver = 'memory';
   }
 
-  // Wrap the raw adapter with resilience features
-  cacheInstance = new CacheWrapper(adapter);
-  log.info('Cache initialized with CacheWrapper', { driver: activeDriver, degraded });
+  cacheInstance = new CacheWrapper(adapter, { version: ADDON_VERSION });
+  log.info('Cache initialized with CacheWrapper', { driver: activeDriver, degraded, version: ADDON_VERSION });
 
   return cacheInstance;
 }
@@ -68,8 +69,7 @@ export async function initCache() {
  */
 export function getCache() {
   if (!cacheInstance) {
-    // If not explicitly initialized, fallback to memory (safe default)
-    cacheInstance = new CacheWrapper(new MemoryAdapter());
+    cacheInstance = new CacheWrapper(new MemoryAdapter(), { version: ADDON_VERSION });
     activeDriver = 'memory';
   }
   return cacheInstance;

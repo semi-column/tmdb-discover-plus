@@ -1,10 +1,10 @@
 import crypto from 'crypto';
 import { getStorage } from './storage/index.js';
-import { createLogger } from '../utils/logger.js';
-import { sanitizeString, isValidUserId, isValidApiKeyFormat } from '../utils/validation.js';
-import { encrypt, decrypt } from '../utils/encryption.js';
-import { computeApiKeyId } from '../utils/security.js';
-import { getConfigCache } from './configCache.js';
+import { createLogger } from '../utils/logger.ts';
+import { sanitizeString, isValidUserId, isValidApiKeyFormat } from '../utils/validation.ts';
+import { encrypt, decrypt } from '../utils/encryption.ts';
+import { computeApiKeyId } from '../utils/security.ts';
+import { getConfigCache } from '../infrastructure/configCache.js';
 
 const log = createLogger('configService');
 

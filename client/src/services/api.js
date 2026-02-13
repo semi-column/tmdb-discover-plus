@@ -254,6 +254,23 @@ class ApiService {
     return this.request('/monetization-types');
   }
 
+  async getReferenceData() {
+    const cacheKey = 'tmdb-reference-data';
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) return JSON.parse(cached);
+    } catch {
+      /* ignore */
+    }
+    const data = await this.request('/reference-data');
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify(data));
+    } catch {
+      /* ignore */
+    }
+    return data;
+  }
+
   async getTVNetworks(apiKey = null, query = '') {
     const params = new URLSearchParams();
     if (query) params.set('query', query);

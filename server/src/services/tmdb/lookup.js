@@ -1,5 +1,10 @@
 import { getCache } from '../cache/index.js';
-import { tmdbFetch } from './client.js';
+import { tmdbFetch } from './client.ts';
+import { createLogger } from '../../utils/logger.ts';
+
+const log = createLogger('tmdb:lookup');
+
+const EXTERNAL_ID_TTL = 86400 * 30;
 
 /**
  * Get external IDs (including IMDB) for a movie or TV show
@@ -13,15 +18,15 @@ export async function getExternalIds(apiKey, tmdbId, type = 'movie') {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
   } catch (e) {
-    /* ignore */
+    log.debug('Cache get failed', { key: cacheKey, error: e.message });
   }
 
   try {
     const data = await tmdbFetch(`/${mediaType}/${tmdbId}/external_ids`, apiKey);
     try {
-      await cache.set(cacheKey, data, 604800); // Cache for 7 days
+      await cache.set(cacheKey, data, EXTERNAL_ID_TTL);
     } catch (e) {
-      /* ignore cache errors */
+      log.debug('Cache set failed', { key: cacheKey, error: e.message });
     }
     return data;
   } catch (error) {
@@ -66,7 +71,7 @@ export async function findByImdbId(apiKey, imdbId, type = 'movie', options = {})
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
   } catch (e) {
-    /* ignore */
+    log.debug('Cache get failed', { key: cacheKey, error: e.message });
   }
 
   const params = { external_source: 'imdb_id' };
@@ -85,8 +90,10 @@ export async function findByImdbId(apiKey, imdbId, type = 'movie', options = {})
     if (result) {
       const found = { tmdbId: result.id };
       try {
-        await cache.set(cacheKey, found, 86400 * 7); // 7 days
-      } catch (e) {}
+        await cache.set(cacheKey, found, EXTERNAL_ID_TTL);
+      } catch (e) {
+        log.debug('Cache set failed', { key: cacheKey, error: e.message });
+      }
       return found;
     }
     return null;

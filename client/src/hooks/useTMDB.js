@@ -28,46 +28,24 @@ export function useTMDB(apiKey) {
     setError(null);
 
     try {
-      const [movieGenres, tvGenres, langs, origLangs, ctries, sorts, presets] = await Promise.all([
-        api.getGenres(apiKey, 'movie'),
-        api.getGenres(apiKey, 'series'),
-        api.getLanguages(apiKey),
-        api.getOriginalLanguages(apiKey),
-        api.getCountries(apiKey),
-        api.getSortOptions(),
-        api.getPresetCatalogs(),
-      ]);
+      const data = await api.getReferenceData();
 
-      setGenres({ movie: movieGenres || [], series: tvGenres || [] });
-      setLanguages(langs || []);
-      setOriginalLanguages(origLangs || []);
-      setCountries(ctries || []);
-      setSortOptions(sorts || { movie: [], series: [] });
-      setPresetCatalogs(presets || { movie: [], series: [] });
+      setGenres(data.genres || { movie: [], series: [] });
+      setLanguages(data.languages || []);
+      setOriginalLanguages(data.originalLanguages || []);
+      setCountries(data.countries || []);
+      setSortOptions(data.sortOptions || { movie: [], series: [] });
+      setPresetCatalogs(data.presetCatalogs || { movie: [], series: [] });
+      setListTypes(data.listTypes || { movie: [], series: [] });
+      setReleaseTypes(data.releaseTypes || []);
+      setTVStatuses(data.tvStatuses || []);
+      setTVTypes(data.tvTypes || []);
+      setMonetizationTypes(data.monetizationTypes || []);
+      setCertifications(data.certifications || { movie: {}, series: {} });
+      setWatchRegions(data.watchRegions || []);
+      setTVNetworks(data.tvNetworks || []);
 
       setLoading(false);
-
-      const [lists, relTypes, tvStats, tvTyps, monTypes, movieCerts, tvCerts, regions, networks] =
-        await Promise.all([
-          api.getListTypes(),
-          api.getReleaseTypes(),
-          api.getTVStatuses(),
-          api.getTVTypes(),
-          api.getMonetizationTypes(),
-          api.getCertifications(apiKey, 'movie'),
-          api.getCertifications(apiKey, 'series'),
-          api.getWatchRegions(apiKey),
-          api.getTVNetworks(null, ''),
-        ]);
-
-      setListTypes(lists || { movie: [], series: [] });
-      setReleaseTypes(relTypes || []);
-      setTVStatuses(tvStats || []);
-      setTVTypes(tvTyps || []);
-      setMonetizationTypes(monTypes || []);
-      setCertifications({ movie: movieCerts || {}, series: tvCerts || {} });
-      setWatchRegions(regions || []);
-      setTVNetworks(networks || []);
     } catch (err) {
       setError(err.message);
       setLoading(false);

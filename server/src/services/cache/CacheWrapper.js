@@ -1,4 +1,4 @@
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../utils/logger.ts';
 import crypto from 'crypto';
 
 const log = createLogger('CacheWrapper');
@@ -51,6 +51,15 @@ export function classifyError(error, statusCode) {
   return 'TEMPORARY_ERROR'; // default
 }
 
+export function classifyResult(data) {
+  if (data === null || data === undefined) return 'EMPTY_RESULT';
+  if (Array.isArray(data) && data.length === 0) return 'EMPTY_RESULT';
+  if (typeof data === 'object' && !Array.isArray(data)) {
+    if (Array.isArray(data.results) && data.results.length === 0) return 'EMPTY_RESULT';
+  }
+  return null;
+}
+
 /**
  * CacheWrapper adds resilience features on top of a raw cache adapter:
  *
@@ -61,16 +70,10 @@ export function classifyError(error, statusCode) {
  * 5. Health stats — tracks hits, misses, errors, corrupted entries
  */
 export class CacheWrapper {
-  /**
-   * @param {import('./CacheInterface.js').CacheInterface} adapter - Raw cache adapter (Redis or Memory)
-   */
-  constructor(adapter) {
+  constructor(adapter, options = {}) {
     this.adapter = adapter;
-
-    /** @type {Map<string, Promise<any>>} In-flight request deduplication */
+    this.keyPrefix = options.version ? `v${options.version}:` : '';
     this.inFlight = new Map();
-
-    /** Health stats */
     this.stats = {
       hits: 0,
       misses: 0,
@@ -80,6 +83,10 @@ export class CacheWrapper {
       deduplicatedRequests: 0,
       staleServed: 0,
     };
+  }
+
+  _prefixKey(key) {
+    return this.keyPrefix + key;
   }
 
   /**
@@ -92,50 +99,45 @@ export class CacheWrapper {
    */
   async get(key) {
     const entry = await this.getEntry(key);
-    
-    // If it's a wrapped entry, return the data
+
     if (entry && typeof entry === 'object' && entry.__cacheWrapper) {
-      // If it's a cached error, we might want to return null or throw?
-      // Standard get() consumers expects data or null.
-      // If they want to handle cached errors explicitly, they should use getEntry().
       if (entry.__errorType) return null;
-      
       return entry.data;
     }
-    
+
     return entry;
   }
 
-  /**
-   * Get the raw cache entry (with wrapper metadata).
-   * Returns { value, isStale, isCachedError } or null.
-   */
   async getEntry(key) {
+    const storageKey = this._prefixKey(key);
     try {
-      const raw = await this.adapter.get(key);
+      const raw = await this.adapter.get(storageKey);
       if (raw === null || raw === undefined) {
         this.stats.misses++;
         return null;
       }
 
-      // Self-healing: validate wrapped entries
       if (raw && typeof raw === 'object' && raw.__cacheWrapper) {
-        // Check for cached error entries
-        if (raw.__errorType) {
-          this.stats.cachedErrors++;
-          return raw; // Return the error marker so caller can handle it
+        if (typeof raw.__storedAt !== 'number' || typeof raw.__ttl !== 'number') {
+          this.stats.corruptedEntries++;
+          log.warn('Malformed cache wrapper entry, cleaning up', { key: storageKey });
+          await this.adapter.del(storageKey).catch(() => {});
+          await this.adapter.set(storageKey, { __cacheWrapper: true, __errorType: 'CACHE_CORRUPTED', __errorMessage: 'malformed entry', __storedAt: Date.now(), __ttl: ERROR_TTLS.CACHE_CORRUPTED, data: null }, ERROR_TTLS.CACHE_CORRUPTED).catch(() => {});
+          return null;
         }
 
-        // Stale-while-revalidate: check if entry is stale
+        if (raw.__errorType) {
+          this.stats.cachedErrors++;
+          return raw;
+        }
+
         if (raw.__storedAt && raw.__ttl) {
           const age = (Date.now() - raw.__storedAt) / 1000;
           if (age > raw.__ttl) {
-            // Entry is past TTL but still in cache (within 2x TTL grace)
             if (age < raw.__ttl * 2) {
               this.stats.staleServed++;
               return { ...raw, __isStale: true };
             }
-            // Too old, treat as miss
             this.stats.misses++;
             return null;
           }
@@ -145,21 +147,20 @@ export class CacheWrapper {
         return raw;
       }
 
-      // Legacy / unwrapped entry — return as-is
       this.stats.hits++;
       return raw;
     } catch (err) {
       this.stats.errors++;
-      // Self-healing: if we get a parse error, the entry is corrupted
       if (
         err.message?.includes('JSON') ||
         err.message?.includes('parse') ||
         err.message?.includes('Unexpected token')
       ) {
         this.stats.corruptedEntries++;
-        log.warn('Corrupted cache entry detected, cleaning up', { key });
+        log.warn('Corrupted cache entry detected, cleaning up', { key: storageKey });
         try {
-          await this.adapter.del(key);
+          await this.adapter.del(storageKey);
+          await this.adapter.set(storageKey, { __cacheWrapper: true, __errorType: 'CACHE_CORRUPTED', __errorMessage: 'corrupted entry', __storedAt: Date.now(), __ttl: ERROR_TTLS.CACHE_CORRUPTED, data: null }, ERROR_TTLS.CACHE_CORRUPTED);
         } catch {
           /* best effort */
         }
@@ -172,6 +173,7 @@ export class CacheWrapper {
    * Set a value in cache with wrapper metadata for stale-while-revalidate.
    */
   async set(key, value, ttlSeconds) {
+    const storageKey = this._prefixKey(key);
     try {
       const wrapped = {
         __cacheWrapper: true,
@@ -179,12 +181,10 @@ export class CacheWrapper {
         __ttl: ttlSeconds,
         data: value,
       };
-      // Store with 1.3x TTL for a brief stale-while-revalidate grace window
-      // (keeps memory usage reasonable vs. 2x)
-      await this.adapter.set(key, wrapped, Math.ceil(ttlSeconds * 1.3));
+      await this.adapter.set(storageKey, wrapped, Math.ceil(ttlSeconds * 1.3));
     } catch (err) {
       this.stats.errors++;
-      log.warn('Cache set failed', { key, error: err.message });
+      log.warn('Cache set failed', { key: storageKey, error: err.message });
     }
   }
 
@@ -192,6 +192,7 @@ export class CacheWrapper {
    * Cache an error result with error-type-specific TTL.
    */
   async setError(key, errorType, errorMessage) {
+    const storageKey = this._prefixKey(key);
     const ttl = ERROR_TTLS[errorType] || ERROR_TTLS.TEMPORARY_ERROR;
     try {
       const entry = {
@@ -202,8 +203,8 @@ export class CacheWrapper {
         __ttl: ttl,
         data: null,
       };
-      await this.adapter.set(key, entry, ttl);
-      log.debug('Cached error result', { key: key.substring(0, 80), errorType, ttl });
+      await this.adapter.set(storageKey, entry, ttl);
+      log.debug('Cached error result', { key: storageKey.substring(0, 80), errorType, ttl });
     } catch (err) {
       log.warn('Failed to cache error', { error: err.message });
     }
@@ -214,7 +215,7 @@ export class CacheWrapper {
    */
   async del(key) {
     try {
-      await this.adapter.del(key);
+      await this.adapter.del(this._prefixKey(key));
     } catch (err) {
       log.warn('Cache del failed', { key, error: err.message });
     }
@@ -280,7 +281,9 @@ export class CacheWrapper {
   async _executeFetch(key, fetchFn, ttlSeconds) {
     try {
       const result = await fetchFn();
-      await this.set(key, result, ttlSeconds);
+      const resultType = classifyResult(result);
+      const effectiveTtl = resultType === 'EMPTY_RESULT' ? ERROR_TTLS.EMPTY_RESULT : ttlSeconds;
+      await this.set(key, result, effectiveTtl);
       return result;
     } catch (error) {
       // Don't cache errors for CachedErrors (already cached)

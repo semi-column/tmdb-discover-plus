@@ -1,4 +1,5 @@
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
+import { config } from '../config.ts';
 
 const log = createLogger('Metrics');
 
@@ -15,7 +16,7 @@ const log = createLogger('Metrics');
  */
 class MetricsTracker {
   constructor() {
-    this.disabled = process.env.DISABLE_METRICS === 'true';
+    this.disabled = config.features.disableMetrics;
 
     /** @type {Map<string, {count: number, totalMs: number, errors: number, lastMs: number}>} */
     this.endpoints = new Map();

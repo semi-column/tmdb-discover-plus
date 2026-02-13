@@ -7,9 +7,11 @@ export function shuffleArray(array) {
   return shuffled;
 }
 
+import { config } from '../config.ts';
+
 export function getBaseUrl(req) {
-  if (process.env.BASE_URL) {
-    return process.env.BASE_URL;
+  if (config.baseUrl) {
+    return config.baseUrl;
   }
 
   const origin = req.get('origin');

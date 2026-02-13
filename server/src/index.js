@@ -1,31 +1,29 @@
-import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { config } from './config.ts';
 import { initStorage, getStorage } from './services/storage/index.js';
 import { initCache, getCacheStatus } from './services/cache/index.js';
 import { addonRouter } from './routes/addon.js';
 import { apiRouter } from './routes/api.js';
 import { authRouter } from './routes/auth.js';
-import { createLogger } from './utils/logger.js';
+import { createLogger } from './utils/logger.ts';
 import { getBaseUrl } from './utils/helpers.js';
 import { apiRateLimit } from './utils/rateLimit.js';
-import { warmEssentialCaches } from './services/cacheWarmer.js';
-import { getMetrics, destroyMetrics } from './services/metrics.js';
-import { destroyTmdbThrottle, getTmdbThrottle } from './services/tmdbThrottle.js';
-import { getConfigCache } from './services/configCache.js';
-import {
-  initImdbRatings,
-  getImdbRatingsStats,
-  destroyImdbRatings,
-} from './services/imdbRatings/index.js';
+import { warmEssentialCaches } from './infrastructure/cacheWarmer.js';
+import { getMetrics, destroyMetrics } from './infrastructure/metrics.js';
+import { destroyTmdbThrottle, getTmdbThrottle } from './infrastructure/tmdbThrottle.js';
+import { getConfigCache } from './infrastructure/configCache.js';
+import { initImdbRatings, getImdbRatingsStats, destroyImdbRatings } from './services/imdbRatings/index.js';
+import { getCircuitBreakerState } from './services/tmdb/client.ts';
+import { requestIdMiddleware } from './utils/requestContext.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const log = createLogger('server');
-const PORT = process.env.PORT || 7000;
+const PORT = config.port;
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
 const SERVER_VERSION = pkg.version;
 
@@ -45,7 +43,7 @@ const serverStatus = {
 
 app.set('trust proxy', true);
 
-const rawOrigins = process.env.CORS_ORIGIN || '*';
+const rawOrigins = config.cors.origin;
 const allowedOrigins =
   rawOrigins === '*'
     ? ['*']
@@ -62,7 +60,7 @@ const corsOptions = {
     }
     return callback(new Error('Not allowed by CORS'));
   },
-  credentials: (process.env.CORS_ALLOW_CREDENTIALS || 'false') === 'true',
+  credentials: config.cors.allowCredentials,
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
 };
@@ -70,6 +68,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
+
+app.use(requestIdMiddleware());
 
 // Global generic rate limit for all routes
 app.use(apiRateLimit);
@@ -91,7 +91,7 @@ if (process.env.NODE_ENV === 'production') {
 
 log.info('Environment status', {
   port: PORT,
-  nodeEnv: process.env.NODE_ENV || 'undefined',
+  nodeEnv: config.nodeEnv,
   hasEncryptionKey: Boolean(process.env.ENCRYPTION_KEY),
   hasJwtSecret: Boolean(process.env.JWT_SECRET),
 });
@@ -126,7 +126,7 @@ app.get('/manifest.json', (req, res) => {
     }
     const raw = fs.readFileSync(clientManifestPath, 'utf8');
     const manifest = JSON.parse(raw);
-    const baseUrl = process.env.BASE_URL || getBaseUrl(req);
+    const baseUrl = config.baseUrl || getBaseUrl(req);
     manifest.logo = `${baseUrl.replace(/\/$/, '')}/logo.png`;
     res.setHeader('Cache-Control', 'no-store, must-revalidate');
     res.json(manifest);
@@ -215,6 +215,7 @@ app.get('/health', (req, res) => {
     cache: cacheStatus,
     configCache: configCacheStats,
     tmdbThrottle: throttleStats,
+    tmdbCircuitBreaker: getCircuitBreakerState(),
     imdbRatings: getImdbRatingsStats(),
     cacheWarming: serverStatus.cacheWarming,
     metrics: metricsData,
@@ -227,6 +228,12 @@ app.get('/health', (req, res) => {
 
   const httpStatus = status === 'ok' || status === 'degraded' ? 200 : 503;
   res.status(httpStatus).json(health);
+});
+
+app.get('/metrics', (req, res) => {
+  res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+  res.set('Cache-Control', 'no-store');
+  res.send(getMetrics().toPrometheus());
 });
 
 app.use('/api/auth', authRouter);
@@ -246,7 +253,7 @@ app.get('*', (req, res) => {
 
 app.use((err, req, res, next) => {
   log.error('Unhandled error', { error: err.message, stack: err.stack, url: req.url });
-  res.status(500).json({ error: 'Internal server error' });
+  res.status(500).json({ error: 'Internal server error', requestId: res.getHeader('X-Request-Id') || undefined });
 });
 
 function gracefulShutdown(signal) {
@@ -325,7 +332,7 @@ async function start() {
 
     // ---- Non-critical initialization (background, fire-and-forget) ----
     // Cache warming runs after server is already listening so it doesn't block startup.
-    const defaultApiKey = process.env.TMDB_API_KEY;
+    const defaultApiKey = config.tmdb.apiKey;
     warmEssentialCaches(defaultApiKey)
       .then((result) => {
         serverStatus.cacheWarming = result;

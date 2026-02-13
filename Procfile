@@ -1,1 +1,1 @@
-web: node server/src/index.js
+web: node --experimental-strip-types server/src/index.js

@@ -11,18 +11,19 @@ import {
   getApiKeyFromConfig,
   getPublicStats,
 } from '../services/configService.js';
-import * as tmdb from '../services/tmdb.js';
+import * as tmdb from '../services/tmdb/index.js';
 import { getBaseUrl, shuffleArray } from '../utils/helpers.js';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 import { apiRateLimit, strictRateLimit } from '../utils/rateLimit.js';
-import { isValidUserId, isValidApiKeyFormat } from '../utils/validation.js';
+import { isValidUserId, isValidApiKeyFormat } from '../utils/validation.ts';
 import {
   requireAuth,
   optionalAuth,
   requireConfigOwnership,
   computeApiKeyId,
 } from '../utils/authMiddleware.js';
+import { config } from '../config.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -62,17 +63,17 @@ router.get('/status', async (req, res) => {
     const stats = await getPublicStats().catch(() => ({ users: 0, catalogs: 0 }));
 
     // Determine database and cache type from environment
-    const databaseType = process.env.DATABASE_URL
+    const databaseType = config.database.databaseUrl
       ? 'postgres'
-      : process.env.MONGODB_URI
+      : config.database.mongodbUri
         ? 'mongodb'
         : 'memory';
-    const cacheType = process.env.REDIS_URL ? 'redis' : 'memory';
+    const cacheType = config.cache.redisUrl ? 'redis' : 'memory';
 
     res.json({
       ...metadata,
       uptime: Math.floor(process.uptime()),
-      environment: process.env.NODE_ENV || 'production',
+      environment: config.nodeEnv,
       database: databaseType,
       cache: cacheType,
       stats: {
@@ -139,6 +140,61 @@ router.get('/configs', requireAuth, resolveApiKey, async (req, res) => {
     res.json(safeConfigs);
   } catch (error) {
     log.error('GET /configs error', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
+  try {
+    const { apiKey } = req;
+
+    const [
+      movieGenres,
+      seriesGenres,
+      languages,
+      originalLanguages,
+      countries,
+      movieCertifications,
+      seriesCertifications,
+      watchRegions,
+      tvNetworks,
+    ] = await Promise.all([
+      tmdb.getGenres(apiKey, 'movie'),
+      tmdb.getGenres(apiKey, 'series'),
+      tmdb.getLanguages(apiKey),
+      tmdb.getOriginalLanguages(apiKey),
+      tmdb.getCountries(apiKey),
+      tmdb.getCertifications(apiKey, 'movie'),
+      tmdb.getCertifications(apiKey, 'series'),
+      tmdb.getWatchRegions(apiKey),
+      tmdb.getNetworks(apiKey, '').catch(() => []),
+    ]);
+
+    const data = {
+      genres: { movie: movieGenres, series: seriesGenres },
+      languages,
+      originalLanguages,
+      countries,
+      sortOptions: tmdb.SORT_OPTIONS,
+      listTypes: tmdb.LIST_TYPES,
+      presetCatalogs: tmdb.PRESET_CATALOGS,
+      releaseTypes: tmdb.RELEASE_TYPES,
+      tvStatuses: tmdb.TV_STATUSES,
+      tvTypes: tmdb.TV_TYPES,
+      monetizationTypes: tmdb.MONETIZATION_TYPES,
+      certifications: { movie: movieCertifications, series: seriesCertifications },
+      watchRegions,
+      tvNetworks: (tmdb.TV_NETWORKS || []).map((n) => ({
+        id: n.id,
+        name: n.name,
+        logo: n.logo || n.logoPath || null,
+      })),
+    };
+
+    res.set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    res.json(data);
+  } catch (error) {
+    log.error('GET /reference-data error', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -473,7 +529,7 @@ router.get('/stats', async (req, res) => {
     const stats = await getPublicStats();
     res.json({
       ...stats,
-      addonVariant: process.env.ADDON_VARIANT,
+      addonVariant: config.addon.variant,
     });
   } catch (error) {
     log.error('GET /stats error', { error: error.message });

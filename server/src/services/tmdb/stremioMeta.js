@@ -1,10 +1,11 @@
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../utils/logger.ts';
 import { generatePosterUrl, generateBackdropUrl, isValidPosterConfig } from '../posterService.js';
 import { getRpdbRating } from '../rpdb.js';
-import { TMDB_IMAGE_BASE } from './constants.js';
+import { TMDB_IMAGE_BASE } from './constants.ts';
 import { getImdbRatingString } from '../imdbRatings/index.js';
 import { genreCache, staticGenreMap } from './genres.js';
 import { usToLocalRatings } from './certificationMappings.js';
+import { config } from '../../config.ts';
 
 const log = createLogger('tmdb:stremioMeta');
 
@@ -33,6 +34,204 @@ export function formatRuntime(minutes) {
 export function generateSlug(type, title, id) {
   const safeTitle = (title || '').toLowerCase().replace(/ /g, '-');
   return `${type}/${safeTitle}-${id}`;
+}
+
+// ── Full meta helpers ─────────────────────────────────────────────────────────
+
+function buildCredits(details, isMovie) {
+  const credits = details.credits || {};
+  const cast = Array.isArray(credits.cast)
+    ? credits.cast
+        .slice(0, 20)
+        .map((p) => p?.name)
+        .filter(Boolean)
+    : [];
+
+  const crew = Array.isArray(credits.crew) ? credits.crew : [];
+  const directors = crew
+    .filter((p) => p?.job === 'Director')
+    .map((p) => p?.name)
+    .filter(Boolean);
+
+  const writers = crew.filter((p) => ['Writer', 'Screenplay', 'Author'].includes(p.job));
+  const writerNames = writers.map((p) => p.name);
+  const writerString = writerNames.join(', ');
+  const directorString = directors.join(', ');
+
+  const creators = !isMovie && Array.isArray(details.created_by)
+    ? details.created_by.map((p) => p?.name).filter(Boolean)
+    : [];
+  const creatorString = creators.join(', ');
+
+  return { cast, crew, directors, writers, writerNames, writerString, directorString, creators, creatorString };
+}
+
+function buildCertification(details, isMovie, targetLanguage, userRegion) {
+  let countryCode = userRegion ? userRegion.toUpperCase() : 'US';
+
+  if (!userRegion && targetLanguage) {
+    countryCode = targetLanguage.includes('-')
+      ? targetLanguage.split('-')[1].toUpperCase()
+      : targetLanguage.toUpperCase();
+    if (countryCode.length !== 2 || countryCode === 'EN') countryCode = 'US';
+  }
+
+  log.debug('Certification lookup', { targetLanguage, countryCode });
+
+  let certification = null;
+  if (isMovie && details.release_dates?.results) {
+    let countryInfo = details.release_dates.results.find((r) => r.iso_3166_1 === countryCode);
+    if (!countryInfo && countryCode !== 'US') {
+      countryInfo = details.release_dates.results.find((r) => r.iso_3166_1 === 'US');
+    }
+    if (countryInfo?.release_dates?.length > 0) {
+      const rated =
+        countryInfo.release_dates.find((d) => d.certification) || countryInfo.release_dates[0];
+      if (rated?.certification) certification = rated.certification;
+    }
+  } else if (!isMovie && details.content_ratings?.results) {
+    let countryInfo = details.content_ratings.results.find((r) => r.iso_3166_1 === countryCode);
+    if (!countryInfo && countryCode !== 'US') {
+      countryInfo = details.content_ratings.results.find((r) => r.iso_3166_1 === 'US');
+    }
+    if (countryInfo?.rating) certification = countryInfo.rating;
+  }
+
+  const localMap = usToLocalRatings[countryCode];
+  if (certification && localMap && localMap[certification]) {
+    certification = localMap[certification];
+  }
+
+  return certification;
+}
+
+function buildTrailers(details, targetLanguage) {
+  const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
+
+  let trailer = null;
+  if (details.videos?.results?.length > 0) {
+    const allVideos = details.videos.results.filter((v) => v.site === 'YouTube');
+    const trailerVideo =
+      allVideos.find((v) => v.iso_639_1 === lang && v.type === 'Trailer') ||
+      allVideos.find((v) => v.iso_639_1 === lang) ||
+      allVideos.find((v) => v.iso_639_1 === 'en' && v.type === 'Trailer') ||
+      allVideos.find((v) => v.type === 'Trailer') ||
+      allVideos[0];
+    if (trailerVideo) trailer = `yt:${trailerVideo.key}`;
+  }
+
+  const trailerStreams = [];
+  const trailers = [];
+  if (details.videos?.results) {
+    const youtubeTrailers = details.videos.results.filter(
+      (v) => v.site === 'YouTube' && v.type === 'Trailer'
+    );
+    youtubeTrailers.sort((a, b) => {
+      const aLang = a.iso_639_1 || 'en';
+      const bLang = b.iso_639_1 || 'en';
+      if (aLang === lang && bLang !== lang) return -1;
+      if (bLang === lang && aLang !== lang) return 1;
+      if (aLang === 'en' && bLang !== 'en') return -1;
+      if (bLang === 'en' && aLang !== 'en') return 1;
+      return 0;
+    });
+    youtubeTrailers.forEach((v) => {
+      trailerStreams.push({ title: v.name, ytId: v.key, lang: v.iso_639_1 || 'en' });
+      trailers.push({ source: v.key, type: v.type });
+    });
+  }
+
+  return { trailer, trailerStreams, trailers };
+}
+
+async function buildLinks(
+  { effectiveImdbId, genres, cast, directors, writerNames, creators, title, type, details, posterOptions, manifestUrl, genreCatalogId }
+) {
+  const links = [];
+
+  let actualImdbRating = null;
+
+  if (effectiveImdbId) {
+    try {
+      const datasetRating = await getImdbRatingString(effectiveImdbId);
+      if (datasetRating) actualImdbRating = datasetRating;
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  if (!actualImdbRating && effectiveImdbId) {
+    const rpdbKey =
+      posterOptions?.service === 'rpdb' && posterOptions.apiKey
+        ? posterOptions.apiKey
+        : config.rpdb.apiKey;
+    if (rpdbKey) {
+      try {
+        const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
+        if (realRating && realRating !== 'N/A') actualImdbRating = realRating;
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+
+  if (effectiveImdbId) {
+    links.push({
+      name: actualImdbRating || 'IMDb',
+      category: 'imdb',
+      url: `https://imdb.com/title/${effectiveImdbId}`,
+    });
+  }
+
+  genres.forEach((genre) => {
+    const genreUrl = manifestUrl && genreCatalogId
+      ? `stremio:///discover/${encodeURIComponent(manifestUrl)}/${type}/${genreCatalogId}?genre=${encodeURIComponent(genre)}`
+      : `stremio:///search?search=${encodeURIComponent(genre)}`;
+    links.push({ name: genre, category: 'Genres', url: genreUrl });
+  });
+
+  cast.slice(0, 5).forEach((name) => {
+    links.push({ name, category: 'Cast', url: `stremio:///search?search=${encodeURIComponent(name)}` });
+  });
+
+  directors.forEach((name) => {
+    links.push({ name, category: 'Directors', url: `stremio:///search?search=${encodeURIComponent(name)}` });
+  });
+
+  writerNames.forEach((name) => {
+    links.push({ name, category: 'Writers', url: `stremio:///search?search=${encodeURIComponent(name)}` });
+  });
+
+  creators.forEach((name) => {
+    if (!writerNames.includes(name)) {
+      links.push({ name, category: 'Writers', url: `stremio:///search?search=${encodeURIComponent(name)}` });
+    }
+  });
+
+  if (type !== 'movie' && Array.isArray(details.networks) && details.networks.length > 0) {
+    const network = details.networks[0];
+    if (network?.name) {
+      links.push({ name: network.name, category: 'Networks', url: `stremio:///search?search=${encodeURIComponent(network.name)}` });
+    }
+  }
+  if (type === 'movie' && Array.isArray(details.production_companies) && details.production_companies.length > 0) {
+    const studio = details.production_companies[0];
+    if (studio?.name) {
+      links.push({ name: studio.name, category: 'Studios', url: `stremio:///search?search=${encodeURIComponent(studio.name)}` });
+    }
+  }
+
+  const slugTitle = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  links.push({
+    name: title,
+    category: 'share',
+    url: `https://www.strem.io/s/${type}/${slugTitle}-${details.id}`,
+  });
+
+  return { links, actualImdbRating };
 }
 
 // ── Full meta conversion ─────────────────────────────────────────────────────
@@ -69,20 +268,8 @@ export async function toStremioFullMeta(
     ? details.genres.map((g) => g?.name).filter(Boolean)
     : [];
 
-  // Credits (best-effort; Stremio warns these may be deprecated but still supported)
-  const credits = details.credits || {};
-  const cast = Array.isArray(credits.cast)
-    ? credits.cast
-        .slice(0, 20)
-        .map((p) => p?.name)
-        .filter(Boolean)
-    : [];
-
-  const crew = Array.isArray(credits.crew) ? credits.crew : [];
-  const directors = crew
-    .filter((p) => p?.job === 'Director')
-    .map((p) => p?.name)
-    .filter(Boolean);
+  const { cast, crew, directors, writers, writerNames, writerString, directorString, creators, creatorString } =
+    buildCredits(details, isMovie);
 
   let runtimeMin = null;
   if (isMovie && typeof details.runtime === 'number') runtimeMin = details.runtime;
@@ -102,47 +289,8 @@ export async function toStremioFullMeta(
   const effectiveImdbId = imdbId || details?.external_ids?.imdb_id || null;
   const status = details.status || null;
 
-  let countryCode = userRegion ? userRegion.toUpperCase() : 'US';
-  
-  if (!userRegion && targetLanguage) {
-    countryCode = targetLanguage.includes('-')
-      ? targetLanguage.split('-')[1].toUpperCase()
-      : targetLanguage.toUpperCase();
-     if (countryCode.length !== 2 || countryCode === 'EN') countryCode = 'US';
-  }
+  const certification = buildCertification(details, isMovie, targetLanguage, userRegion);
 
-  log.debug('Certification lookup', { targetLanguage, countryCode });
-
-  let certification = null;
-  if (isMovie && details.release_dates?.results) {
-    // Try user's country first, then fallback to US
-    let countryInfo = details.release_dates.results.find((r) => r.iso_3166_1 === countryCode);
-    if (!countryInfo && countryCode !== 'US') {
-      countryInfo = details.release_dates.results.find((r) => r.iso_3166_1 === 'US');
-    }
-    if (countryInfo?.release_dates?.length > 0) {
-      // Find optimal rating (theatrical preferred)
-      const rated =
-        countryInfo.release_dates.find((d) => d.certification) || countryInfo.release_dates[0];
-      if (rated?.certification) certification = rated.certification;
-    }
-  } else if (!isMovie && details.content_ratings?.results) {
-    // Try user's country first, then fallback to US
-    let countryInfo = details.content_ratings.results.find((r) => r.iso_3166_1 === countryCode);
-    if (!countryInfo && countryCode !== 'US') {
-      countryInfo = details.content_ratings.results.find((r) => r.iso_3166_1 === 'US');
-    }
-    if (countryInfo?.rating) certification = countryInfo.rating;
-  }
-
-  // Apply conversion if using fallback US rating
-  const localMap = usToLocalRatings[countryCode];
-  if (certification && localMap && localMap[certification]) {
-    certification = localMap[certification];
-  }
-
-  // Format Release Info - Year or Year Range (like Cinemeta)
-  // Ended series: "2016-2025", Ongoing: "2016-", Movies: "2016"
   let releaseInfo = year;
   if (!isMovie) {
     const endYear = details.last_air_date ? String(details.last_air_date).split('-')[0] : null;
@@ -157,215 +305,16 @@ export async function toStremioFullMeta(
     }
   }
 
-  // Add certification if present (separated with em-spaces for proper width)
   if (certification) {
     releaseInfo = releaseInfo ? `${releaseInfo}\u2003\u2003${certification}` : certification;
   }
 
-  // Trailer
-  let trailer = null;
-  if (details.videos?.results?.length > 0) {
-    const allVideos = details.videos.results.filter((v) => v.site === 'YouTube');
-
-    // Prioritize:
-    // 1. Language match + Trailer
-    // 2. Language match + Teaser/Clip
-    // 3. English + Trailer
-    // 4. Any Trailer
-
-    // Extract language code (e.g., 'it' from 'it-IT') since TMDB uses ISO 639-1
-    const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
-
-    const trailerVideo =
-      allVideos.find((v) => v.iso_639_1 === lang && v.type === 'Trailer') ||
-      allVideos.find((v) => v.iso_639_1 === lang) ||
-      allVideos.find((v) => v.iso_639_1 === 'en' && v.type === 'Trailer') ||
-      allVideos.find((v) => v.type === 'Trailer') ||
-      allVideos[0];
-
-    if (trailerVideo) {
-      trailer = `yt:${trailerVideo.key}`;
-    }
-  }
-
-  // Links
-  const links = [];
-
-  let actualImdbRating = null;
-
-  // 1. Try IMDb dataset (bulk-loaded on startup — instant, offline, near-100% coverage)
-  if (effectiveImdbId) {
-    try {
-      const datasetRating = await getImdbRatingString(effectiveImdbId);
-      if (datasetRating) {
-        actualImdbRating = datasetRating;
-      }
-    } catch (e) {
-      /* ignore */
-    }
-  }
-
-  // 2. Fallback: try RPDB if the dataset didn't have it
-  if (!actualImdbRating && effectiveImdbId) {
-    const rpdbKey =
-      posterOptions?.service === 'rpdb' && posterOptions.apiKey
-        ? posterOptions.apiKey
-        : process.env.RPDB_API_KEY;
-
-    if (rpdbKey) {
-      try {
-        const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
-        if (realRating && realRating !== 'N/A') {
-          actualImdbRating = realRating;
-        }
-      } catch (e) {
-        /* ignore */
-      }
-    }
-  }
-
-  if (effectiveImdbId) {
-    links.push({
-      name: actualImdbRating || 'IMDb',
-      category: 'imdb',
-      url: `https://imdb.com/title/${effectiveImdbId}`,
-    });
-  }
-
-  // Genre Links — deep-link to own discover catalog when manifestUrl is available, fallback to search
-  genres.forEach((genre) => {
-    const genreUrl = manifestUrl && genreCatalogId
-      ? `stremio:///discover/${encodeURIComponent(manifestUrl)}/${type}/${genreCatalogId}?genre=${encodeURIComponent(genre)}`
-      : `stremio:///search?search=${encodeURIComponent(genre)}`;
-    links.push({
-      name: genre,
-      category: 'Genres',
-      url: genreUrl,
-    });
+  const { trailer, trailerStreams, trailers } = buildTrailers(details, targetLanguage);
+  const { links, actualImdbRating } = await buildLinks({
+    effectiveImdbId, genres, cast, directors, writerNames, creators, title, type, details, posterOptions, manifestUrl, genreCatalogId,
   });
 
-  // Cast Links
-  cast.slice(0, 5).forEach((name) => {
-    links.push({
-      name: name,
-      category: 'Cast',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
-    });
-  });
-
-  // Director Links
-  directors.forEach((name) => {
-    links.push({
-      name: name,
-      category: 'Directors',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
-    });
-  });
-
-  // Crew strings
-  const writers = crew.filter((p) => ['Writer', 'Screenplay', 'Author'].includes(p.job));
-  const writerNames = writers.map((p) => p.name);
-  const writerString = writerNames.join(', ');
-  const directorString = directors.join(', ');
-
-  // Creator string for series (from TMDB created_by field)
-  const creators = !isMovie && Array.isArray(details.created_by)
-    ? details.created_by.map((p) => p?.name).filter(Boolean)
-    : [];
-  const creatorString = creators.join(', ');
-
-  // Writer Links
-  writerNames.forEach((name) => {
-    links.push({
-      name: name,
-      category: 'Writers',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
-    });
-  });
-
-  // Creator Links (series only — "Created By" credit)
-  creators.forEach((name) => {
-    // Avoid duplicate if creator is also a writer
-    if (!writerNames.includes(name)) {
-      links.push({
-        name: name,
-        category: 'Writers',
-        url: `stremio:///search?search=${encodeURIComponent(name)}`,
-      });
-    }
-  });
-
-  // Network Links (series) / Studio Links (movies)
-  if (!isMovie && Array.isArray(details.networks) && details.networks.length > 0) {
-    const network = details.networks[0];
-    if (network?.name) {
-      links.push({
-        name: network.name,
-        category: 'Networks',
-        url: `stremio:///search?search=${encodeURIComponent(network.name)}`,
-      });
-    }
-  }
-  if (isMovie && Array.isArray(details.production_companies) && details.production_companies.length > 0) {
-    const studio = details.production_companies[0];
-    if (studio?.name) {
-      links.push({
-        name: studio.name,
-        category: 'Studios',
-        url: `stremio:///search?search=${encodeURIComponent(studio.name)}`,
-      });
-    }
-  }
-
-  // Share Link
-  const slugTitle = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  links.push({
-    name: title,
-    category: 'share',
-    url: `https://www.strem.io/s/${type}/${slugTitle}-${details.id}`,
-  });
-
-  // Trailer Streams and Trailers array
-  const trailerStreams = [];
-  const trailers = []; // Stremio format: { source, type }
-
-  if (details.videos?.results) {
-    const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
-
-    // Get all YouTube trailers
-    const youtubeTrailers = details.videos.results.filter(
-      (v) => v.site === 'YouTube' && v.type === 'Trailer'
-    );
-
-    // Sort: target language first, then English, then others
-    youtubeTrailers.sort((a, b) => {
-      const aLang = a.iso_639_1 || 'en';
-      const bLang = b.iso_639_1 || 'en';
-      if (aLang === lang && bLang !== lang) return -1;
-      if (bLang === lang && aLang !== lang) return 1;
-      if (aLang === 'en' && bLang !== 'en') return -1;
-      if (bLang === 'en' && aLang !== 'en') return 1;
-      return 0;
-    });
-
-    youtubeTrailers.forEach((v) => {
-      trailerStreams.push({
-        title: v.name,
-        ytId: v.key,
-        lang: v.iso_639_1 || 'en',
-      });
-      // Stremio format
-      trailers.push({
-        source: v.key,
-        type: v.type,
-      });
-    });
-  }
-
-  // app_extras
+  const credits = details.credits || {};
   const app_extras = {
     cast: Array.isArray(credits.cast)
       ? credits.cast.slice(0, 15).map((p) => ({
@@ -430,10 +379,12 @@ export async function toStremioFullMeta(
 
     const candidates = [
       logoSources.find((l) => l.iso_639_1 === lang),
-      originalLang && originalLang !== lang ? logoSources.find((l) => l.iso_639_1 === originalLang) : null,
       lang !== 'en' ? logoSources.find((l) => l.iso_639_1 === 'en') : null,
+      originalLang && originalLang !== lang && originalLang !== 'en'
+        ? logoSources.find((l) => l.iso_639_1 === originalLang)
+        : null,
       logoSources.find((l) => l.iso_639_1 === null),
-      logoSources[0],
+      [...logoSources].sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))[0],
     ];
 
     const best = candidates.find(Boolean);
@@ -571,14 +522,14 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
     imdb_id: effectiveImdbId, // Some addons/clients expect this format
     type: type === 'series' ? 'series' : 'movie',
     name: title,
+    slug: generateSlug(type === 'series' ? 'series' : 'movie', title, primaryId),
     poster,
     posterShape: 'poster',
     background,
-    fanart: background, // Compatibility alias
-    landscapePoster: background, // Landscape preview for TV clients
+    fanart: background,
+    landscapePoster: background,
     description: item.overview || '',
     releaseInfo: year,
-    // Only genuine IMDb ratings — never show TMDB vote_average as imdbRating
     imdbRating: ratingsMap && effectiveImdbId && ratingsMap.has(effectiveImdbId)
       ? ratingsMap.get(effectiveImdbId)
       : undefined,

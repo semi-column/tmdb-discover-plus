@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 import { getCache } from './cache/index.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 
 const log = createLogger('rpdb');
 const RPDB_BASE_URL = 'https://api.ratingposterdb.com';
