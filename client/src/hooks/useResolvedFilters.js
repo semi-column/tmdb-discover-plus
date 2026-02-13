@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-function toPlaceholdersFromCsv(csv, sep = ',') {
+export function toPlaceholdersFromCsv(csv, sep = ',') {
   if (!csv) return [];
   return String(csv)
     .split(sep)
@@ -8,7 +8,7 @@ function toPlaceholdersFromCsv(csv, sep = ',') {
     .map((id) => ({ id, name: id }));
 }
 
-async function resolveItems(items, fetchById, search) {
+export async function resolveItems(items, fetchById, search) {
   if (!items || items.length === 0) return items;
 
   const needsResolution = items.some((item) => /^\d+$/.test(item.name) || item.name === item.id);

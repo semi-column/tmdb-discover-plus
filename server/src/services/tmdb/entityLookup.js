@@ -1,5 +1,5 @@
-import { tmdbFetch, tmdbWebsiteFetchJson, matchesLoose } from './client.js';
-import { TMDB_IMAGE_BASE } from './constants.js';
+import { tmdbFetch, tmdbWebsiteFetchJson, matchesLoose } from './client.ts';
+import { TMDB_IMAGE_BASE } from './constants.ts';
 
 /**
  * Get a person by TMDB ID

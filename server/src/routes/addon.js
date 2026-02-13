@@ -4,15 +4,16 @@ import {
   getApiKeyFromConfig,
   getPosterKeyFromConfig,
 } from '../services/configService.js';
-import * as tmdb from '../services/tmdb.js';
+import * as tmdb from '../services/tmdb/index.js';
 import { shuffleArray, getBaseUrl, normalizeGenreName, parseIdArray } from '../utils/helpers.js';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { addonRateLimit } from '../utils/rateLimit.js';
 import { etagMiddleware } from '../utils/etag.js';
+import { config } from '../config.ts';
 
 const log = createLogger('addon');
 
@@ -92,6 +93,134 @@ function extractGenreIds(item) {
   return ids.map(String);
 }
 
+async function resolveGenreFilter(extra, effectiveFilters, type, apiKey) {
+  if (!extra.genre) return;
+
+  try {
+    const selected = String(extra.genre)
+      .split(',')
+      .map((s) => normalizeGenreName(s))
+      .filter(Boolean);
+    const mediaType = type === 'series' ? 'tv' : 'movie';
+
+    let tmdbGenres = null;
+    try {
+      tmdbGenres = await tmdb.getGenres(apiKey, type);
+    } catch (err) {
+      tmdbGenres = null;
+    }
+
+    const reverse = {};
+
+    if (tmdbGenres && Array.isArray(tmdbGenres)) {
+      tmdbGenres.forEach((g) => {
+        reverse[normalizeGenreName(g.name)] = String(g.id);
+      });
+    } else {
+      try {
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        const genresPath = path.resolve(__dirname, '..', 'data', 'tmdb_genres.json');
+        const raw = fs.readFileSync(genresPath, 'utf8');
+        const staticGenreMap = JSON.parse(raw);
+        const mapping = staticGenreMap[mediaType] || {};
+        Object.entries(mapping).forEach(([id, name]) => {
+          reverse[normalizeGenreName(name)] = String(id);
+        });
+      } catch (err) {
+        log.warn('Could not load static genres for mapping extra.genre', {
+          error: err.message,
+        });
+      }
+    }
+
+    let genreIds = selected.map((name) => reverse[name]).filter(Boolean);
+
+    if (genreIds.length === 0 && Object.keys(reverse).length > 0) {
+      const fuzzyMatches = [];
+      for (const sel of selected) {
+        let found = null;
+        if (reverse[sel]) found = reverse[sel];
+
+        if (!found) {
+          for (const k of Object.keys(reverse)) {
+            if (k.includes(sel) || sel.includes(k)) {
+              found = reverse[k];
+              break;
+            }
+          }
+        }
+
+        if (!found) {
+          const parts = sel.split(' ').filter(Boolean);
+          if (parts.length > 0) {
+            for (const k of Object.keys(reverse)) {
+              const hasAll = parts.every((p) => k.includes(p));
+              if (hasAll) {
+                found = reverse[k];
+                break;
+              }
+            }
+          }
+        }
+
+        if (found) {
+          fuzzyMatches.push({ selected: sel, matchedId: found });
+          genreIds.push(found);
+        }
+      }
+      if (fuzzyMatches.length > 0) {
+        log.debug('Fuzzy genre matches applied', { count: fuzzyMatches.length });
+      }
+    }
+
+    if (genreIds.length > 0) {
+      effectiveFilters.genres = genreIds;
+      log.debug('Genre filter applied', { genreCount: genreIds.length });
+    } else {
+      log.debug('No genre mapping found, using stored filters', { selected });
+    }
+  } catch (err) {
+    log.warn('Error mapping extra.genre to IDs', { error: err.message });
+  }
+}
+
+async function enrichCatalogResults(allItems, type, apiKey, displayLanguage, isSearch) {
+  if (!isSearch) {
+    try {
+      await tmdb.enrichItemsWithImdbIds(apiKey, allItems, type);
+    } catch (e) {
+      log.warn('IMDb enrichment failed (continuing with TMDB IDs)', { error: e.message });
+    }
+  }
+
+  let genreMap = null;
+  if (allItems.length > 0 && displayLanguage && displayLanguage !== 'en') {
+    try {
+      const localizedGenres = await tmdb.getGenres(apiKey, type, displayLanguage);
+      if (Array.isArray(localizedGenres)) {
+        genreMap = {};
+        localizedGenres.forEach((g) => {
+          genreMap[String(g.id)] = g.name;
+        });
+      }
+    } catch (err) {
+      log.warn('Failed to fetch localized genres for catalog', { displayLanguage, error: err.message });
+    }
+  }
+
+  let ratingsMap = null;
+  if (!isSearch) {
+    try {
+      ratingsMap = await tmdb.batchGetCinemetaRatings(allItems, type);
+    } catch (e) {
+      log.warn('Batch IMDb ratings failed', { error: e.message });
+    }
+  }
+
+  return { genreMap, ratingsMap };
+}
+
 async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
   try {
     const skip = parseInt(extra.skip) || 0;
@@ -113,7 +242,6 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
       return res.json({ metas: [] });
     }
 
-    // Get poster service configuration
     const posterOptions =
       config.preferences?.posterService && config.preferences.posterService !== 'none'
         ? {
@@ -143,100 +271,8 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
       return res.json({ metas: [] });
     }
 
-    let result = null;
-
     const effectiveFilters = { ...(catalogConfig.filters || {}) };
-
-    if (extra.genre) {
-      try {
-        const selected = String(extra.genre)
-          .split(',')
-          .map((s) => normalizeGenreName(s))
-          .filter(Boolean);
-        const mediaType = type === 'series' ? 'tv' : 'movie';
-
-        let tmdbGenres = null;
-        try {
-          tmdbGenres = await tmdb.getGenres(apiKey, type);
-        } catch (err) {
-          tmdbGenres = null;
-        }
-
-        const reverse = {};
-
-        if (tmdbGenres && Array.isArray(tmdbGenres)) {
-          tmdbGenres.forEach((g) => {
-            reverse[normalizeGenreName(g.name)] = String(g.id);
-          });
-        } else {
-          try {
-            const __filename = fileURLToPath(import.meta.url);
-            const __dirname = path.dirname(__filename);
-            const genresPath = path.resolve(__dirname, '..', 'services', 'tmdb_genres.json');
-            const raw = fs.readFileSync(genresPath, 'utf8');
-            const staticGenreMap = JSON.parse(raw);
-            const mapping = staticGenreMap[mediaType] || {};
-            Object.entries(mapping).forEach(([id, name]) => {
-              reverse[normalizeGenreName(name)] = String(id);
-            });
-          } catch (err) {
-            log.warn('Could not load static genres for mapping extra.genre', {
-              error: err.message,
-            });
-          }
-        }
-
-        let genreIds = selected.map((name) => reverse[name]).filter(Boolean);
-
-        if (genreIds.length === 0 && Object.keys(reverse).length > 0) {
-          const fuzzyMatches = [];
-          for (const sel of selected) {
-            let found = null;
-            if (reverse[sel]) found = reverse[sel];
-
-            if (!found) {
-              for (const k of Object.keys(reverse)) {
-                if (k.includes(sel) || sel.includes(k)) {
-                  found = reverse[k];
-                  break;
-                }
-              }
-            }
-
-            if (!found) {
-              const parts = sel.split(' ').filter(Boolean);
-              if (parts.length > 0) {
-                for (const k of Object.keys(reverse)) {
-                  const hasAll = parts.every((p) => k.includes(p));
-                  if (hasAll) {
-                    found = reverse[k];
-                    break;
-                  }
-                }
-              }
-            }
-
-            if (found) {
-              fuzzyMatches.push({ selected: sel, matchedId: found });
-              genreIds.push(found);
-            }
-          }
-          if (fuzzyMatches.length > 0) {
-            log.debug('Fuzzy genre matches applied', { count: fuzzyMatches.length });
-          }
-        }
-
-        if (genreIds.length > 0) {
-          effectiveFilters.genres = genreIds;
-          log.debug('Genre filter applied', { userId, catalogId, genreCount: genreIds.length });
-        } else {
-          log.debug('No genre mapping found, using stored filters', { selected });
-        }
-      } catch (err) {
-        log.warn('Error mapping extra.genre to IDs', { error: err.message });
-      }
-    }
-
+    await resolveGenreFilter(extra, effectiveFilters, type, apiKey);
     const resolvedFilters = resolveDynamicDatePreset(effectiveFilters, type);
 
     const listType = resolvedFilters?.listType || catalogConfig.filters?.listType;
@@ -245,9 +281,10 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
       catalogConfig.filters?.randomize ||
       resolvedFilters?.sortBy === 'random';
 
+    let result = null;
+
     if (search) {
-      // Direct IMDb ID lookup: users sometimes paste tt1234567 in search
-      if (/^tt\d+$/i.test(search.trim())) {
+      if (/^tt\d{7,8}$/i.test(search.trim())) {
         try {
           const found = await tmdb.findByImdbId(apiKey, search.trim(), type, {
             language: config.preferences?.defaultLanguage,
@@ -272,73 +309,42 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
           includeAdult: config.preferences?.includeAdult,
         });
       }
+    } else if (listType && listType !== 'discover') {
+      result = await tmdb.fetchSpecialList(apiKey, listType, type, {
+        page,
+        displayLanguage: config.preferences?.defaultLanguage,
+        language: resolvedFilters?.language || catalogConfig.filters?.language,
+        region: resolvedFilters?.originCountry || catalogConfig.filters?.originCountry,
+        randomize,
+      });
     } else {
-      if (listType && listType !== 'discover') {
-        result = await tmdb.fetchSpecialList(apiKey, listType, type, {
-          page,
-          displayLanguage: config.preferences?.defaultLanguage,
-          language: resolvedFilters?.language || catalogConfig.filters?.language,
-          region: resolvedFilters?.originCountry || catalogConfig.filters?.originCountry,
-          randomize,
-        });
-      } else {
-        result = await tmdb.discover(apiKey, {
-          type,
-          ...resolvedFilters,
-          displayLanguage: config.preferences?.defaultLanguage,
-          page,
-          randomize,
-        });
-      }
+      result = await tmdb.discover(apiKey, {
+        type,
+        ...resolvedFilters,
+        displayLanguage: config.preferences?.defaultLanguage,
+        page,
+        randomize,
+      });
     }
 
     const allItems = result?.results || [];
-
-    // Skip IMDb enrichment for search results — it fires 20 parallel API calls
-    // and makes search noticeably slow. TMDB IDs work fine for catalog previews;
-    // full IMDb resolution happens when user opens the meta detail page.
-    if (!search) {
-      try {
-        await tmdb.enrichItemsWithImdbIds(apiKey, allItems, type);
-      } catch (e) {
-        log.warn('IMDb enrichment failed (continuing with TMDB IDs)', { error: e.message });
-      }
-    }
-
     const displayLanguage = config.preferences?.defaultLanguage;
-    let genreMap = null;
 
-    if (allItems.length > 0 && displayLanguage && displayLanguage !== 'en') {
-      try {
-        const localizedGenres = await tmdb.getGenres(apiKey, type, displayLanguage);
-        if (Array.isArray(localizedGenres)) {
-          genreMap = {};
-          localizedGenres.forEach((g) => {
-            genreMap[String(g.id)] = g.name;
-          });
-        }
-      } catch (err) {
-        log.warn('Failed to fetch localized genres for catalog', { catalogId, displayLanguage, error: err.message });
-      }
-    }
+    const catalogPosterOverride = catalogConfig.filters?.enableRatingPosters;
+    const effectivePosterOptions =
+      catalogPosterOverride === true
+        ? posterOptions || null
+        : catalogPosterOverride === false
+          ? null
+          : posterOptions;
 
-    // Batch-fetch real IMDb ratings from the IMDb dataset for non-search catalogs
-    // (search skips IMDb enrichment, so no imdb_ids to look up)
-    let ratingsMap = null;
-    if (!search) {
-      try {
-        ratingsMap = await tmdb.batchGetCinemetaRatings(allItems, type);
-      } catch (e) {
-        log.warn('Batch IMDb ratings failed', { error: e.message });
-      }
-    }
+    const { genreMap, ratingsMap } = await enrichCatalogResults(allItems, type, apiKey, displayLanguage, !!search);
 
     const metas = allItems.map((item) => {
-      return tmdb.toStremioMeta(item, type, null, posterOptions, genreMap, ratingsMap);
+      return tmdb.toStremioMeta(item, type, null, effectivePosterOptions, genreMap, ratingsMap);
     });
 
-    // Apply fallback images for items missing poster/thumbnail
-    const baseUrl = (process.env.BASE_URL || getBaseUrl(req)).replace(/\/$/, '');
+    const baseUrl = (config.baseUrl || getBaseUrl(req)).replace(/\/$/, '');
     for (const m of metas) {
       if (!m) continue;
       if (!m.poster) m.poster = `${baseUrl}/placeholder-poster.svg`;
@@ -472,7 +478,7 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
     );
 
     // Apply fallback images for missing poster/thumbnail
-    const resolvedBaseUrl = (process.env.BASE_URL || baseUrl).replace(/\/$/, '');
+    const resolvedBaseUrl = (config.baseUrl || baseUrl).replace(/\/$/, '');
     if (meta && !meta.poster) meta.poster = `${resolvedBaseUrl}/placeholder-poster.svg`;
     if (meta?.videos) {
       for (const v of meta.videos) {

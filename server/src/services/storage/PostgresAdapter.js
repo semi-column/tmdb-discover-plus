@@ -1,6 +1,6 @@
 import pg from 'pg';
-import { StorageInterface } from './StorageInterface.js';
-import { createLogger } from '../../utils/logger.js';
+import { StorageInterface } from './StorageInterface.ts';
+import { createLogger } from '../../utils/logger.ts';
 
 const log = createLogger('PostgresAdapter');
 const { Pool } = pg;

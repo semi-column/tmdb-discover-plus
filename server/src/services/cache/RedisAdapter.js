@@ -1,6 +1,6 @@
 import { createClient } from 'redis';
-import { CacheInterface } from './CacheInterface.js';
-import { createLogger } from '../../utils/logger.js';
+import { CacheInterface } from './CacheInterface.ts';
+import { createLogger } from '../../utils/logger.ts';
 
 const log = createLogger('RedisAdapter');
 

@@ -1,22 +1,17 @@
 import { rateLimit } from 'express-rate-limit';
-import { createLogger } from './logger.js';
+import { createLogger } from './logger.ts';
+import { config } from '../config.ts';
 
 const log = createLogger('rateLimit');
 
-/**
- * Common configuration for rate limiters
- */
 const baseOptions = {
-  // Use a memory store as default
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: true, // Disable the `X-RateLimit-*` headers
-  validate: { trustProxy: false }, // Allow 'trust proxy' in Express without error
+  standardHeaders: true,
+  legacyHeaders: true,
+  validate: { trustProxy: false },
   skip: (req) => {
-    // Skip rate limiting if disabled via env
-    if (process.env.DISABLE_RATE_LIMIT === 'true') return true;
+    if (config.features.disableRateLimit) return true;
 
-    // Bypass rate limiting for localhost in development or test mode
-    const isDevOrTest = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+    const isDevOrTest = config.nodeEnv === 'development' || config.nodeEnv === 'test';
     const ip = req.ip || req.headers['x-forwarded-for'];
     const isLocalhost =
       ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip === '::ffff:127.0.0.1';

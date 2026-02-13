@@ -1,7 +1,7 @@
-import { MongoAdapter } from './MongoAdapter.js';
 import { PostgresAdapter } from './PostgresAdapter.js';
 import { MemoryAdapter } from './MemoryAdapter.js';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../utils/logger.ts';
+import { config } from '../../config.ts';
 
 const log = createLogger('StorageFactory');
 
@@ -10,16 +10,16 @@ let storageInstance = null;
 export async function initStorage() {
   if (storageInstance) return storageInstance;
 
-  const mongoUri = process.env.MONGODB_URI;
-  const postgresUri = process.env.POSTGRES_URI;
-  const driver = process.env.DATABASE_DRIVER; // 'postgres', 'mongo', 'memory'
+  const mongoUri = config.database.mongodbUri;
+  const postgresUri = config.database.postgresUri;
+  const driver = config.database.driver;
 
-  // 1. Explicit Driver Selection
   if (driver === 'postgres' && postgresUri) {
     log.info('Initializing Postgres Adapter (Explicit)');
     storageInstance = new PostgresAdapter(postgresUri);
   } else if (driver === 'mongo' && mongoUri) {
     log.info('Initializing MongoDB Adapter (Explicit)');
+    const { MongoAdapter } = await import('./MongoAdapter.js');
     storageInstance = new MongoAdapter(mongoUri);
   } else if (driver === 'memory') {
     log.info('Initializing Memory Adapter (Explicit)');
@@ -31,6 +31,7 @@ export async function initStorage() {
     storageInstance = new PostgresAdapter(postgresUri);
   } else if (mongoUri) {
     log.info('Initializing MongoDB Adapter (Auto-detected)');
+    const { MongoAdapter } = await import('./MongoAdapter.js');
     storageInstance = new MongoAdapter(mongoUri);
   } else {
     log.warn(

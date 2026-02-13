@@ -1,16 +1,11 @@
 import NodeCache from 'node-cache';
-import { CacheInterface } from './CacheInterface.js';
-import { createLogger } from '../../utils/logger.js';
+import { CacheInterface } from './CacheInterface.ts';
+import { createLogger } from '../../utils/logger.ts';
+import { config } from '../../config.ts';
 
 const log = createLogger('MemoryAdapter');
 
-/**
- * Max keys: configurable via CACHE_MAX_KEYS env var.
- * Default 50000 — enough for production with many users.
- * node-cache throws when maxKeys is exceeded, so we implement
- * LRU-style eviction: flush expired first, then evict oldest.
- */
-const MAX_KEYS = parseInt(process.env.CACHE_MAX_KEYS) || 50000;
+const MAX_KEYS = config.cache.maxKeys;
 
 export class MemoryAdapter extends CacheInterface {
   constructor(options = {}) {

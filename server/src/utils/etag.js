@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { createLogger } from './logger.js';
+import { createLogger } from './logger.ts';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

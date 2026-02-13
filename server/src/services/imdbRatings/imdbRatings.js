@@ -1,15 +1,14 @@
 import { createGunzip } from 'zlib';
 import { createInterface } from 'readline';
 import fetch from 'node-fetch';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../utils/logger.ts';
+import { config } from '../../config.ts';
 
 const log = createLogger('ImdbRatings');
 
-// ── Configuration ────────────────────────────────────────────────────────────
-
 const IMDB_RATINGS_URL = 'https://datasets.imdbws.com/title.ratings.tsv.gz';
-const UPDATE_INTERVAL_HOURS = parseInt(process.env.IMDB_RATINGS_UPDATE_HOURS || '24', 10);
-const MIN_VOTES = parseInt(process.env.IMDB_MIN_VOTES || '100', 10);
+const UPDATE_INTERVAL_HOURS = config.imdbRatings.updateIntervalHours;
+const MIN_VOTES = config.imdbRatings.minVotes;
 const DOWNLOAD_TIMEOUT_MS = 120_000; // 2 minutes
 const WRITE_BATCH_SIZE = 10_000;
 

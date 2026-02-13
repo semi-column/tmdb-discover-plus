@@ -1,5 +1,8 @@
 import { getCache } from '../cache/index.js';
-import { tmdbFetch } from './client.js';
+import { tmdbFetch } from './client.ts';
+import { createLogger } from '../../utils/logger.ts';
+
+const log = createLogger('tmdb:configuration');
 
 const REGIONAL_LANGUAGE_VARIANTS = [
   { iso_639_1: 'pt-BR', english_name: 'Portuguese (Brazil)', name: 'Português (Brasil)' },
@@ -31,7 +34,7 @@ export async function getLanguages(apiKey) {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
   } catch (e) {
-    /* ignore */
+    log.debug('Cache get failed', { key: cacheKey, error: e.message });
   }
 
   const data = await tmdbFetch('/configuration/languages', apiKey);
@@ -43,7 +46,7 @@ export async function getLanguages(apiKey) {
     try {
       await cache.set(cacheKey, sorted, 86400 * 7);
     } catch (e) {
-      /* ignore */
+      log.debug('Cache set failed', { key: cacheKey, error: e.message });
     }
   }
 
@@ -63,7 +66,7 @@ export async function getOriginalLanguages(apiKey) {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
   } catch (e) {
-    /* ignore */
+    log.debug('Cache get failed', { key: cacheKey, error: e.message });
   }
 
   const data = await tmdbFetch('/configuration/languages', apiKey);
@@ -75,7 +78,7 @@ export async function getOriginalLanguages(apiKey) {
     try {
       await cache.set(cacheKey, sorted, 86400 * 7);
     } catch (e) {
-      /* ignore */
+      log.debug('Cache set failed', { key: cacheKey, error: e.message });
     }
   }
 
@@ -93,7 +96,7 @@ export async function getCountries(apiKey) {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
   } catch (e) {
-    /* ignore */
+    log.debug('Cache get failed', { key: cacheKey, error: e.message });
   }
 
   const data = await tmdbFetch('/configuration/countries', apiKey);
@@ -101,9 +104,9 @@ export async function getCountries(apiKey) {
 
   if (sorted.length > 0) {
     try {
-      await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
+      await cache.set(cacheKey, sorted, 86400 * 7);
     } catch (e) {
-      /* ignore */
+      log.debug('Cache set failed', { key: cacheKey, error: e.message });
     }
   }
 
@@ -122,7 +125,7 @@ export async function getCertifications(apiKey, type = 'movie') {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
   } catch (e) {
-    /* ignore */
+    log.debug('Cache get failed', { key: cacheKey, error: e.message });
   }
 
   const data = await tmdbFetch(`/certification/${mediaType}/list`, apiKey);
@@ -130,9 +133,9 @@ export async function getCertifications(apiKey, type = 'movie') {
 
   if (Object.keys(certs).length > 0) {
     try {
-      await cache.set(cacheKey, certs, 86400 * 7); // 7 days
+      await cache.set(cacheKey, certs, 86400 * 7);
     } catch (e) {
-      /* ignore */
+      log.debug('Cache set failed', { key: cacheKey, error: e.message });
     }
   }
 
@@ -150,7 +153,7 @@ export async function getWatchRegions(apiKey) {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
   } catch (e) {
-    /* ignore */
+    log.debug('Cache get failed', { key: cacheKey, error: e.message });
   }
 
   const data = await tmdbFetch('/watch/providers/regions', apiKey);
@@ -159,9 +162,9 @@ export async function getWatchRegions(apiKey) {
 
   if (sorted.length > 0) {
     try {
-      await cache.set(cacheKey, sorted, 86400 * 7); // 7 days
+      await cache.set(cacheKey, sorted, 86400 * 7);
     } catch (e) {
-      /* ignore */
+      log.debug('Cache set failed', { key: cacheKey, error: e.message });
     }
   }
 
@@ -180,7 +183,7 @@ export async function getWatchProviders(apiKey, type = 'movie', region = 'US') {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
   } catch (e) {
-    /* ignore */
+    log.debug('Cache get failed', { key: cacheKey, error: e.message });
   }
 
   const params = { watch_region: region };
@@ -190,9 +193,9 @@ export async function getWatchProviders(apiKey, type = 'movie', region = 'US') {
 
   if (sorted.length > 0) {
     try {
-      await cache.set(cacheKey, sorted, 86400); // 24 hours
+      await cache.set(cacheKey, sorted, 86400);
     } catch (e) {
-      /* ignore */
+      log.debug('Cache set failed', { key: cacheKey, error: e.message });
     }
   }
 

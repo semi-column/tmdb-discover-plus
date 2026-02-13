@@ -5,9 +5,12 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "test": "node tests/run-integration.js",
+    "start": "node --experimental-strip-types src/index.js",
+    "dev": "node --experimental-strip-types --watch src/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
     "test:integration": "node tests/run-integration.js"
   },
   "keywords": [
@@ -30,5 +33,13 @@
     "node-fetch": "^3.3.2",
     "pg": "^8.17.2",
     "redis": "^5.10.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.2.3",
+    "msw": "^2.12.10",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }

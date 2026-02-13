@@ -30,7 +30,8 @@ import {
   getStats,
   destroyRatings,
 } from './imdbRatings.js';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../utils/logger.ts';
+import { config } from '../../config.ts';
 
 const log = createLogger('ImdbRatings:Factory');
 
@@ -42,13 +43,13 @@ const log = createLogger('ImdbRatings:Factory');
  */
 export async function initImdbRatings() {
   // Feature kill-switch
-  if (process.env.IMDB_RATINGS_DISABLED === 'true') {
+  if (config.imdbRatings.disabled) {
     log.info('IMDb ratings disabled via IMDB_RATINGS_DISABLED env var');
     return;
   }
 
-  const redisUrl = process.env.REDIS_URL;
-  const cacheDriver = process.env.CACHE_DRIVER;
+  const redisUrl = config.cache.redisUrl;
+  const cacheDriver = config.cache.driver;
 
   let adapter;
 

@@ -1,15 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import * as tmdb from './tmdb.js';
+import * as tmdb from './tmdb/index.js';
 import { normalizeGenreName, parseIdArray } from '../utils/helpers.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 import { getApiKeyFromConfig, updateCatalogGenres } from './configService.js';
+import { config } from '../config.ts';
 
 const log = createLogger('manifestService');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const ADDON_VARIANT = process.env.ADDON_VARIANT || '';
+const ADDON_VARIANT = config.addon.variant;
 const ADDON_ID = ADDON_VARIANT
   ? `community.tmdb.discover.plus.${ADDON_VARIANT}`
   : 'community.tmdb.discover.plus';
@@ -26,7 +27,7 @@ const TMDB_PAGE_SIZE = 20;
  * @returns {Object}
  */
 export function buildManifest(userConfig, baseUrl) {
-  const resolvedBaseUrl = process.env.BASE_URL || baseUrl;
+  const resolvedBaseUrl = config.baseUrl || baseUrl;
   const catalogs = (userConfig?.catalogs || [])
     .filter((c) => c.enabled !== false)
     .map((catalog) => ({
@@ -108,7 +109,7 @@ export async function enrichManifestWithGenres(manifest, config) {
         // Fallback to static JSON if needed
         if (!fullNames) {
           try {
-            const genresPath = path.join(__dirname, 'tmdb_genres.json');
+            const genresPath = path.join(__dirname, '..', 'data', 'tmdb_genres.json');
             const raw = fs.readFileSync(genresPath, 'utf8');
             const staticGenreMap = JSON.parse(raw);
             const mapping = staticGenreMap[staticKey] || {};

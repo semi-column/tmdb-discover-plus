@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
-import { StorageInterface } from './StorageInterface.js';
+import { StorageInterface } from './StorageInterface.ts';
 import { UserConfig } from '../../models/UserConfig.js';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../utils/logger.ts';
 
 const log = createLogger('MongoAdapter');
 

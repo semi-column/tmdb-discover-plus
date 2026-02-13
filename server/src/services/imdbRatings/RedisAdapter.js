@@ -1,6 +1,6 @@
 import { createClient } from 'redis';
-import { ImdbRatingsAdapter } from './ImdbRatingsAdapter.js';
-import { createLogger } from '../../utils/logger.js';
+import { ImdbRatingsAdapter } from './ImdbRatingsAdapter.ts';
+import { createLogger } from '../../utils/logger.ts';
 
 const log = createLogger('ImdbRatings:Redis');
 
