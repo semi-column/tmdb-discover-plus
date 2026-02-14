@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { useModalA11y } from '../../hooks/useModalA11y';
 
 export function NewCatalogModal({ isOpen, onClose, onAdd }) {
   const [name, setName] = useState('');
+  const modalRef = useModalA11y(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -28,7 +30,14 @@ export function NewCatalogModal({ isOpen, onClose, onAdd }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create New Catalog"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <h3 className="modal-title">Create New Catalog</h3>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>

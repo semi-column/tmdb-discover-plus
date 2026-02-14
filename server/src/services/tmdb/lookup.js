@@ -34,28 +34,23 @@ export async function getExternalIds(apiKey, tmdbId, type = 'movie') {
   }
 }
 
-/**
- * Enrich a list of TMDB items with their IMDb IDs.
- * Use concurrency (Promise.all) to fetch efficiently.
- * Relies on getExternalIds which handles caching.
- */
+const ENRICHMENT_CONCURRENCY = 5;
+
 export async function enrichItemsWithImdbIds(apiKey, items, type = 'movie') {
   if (!items || !Array.isArray(items) || items.length === 0) return items;
 
-  // Process in parallel
-  // This might fire up to 20 requests at once.
-  // Trusted TMDB keys usually handle this fine.
-  await Promise.all(
-    items.map(async (item) => {
-      // If already has known ID, skip
-      if (item.imdb_id) return;
-
-      const ids = await getExternalIds(apiKey, item.id, type);
-      if (ids?.imdb_id) {
-        item.imdb_id = ids.imdb_id;
-      }
-    })
-  );
+  for (let i = 0; i < items.length; i += ENRICHMENT_CONCURRENCY) {
+    const batch = items.slice(i, i + ENRICHMENT_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (item) => {
+        if (item.imdb_id) return;
+        const ids = await getExternalIds(apiKey, item.id, type);
+        if (ids?.imdb_id) {
+          item.imdb_id = ids.imdb_id;
+        }
+      })
+    );
+  }
 
   return items;
 }

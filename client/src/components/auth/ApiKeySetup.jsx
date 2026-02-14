@@ -11,8 +11,17 @@ export function ApiKeySetup({ onLogin, isSessionExpired = false, returnUserId = 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!apiKey.trim()) {
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
       setError('Please enter your TMDB API key');
+      return;
+    }
+    if (!/^[a-f0-9]+$/i.test(trimmed)) {
+      setError('API key must contain only hexadecimal characters (0-9, a-f)');
+      return;
+    }
+    if (trimmed.length !== 32) {
+      setError(`API key must be 32 characters (currently ${trimmed.length})`);
       return;
     }
 

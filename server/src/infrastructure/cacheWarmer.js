@@ -1,4 +1,5 @@
 import { createLogger } from '../utils/logger.ts';
+import { config } from '../config.ts';
 import * as tmdb from '../services/tmdb/index.js';
 
 const log = createLogger('CacheWarmer');
@@ -21,6 +22,18 @@ export async function warmEssentialCaches(apiKey) {
     { name: 'tv_certifications', fn: () => tmdb.getCertifications(apiKey, 'tv') },
     { name: 'watch_regions', fn: () => tmdb.getWatchRegions(apiKey) },
   ];
+
+  const regions = config.cache.warmRegions;
+  for (const region of regions) {
+    tasks.push({
+      name: `watch_providers_movie_${region}`,
+      fn: () => tmdb.getWatchProviders(apiKey, 'movie', region),
+    });
+    tasks.push({
+      name: `watch_providers_tv_${region}`,
+      fn: () => tmdb.getWatchProviders(apiKey, 'tv', region),
+    });
+  }
 
   const results = await Promise.allSettled(tasks.map((t) => t.fn()));
 

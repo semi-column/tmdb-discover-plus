@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CacheWrapper, CachedError, classifyError, classifyResult } from '../../src/services/cache/CacheWrapper.js';
+import {
+  CacheWrapper,
+  CachedError,
+  classifyError,
+  classifyResult,
+} from '../../src/services/cache/CacheWrapper.js';
 import { MockCacheAdapter, FailingCacheAdapter } from './helpers/mocks.ts';
 
 describe('classifyError', () => {
@@ -81,10 +86,10 @@ describe('CacheWrapper', () => {
       expect(cache.getStats().hits).toBe(1);
     });
 
-    it('stores with 1.3x TTL buffer', async () => {
+    it('stores with 2.5x TTL buffer', async () => {
       const spy = vi.spyOn(adapter, 'set');
       await cache.set('key', 'val', 100);
-      expect(spy).toHaveBeenCalledWith('v1.0.0:key', expect.any(Object), 130);
+      expect(spy).toHaveBeenCalledWith('v1.0.0:key', expect.any(Object), 250);
     });
   });
 
@@ -98,7 +103,9 @@ describe('CacheWrapper', () => {
 
     it('handles JSON parse errors gracefully', async () => {
       const failing = new FailingCacheAdapter();
-      failing.get = async () => { throw new Error('Unexpected token in JSON'); };
+      failing.get = async () => {
+        throw new Error('Unexpected token in JSON');
+      };
       const wrapper = new CacheWrapper(failing, { version: '1' });
       const result = await wrapper.get('key');
       expect(result).toBeNull();
@@ -171,9 +178,9 @@ describe('CacheWrapper', () => {
     });
 
     it('deduplicates concurrent requests', async () => {
-      const slow = vi.fn().mockImplementation(
-        () => new Promise<string>((r) => setTimeout(() => r('result'), 50))
-      );
+      const slow = vi
+        .fn()
+        .mockImplementation(() => new Promise<string>((r) => setTimeout(() => r('result'), 50)));
 
       const p1 = cache.wrap('dedup', slow, 300);
       const p2 = cache.wrap('dedup', slow, 300);

@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="https://nodejs.org/">
-    <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js" />
+    <img src="https://img.shields.io/badge/node-%3E%3D22-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js" />
   </a>
   <a href="https://hub.docker.com/">
     <img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker" />
@@ -222,7 +222,7 @@ The addon will be available at `http://localhost:7000`
 
 #### Requirements
 
-- Node.js 18+
+- Node.js 22+
 - npm or yarn
 - Postgres or MongoDB (Recommended for persistence)
 - Redis (Optional for caching)
@@ -291,6 +291,8 @@ location / {
 ## ⚙️ Configuration
 
 ### Environment Variables
+
+See [docs/environment.md](docs/environment.md) for a complete reference of all 28 environment variables.
 
 Create a `.env` file from `.env.example`:
 
@@ -472,6 +474,8 @@ Follow the project for updates or contribute this feature!
 
 ## 📡 API Reference
 
+See [docs/api.md](docs/api.md) for comprehensive API documentation with request/response shapes, auth requirements, and rate limits. See [docs/architecture.md](docs/architecture.md) for system architecture.
+
 ### Health & Status
 
 | Endpoint          | Description                                      |
@@ -532,7 +536,7 @@ The `/api/status` endpoint returns:
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - npm
 
 ### Setup
@@ -576,7 +580,7 @@ tmdb-discover-plus/
 
 **Backend:**
 
-- **Runtime:** Node.js 18+ with ES Modules
+- **Runtime:** Node.js 22+ with ES Modules
 - **Framework:** Express.js
 - **Databases:** PostgreSQL / MongoDB (with in-memory fallback)
 - **Caching:** Redis / Memory
@@ -621,7 +625,7 @@ We're constantly improving TMDB Discover+! Here's what's on the horizon:
 - Integration with Trakt.tv
 - Custom poster/artwork selection
 
-**Want to contribute?** Check out our [Contributing Guide](CONTRIBUTING.md) or [open a discussion](https://github.com/semi-column/tmdb-discover-plus/discussions)!
+**Want to contribute?** Check out our [Contributing Guide](docs/CONTRIBUTING.md) or [open a discussion](https://github.com/semi-column/tmdb-discover-plus/discussions)!
 
 ---
 
@@ -631,11 +635,11 @@ We welcome contributions from everyone! Whether you're fixing bugs, adding featu
 
 **Quick Links:**
 
-- 📖 [Contributing Guidelines](CONTRIBUTING.md)
+- 📖 [Contributing Guidelines](docs/CONTRIBUTING.md)
 - 🐛 [Report a Bug](https://github.com/semi-column/tmdb-discover-plus/issues/new?template=bug_report.yml)
 - ✨ [Request a Feature](https://github.com/semi-column/tmdb-discover-plus/issues/new?template=feature_request.yml)
 - 💬 [Join Discussions](https://github.com/semi-column/tmdb-discover-plus/discussions)
-- 🔒 [Security Policy](SECURITY.md)
+- 🔒 [Security Policy](docs/SECURITY.md)
 
 ### How to Contribute
 
@@ -669,9 +673,9 @@ We welcome contributions from everyone! Whether you're fixing bugs, adding featu
 
 We're committed to providing a welcoming and inspiring community for all. Please review our:
 
-- 📜 [Code of Conduct](CODE_OF_CONDUCT.md)
-- 🛡️ [Security Policy](SECURITY.md)
-- 🤝 [Contributing Guidelines](CONTRIBUTING.md)
+- 📜 [Code of Conduct](docs/CODE_OF_CONDUCT.md)
+- 🛡️ [Security Policy](docs/SECURITY.md)
+- 🤝 [Contributing Guidelines](docs/CONTRIBUTING.md)
 
 ---
 

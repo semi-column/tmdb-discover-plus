@@ -60,17 +60,38 @@ class ApiService {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  async request(endpoint, options = {}) {
+  _buildAuthUrl(endpoint, apiKey, extraParams = {}) {
+    const token = this.getSessionToken();
+    const params = new URLSearchParams();
+    if (!token && apiKey) params.set('apiKey', apiKey);
+    Object.entries(extraParams).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') params.set(k, v);
+    });
+    const qs = params.toString();
+    return qs ? `${endpoint}?${qs}` : endpoint;
+  }
+
+  async request(endpoint, options = {}, _retry = false) {
     const url = `${API_BASE}${endpoint}`;
     const { headers: optionHeaders, ...restOptions } = options;
-    const response = await fetch(url, {
-      ...restOptions,
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-        ...optionHeaders,
-      },
-    });
+
+    let response;
+    try {
+      response = await fetch(url, {
+        ...restOptions,
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.getAuthHeaders(),
+          ...optionHeaders,
+        },
+      });
+    } catch (err) {
+      if (!_retry && err instanceof TypeError) {
+        await new Promise((r) => setTimeout(r, 2000));
+        return this.request(endpoint, options, true);
+      }
+      throw err;
+    }
 
     if (response.status === 401) {
       this.clearSession();
@@ -139,91 +160,43 @@ class ApiService {
   }
 
   async getGenres(apiKey, type = 'movie') {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/genres/${type}`);
-    }
-    return this.request(`/genres/${type}?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl(`/genres/${type}`, apiKey));
   }
 
   async getLanguages(apiKey) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request('/languages');
-    }
-    return this.request(`/languages?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl('/languages', apiKey));
   }
 
   async getOriginalLanguages(apiKey) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request('/original-languages');
-    }
-    return this.request(`/original-languages?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl('/original-languages', apiKey));
   }
 
   async getCountries(apiKey) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request('/countries');
-    }
-    return this.request(`/countries?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl('/countries', apiKey));
   }
 
   async getCertifications(apiKey, type = 'movie') {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/certifications/${type}`);
-    }
-    return this.request(`/certifications/${type}?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl(`/certifications/${type}`, apiKey));
   }
 
   async getWatchProviders(apiKey, type = 'movie', region = 'US') {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/watch-providers/${type}?region=${region}`);
-    }
-    return this.request(
-      `/watch-providers/${type}?apiKey=${encodeURIComponent(apiKey)}&region=${region}`
-    );
+    return this.request(this._buildAuthUrl(`/watch-providers/${type}`, apiKey, { region }));
   }
 
   async getWatchRegions(apiKey) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request('/watch-regions');
-    }
-    return this.request(`/watch-regions?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl('/watch-regions', apiKey));
   }
 
   async searchPerson(apiKey, query) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/search/person?query=${encodeURIComponent(query)}`);
-    }
-    return this.request(
-      `/search/person?apiKey=${encodeURIComponent(apiKey)}&query=${encodeURIComponent(query)}`
-    );
+    return this.request(this._buildAuthUrl('/search/person', apiKey, { query }));
   }
 
   async searchCompany(apiKey, query) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/search/company?query=${encodeURIComponent(query)}`);
-    }
-    return this.request(
-      `/search/company?apiKey=${encodeURIComponent(apiKey)}&query=${encodeURIComponent(query)}`
-    );
+    return this.request(this._buildAuthUrl('/search/company', apiKey, { query }));
   }
 
   async searchKeyword(apiKey, query) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/search/keyword?query=${encodeURIComponent(query)}`);
-    }
-    return this.request(
-      `/search/keyword?apiKey=${encodeURIComponent(apiKey)}&query=${encodeURIComponent(query)}`
-    );
+    return this.request(this._buildAuthUrl('/search/keyword', apiKey, { query }));
   }
 
   async getSortOptions() {
@@ -272,12 +245,7 @@ class ApiService {
   }
 
   async getTVNetworks(apiKey = null, query = '') {
-    const params = new URLSearchParams();
-    if (query) params.set('query', query);
-    const token = this.getSessionToken();
-    if (!token && apiKey) params.set('apiKey', apiKey);
-    const qs = params.toString();
-    return this.request(`/tv-networks${qs ? `?${qs}` : ''}`);
+    return this.request(this._buildAuthUrl('/tv-networks', apiKey, { query }));
   }
 
   async preview(apiKey, type, filters, page = 1) {
@@ -293,35 +261,19 @@ class ApiService {
   }
 
   async getPersonById(apiKey, id) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/person/${encodeURIComponent(id)}`);
-    }
-    return this.request(`/person/${encodeURIComponent(id)}?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl(`/person/${encodeURIComponent(id)}`, apiKey));
   }
 
   async getCompanyById(apiKey, id) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/company/${encodeURIComponent(id)}`);
-    }
-    return this.request(`/company/${encodeURIComponent(id)}?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl(`/company/${encodeURIComponent(id)}`, apiKey));
   }
 
   async getKeywordById(apiKey, id) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/keyword/${encodeURIComponent(id)}`);
-    }
-    return this.request(`/keyword/${encodeURIComponent(id)}?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl(`/keyword/${encodeURIComponent(id)}`, apiKey));
   }
 
   async getNetworkById(apiKey, id) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/network/${encodeURIComponent(id)}`);
-    }
-    return this.request(`/network/${encodeURIComponent(id)}?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl(`/network/${encodeURIComponent(id)}`, apiKey));
   }
 
   async saveConfig(config) {
@@ -332,9 +284,7 @@ class ApiService {
   }
 
   async getConfig(userId, apiKey = null) {
-    const token = this.getSessionToken();
-    const params = !token && apiKey ? `?apiKey=${encodeURIComponent(apiKey)}` : '';
-    return this.request(`/config/${userId}${params}`);
+    return this.request(this._buildAuthUrl(`/config/${userId}`, apiKey));
   }
 
   async updateConfig(userId, config) {
@@ -345,21 +295,11 @@ class ApiService {
   }
 
   async getConfigsByApiKey(apiKey) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request('/configs');
-    }
-    return this.request(`/configs?apiKey=${encodeURIComponent(apiKey)}`);
+    return this.request(this._buildAuthUrl('/configs', apiKey));
   }
 
   async deleteConfig(userId, apiKey) {
-    const token = this.getSessionToken();
-    if (token) {
-      return this.request(`/config/${userId}`, { method: 'DELETE' });
-    }
-    return this.request(`/config/${userId}?apiKey=${encodeURIComponent(apiKey)}`, {
-      method: 'DELETE',
-    });
+    return this.request(this._buildAuthUrl(`/config/${userId}`, apiKey), { method: 'DELETE' });
   }
 }
 

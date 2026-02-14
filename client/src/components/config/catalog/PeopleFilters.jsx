@@ -1,7 +1,8 @@
+import { memo } from 'react';
 import { SearchInput } from '../../forms/SearchInput';
 import { LabelWithTooltip } from '../../forms/Tooltip';
 
-export function PeopleFilters({
+export const PeopleFilters = memo(function PeopleFilters({
   selectedPeople,
   onSelectPeople,
   selectedCompanies,
@@ -95,4 +96,4 @@ export function PeopleFilters({
       </div>
     </div>
   );
-}
+});

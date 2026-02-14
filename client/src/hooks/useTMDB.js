@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 
 export function useTMDB(apiKey) {
@@ -20,15 +20,21 @@ export function useTMDB(apiKey) {
   const [error, setError] = useState(null);
 
   const hasAuth = !!(apiKey || api.getSessionToken());
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const loadMetadata = useCallback(async () => {
     if (!hasAuth) return;
 
-    setLoading(true);
-    setError(null);
-
     try {
       const data = await api.getReferenceData();
+
+      if (!mountedRef.current) return;
 
       setGenres(data.genres || { movie: [], series: [] });
       setLanguages(data.languages || []);
@@ -45,19 +51,52 @@ export function useTMDB(apiKey) {
       setWatchRegions(data.watchRegions || []);
       setTVNetworks(data.tvNetworks || []);
 
+      setError(null);
       setLoading(false);
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err.message);
       setLoading(false);
     }
-  }, [apiKey, hasAuth]);
+  }, [hasAuth]);
 
   useEffect(() => {
-    if (hasAuth) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadMetadata();
-    }
-  }, [hasAuth, loadMetadata]);
+    if (!hasAuth) return;
+    let cancelled = false;
+
+    api
+      .getReferenceData()
+      .then((data) => {
+        if (cancelled || !mountedRef.current) return;
+
+        setGenres(data.genres || { movie: [], series: [] });
+        setLanguages(data.languages || []);
+        setOriginalLanguages(data.originalLanguages || []);
+        setCountries(data.countries || []);
+        setSortOptions(data.sortOptions || { movie: [], series: [] });
+        setPresetCatalogs(data.presetCatalogs || { movie: [], series: [] });
+        setListTypes(data.listTypes || { movie: [], series: [] });
+        setReleaseTypes(data.releaseTypes || []);
+        setTVStatuses(data.tvStatuses || []);
+        setTVTypes(data.tvTypes || []);
+        setMonetizationTypes(data.monetizationTypes || []);
+        setCertifications(data.certifications || { movie: {}, series: {} });
+        setWatchRegions(data.watchRegions || []);
+        setTVNetworks(data.tvNetworks || []);
+
+        setError(null);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled || !mountedRef.current) return;
+        setError(err.message);
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasAuth]);
 
   const preview = useCallback(
     async (type, filters, page = 1) => {

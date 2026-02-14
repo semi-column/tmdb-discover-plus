@@ -1,11 +1,21 @@
 import { AlertTriangle, Home, LogIn } from 'lucide-react';
+import { useModalA11y } from '../../hooks/useModalA11y';
 
 export function ConfigMismatchModal({ isOpen, onGoToOwn, onLoginNew }) {
+  const modalRef = useModalA11y(isOpen, onGoToOwn);
+
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card" style={{ maxWidth: '450px' }}>
+      <div
+        className="modal-card"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Access Restricted"
+        style={{ maxWidth: '450px' }}
+      >
         <div className="modal-header">
           <div className="modal-icon warning">
             <AlertTriangle size={24} />

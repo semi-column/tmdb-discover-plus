@@ -2,8 +2,16 @@ import { tmdbFetch } from './client.ts';
 import { shuffleArray } from '../../utils/helpers.js';
 import { getCache } from '../cache/index.js';
 import { stableStringify } from '../../utils/stableStringify.ts';
+import { createLogger } from '../../utils/logger.ts';
 
-import type { ContentType, DiscoverOptions, SpecialListOptions, SpecialListType } from '../../types/index.ts';
+const log = createLogger('tmdb:discover');
+
+import type {
+  ContentType,
+  DiscoverOptions,
+  SpecialListOptions,
+  SpecialListType,
+} from '../../types/index.ts';
 
 export async function discover(apiKey: string, options: DiscoverOptions = {}): Promise<unknown> {
   const {
@@ -188,7 +196,11 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
 
     try {
       const cached = await cache.get(totalPagesCacheKey);
-      if (cached && typeof cached === 'object' && '__cacheWrapper' in (cached as Record<string, unknown>)) {
+      if (
+        cached &&
+        typeof cached === 'object' &&
+        '__cacheWrapper' in (cached as Record<string, unknown>)
+      ) {
         maxPage = ((cached as Record<string, unknown>).data as number) || 0;
       } else if (typeof cached === 'number') {
         maxPage = cached;
@@ -205,8 +217,8 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
       maxPage = Math.min(discoverResult.total_pages || 1, 500);
       try {
         await cache.set(totalPagesCacheKey, maxPage, 86400);
-      } catch {
-        /* best effort */
+      } catch (e) {
+        log.debug('Failed to cache total_pages for discover', { error: (e as Error).message });
       }
     }
 
@@ -227,7 +239,7 @@ export async function fetchSpecialList(
   apiKey: string,
   listType: SpecialListType | string,
   type: ContentType = 'movie',
-  options: SpecialListOptions = {},
+  options: SpecialListOptions = {}
 ): Promise<unknown> {
   const { page = 1, language, displayLanguage, region } = options;
   const mediaType = type === 'series' ? 'tv' : 'movie';
@@ -277,7 +289,11 @@ export async function fetchSpecialList(
 
     try {
       const cached = await cache.get(totalPagesCacheKey);
-      if (cached && typeof cached === 'object' && '__cacheWrapper' in (cached as Record<string, unknown>)) {
+      if (
+        cached &&
+        typeof cached === 'object' &&
+        '__cacheWrapper' in (cached as Record<string, unknown>)
+      ) {
         maxPage = ((cached as Record<string, unknown>).data as number) || 0;
       } else if (typeof cached === 'number') {
         maxPage = cached;
@@ -294,8 +310,8 @@ export async function fetchSpecialList(
       maxPage = Math.min(discoverResult.total_pages || 1, 500);
       try {
         await cache.set(totalPagesCacheKey, maxPage, 86400);
-      } catch {
-        /* best effort */
+      } catch (e) {
+        log.debug('Failed to cache total_pages for special list', { error: (e as Error).message });
       }
     }
 

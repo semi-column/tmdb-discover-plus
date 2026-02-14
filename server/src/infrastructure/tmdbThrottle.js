@@ -131,6 +131,8 @@ class TokenBucket {
 // Singleton
 let instance = null;
 
+export { TokenBucket };
+
 export function getTmdbThrottle() {
   if (!instance) {
     const maxTokens = config.tmdb.rateLimit;

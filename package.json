@@ -41,15 +41,6 @@
   "bugs": {
     "url": "https://github.com/semi-column/tmdb-discover-plus/issues"
   },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "mongoose": "^8.0.0",
-    "nanoid": "^5.0.4",
-    "node-cache": "^5.1.2",
-    "node-fetch": "^3.3.2"
-  },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "husky": "^9.1.7",

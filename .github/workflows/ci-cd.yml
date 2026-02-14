@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: '18.x'
+  NODE_VERSION: '22.x'
 
 jobs:
   # ============================================
@@ -52,8 +52,14 @@ jobs:
       - name: Check server syntax
         run: node --check server/src/index.js
 
+      - name: Typecheck server
+        run: cd server && npx tsc --noEmit
+
       - name: Build client
         run: cd client && npm run build
+
+      - name: Run client tests
+        run: cd client && npm test
 
       - name: Run Integration Tests
         env:

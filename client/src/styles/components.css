@@ -457,6 +457,20 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   margin-top: 8px;
 }
 
+.field-error {
+  color: var(--error);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.input.field-invalid {
+  border-color: var(--error);
+}
+
+.input.field-invalid:focus {
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -1331,7 +1345,8 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   margin-top: 4px;
 }
 
-.preview-skeleton {
+.preview-skeleton,
+.skeleton-box {
   background: linear-gradient(
     90deg,
     var(--bg-tertiary) 25%,
@@ -1340,6 +1355,10 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
+}
+
+.skeleton-item {
+  pointer-events: none;
 }
 
 @keyframes shimmer {
@@ -1480,6 +1499,35 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   align-items: center;
   justify-content: center;
   padding: 48px;
+}
+
+.loading--page {
+  min-height: 60vh;
+  flex-direction: column;
+}
+
+.loading--page p {
+  margin-top: 16px;
+  color: var(--text-muted);
+}
+
+.builder-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.builder-toolbar h2 {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.editor-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
 }
 
 .spinner {
@@ -2085,6 +2133,18 @@ input[type='date'] {
 
 .filter-section-content {
   padding: 0 16px 16px;
+  animation: sectionExpand 0.2s ease;
+}
+
+@keyframes sectionExpand {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 2000px;
+  }
 }
 
 .filter-grid {
@@ -3971,6 +4031,41 @@ input[type='date'] {
   .filter-section-header {
     min-height: 44px;
   }
+
+  .date-preset {
+    padding: 10px 14px;
+    font-size: 13px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .date-presets,
+  .runtime-presets {
+    flex-wrap: wrap;
+  }
+
+  .genre-instructions {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+/* Safe area for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  @media (max-width: 768px) {
+    .app {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .toast-container {
+      bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+
+    .modal-overlay {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
 }
 
 /* Hide scrollbar on mobile for cleaner look */
@@ -4659,4 +4754,119 @@ input[type='date'] {
     color: rgba(255, 255, 255, 0.2);
     font-size: 10px;
   }
+}
+
+/* ========================================
+   Social Buttons (Discord, Ko-Fi)
+   ======================================== */
+.discord-button {
+  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.2);
+  line-height: 36px !important;
+  min-width: 130px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  background-color: #5865f2;
+  padding: 2px 12px !important;
+  text-align: center !important;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  overflow-wrap: break-word;
+  vertical-align: middle;
+  border: 0 none #fff !important;
+  font-family:
+    'Quicksand',
+    Helvetica,
+    Century Gothic,
+    sans-serif !important;
+  text-decoration: none;
+  text-shadow: none;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  height: 36px;
+}
+
+.discord-button:hover {
+  opacity: 0.85;
+  color: #fff !important;
+  text-decoration: none !important;
+}
+
+.discord-icon {
+  display: initial;
+  vertical-align: middle;
+  height: 14px !important;
+  width: 18px !important;
+  padding: 0 !important;
+  margin: 0 8px 0 0 !important;
+  border: none;
+}
+
+.discord-text {
+  color: #fff !important;
+  letter-spacing: -0.15px !important;
+  text-wrap: nowrap !important;
+  vertical-align: middle !important;
+  line-height: 33px !important;
+  padding: 0 !important;
+  text-align: center;
+  text-decoration: none !important;
+  text-shadow: 0 1px 1px rgba(34, 34, 34, 0.05);
+}
+
+.kofi-button {
+  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.2);
+  line-height: 36px !important;
+  min-width: 150px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  background-color: #72a4f2;
+  padding: 2px 12px !important;
+  text-align: center !important;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  overflow-wrap: break-word;
+  vertical-align: middle;
+  border: 0 none #fff !important;
+  font-family:
+    'Quicksand',
+    Helvetica,
+    Century Gothic,
+    sans-serif !important;
+  text-decoration: none;
+  text-shadow: none;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  height: 36px;
+}
+
+.kofi-button:hover {
+  opacity: 0.85;
+  color: #fff !important;
+  text-decoration: none !important;
+}
+
+.kofiimg {
+  display: initial;
+  vertical-align: middle;
+  height: 13px !important;
+  width: 20px !important;
+  padding: 0 !important;
+  margin: 0 5px 0 0 !important;
+  border: none;
+}
+
+.kofitext {
+  color: #fff !important;
+  letter-spacing: -0.15px !important;
+  text-wrap: nowrap !important;
+  vertical-align: middle !important;
+  line-height: 33px !important;
+  padding: 0 !important;
+  text-align: center;
+  text-decoration: none !important;
+  text-shadow: 0 1px 1px rgba(34, 34, 34, 0.05);
 }

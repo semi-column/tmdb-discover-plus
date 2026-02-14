@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 
-export function SearchableSelect({
+export const SearchableSelect = memo(function SearchableSelect({
   options = [],
   value,
   onChange,
@@ -206,4 +206,4 @@ export function SearchableSelect({
       )}
     </div>
   );
-}
+});

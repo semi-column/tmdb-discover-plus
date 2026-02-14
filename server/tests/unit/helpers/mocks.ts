@@ -38,8 +38,22 @@ export function createMockTmdbResponse(overrides: Record<string, unknown> = {}) 
     total_pages: 10,
     total_results: 200,
     results: [
-      { id: 550, title: 'Fight Club', popularity: 61.4, vote_average: 8.4, poster_path: '/poster.jpg', release_date: '1999-10-15' },
-      { id: 680, title: 'Pulp Fiction', popularity: 55.2, vote_average: 8.5, poster_path: '/poster2.jpg', release_date: '1994-09-10' },
+      {
+        id: 550,
+        title: 'Fight Club',
+        popularity: 61.4,
+        vote_average: 8.4,
+        poster_path: '/poster.jpg',
+        release_date: '1999-10-15',
+      },
+      {
+        id: 680,
+        title: 'Pulp Fiction',
+        popularity: 55.2,
+        vote_average: 8.5,
+        poster_path: '/poster2.jpg',
+        release_date: '1994-09-10',
+      },
     ],
     ...overrides,
   };
@@ -54,8 +68,9 @@ export class MockStorageAdapter {
     return this.configs.get(userId) ?? null;
   }
 
-  async saveUserConfig(config: Record<string, unknown>): Promise<void> {
+  async saveUserConfig(config: Record<string, unknown>): Promise<Record<string, unknown>> {
     this.configs.set(config.userId as string, config);
+    return config;
   }
 
   async deleteUserConfig(userId: string): Promise<void> {
@@ -64,5 +79,23 @@ export class MockStorageAdapter {
 
   async getAllConfigs(): Promise<unknown[]> {
     return Array.from(this.configs.values());
+  }
+
+  async getConfigsByApiKeyId(apiKeyId: string): Promise<unknown[]> {
+    const results: unknown[] = [];
+    for (const config of this.configs.values()) {
+      if ((config as Record<string, unknown>).apiKeyId === apiKeyId) {
+        results.push(config);
+      }
+    }
+    return results;
+  }
+
+  async getPublicStats(): Promise<{ totalUsers: number; totalCatalogs: number }> {
+    let totalCatalogs = 0;
+    for (const config of this.configs.values()) {
+      totalCatalogs += (((config as Record<string, unknown>).catalogs as unknown[]) || []).length;
+    }
+    return { totalUsers: this.configs.size, totalCatalogs };
   }
 }

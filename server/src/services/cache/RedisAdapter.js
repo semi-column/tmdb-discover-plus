@@ -60,4 +60,8 @@ export class RedisAdapter extends CacheInterface {
       log.warn('Redis del error', { key, error: err.message });
     }
   }
+
+  getStats() {
+    return { driver: 'redis' };
+  }
 }

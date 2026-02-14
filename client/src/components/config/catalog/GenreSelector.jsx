@@ -1,6 +1,8 @@
+import { memo } from 'react';
 import { Check, X } from 'lucide-react';
+import { Skeleton } from '../../layout/Skeleton';
 
-export function GenreSelector({
+export const GenreSelector = memo(function GenreSelector({
   genres,
   selectedGenres,
   excludedGenres,
@@ -31,8 +33,10 @@ export function GenreSelector({
 
   if (loading) {
     return (
-      <div className="loading-box">
-        <p>Loading genres...</p>
+      <div className="genre-grid tristate">
+        {Array.from({ length: 12 }, (_, i) => (
+          <Skeleton key={i} width="100%" height={36} borderRadius="var(--radius-full)" />
+        ))}
       </div>
     );
   }
@@ -92,33 +96,39 @@ export function GenreSelector({
         </div>
       )}
 
-      <div className="genre-grid tristate">
-        {[...genres].sort((a, b) => a.name.localeCompare(b.name)).map((genre) => {
-          const state = getGenreState(genre.id);
-          return (
-            <button
-              key={genre.id}
-              type="button"
-              className={`genre-chip tristate ${state}`}
-              onClick={() => handleTriStateClick(genre.id)}
-              title={
-                state === 'neutral'
-                  ? 'Click to include'
-                  : state === 'include'
-                    ? 'Click to exclude'
-                    : 'Click to clear'
-              }
-            >
-              <span className="genre-chip-label">{genre.name}</span>
-              {state === 'include' && <Check size={14} />}
-              {state === 'exclude' && <X size={14} />}
-            </button>
-          );
-        })}
+      <div className="genre-grid tristate" role="group" aria-label="Genre filter">
+        {[...genres]
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((genre) => {
+            const state = getGenreState(genre.id);
+            const ariaPressed =
+              state === 'include' ? 'true' : state === 'exclude' ? 'mixed' : 'false';
+            return (
+              <button
+                key={genre.id}
+                type="button"
+                className={`genre-chip tristate ${state}`}
+                onClick={() => handleTriStateClick(genre.id)}
+                aria-pressed={ariaPressed}
+                aria-label={`${genre.name}: ${state === 'neutral' ? 'not selected' : state === 'include' ? 'included' : 'excluded'}`}
+                title={
+                  state === 'neutral'
+                    ? 'Click to include'
+                    : state === 'include'
+                      ? 'Click to exclude'
+                      : 'Click to clear'
+                }
+              >
+                <span className="genre-chip-label">{genre.name}</span>
+                {state === 'include' && <Check size={14} aria-hidden="true" />}
+                {state === 'exclude' && <X size={14} aria-hidden="true" />}
+              </button>
+            );
+          })}
       </div>
 
       {(selectedGenres.length > 0 || excludedGenres.length > 0) && (
-        <div className="genre-summary">
+        <div className="genre-summary" role="status" aria-live="polite">
           {selectedGenres.length > 0 && (
             <div className="genre-summary-row include">
               <Check size={14} />
@@ -151,4 +161,4 @@ export function GenreSelector({
       )}
     </>
   );
-}
+});

@@ -18,27 +18,15 @@ import {
   Download,
   Upload as ArrowUpTrayIcon,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
-
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { useState, useEffect, lazy, Suspense, memo } from 'react';
 
 import { useIsMobile } from '../../hooks/useIsMobile';
-import { SortableCatalogItem } from './SortableCatalogItem';
 import { SearchableSelect } from '../forms/SearchableSelect';
+import { CatalogListSkeleton } from '../layout/Skeleton';
+
+const DraggableCatalogList = lazy(() =>
+  import('./DraggableCatalogList').then((m) => ({ default: m.DraggableCatalogList }))
+);
 
 function GeneralSettingsSection({ preferences, onPreferencesChange, languages = [] }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -277,7 +265,7 @@ function PosterSettingsSection({ preferences, onPreferencesChange }) {
   );
 }
 
-export function CatalogSidebar({
+export const CatalogSidebar = memo(function CatalogSidebar({
   catalogs,
   activeCatalog,
   onSelectCatalog,
@@ -295,7 +283,10 @@ export function CatalogSidebar({
   languages = [],
 }) {
   const safeCatalogs = Array.isArray(catalogs) ? catalogs : [];
-  const safePresetCatalogs = presetCatalogs && typeof presetCatalogs === 'object' && !Array.isArray(presetCatalogs) ? presetCatalogs : { movie: [], series: [] };
+  const safePresetCatalogs =
+    presetCatalogs && typeof presetCatalogs === 'object' && !Array.isArray(presetCatalogs)
+      ? presetCatalogs
+      : { movie: [], series: [] };
   const isMobile = useIsMobile();
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
   const [tvPresetsCollapsed, setTvPresetsCollapsed] = useState(isMobile);
@@ -312,38 +303,6 @@ export function CatalogSidebar({
   );
 
   const getCatalogKey = (catalog) => String(catalog?._id || catalog?.id || catalog?.name);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 6,
-      },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 150,
-        tolerance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    if (!over) return;
-    if (!active?.id || !over?.id) return;
-    if (active.id === over.id) return;
-    if (typeof onReorderCatalogs !== 'function') return;
-
-    const oldIndex = safeCatalogs.findIndex((c) => getCatalogKey(c) === String(active.id));
-    const newIndex = safeCatalogs.findIndex((c) => getCatalogKey(c) === String(over.id));
-    if (oldIndex < 0 || newIndex < 0) return;
-
-    const reordered = arrayMove(safeCatalogs, oldIndex, newIndex);
-    onReorderCatalogs(reordered);
-  };
 
   const getPlaceholder = () => {
     if (safeCatalogs.length > 0 && safeCatalogs[0].name) {
@@ -484,27 +443,17 @@ export function CatalogSidebar({
             <p className="text-sm">Add a custom catalog or use presets below</p>
           </div>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={safeCatalogs.map(getCatalogKey)}
-              strategy={verticalListSortingStrategy}
-            >
-              {safeCatalogs.map((catalog) => (
-                <SortableCatalogItem
-                  key={getCatalogKey(catalog)}
-                  catalog={catalog}
-                  isActive={activeCatalog?._id === catalog._id}
-                  onSelect={onSelectCatalog}
-                  onDelete={onDeleteCatalog}
-                  onDuplicate={onDuplicateCatalog}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
+          <Suspense fallback={<CatalogListSkeleton count={safeCatalogs.length || 3} />}>
+            <DraggableCatalogList
+              catalogs={safeCatalogs}
+              activeCatalog={activeCatalog}
+              onSelectCatalog={onSelectCatalog}
+              onDeleteCatalog={onDeleteCatalog}
+              onDuplicateCatalog={onDuplicateCatalog}
+              onReorderCatalogs={onReorderCatalogs}
+              getCatalogKey={getCatalogKey}
+            />
+          </Suspense>
         )}
       </div>
 
@@ -573,4 +522,4 @@ export function CatalogSidebar({
       </div>
     </aside>
   );
-}
+});

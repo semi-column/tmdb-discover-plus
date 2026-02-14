@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useConfig } from './useConfig';
 import { useTMDB } from './useTMDB';
 import { useToast } from './useToast';
@@ -31,7 +31,7 @@ export function useAppController() {
     setShowMismatchModal: configMgr.setShowMismatchModal,
   });
 
-  const handleConfigMismatchGoToOwn = async () => {
+  const handleConfigMismatchGoToOwn = useCallback(async () => {
     configMgr.setShowMismatchModal(false);
     auth.setPageLoading(true);
     try {
@@ -44,10 +44,10 @@ export function useAppController() {
     } catch {
       window.location.href = '/';
     }
-  };
+  }, [configMgr, auth]);
 
-  return {
-    state: {
+  const state = useMemo(
+    () => ({
       isSetup: auth.isSetup,
       setIsSetup: auth.setIsSetup,
       wantsToChangeKey: auth.wantsToChangeKey,
@@ -66,8 +66,30 @@ export function useAppController() {
       configsLoading: configMgr.configsLoading,
       isSessionExpired: auth.isSessionExpired,
       showMismatchModal: configMgr.showMismatchModal,
-    },
-    actions: {
+    }),
+    [
+      auth.isSetup,
+      auth.setIsSetup,
+      auth.wantsToChangeKey,
+      auth.setWantsToChangeKey,
+      auth.pageLoading,
+      auth.isSessionExpired,
+      catalogs.activeCatalog,
+      catalogs.setActiveCatalog,
+      install.showInstallModal,
+      install.setShowInstallModal,
+      install.installData,
+      showNewCatalogModal,
+      toast.toasts,
+      configMgr.isSaving,
+      configMgr.userConfigs,
+      configMgr.configsLoading,
+      configMgr.showMismatchModal,
+    ]
+  );
+
+  const actions = useMemo(
+    () => ({
       addToast: toast.addToast,
       removeToast: toast.removeToast,
       handleLogin: auth.handleLogin,
@@ -84,10 +106,34 @@ export function useAppController() {
       handleCreateNewConfig: configMgr.handleCreateNewConfig,
       setShowMismatchModal: configMgr.setShowMismatchModal,
       handleConfigMismatchGoToOwn,
-    },
-    data: {
+    }),
+    [
+      toast.addToast,
+      toast.removeToast,
+      auth.handleLogin,
+      auth.handleValidApiKey,
+      configMgr.handleSave,
+      configMgr.handleDeleteConfigFromDropdown,
+      configMgr.handleImportConfig,
+      configMgr.handleSwitchConfig,
+      configMgr.handleCreateNewConfig,
+      configMgr.setShowMismatchModal,
+      catalogs.handleAddCatalog,
+      catalogs.handleAddPresetCatalog,
+      catalogs.handleDeleteCatalog,
+      catalogs.handleDuplicateCatalog,
+      catalogs.handleUpdateCatalog,
+      handleConfigMismatchGoToOwn,
+    ]
+  );
+
+  const data = useMemo(
+    () => ({
       config,
       tmdb,
-    },
-  };
+    }),
+    [config, tmdb]
+  );
+
+  return { state, actions, data };
 }

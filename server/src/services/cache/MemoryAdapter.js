@@ -34,8 +34,8 @@ export class MemoryAdapter extends CacheInterface {
         this._evict();
         try {
           this.cache.set(key, value, ttlSeconds);
-        } catch {
-          // Still full after eviction — skip silently
+        } catch (e) {
+          log.warn('Cache still full after eviction', { key, error: e.message });
         }
       }
     }

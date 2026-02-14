@@ -39,7 +39,11 @@ export const config = Object.freeze({
 
   encryption: Object.freeze({
     get key(): string {
-      return requireEnv('ENCRYPTION_KEY');
+      const value = requireEnv('ENCRYPTION_KEY');
+      if (!/^[0-9a-fA-F]{64}$/.test(value)) {
+        throw new Error('ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)');
+      }
+      return value;
     },
   }),
 
@@ -54,6 +58,11 @@ export const config = Object.freeze({
     driver: env('CACHE_DRIVER'),
     redisUrl: env('REDIS_URL'),
     maxKeys: envInt('CACHE_MAX_KEYS', 50000),
+    versionOverride: env('CACHE_VERSION_OVERRIDE'),
+    warmRegions: env('CACHE_WARM_REGIONS', 'US,GB,DE,FR,ES')
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean),
   }),
 
   tmdb: Object.freeze({
@@ -79,9 +88,13 @@ export const config = Object.freeze({
   }),
 
   features: Object.freeze({
-    disableRateLimit: envBool('DISABLE_RATE_LIMIT'),
+    disableRateLimit:
+      envBool('DISABLE_RATE_LIMIT') &&
+      ['development', 'test'].includes(env('NODE_ENV', 'production')),
     disableMetrics: envBool('DISABLE_METRICS'),
   }),
+
+  trustProxy: env('TRUST_PROXY', '1'),
 
   addon: Object.freeze({
     variant: env('ADDON_VARIANT'),

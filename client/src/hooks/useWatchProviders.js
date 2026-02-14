@@ -1,40 +1,42 @@
 import { useState, useEffect } from 'react';
 
 export function useWatchProviders({ type, region, getWatchProviders }) {
-  const [watchProviders, setWatchProviders] = useState([]);
+  const [fetchedProviders, setFetchedProviders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const shouldFetch = !!(region && getWatchProviders);
+
   useEffect(() => {
-    const loadProviders = async () => {
-      if (!region || !getWatchProviders) {
-        setWatchProviders([]);
-        return;
-      }
+    if (!shouldFetch) return;
 
-      setLoading(true);
-      setError(null);
+    let cancelled = false;
 
-      try {
-        const providers = await getWatchProviders(type || 'movie', region);
-
-        setWatchProviders(
+    getWatchProviders(type || 'movie', region)
+      .then((providers) => {
+        if (cancelled) return;
+        setFetchedProviders(
           providers.map((p) => ({
             id: p.provider_id,
             name: p.provider_name,
             logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
           }))
         );
-      } catch (err) {
-        console.error('Failed to load providers:', err);
+      })
+      .catch((err) => {
+        if (cancelled) return;
         setError(err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-    loadProviders();
-  }, [type, region, getWatchProviders]);
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldFetch, type, region, getWatchProviders]);
+
+  const watchProviders = shouldFetch ? fetchedProviders : [];
 
   return { watchProviders, loading, error };
 }

@@ -5,12 +5,8 @@ import { createLogger } from '../../utils/logger.ts';
 import { getTmdbThrottle } from '../../infrastructure/tmdbThrottle.js';
 import { getMetrics } from '../../infrastructure/metrics.js';
 import { config } from '../../config.ts';
-import {
-  httpsAgent,
-  TMDB_API_ORIGIN,
-  TMDB_API_BASE_PATH,
-  TMDB_SITE_ORIGIN,
-} from './constants.ts';
+import { getRequestId } from '../../utils/requestContext.ts';
+import { httpsAgent, TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
 
 import type { ApiKeyValidationResult, CacheErrorType, Logger } from '../../types/index.ts';
 
@@ -32,7 +28,7 @@ function recordCircuitFailure(): void {
   const now = Date.now();
   CIRCUIT_BREAKER.failures.push(now);
   CIRCUIT_BREAKER.failures = CIRCUIT_BREAKER.failures.filter(
-    (ts) => now - ts < CIRCUIT_BREAKER.windowMs,
+    (ts) => now - ts < CIRCUIT_BREAKER.windowMs
   );
   if (CIRCUIT_BREAKER.failures.length >= CIRCUIT_BREAKER.threshold) {
     CIRCUIT_BREAKER.openedAt = now;
@@ -66,6 +62,11 @@ export function getCircuitBreakerState(): {
   };
 }
 
+export function resetCircuitBreaker(): void {
+  CIRCUIT_BREAKER.failures = [];
+  CIRCUIT_BREAKER.openedAt = 0;
+}
+
 export function redactTmdbUrl(urlString: string): string {
   if (typeof urlString !== 'string') return urlString;
   return urlString.replace(/([?&]api_key=)[^&\s]+/gi, '$1[REDACTED]');
@@ -85,7 +86,7 @@ export function normalizeEndpoint(endpoint: string): string {
 
 export function assertAllowedUrl(
   url: URL,
-  { origin, pathPrefix }: { origin?: string; pathPrefix?: string },
+  { origin, pathPrefix }: { origin?: string; pathPrefix?: string }
 ): void {
   if (!(url instanceof URL)) throw new Error('Invalid URL');
   if (url.protocol !== 'https:') throw new Error('Blocked non-HTTPS outbound request');
@@ -115,7 +116,7 @@ export async function tmdbFetch(
   endpoint: string,
   apiKey: string,
   params: TmdbApiParams = {},
-  retries: number = 3,
+  retries: number = 3
 ): Promise<unknown> {
   const ep = normalizeEndpoint(endpoint);
   const url = new URL(TMDB_API_ORIGIN);
@@ -143,12 +144,12 @@ export async function tmdbFetch(
   }
 
   try {
-    const cached = await cache.getEntry(cacheKey) as Record<string, unknown> | null;
+    const cached = (await cache.getEntry(cacheKey)) as Record<string, unknown> | null;
     if (cached !== null && cached !== undefined) {
       if (cached.__errorType) {
         throw new CachedError(
           cached.__errorType as CacheErrorType,
-          cached.__errorMessage as string,
+          cached.__errorMessage as string
         );
       }
       if (cached.__cacheWrapper) return cached.data;
@@ -194,7 +195,7 @@ export async function tmdbFetch(
         const statusMessage =
           typeof errorBody.status_message === 'string' ? errorBody.status_message : undefined;
         const err = new Error(
-          statusMessage || `TMDB API error: ${response.status}`,
+          statusMessage || `TMDB API error: ${response.status}`
         ) as TmdbFetchError;
         err.statusCode = response.status;
         throw err;
@@ -238,15 +239,32 @@ export async function tmdbFetch(
     }
   }
 
-  log.error('TMDB fetch error after retries', { error: redactTmdbUrl(lastError!.message) });
-  recordCircuitFailure();
+  log.error('TMDB fetch error after retries', {
+    error: redactTmdbUrl(lastError!.message),
+    endpoint: endpoint.slice(0, 80),
+    statusCode: lastError!.statusCode,
+    requestId: getRequestId(),
+  });
+
+  const shouldTrip =
+    !lastError!.statusCode ||
+    lastError!.statusCode >= 500 ||
+    lastError!.statusCode === 429 ||
+    ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(lastError!.code || '');
+
+  if (shouldTrip) {
+    recordCircuitFailure();
+  }
 
   const errorType = classifyError(lastError!, lastError!.statusCode) as CacheErrorType;
   try {
     await cache.setError(cacheKey, errorType, lastError!.message);
     metrics.trackError(errorType);
-  } catch {
-    /* best effort */
+  } catch (e) {
+    log.debug('Failed to cache error response', {
+      cacheKey: cacheKey.slice(0, 60),
+      error: (e as Error).message,
+    });
   }
 
   throw lastError;
@@ -254,7 +272,7 @@ export async function tmdbFetch(
 
 export async function tmdbWebsiteFetchJson(
   endpoint: string,
-  params: TmdbApiParams = {},
+  params: TmdbApiParams = {}
 ): Promise<unknown> {
   const ep = normalizeEndpoint(endpoint);
   const url = new URL(TMDB_SITE_ORIGIN);
@@ -277,6 +295,9 @@ export async function tmdbWebsiteFetchJson(
   } catch {
     /* ignore get error */
   }
+
+  const throttle = getTmdbThrottle();
+  await throttle.acquire();
 
   const response = await fetch(url.toString(), {
     agent: httpsAgent,
