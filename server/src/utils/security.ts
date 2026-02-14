@@ -20,22 +20,32 @@ setInterval(() => {
   }
 }, REVOKE_CLEANUP_INTERVAL_MS);
 
+const MAX_REVOKED_TOKENS = 10000;
+
 function getJwtSecret(): string {
-  return config.jwt.secret;
+  const secret = config.jwt.secret;
+  if (secret.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters');
+  }
+  return secret;
 }
 
-export function computeApiKeyId(apiKey: string): string {
+export async function computeApiKeyId(apiKey: string): Promise<string> {
   if (!apiKey) return '';
-  const salt = getJwtSecret();
-  const hash = crypto.pbkdf2Sync(apiKey, salt, 100000, 32, 'sha256');
+  const hash = await new Promise<Buffer>((resolve, reject) => {
+    crypto.pbkdf2(apiKey, getJwtSecret(), 100000, 32, 'sha256', (err, derivedKey) => {
+      if (err) reject(err);
+      else resolve(derivedKey);
+    });
+  });
   return hash.toString('hex');
 }
 
-export function generateToken(
+export async function generateToken(
   apiKey: string,
-  rememberMe: boolean = true,
-): { token: string; expiresIn: string } {
-  const apiKeyId = computeApiKeyId(apiKey);
+  rememberMe: boolean = true
+): Promise<{ token: string; expiresIn: string }> {
+  const apiKeyId = await computeApiKeyId(apiKey);
   const expiresIn = rememberMe ? JWT_EXPIRY_PERSISTENT : JWT_EXPIRY_SESSION;
   const jti = crypto.randomUUID();
   const token = jwt.sign({ apiKeyId, jti }, getJwtSecret(), { expiresIn });
@@ -60,6 +70,16 @@ export function revokeToken(token: string): boolean {
   try {
     const decoded = jwt.decode(token);
     if (!decoded || typeof decoded === 'string' || !decoded.jti || !decoded.exp) return false;
+    if (revokedTokens.size >= MAX_REVOKED_TOKENS) {
+      const now = Date.now();
+      for (const [jti, expiresAt] of revokedTokens) {
+        if (expiresAt <= now) revokedTokens.delete(jti);
+      }
+      if (revokedTokens.size >= MAX_REVOKED_TOKENS) {
+        const oldest = revokedTokens.keys().next().value;
+        if (oldest) revokedTokens.delete(oldest);
+      }
+    }
     revokedTokens.set(decoded.jti as string, decoded.exp * 1000);
     log.debug('Token revoked', { jti: decoded.jti });
     return true;

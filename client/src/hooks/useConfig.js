@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { api } from '../services/api';
 
 export function useConfig(initialUserId = null) {
@@ -14,32 +14,15 @@ export function useConfig(initialUserId = null) {
   const [error, setError] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
-
-  const savedStateRef = useRef({
-    catalogs: [],
-    configName: '',
-    preferences: { showAdultContent: false, defaultLanguage: 'en' },
-  });
+  const [isDirty, setIsDirty] = useState(false);
 
   const setApiKey = useCallback((key) => {
     setApiKeyState(key);
   }, []);
 
-  const isDirty = useMemo(() => {
-    const saved = savedStateRef.current;
-    if (configName !== saved.configName) return true;
-    if (JSON.stringify(catalogs) !== JSON.stringify(saved.catalogs)) return true;
-    if (JSON.stringify(preferences) !== JSON.stringify(saved.preferences)) return true;
-    return false;
-  }, [catalogs, configName, preferences]);
-
   const markAsSaved = useCallback(() => {
-    savedStateRef.current = {
-      catalogs: JSON.parse(JSON.stringify(catalogs)),
-      configName,
-      preferences: JSON.parse(JSON.stringify(preferences)),
-    };
-  }, [catalogs, configName, preferences]);
+    setIsDirty(false);
+  }, []);
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -112,11 +95,7 @@ export function useConfig(initialUserId = null) {
     setCatalogs([]);
     setConfigName('');
     setPreferences({ showAdultContent: false, defaultLanguage: 'en' });
-    savedStateRef.current = {
-      catalogs: [],
-      configName: '',
-      preferences: { showAdultContent: false, defaultLanguage: 'en' },
-    };
+    setIsDirty(false);
   }, []);
 
   const loadConfig = useCallback(async (id) => {
@@ -128,11 +107,7 @@ export function useConfig(initialUserId = null) {
       setCatalogs(config.catalogs || []);
       setConfigName(config.configName || '');
       setPreferences(config.preferences || {});
-      savedStateRef.current = {
-        catalogs: config.catalogs || [],
-        configName: config.configName || '',
-        preferences: config.preferences || {},
-      };
+      setIsDirty(false);
       return config;
     } catch (err) {
       setError(err.message);
@@ -190,16 +165,34 @@ export function useConfig(initialUserId = null) {
 
   const addCatalog = useCallback((catalog) => {
     setCatalogs((prev) => [...prev, { ...catalog, _id: crypto.randomUUID() }]);
+    setIsDirty(true);
   }, []);
 
   const updateCatalog = useCallback((catalogId, updates) => {
     setCatalogs((prev) =>
       prev.map((c) => (c._id === catalogId || c.id === catalogId ? { ...c, ...updates } : c))
     );
+    setIsDirty(true);
   }, []);
 
   const removeCatalog = useCallback((catalogId) => {
     setCatalogs((prev) => prev.filter((c) => c._id !== catalogId && c.id !== catalogId));
+    setIsDirty(true);
+  }, []);
+
+  const setCatalogsAndDirty = useCallback((value) => {
+    setCatalogs(value);
+    setIsDirty(true);
+  }, []);
+
+  const setConfigNameAndDirty = useCallback((value) => {
+    setConfigName(value);
+    setIsDirty(true);
+  }, []);
+
+  const setPreferencesAndDirty = useCallback((value) => {
+    setPreferences(value);
+    setIsDirty(true);
   }, []);
 
   return {
@@ -208,11 +201,11 @@ export function useConfig(initialUserId = null) {
     apiKey,
     setApiKey,
     catalogs,
-    setCatalogs,
+    setCatalogs: setCatalogsAndDirty,
     configName,
-    setConfigName,
+    setConfigName: setConfigNameAndDirty,
     preferences,
-    setPreferences,
+    setPreferences: setPreferencesAndDirty,
     loading,
     error,
     isDirty,

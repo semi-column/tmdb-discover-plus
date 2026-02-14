@@ -33,6 +33,8 @@ class MetricsTracker {
     this.startTime = Date.now();
     this.totalRequests = 0;
 
+    this._cacheStatsProvider = null;
+
     // Cleanup stale active users every 10 minutes
     this._cleanupInterval = setInterval(() => this._cleanupActiveUsers(), 10 * 60 * 1000);
   }
@@ -93,6 +95,9 @@ class MetricsTracker {
    */
   trackError(errorType) {
     if (this.disabled) return;
+    if (this.errorCounts.size >= 500 && !this.errorCounts.has(errorType)) {
+      return;
+    }
     const count = this.errorCounts.get(errorType) || 0;
     this.errorCounts.set(errorType, count + 1);
   }
@@ -155,6 +160,9 @@ class MetricsTracker {
 
   /** @private */
   _recordEndpoint(route, durationMs, isError) {
+    if (this.endpoints.size >= 500 && !this.endpoints.has(route)) {
+      return;
+    }
     const existing = this.endpoints.get(route) || { count: 0, totalMs: 0, errors: 0, lastMs: 0 };
     existing.count++;
     existing.totalMs += durationMs;
@@ -169,6 +177,10 @@ class MetricsTracker {
     for (const [userId, ts] of this.activeUsers) {
       if (ts < hourAgo) this.activeUsers.delete(userId);
     }
+  }
+
+  setCacheStatsProvider(fn) {
+    this._cacheStatsProvider = fn;
   }
 
   destroy() {
@@ -208,7 +220,9 @@ class MetricsTracker {
     for (const [route, stats] of this.endpoints) {
       const label = `route="${route}"`;
       lines.push(`tmdb_endpoint_requests_total{${label}} ${stats.count}`);
-      lines.push(`tmdb_endpoint_duration_avg_ms{${label}} ${stats.count > 0 ? Math.round(stats.totalMs / stats.count) : 0}`);
+      lines.push(
+        `tmdb_endpoint_duration_avg_ms{${label}} ${stats.count > 0 ? Math.round(stats.totalMs / stats.count) : 0}`
+      );
       lines.push(`tmdb_endpoint_errors_total{${label}} ${stats.errors}`);
     }
 
@@ -221,7 +235,9 @@ class MetricsTracker {
     for (const [name, stats] of this.providers) {
       const label = `provider="${name}"`;
       lines.push(`tmdb_provider_requests_total{${label}} ${stats.count}`);
-      lines.push(`tmdb_provider_duration_avg_ms{${label}} ${stats.count > 0 ? Math.round(stats.totalMs / stats.count) : 0}`);
+      lines.push(
+        `tmdb_provider_duration_avg_ms{${label}} ${stats.count > 0 ? Math.round(stats.totalMs / stats.count) : 0}`
+      );
       lines.push(`tmdb_provider_errors_total{${label}} ${stats.errors}`);
     }
 
@@ -229,6 +245,65 @@ class MetricsTracker {
     lines.push('# TYPE tmdb_errors_total counter');
     for (const [errorType, count] of this.errorCounts) {
       lines.push(`tmdb_errors_total{type="${errorType}"} ${count}`);
+    }
+
+    if (this._cacheStatsProvider) {
+      const cs = this._cacheStatsProvider();
+      if (cs?.adapter) {
+        if (typeof cs.adapter.keys === 'number') {
+          lines.push('# HELP tmdb_cache_keys Current number of cached keys');
+          lines.push('# TYPE tmdb_cache_keys gauge');
+          lines.push(`tmdb_cache_keys ${cs.adapter.keys}`);
+        }
+        if (typeof cs.adapter.maxKeys === 'number') {
+          lines.push('# HELP tmdb_cache_max_keys Maximum cache capacity');
+          lines.push('# TYPE tmdb_cache_max_keys gauge');
+          lines.push(`tmdb_cache_max_keys ${cs.adapter.maxKeys}`);
+        }
+        if (typeof cs.adapter.evictions === 'number') {
+          lines.push('# HELP tmdb_cache_evictions_total Total cache evictions');
+          lines.push('# TYPE tmdb_cache_evictions_total counter');
+          lines.push(`tmdb_cache_evictions_total ${cs.adapter.evictions}`);
+        }
+      }
+      if (typeof cs.hits === 'number') {
+        lines.push('# HELP tmdb_cache_hits_total Cache wrapper hits');
+        lines.push('# TYPE tmdb_cache_hits_total counter');
+        lines.push(`tmdb_cache_hits_total ${cs.hits}`);
+      }
+      if (typeof cs.misses === 'number') {
+        lines.push('# HELP tmdb_cache_misses_total Cache wrapper misses');
+        lines.push('# TYPE tmdb_cache_misses_total counter');
+        lines.push(`tmdb_cache_misses_total ${cs.misses}`);
+      }
+      if (typeof cs.hits === 'number' && typeof cs.misses === 'number') {
+        const total = cs.hits + cs.misses;
+        const ratio = total > 0 ? cs.hits / total : 0;
+        lines.push('# HELP tmdb_cache_hit_ratio Cache hit ratio (0-1)');
+        lines.push('# TYPE tmdb_cache_hit_ratio gauge');
+        lines.push(`tmdb_cache_hit_ratio ${ratio.toFixed(4)}`);
+      }
+      if (
+        cs?.adapter &&
+        typeof cs.adapter.keys === 'number' &&
+        typeof cs.adapter.maxKeys === 'number' &&
+        cs.adapter.maxKeys > 0
+      ) {
+        const pct = (cs.adapter.keys / cs.adapter.maxKeys) * 100;
+        lines.push('# HELP tmdb_cache_capacity_percent Cache usage as percentage of max capacity');
+        lines.push('# TYPE tmdb_cache_capacity_percent gauge');
+        lines.push(`tmdb_cache_capacity_percent ${pct.toFixed(2)}`);
+      }
+      if (typeof cs.staleServed === 'number') {
+        lines.push('# HELP tmdb_cache_stale_served_total Stale cache entries served');
+        lines.push('# TYPE tmdb_cache_stale_served_total counter');
+        lines.push(`tmdb_cache_stale_served_total ${cs.staleServed}`);
+      }
+      if (typeof cs.cachedErrors === 'number') {
+        lines.push('# HELP tmdb_cache_cached_errors_total Cached error responses served');
+        lines.push('# TYPE tmdb_cache_cached_errors_total counter');
+        lines.push(`tmdb_cache_cached_errors_total ${cs.cachedErrors}`);
+      }
     }
 
     const mem = process.memoryUsage();

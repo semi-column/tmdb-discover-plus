@@ -7,6 +7,12 @@ import { ADDON_VERSION } from '../../version.ts';
 
 const log = createLogger('CacheFactory');
 
+function getCacheVersion() {
+  if (config.cache.versionOverride) return config.cache.versionOverride;
+  const major = ADDON_VERSION.split('.')[0];
+  return major || ADDON_VERSION;
+}
+
 /** @type {CacheWrapper|null} */
 let cacheInstance = null;
 
@@ -58,8 +64,12 @@ export async function initCache() {
     activeDriver = 'memory';
   }
 
-  cacheInstance = new CacheWrapper(adapter, { version: ADDON_VERSION });
-  log.info('Cache initialized with CacheWrapper', { driver: activeDriver, degraded, version: ADDON_VERSION });
+  cacheInstance = new CacheWrapper(adapter, { version: getCacheVersion() });
+  log.info('Cache initialized with CacheWrapper', {
+    driver: activeDriver,
+    degraded,
+    version: getCacheVersion(),
+  });
 
   return cacheInstance;
 }
@@ -69,7 +79,7 @@ export async function initCache() {
  */
 export function getCache() {
   if (!cacheInstance) {
-    cacheInstance = new CacheWrapper(new MemoryAdapter(), { version: ADDON_VERSION });
+    cacheInstance = new CacheWrapper(new MemoryAdapter(), { version: getCacheVersion() });
     activeDriver = 'memory';
   }
   return cacheInstance;

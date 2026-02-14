@@ -13,6 +13,7 @@ import * as tmdb from '../services/tmdb/index.js';
 import { createLogger } from '../utils/logger.ts';
 import { strictRateLimit } from '../utils/rateLimit.js';
 import { isValidApiKeyFormat, isValidUserId } from '../utils/validation.ts';
+import { sendError, ErrorCodes } from '../utils/AppError.ts';
 
 const router = Router();
 const log = createLogger('auth');
@@ -22,30 +23,33 @@ router.post('/login', strictRateLimit, async (req, res) => {
     const { apiKey, userId: requestedUserId, rememberMe = true } = req.body;
 
     if (!apiKey) {
-      return res.status(400).json({ error: 'API key is required' });
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'API key is required');
     }
 
     if (!isValidApiKeyFormat(apiKey)) {
-      return res.status(400).json({ error: 'Invalid API key format' });
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid API key format');
     }
 
     const validation = await tmdb.validateApiKey(apiKey);
     if (!validation.valid) {
-      return res.status(401).json({ error: 'Invalid TMDB API key' });
+      return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
     }
 
     if (requestedUserId) {
       if (!isValidUserId(requestedUserId)) {
-        return res.status(400).json({ error: 'Invalid user ID format' });
+        return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid user ID format');
       }
 
       const existingConfig = await getUserConfig(requestedUserId);
       if (existingConfig) {
         const storedKey = getApiKeyFromConfig(existingConfig);
         if (storedKey !== apiKey) {
-          return res.status(403).json({
-            error: 'API key does not match this configuration',
-          });
+          return sendError(
+            res,
+            403,
+            ErrorCodes.FORBIDDEN,
+            'API key does not match this configuration'
+          );
         }
 
         const allConfigsRaw = await getConfigsByApiKey(apiKey);
@@ -58,7 +62,7 @@ router.post('/login', strictRateLimit, async (req, res) => {
           updatedAt: c.updatedAt,
         }));
 
-        const tokenData = generateToken(apiKey, rememberMe);
+        const tokenData = await generateToken(apiKey, rememberMe);
         log.info('User authenticated for existing config', { userId: requestedUserId });
 
         return res.json({
@@ -76,7 +80,7 @@ router.post('/login', strictRateLimit, async (req, res) => {
     if (existingConfigs.length > 0) {
       existingConfigs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
       const config = existingConfigs[0];
-      const tokenData = generateToken(apiKey, rememberMe);
+      const tokenData = await generateToken(apiKey, rememberMe);
       log.info('User authenticated', {
         userId: config.userId,
         totalConfigs: existingConfigs.length,
@@ -110,7 +114,7 @@ router.post('/login', strictRateLimit, async (req, res) => {
       preferences: {},
     });
 
-    const tokenData = generateToken(apiKey, rememberMe);
+    const tokenData = await generateToken(apiKey, rememberMe);
     log.info('New user created', { userId: newUserId });
 
     return res.json({
@@ -121,7 +125,7 @@ router.post('/login', strictRateLimit, async (req, res) => {
     });
   } catch (error) {
     log.error('Login error', { error: error.message });
-    return res.status(500).json({ error: 'Authentication failed' });
+    return sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Authentication failed');
   }
 });
 
@@ -137,19 +141,19 @@ router.get('/verify', strictRateLimit, async (req, res) => {
   const bearerToken = req.headers.authorization?.replace('Bearer ', '');
 
   if (!bearerToken) {
-    return res.status(401).json({ valid: false, error: 'No token provided' });
+    return sendError(res, 401, ErrorCodes.UNAUTHORIZED, 'No token provided');
   }
 
   const decoded = verifyToken(bearerToken);
   if (!decoded || !decoded.apiKeyId) {
-    return res.status(401).json({ valid: false, error: 'Invalid or expired token' });
+    return sendError(res, 401, ErrorCodes.UNAUTHORIZED, 'Invalid or expired token');
   }
 
   try {
     const allConfigs = await getConfigsByApiKey(null, decoded.apiKeyId);
 
     if (!allConfigs || allConfigs.length === 0) {
-      return res.status(401).json({ valid: false, error: 'No configurations found' });
+      return sendError(res, 401, ErrorCodes.UNAUTHORIZED, 'No configurations found');
     }
 
     allConfigs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -162,7 +166,7 @@ router.get('/verify', strictRateLimit, async (req, res) => {
     });
   } catch (error) {
     log.error('Verify error', { error: error.message });
-    return res.status(401).json({ valid: false, error: 'Verification failed' });
+    return sendError(res, 401, ErrorCodes.UNAUTHORIZED, 'Verification failed');
   }
 });
 

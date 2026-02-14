@@ -1,10 +1,10 @@
 import { X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, memo } from 'react';
 import { MultiSelect } from '../../forms/MultiSelect';
 import { SearchableSelect } from '../../forms/SearchableSelect';
 import { LabelWithTooltip } from '../../forms/Tooltip';
 
-export function StreamFilters({
+export const StreamFilters = memo(function StreamFilters({
   type,
   tvNetworks,
   watchRegions,
@@ -175,7 +175,16 @@ export function StreamFilters({
                     <div
                       key={provider.id}
                       className={`provider-item ${(filters.watchProviders || []).includes(provider.id) ? 'selected' : ''}`}
+                      role="checkbox"
+                      aria-checked={(filters.watchProviders || []).includes(provider.id)}
+                      tabIndex={0}
                       onClick={() => handleProviderToggle(provider.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === ' ' || e.key === 'Enter') {
+                          e.preventDefault();
+                          handleProviderToggle(provider.id);
+                        }
+                      }}
                     >
                       {provider.logo ? (
                         <img src={provider.logo} alt={provider.name} className="provider-logo" />
@@ -200,4 +209,4 @@ export function StreamFilters({
       </div>
     </>
   );
-}
+});

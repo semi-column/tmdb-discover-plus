@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { ChevronDown, Check, X, Search } from 'lucide-react';
 
-export function MultiSelect({
+export const MultiSelect = memo(function MultiSelect({
   options = [],
   value = [],
   onChange,
@@ -195,4 +195,4 @@ export function MultiSelect({
       )}
     </div>
   );
-}
+});

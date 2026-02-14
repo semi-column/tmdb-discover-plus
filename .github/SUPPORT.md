@@ -9,8 +9,8 @@ Thank you for using TMDB Discover+! This document will help you find the right p
 Before asking for help, please check these resources:
 
 - **[README](../README.md)** - Setup instructions and feature overview
-- **[CONTRIBUTING](../CONTRIBUTING.md)** - Development setup and guidelines
-- **[SECURITY](../SECURITY.md)** - Security policy and best practices
+- **[CONTRIBUTING](../docs/CONTRIBUTING.md)** - Development setup and guidelines
+- **[SECURITY](../docs/SECURITY.md)** - Security policy and best practices
 
 ### 2. Search Existing Issues
 
@@ -43,7 +43,7 @@ Have an idea? Use the [feature request template](https://github.com/semi-column/
 
 ### Security Vulnerabilities
 
-**DO NOT** open a public issue for security vulnerabilities. Please see our [Security Policy](../SECURITY.md) for responsible disclosure.
+**DO NOT** open a public issue for security vulnerabilities. Please see our [Security Policy](../docs/SECURITY.md) for responsible disclosure.
 
 ## Self-Hosting Help
 

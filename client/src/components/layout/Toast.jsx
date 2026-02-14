@@ -12,7 +12,7 @@ export function Toast({ id, message, type = 'success', removeToast, duration = 2
   }, [handleClose, duration]);
 
   return (
-    <div className={`toast ${type}`}>
+    <div className={`toast ${type}`} role="alert">
       <div className="toast-icon">
         {type === 'success' ? (
           <CheckCircle size={20} color="var(--success)" />
@@ -30,7 +30,7 @@ export function Toast({ id, message, type = 'success', removeToast, duration = 2
 
 export function ToastContainer({ toasts, removeToast }) {
   return (
-    <div className="toast-container">
+    <div className="toast-container" aria-live="polite" aria-atomic="false">
       {toasts.map((toast) => (
         <Toast
           key={toast.id}

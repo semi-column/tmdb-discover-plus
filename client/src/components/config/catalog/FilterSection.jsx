@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
-export function FilterSection({
+export const FilterSection = memo(function FilterSection({
   id,
   title,
   icon: Icon,
@@ -12,7 +13,12 @@ export function FilterSection({
 }) {
   return (
     <div className="filter-section">
-      <button className="filter-section-header" onClick={() => onToggle(id)}>
+      <button
+        className="filter-section-header"
+        onClick={() => onToggle(id)}
+        aria-expanded={isOpen}
+        aria-controls={`filter-section-${id}`}
+      >
         {Icon && <Icon size={18} />}
         <div className="filter-section-title-group">
           <h4 className="filter-section-title">{title}</h4>
@@ -21,7 +27,11 @@ export function FilterSection({
         {badgeCount > 0 && <span className="filter-count-badge">{badgeCount}</span>}
         {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </button>
-      {isOpen && <div className="filter-section-content">{children}</div>}
+      {isOpen && (
+        <div id={`filter-section-${id}`} className="filter-section-content">
+          {children}
+        </div>
+      )}
     </div>
   );
-}
+});

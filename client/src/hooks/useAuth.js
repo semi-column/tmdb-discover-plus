@@ -63,16 +63,21 @@ export function useAuth(config, addToast, urlUserId, deps) {
 
     if (isSetup) return;
 
+    let stale = false;
+
     setPageLoading(true);
     config
       .loadConfig(urlUserId)
       .then((data) => {
+        if (stale) return;
         if (data.catalogs?.length > 0) {
           setActiveCatalog(data.catalogs[0]);
         }
         setPageLoading(false);
       })
       .catch(async (err) => {
+        if (stale) return;
+
         if (err.code === 'API_KEY_MISMATCH') {
           logger.warn('[App] API key mismatch for config:', urlUserId);
           setShowMismatchModal(true);
@@ -84,6 +89,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
 
         try {
           const configs = await loadUserConfigs();
+          if (stale) return;
 
           if (configs && configs.length > 0) {
             const latest = configs[0];
@@ -106,11 +112,16 @@ export function useAuth(config, addToast, urlUserId, deps) {
             setPageLoading(false);
           }
         } catch (fallbackErr) {
+          if (stale) return;
           logger.error('[App] Fallback failed:', fallbackErr);
           addToast('Failed to recover configuration', 'error');
           setPageLoading(false);
         }
       });
+
+    return () => {
+      stale = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     urlUserId,

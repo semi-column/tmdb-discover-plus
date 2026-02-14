@@ -14,12 +14,33 @@ import { fileURLToPath } from 'url';
 import { addonRateLimit } from '../utils/rateLimit.js';
 import { etagMiddleware } from '../utils/etag.js';
 import { config } from '../config.ts';
+import { isValidUserId, isValidContentType } from '../utils/validation.ts';
+import { sendError, ErrorCodes } from '../utils/AppError.ts';
 
 const log = createLogger('addon');
 
 const router = Router();
 router.use(addonRateLimit);
 router.use(etagMiddleware);
+
+router.param('userId', (req, res, next, value) => {
+  if (!isValidUserId(value)) {
+    return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid user ID format');
+  }
+  next();
+});
+
+router.param('type', (req, res, next, value) => {
+  if (!isValidContentType(value)) {
+    return sendError(
+      res,
+      400,
+      ErrorCodes.VALIDATION_ERROR,
+      'Invalid content type — must be movie or series'
+    );
+  }
+  next();
+});
 
 import { buildManifest, enrichManifestWithGenres } from '../services/manifestService.js';
 
@@ -28,7 +49,6 @@ const TMDB_PAGE_SIZE = 20;
 function pickPreferredMetaLanguage(config) {
   return config?.preferences?.defaultLanguage || 'en';
 }
-
 
 router.get('/:userId/manifest.json', async (req, res) => {
   try {
@@ -63,7 +83,7 @@ router.get('/:userId/manifest.json', async (req, res) => {
     res.etagJson(manifest, { extra: userId });
   } catch (error) {
     log.error('Manifest error', { error: error.message });
-    res.status(500).json({ error: error.message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, error.message);
   }
 });
 
@@ -205,7 +225,10 @@ async function enrichCatalogResults(allItems, type, apiKey, displayLanguage, isS
         });
       }
     } catch (err) {
-      log.warn('Failed to fetch localized genres for catalog', { displayLanguage, error: err.message });
+      log.warn('Failed to fetch localized genres for catalog', {
+        displayLanguage,
+        error: err.message,
+      });
     }
   }
 
@@ -245,9 +268,9 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
     const posterOptions =
       config.preferences?.posterService && config.preferences.posterService !== 'none'
         ? {
-          apiKey: getPosterKeyFromConfig(config),
-          service: config.preferences.posterService,
-        }
+            apiKey: getPosterKeyFromConfig(config),
+            service: config.preferences.posterService,
+          }
         : null;
 
     let catalogConfig = config.catalogs.find((c) => {
@@ -299,7 +322,10 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
             }
           }
         } catch (e) {
-          log.warn('IMDb direct lookup failed, falling back to search', { search, error: e.message });
+          log.warn('IMDb direct lookup failed, falling back to search', {
+            search,
+            error: e.message,
+          });
         }
       }
 
@@ -338,7 +364,13 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
           ? null
           : posterOptions;
 
-    const { genreMap, ratingsMap } = await enrichCatalogResults(allItems, type, apiKey, displayLanguage, !!search);
+    const { genreMap, ratingsMap } = await enrichCatalogResults(
+      allItems,
+      type,
+      apiKey,
+      displayLanguage,
+      !!search
+    );
 
     const metas = allItems.map((item) => {
       return tmdb.toStremioMeta(item, type, null, effectivePosterOptions, genreMap, ratingsMap);
@@ -369,11 +401,14 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
       cacheHeader: res.get('Cache-Control'),
     });
 
-    res.etagJson({
-      metas: filteredMetas,
-      cacheMaxAge: randomize ? 0 : 300,
-      staleRevalidate: randomize ? 0 : 600,
-    }, { extra: `${userId}:${catalogId}:${skip}` });
+    res.etagJson(
+      {
+        metas: filteredMetas,
+        cacheMaxAge: randomize ? 0 : 300,
+        staleRevalidate: randomize ? 0 : 600,
+      },
+      { extra: `${userId}:${catalogId}:${skip}` }
+    );
   } catch (error) {
     log.error('Catalog error', { error: error.message });
     res.json({ metas: [] });
@@ -392,9 +427,9 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
     const posterOptions =
       config.preferences?.posterService && config.preferences.posterService !== 'none'
         ? {
-          apiKey: getPosterKeyFromConfig(config),
-          service: config.preferences.posterService,
-        }
+            apiKey: getPosterKeyFromConfig(config),
+            service: config.preferences.posterService,
+          }
         : null;
 
     const requestedId = String(id || '');
@@ -405,7 +440,7 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
       configured: configuredLanguage,
       extraDisplay: extra?.displayLanguage,
       extraLang: extra?.language,
-      final: language
+      final: language,
     });
 
     let tmdbId = null;
@@ -433,9 +468,7 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
       type === 'series'
         ? tmdb.getSeriesEpisodes(apiKey, tmdbId, details, { language })
         : Promise.resolve(null),
-      !hasLogos
-        ? tmdb.getLogos(apiKey, tmdbId, type)
-        : Promise.resolve(null),
+      !hasLogos ? tmdb.getLogos(apiKey, tmdbId, type) : Promise.resolve(null),
     ]);
     videos = episodesResult;
     if (videos) {
@@ -447,23 +480,25 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
     const manifestUrl = `${baseUrl}/${userId}/manifest.json`;
 
     // Find the first user catalog of this type that has genre support for deep-linking
-    const genreCatalogId = (config.catalogs || [])
-      .filter((c) => c.enabled !== false && (c.type === type || (!c.type && type === 'movie')))
-      .map((c) => `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`)
-      [0] || null;
+    const genreCatalogId =
+      (config.catalogs || [])
+        .filter((c) => c.enabled !== false && (c.type === type || (!c.type && type === 'movie')))
+        .map((c) => `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`)[0] || null;
 
     let userRegion = config.preferences?.region || config.preferences?.originCountry || null;
-    
+
     if (!userRegion && Array.isArray(config.catalogs)) {
-        const certCatalog = config.catalogs.find(c => c.filters?.certificationCountry && c.filters.certificationCountry !== 'US');
-        if (certCatalog) {
-            userRegion = certCatalog.filters.certificationCountry;
-        } else {
-            const originCatalog = config.catalogs.find(c => c.filters?.originCountry);
-            if (originCatalog) {
-                 userRegion = originCatalog.filters.originCountry;
-            }
+      const certCatalog = config.catalogs.find(
+        (c) => c.filters?.certificationCountry && c.filters.certificationCountry !== 'US'
+      );
+      if (certCatalog) {
+        userRegion = certCatalog.filters.certificationCountry;
+      } else {
+        const originCatalog = config.catalogs.find((c) => c.filters?.originCountry);
+        if (originCatalog) {
+          userRegion = originCatalog.filters.originCountry;
         }
+      }
     }
 
     const meta = await tmdb.toStremioFullMeta(
@@ -486,12 +521,15 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
       }
     }
 
-    res.etagJson({
-      meta,
-      cacheMaxAge: 3600,
-      staleRevalidate: 86400,
-      staleError: 86400,
-    }, { extra: `${userId}:${id}` });
+    res.etagJson(
+      {
+        meta,
+        cacheMaxAge: 3600,
+        staleRevalidate: 86400,
+        staleError: 86400,
+      },
+      { extra: `${userId}:${id}` }
+    );
   } catch (error) {
     log.error('Meta error', { error: error.message });
     res.json({ meta: {} });

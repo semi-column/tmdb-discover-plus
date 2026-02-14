@@ -108,7 +108,7 @@ export async function saveUserConfig(config) {
 
     const apiKeyForHash = rawApiKey || (encryptedApiKey ? decrypt(encryptedApiKey) : null);
     if (apiKeyForHash) {
-      updateData.apiKeyId = computeApiKeyId(apiKeyForHash);
+      updateData.apiKeyId = await computeApiKeyId(apiKeyForHash);
     }
 
     if (encryptedApiKey) {
@@ -169,6 +169,10 @@ export async function updateCatalogGenres(userId, fixes) {
       config.catalogs = newCatalogs;
       config.updatedAt = new Date();
       await storage.saveUserConfig(config);
+
+      const configCache = getConfigCache();
+      configCache.invalidate(userId);
+
       log.info('Persisted healed genres to storage', { userId });
     }
   } catch (err) {
@@ -182,7 +186,7 @@ export async function getConfigsByApiKey(apiKey, apiKeyId = null) {
 
   if (!apiKey && !apiKeyId) return [];
 
-  const targetApiKeyId = apiKeyId || (apiKey ? computeApiKeyId(apiKey) : null);
+  const targetApiKeyId = apiKeyId || (apiKey ? await computeApiKeyId(apiKey) : null);
 
   if (!targetApiKeyId) return [];
 

@@ -46,6 +46,9 @@ RUN npm ci --omit=dev --ignore-scripts && \
 # Copy server source
 COPY server/src ./server/src
 
+# Copy server static assets (placeholder SVGs)
+COPY server/static ./server/static
+
 # Copy built client from previous stage
 COPY --from=client-builder /app/client/dist ./client/dist
 

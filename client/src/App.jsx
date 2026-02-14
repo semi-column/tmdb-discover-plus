@@ -1,19 +1,23 @@
 import { Header } from './components/layout/Header';
 import { ApiKeySetup } from './components/auth/ApiKeySetup';
 import { CatalogSidebar } from './components/config/CatalogSidebar';
-import { CatalogEditor } from './components/config/CatalogEditor';
 import { InstallModal } from './components/modals/InstallModal';
 import { NewCatalogModal } from './components/modals/NewCatalogModal';
 import { ConfigMismatchModal } from './components/modals/ConfigMismatchModal';
 import { ToastContainer } from './components/layout/Toast';
 import { ConfigDropdown } from './components/config/ConfigDropdown';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useAppController } from './hooks/useAppController';
 import { api } from './services/api';
 import { Download, Settings, Loader } from 'lucide-react';
+import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
 
 import './styles/globals.css';
 import './styles/components.css';
+
+const CatalogEditor = lazy(() =>
+  import('./components/config/CatalogEditor').then((m) => ({ default: m.CatalogEditor }))
+);
 
 function App() {
   const {
@@ -38,10 +42,16 @@ function App() {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
+    let stale = false;
     api
       .getStats()
-      .then(setStats)
-      .catch(() => { });
+      .then((data) => {
+        if (!stale) setStats(data);
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
   }, []);
 
   if (pageLoading || !config.authChecked) {
@@ -49,7 +59,7 @@ function App() {
       <div className="app">
         <Header stats={stats} />
         <main className="main">
-          <div className="loading" style={{ minHeight: '60vh' }}>
+          <div className="loading loading--page">
             <div className="spinner" />
           </div>
         </main>
@@ -78,9 +88,24 @@ function App() {
       <div className="app">
         <Header />
         <main className="main">
-          <div className="loading" style={{ minHeight: '60vh' }}>
-            <div className="spinner" />
-            <p style={{ marginTop: '16px', color: 'var(--text-muted)' }}>Loading TMDB data...</p>
+          <div className="container">
+            <div className="builder-toolbar">
+              <div>
+                <div
+                  className="skeleton-box"
+                  style={{ width: 200, height: 24, borderRadius: 6, marginBottom: 8 }}
+                />
+                <div className="skeleton-box" style={{ width: 320, height: 14, borderRadius: 4 }} />
+              </div>
+            </div>
+            <div className="builder-layout">
+              <aside className="sidebar">
+                <CatalogListSkeleton count={4} />
+              </aside>
+              <div className="editor-panel" style={{ padding: 24 }}>
+                <FilterPanelSkeleton />
+              </div>
+            </div>
           </div>
         </main>
       </div>
@@ -93,16 +118,9 @@ function App() {
 
       <main className="main">
         <div className="container">
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '24px',
-            }}
-          >
+          <div className="builder-toolbar">
             <div>
-              <h2 style={{ fontSize: '24px', marginBottom: '4px' }}>Catalog Builder</h2>
+              <h2>Catalog Builder</h2>
               <p className="text-secondary">
                 Create and customize your Stremio catalogs with TMDB filters
               </p>
@@ -186,35 +204,43 @@ function App() {
               languages={tmdb.languages}
             />
 
-            <CatalogEditor
-              catalog={activeCatalog}
-              genres={tmdb.genres}
-              genresLoading={tmdb.loading}
-              refreshGenres={tmdb.refresh}
-              languages={tmdb.languages}
-              originalLanguages={tmdb.originalLanguages}
-              countries={tmdb.countries}
-              sortOptions={tmdb.sortOptions}
-              releaseTypes={tmdb.releaseTypes}
-              tvStatuses={tmdb.tvStatuses}
-              tvTypes={tmdb.tvTypes}
-              monetizationTypes={tmdb.monetizationTypes}
-              certifications={tmdb.certifications}
-              watchRegions={tmdb.watchRegions}
-              tvNetworks={tmdb.tvNetworks}
-              preferences={config.preferences}
-              onUpdate={actions.handleUpdateCatalog}
-              onPreview={tmdb.preview}
-              searchPerson={tmdb.searchPerson}
-              searchCompany={tmdb.searchCompany}
-              searchKeyword={tmdb.searchKeyword}
-              searchTVNetworks={tmdb.searchTVNetworks}
-              getPersonById={tmdb.getPersonById}
-              getCompanyById={tmdb.getCompanyById}
-              getKeywordById={tmdb.getKeywordById}
-              getNetworkById={tmdb.getNetworkById}
-              getWatchProviders={tmdb.getWatchProviders}
-            />
+            <Suspense
+              fallback={
+                <div className="editor-panel editor-loading">
+                  <div className="spinner" />
+                </div>
+              }
+            >
+              <CatalogEditor
+                catalog={activeCatalog}
+                genres={tmdb.genres}
+                genresLoading={tmdb.loading}
+                refreshGenres={tmdb.refresh}
+                languages={tmdb.languages}
+                originalLanguages={tmdb.originalLanguages}
+                countries={tmdb.countries}
+                sortOptions={tmdb.sortOptions}
+                releaseTypes={tmdb.releaseTypes}
+                tvStatuses={tmdb.tvStatuses}
+                tvTypes={tmdb.tvTypes}
+                monetizationTypes={tmdb.monetizationTypes}
+                certifications={tmdb.certifications}
+                watchRegions={tmdb.watchRegions}
+                tvNetworks={tmdb.tvNetworks}
+                preferences={config.preferences}
+                onUpdate={actions.handleUpdateCatalog}
+                onPreview={tmdb.preview}
+                searchPerson={tmdb.searchPerson}
+                searchCompany={tmdb.searchCompany}
+                searchKeyword={tmdb.searchKeyword}
+                searchTVNetworks={tmdb.searchTVNetworks}
+                getPersonById={tmdb.getPersonById}
+                getCompanyById={tmdb.getCompanyById}
+                getKeywordById={tmdb.getKeywordById}
+                getNetworkById={tmdb.getNetworkById}
+                getWatchProviders={tmdb.getWatchProviders}
+              />
+            </Suspense>
           </div>
         </div>
       </main>

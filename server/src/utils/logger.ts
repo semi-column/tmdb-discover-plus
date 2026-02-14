@@ -48,7 +48,7 @@ function sanitizeValue(value: unknown, key: string = ''): unknown {
   if (value instanceof Error) {
     return {
       message: value.message,
-      stack: '[REDACTED]',
+      stack: config.nodeEnv === 'production' ? '[REDACTED]' : value.stack,
     };
   }
 
@@ -80,7 +80,7 @@ function formatMessage(
   level: string,
   context: string,
   message: string,
-  safeData: unknown = null,
+  safeData: unknown = null
 ): string {
   const timestamp = new Date().toISOString();
   const requestId = getRequestId();

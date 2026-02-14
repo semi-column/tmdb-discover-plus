@@ -25,7 +25,7 @@ try {
  */
 export function generateETag(data, extra = '') {
   const content = `${addonVersion}:${extra}:${typeof data === 'string' ? data : JSON.stringify(data)}`;
-  const hash = crypto.createHash('md5').update(content).digest('hex').substring(0, 16);
+  const hash = crypto.createHash('sha256').update(content).digest('hex').substring(0, 20);
   return `W/"${hash}"`;
 }
 

@@ -109,7 +109,8 @@ export class RedisAdapter extends ImdbRatingsAdapter {
     this._ensureReady();
     try {
       return await this.client.hLen(RATINGS_HASH);
-    } catch {
+    } catch (e) {
+      log.debug('Redis count failed', { error: e.message });
       return 0;
     }
   }
@@ -123,7 +124,8 @@ export class RedisAdapter extends ImdbRatingsAdapter {
     this._ensureReady();
     try {
       return await this.client.get(`${META_PREFIX}${key}`);
-    } catch {
+    } catch (e) {
+      log.debug('Redis getMeta failed', { key, error: e.message });
       return null;
     }
   }

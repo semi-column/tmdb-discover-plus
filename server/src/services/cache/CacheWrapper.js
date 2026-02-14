@@ -8,12 +8,12 @@ const log = createLogger('CacheWrapper');
  * Prevents thundering herd on failed resources and protects API quota.
  */
 const ERROR_TTLS = {
-  EMPTY_RESULT: 60,        // 1 minute — might have data soon
-  RATE_LIMITED: 900,       // 15 minutes — back off significantly
-  TEMPORARY_ERROR: 120,    // 2 minutes — 5xx, network errors
-  PERMANENT_ERROR: 1800,   // 30 minutes — 4xx (except 404/429)
-  NOT_FOUND: 3600,         // 1 hour — resource doesn't exist
-  CACHE_CORRUPTED: 60,     // 1 minute — retry quickly after cleanup
+  EMPTY_RESULT: 60, // 1 minute — might have data soon
+  RATE_LIMITED: 900, // 15 minutes — back off significantly
+  TEMPORARY_ERROR: 120, // 2 minutes — 5xx, network errors
+  PERMANENT_ERROR: 1800, // 30 minutes — 4xx (except 404/429)
+  NOT_FOUND: 3600, // 1 hour — resource doesn't exist
+  CACHE_CORRUPTED: 60, // 1 minute — retry quickly after cleanup
 };
 
 /**
@@ -31,9 +31,8 @@ export function classifyError(error, statusCode) {
   if (statusCode === 404 || msg.includes('404') || msg.toLowerCase().includes('not found')) {
     return 'NOT_FOUND';
   }
-  if (statusCode >= 500 || msg.includes('5')) {
-    // Be more specific — check for 5xx patterns
-    if (/\b5\d{2}\b/.test(msg)) return 'TEMPORARY_ERROR';
+  if (statusCode >= 500 || /\b5\d{2}\b/.test(msg)) {
+    return 'TEMPORARY_ERROR';
   }
   if (
     error?.code === 'ECONNREFUSED' ||
@@ -121,8 +120,33 @@ export class CacheWrapper {
         if (typeof raw.__storedAt !== 'number' || typeof raw.__ttl !== 'number') {
           this.stats.corruptedEntries++;
           log.warn('Malformed cache wrapper entry, cleaning up', { key: storageKey });
-          await this.adapter.del(storageKey).catch(() => {});
-          await this.adapter.set(storageKey, { __cacheWrapper: true, __errorType: 'CACHE_CORRUPTED', __errorMessage: 'malformed entry', __storedAt: Date.now(), __ttl: ERROR_TTLS.CACHE_CORRUPTED, data: null }, ERROR_TTLS.CACHE_CORRUPTED).catch(() => {});
+          await this.adapter
+            .del(storageKey)
+            .catch((e) =>
+              log.debug('Cache del failed during corruption cleanup', {
+                key: storageKey,
+                error: e.message,
+              })
+            );
+          await this.adapter
+            .set(
+              storageKey,
+              {
+                __cacheWrapper: true,
+                __errorType: 'CACHE_CORRUPTED',
+                __errorMessage: 'malformed entry',
+                __storedAt: Date.now(),
+                __ttl: ERROR_TTLS.CACHE_CORRUPTED,
+                data: null,
+              },
+              ERROR_TTLS.CACHE_CORRUPTED
+            )
+            .catch((e) =>
+              log.debug('Cache set failed during corruption cleanup', {
+                key: storageKey,
+                error: e.message,
+              })
+            );
           return null;
         }
 
@@ -160,9 +184,20 @@ export class CacheWrapper {
         log.warn('Corrupted cache entry detected, cleaning up', { key: storageKey });
         try {
           await this.adapter.del(storageKey);
-          await this.adapter.set(storageKey, { __cacheWrapper: true, __errorType: 'CACHE_CORRUPTED', __errorMessage: 'corrupted entry', __storedAt: Date.now(), __ttl: ERROR_TTLS.CACHE_CORRUPTED, data: null }, ERROR_TTLS.CACHE_CORRUPTED);
-        } catch {
-          /* best effort */
+          await this.adapter.set(
+            storageKey,
+            {
+              __cacheWrapper: true,
+              __errorType: 'CACHE_CORRUPTED',
+              __errorMessage: 'corrupted entry',
+              __storedAt: Date.now(),
+              __ttl: ERROR_TTLS.CACHE_CORRUPTED,
+              data: null,
+            },
+            ERROR_TTLS.CACHE_CORRUPTED
+          );
+        } catch (e) {
+          log.debug('Cache cleanup failed after corruption', { key: storageKey, error: e.message });
         }
       }
       return null;
@@ -181,7 +216,7 @@ export class CacheWrapper {
         __ttl: ttlSeconds,
         data: value,
       };
-      await this.adapter.set(storageKey, wrapped, Math.ceil(ttlSeconds * 1.3));
+      await this.adapter.set(storageKey, wrapped, Math.ceil(ttlSeconds * 2.5));
     } catch (err) {
       this.stats.errors++;
       log.warn('Cache set failed', { key: storageKey, error: err.message });
@@ -312,10 +347,12 @@ export class CacheWrapper {
    */
   getStats() {
     const total = this.stats.hits + this.stats.misses;
+    const adapterStats = typeof this.adapter.getStats === 'function' ? this.adapter.getStats() : {};
     return {
       ...this.stats,
       hitRate: total > 0 ? ((this.stats.hits / total) * 100).toFixed(1) + '%' : 'N/A',
       inFlightRequests: this.inFlight.size,
+      adapter: adapterStats,
     };
   }
 

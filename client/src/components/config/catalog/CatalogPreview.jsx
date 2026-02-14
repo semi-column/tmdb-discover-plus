@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { Eye, Loader, RefreshCw, ImageOff, Star, CheckCircle } from 'lucide-react';
+import { PreviewGridSkeleton } from '../../layout/Skeleton';
 
-export function CatalogPreview({ loading, error, data, onRetry }) {
+export const CatalogPreview = memo(function CatalogPreview({ loading, error, data, onRetry }) {
   const [showUpdated, setShowUpdated] = useState(false);
   const prevDataRef = useRef(null);
 
@@ -37,8 +38,8 @@ export function CatalogPreview({ loading, error, data, onRetry }) {
 
           {loading && (
             <div className="preview-loading">
-              <Loader size={32} className="animate-spin" />
-              <p>Loading preview...</p>
+              <PreviewGridSkeleton count={10} />
+              <p style={{ textAlign: 'center', marginTop: 12 }}>Loading preview...</p>
             </div>
           )}
 
@@ -106,4 +107,4 @@ export function CatalogPreview({ loading, error, data, onRetry }) {
       </div>
     </div>
   );
-}
+});

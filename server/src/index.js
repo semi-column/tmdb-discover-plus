@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,9 +17,14 @@ import { warmEssentialCaches } from './infrastructure/cacheWarmer.js';
 import { getMetrics, destroyMetrics } from './infrastructure/metrics.js';
 import { destroyTmdbThrottle, getTmdbThrottle } from './infrastructure/tmdbThrottle.js';
 import { getConfigCache } from './infrastructure/configCache.js';
-import { initImdbRatings, getImdbRatingsStats, destroyImdbRatings } from './services/imdbRatings/index.js';
+import {
+  initImdbRatings,
+  getImdbRatingsStats,
+  destroyImdbRatings,
+} from './services/imdbRatings/index.js';
 import { getCircuitBreakerState } from './services/tmdb/client.ts';
 import { requestIdMiddleware } from './utils/requestContext.ts';
+import { sendError, ErrorCodes, AppError } from './utils/AppError.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -41,7 +47,21 @@ const serverStatus = {
   cacheWarming: { warmed: 0, failed: 0, skipped: false },
 };
 
-app.set('trust proxy', true);
+const trustProxySetting = config.trustProxy;
+const VALID_TRUST_PROXY = /^(\d+|true|false|loopback|linklocal|uniquelocal)$/;
+if (
+  trustProxySetting &&
+  !VALID_TRUST_PROXY.test(trustProxySetting) &&
+  !/^[\d.\/,: ]+$/.test(trustProxySetting)
+) {
+  log.warn('Invalid TRUST_PROXY value, falling back to 1', { value: trustProxySetting });
+  app.set('trust proxy', 1);
+} else {
+  app.set(
+    'trust proxy',
+    /^\d+$/.test(trustProxySetting) ? parseInt(trustProxySetting, 10) : trustProxySetting
+  );
+}
 
 const rawOrigins = config.cors.origin;
 const allowedOrigins =
@@ -67,7 +87,37 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+app.use(compression({ threshold: 1024 }));
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+  }
+
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' https://image.tmdb.org https://storage.ko-fi.com data:",
+      "font-src 'self'",
+      "connect-src 'self' https://api.themoviedb.org",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ')
+  );
+
+  next();
+});
 
 app.use(requestIdMiddleware());
 
@@ -76,6 +126,7 @@ app.use(apiRateLimit);
 
 // Request metrics tracking
 const metrics = getMetrics();
+metrics.setCacheStatsProvider(() => getCacheStatus());
 app.use(metrics.middleware());
 
 const clientDistPath = path.join(__dirname, '../../client/dist');
@@ -92,9 +143,14 @@ if (process.env.NODE_ENV === 'production') {
 log.info('Environment status', {
   port: PORT,
   nodeEnv: config.nodeEnv,
+  trustProxy: config.trustProxy,
   hasEncryptionKey: Boolean(process.env.ENCRYPTION_KEY),
   hasJwtSecret: Boolean(process.env.JWT_SECRET),
 });
+
+if (process.env.DISABLE_RATE_LIMIT === 'true' && !config.features.disableRateLimit) {
+  log.warn('DISABLE_RATE_LIMIT is set but ignored outside development/test environments');
+}
 
 log.info('Client dist status', {
   path: clientDistPath,
@@ -132,7 +188,7 @@ app.get('/manifest.json', (req, res) => {
     res.json(manifest);
   } catch (error) {
     log.warn('Failed to serve manifest.json', { error: error.message });
-    res.status(500).json({ error: 'Failed to load manifest' });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Failed to load manifest');
   }
 });
 
@@ -147,30 +203,27 @@ app.use(
 );
 
 // ============================================
-// Fallback Placeholder Images
+// Fallback Placeholder Images (served from static/)
 // ============================================
-const PLACEHOLDER_POSTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
-  <rect width="300" height="450" fill="#1a1a2e"/>
-  <text x="150" y="210" text-anchor="middle" fill="#555" font-family="sans-serif" font-size="40">🎬</text>
-  <text x="150" y="260" text-anchor="middle" fill="#444" font-family="sans-serif" font-size="14">No Poster</text>
-</svg>`;
+const staticPath = path.join(__dirname, '../static');
+app.use(
+  express.static(staticPath, {
+    maxAge: '1d',
+    immutable: true,
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    },
+  })
+);
 
-const PLACEHOLDER_THUMB_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="281" viewBox="0 0 500 281">
-  <rect width="500" height="281" fill="#1a1a2e"/>
-  <text x="250" y="130" text-anchor="middle" fill="#555" font-family="sans-serif" font-size="36">🎬</text>
-  <text x="250" y="170" text-anchor="middle" fill="#444" font-family="sans-serif" font-size="13">No Thumbnail</text>
-</svg>`;
-
-app.get('/placeholder-poster.svg', (req, res) => {
-  res.set('Content-Type', 'image/svg+xml');
-  res.set('Cache-Control', 'public, max-age=86400');
-  res.send(PLACEHOLDER_POSTER_SVG);
-});
-
-app.get('/placeholder-thumbnail.svg', (req, res) => {
-  res.set('Content-Type', 'image/svg+xml');
-  res.set('Cache-Control', 'public, max-age=86400');
-  res.send(PLACEHOLDER_THUMB_SVG);
+app.get('/ready', (req, res) => {
+  if (isShuttingDown) {
+    return res.status(503).json({ ready: false, reason: 'shutting_down' });
+  }
+  if (!serverStatus.healthy) {
+    return res.status(503).json({ ready: false, reason: 'starting' });
+  }
+  res.json({ ready: true });
 });
 
 // ============================================
@@ -253,7 +306,10 @@ app.get('*', (req, res) => {
 
 app.use((err, req, res, next) => {
   log.error('Unhandled error', { error: err.message, stack: err.stack, url: req.url });
-  res.status(500).json({ error: 'Internal server error', requestId: res.getHeader('X-Request-Id') || undefined });
+  if (err instanceof AppError) {
+    return sendError(res, err.statusCode, err.code, err.message);
+  }
+  sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Internal server error');
 });
 
 function gracefulShutdown(signal) {

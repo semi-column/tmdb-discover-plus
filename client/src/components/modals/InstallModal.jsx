@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { X, Copy, Check, ExternalLink, Download } from 'lucide-react';
+import { useModalA11y } from '../../hooks/useModalA11y';
 import { logger } from '../../utils/logger';
 
 export function InstallModal({ isOpen, onClose, installUrl, stremioUrl }) {
   const [copied, setCopied] = useState(false);
+  const modalRef = useModalA11y(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -31,7 +33,14 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Install Your Addon"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <h3 className="modal-title">Install Your Addon</h3>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>
