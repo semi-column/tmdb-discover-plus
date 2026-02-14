@@ -24,7 +24,9 @@ export const MultiSelect = memo(function MultiSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const containerRef = useRef(null);
+  const optionsRef = useRef(null);
   const searchRequestIdRef = useRef(0);
 
   useEffect(() => {
@@ -38,6 +40,10 @@ export const MultiSelect = memo(function MultiSelect({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) setFocusedIndex(-1);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -100,10 +106,56 @@ export const MultiSelect = memo(function MultiSelect({
         ? safeOptions.filter((opt) => safeValue.includes(opt[valueKey]))
         : safeOptions;
 
+  const handleDropdownKeyDown = (e) => {
+    if (!isOpen || isSearching) return;
+    const count = filteredOptions.length;
+    if (count === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev + 1) % count);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev <= 0 ? count - 1 : prev - 1));
+        break;
+      case 'Home':
+        e.preventDefault();
+        setFocusedIndex(0);
+        break;
+      case 'End':
+        e.preventDefault();
+        setFocusedIndex(count - 1);
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        if (focusedIndex >= 0 && focusedIndex < count) {
+          handleToggle(filteredOptions[focusedIndex][valueKey]);
+        }
+        break;
+      case 'Escape':
+        setIsOpen(false);
+        setSearch('');
+        break;
+      default:
+        break;
+    }
+  };
+
+  useEffect(() => {
+    if (focusedIndex >= 0 && optionsRef.current) {
+      const el = optionsRef.current.children[focusedIndex];
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [focusedIndex]);
+
   return (
     <div
       className={`multi-select ${isOpen ? 'open' : ''} ${disabled ? 'disabled' : ''}`}
       ref={containerRef}
+      onKeyDown={handleDropdownKeyDown}
     >
       <div
         className={`multi-select-trigger ${isOpen ? 'open' : ''} ${disabled ? 'disabled' : ''}`}
@@ -160,18 +212,19 @@ export const MultiSelect = memo(function MultiSelect({
               )}
             </div>
           )}
-          <div className="multi-select-options">
+          <div className="multi-select-options" ref={optionsRef} role="listbox">
             {isSearchEnabled && isSearching && <div className="multi-select-empty">Searching…</div>}
             {!isSearching && filteredOptions.length === 0 && (
               <div className="multi-select-empty">{emptyMessage}</div>
             )}
             {!isSearching &&
-              filteredOptions.map((option) => {
+              filteredOptions.map((option, index) => {
                 const isSelected = safeValue.includes(option[valueKey]);
+                const isFocused = index === focusedIndex;
                 return (
                   <div
                     key={option[valueKey]}
-                    className={`multi-select-option ${isSelected ? 'selected' : ''}`}
+                    className={`multi-select-option ${isSelected ? 'selected' : ''} ${isFocused ? 'focused' : ''}`}
                     onClick={() => handleToggle(option[valueKey])}
                     role="option"
                     aria-selected={isSelected}

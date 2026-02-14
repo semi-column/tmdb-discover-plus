@@ -4,6 +4,36 @@
   flex-direction: column;
 }
 
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10000;
+  padding: 8px 16px;
+  background: var(--accent-primary);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  text-decoration: none;
+}
+
+.skip-to-content:focus {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tmdb-error-banner {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--error);
+  border-radius: var(--radius-sm);
+  color: var(--error);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+
 /* ========================================
    Tooltip Styles
    ======================================== */
@@ -1855,6 +1885,12 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
 .multi-select-option.selected {
   background: rgba(130, 87, 229, 0.1);
   color: var(--accent-primary);
+}
+
+.multi-select-option.focused {
+  background: var(--bg-hover);
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
 }
 
 .multi-select-checkbox {

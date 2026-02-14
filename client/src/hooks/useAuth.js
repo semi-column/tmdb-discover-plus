@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import { api } from '../services/api';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '../utils/logger';
 
 export const getUrlUserId = () => {
@@ -56,6 +55,18 @@ export function useAuth(config, addToast, urlUserId, deps) {
     if (isSetup) {
       loginHandledRef.current = false;
     }
+  }, [isSetup]);
+
+  // Global 401 handler — smoothly redirect to login when any API call gets 401
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      if (isSetup) return; // Already showing setup, ignore
+      setIsSessionExpired(true);
+      setIsSetup(true);
+      setPageLoading(false);
+    };
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
   }, [isSetup]);
 
   useEffect(() => {
@@ -134,6 +145,20 @@ export function useAuth(config, addToast, urlUserId, deps) {
     addToast,
   ]);
 
+  const handleLogout = useCallback(
+    ({ changeKey = false } = {}) => {
+      window.history.replaceState({}, '', '/');
+      setUrlUserId(null);
+      setIsSessionExpired(false);
+      setWantsToChangeKey(changeKey);
+      configsLoadedRef.current = false;
+      config.logout(); // fire-and-forget — local state reset is immediate
+      setIsSetup(true);
+      setPageLoading(false);
+    },
+    [config, setUrlUserId]
+  );
+
   const handleLogin = async (userId, configs = []) => {
     if (loginHandledRef.current) return;
     loginHandledRef.current = true;
@@ -144,36 +169,29 @@ export function useAuth(config, addToast, urlUserId, deps) {
 
     try {
       if (configs && configs.length > 0) {
+        // Returning user: populate state directly from login response (no extra API calls)
         configs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
         setUserConfigs(configs);
         configsLoadedRef.current = true;
-      }
 
-      const data = await config.loadConfig(userId);
-      if (data.catalogs?.length > 0) {
-        setActiveCatalog(data.catalogs[0]);
+        const target = configs.find((c) => c.userId === userId) || configs[0];
+        config.applyConfig(target);
+
+        if (target.catalogs?.length > 0) {
+          setActiveCatalog(target.catalogs[0]);
+        }
+      } else {
+        // New user: apply known empty config, load config list in background
+        config.applyConfig({ userId, configName: '', catalogs: [], preferences: {} });
+        configsLoadedRef.current = true;
+        loadUserConfigs();
       }
 
       window.history.replaceState({}, '', `/?userId=${userId}`);
       setUrlUserId(userId);
-
       addToast('Logged in successfully');
-      if (!configs || configs.length === 0) {
-        configsLoadedRef.current = true;
-        const loadedConfigs = await loadUserConfigs();
-
-        if (!loadedConfigs || loadedConfigs.length === 0) {
-          const newConfig = await api.saveConfig({
-            catalogs: [],
-            preferences: {},
-          });
-          window.history.replaceState({}, '', `/?userId=${newConfig.userId}`);
-          setUrlUserId(newConfig.userId);
-          await config.loadConfig(newConfig.userId);
-        }
-      }
     } catch (err) {
-      logger.error('Error loading config after login:', err);
+      logger.error('Error during login:', err);
       addToast('Failed to load configuration', 'error');
       loginHandledRef.current = false;
     } finally {
@@ -190,6 +208,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
     pageLoading,
     setPageLoading,
     handleLogin,
+    handleLogout,
     handleValidApiKey: handleLogin,
   };
 }

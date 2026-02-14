@@ -131,6 +131,16 @@ jobs:
           cd server && npm ci
           cd ../client && npm ci
 
+      - name: Run server tests
+        env:
+          PORT: 7000
+          JWT_SECRET: 'nightly-test-secret'
+          ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+        run: cd server && npm test
+
+      - name: Run client tests
+        run: cd client && npm test
+
       - name: Generate build metadata
         run: |
           node -e "

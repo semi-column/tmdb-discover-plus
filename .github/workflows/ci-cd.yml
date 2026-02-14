@@ -61,7 +61,7 @@ jobs:
       - name: Run client tests
         run: cd client && npm test
 
-      - name: Run Integration Tests
+      - name: Run Server Unit Tests
         env:
           PORT: 7000
           TEST_BASE_URL: http://127.0.0.1:7000
@@ -69,4 +69,7 @@ jobs:
           TEST_TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           JWT_SECRET: 'test-jwt-secret-value-for-ci-cd-pipeline-testing'
           ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
-        run: cd server && npm test
+        run: cd server && npm test -- --coverage
+
+      - name: Audit dependencies
+        run: npm audit --omit=dev || true

@@ -19,6 +19,17 @@ import { sendError, ErrorCodes } from '../utils/AppError.ts';
 
 const log = createLogger('addon');
 
+const __filename_addon = fileURLToPath(import.meta.url);
+const __dirname_addon = path.dirname(__filename_addon);
+const STATIC_GENRE_MAP = (() => {
+  try {
+    const genresPath = path.resolve(__dirname_addon, '..', 'data', 'tmdb_genres.json');
+    return JSON.parse(fs.readFileSync(genresPath, 'utf8'));
+  } catch {
+    return {};
+  }
+})();
+
 const router = Router();
 router.use(addonRateLimit);
 router.use(etagMiddleware);
@@ -141,8 +152,7 @@ async function resolveGenreFilter(extra, effectiveFilters, type, apiKey) {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = path.dirname(__filename);
         const genresPath = path.resolve(__dirname, '..', 'data', 'tmdb_genres.json');
-        const raw = fs.readFileSync(genresPath, 'utf8');
-        const staticGenreMap = JSON.parse(raw);
+        const staticGenreMap = STATIC_GENRE_MAP;
         const mapping = staticGenreMap[mediaType] || {};
         Object.entries(mapping).forEach(([id, name]) => {
           reverse[normalizeGenreName(name)] = String(id);
@@ -245,6 +255,7 @@ async function enrichCatalogResults(allItems, type, apiKey, displayLanguage, isS
 }
 
 async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
+  const startTime = Date.now();
   try {
     const skip = parseInt(extra.skip) || 0;
     const search = extra.search || null;
@@ -399,6 +410,7 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
       skip,
       randomize,
       cacheHeader: res.get('Cache-Control'),
+      durationMs: Date.now() - startTime,
     });
 
     res.etagJson(
@@ -410,12 +422,21 @@ async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
       { extra: `${userId}:${catalogId}:${skip}` }
     );
   } catch (error) {
-    log.error('Catalog error', { error: error.message });
+    const durationMs = Date.now() - startTime;
+    log.error('Catalog error', {
+      catalogId,
+      type,
+      error: error.message,
+      durationMs,
+      isTimeout: error.name === 'AbortError',
+      code: error.code || 'CATALOG_FETCH_ERROR',
+    });
     res.json({ metas: [] });
   }
 }
 
 async function handleMetaRequest(userId, type, id, extra, res, req) {
+  const startTime = Date.now();
   try {
     const config = await getUserConfig(userId);
     if (!config) return res.json({ meta: {} });
@@ -531,7 +552,15 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
       { extra: `${userId}:${id}` }
     );
   } catch (error) {
-    log.error('Meta error', { error: error.message });
+    const durationMs = Date.now() - startTime;
+    log.error('Meta error', {
+      id,
+      type,
+      error: error.message,
+      durationMs,
+      isTimeout: error.name === 'AbortError',
+      code: error.code || 'META_FETCH_ERROR',
+    });
     res.json({ meta: {} });
   }
 }

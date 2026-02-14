@@ -98,24 +98,31 @@ export function useConfig(initialUserId = null) {
     setIsDirty(false);
   }, []);
 
-  const loadConfig = useCallback(async (id) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const config = await api.getConfig(id);
-      setUserId(config.userId);
-      setCatalogs(config.catalogs || []);
-      setConfigName(config.configName || '');
-      setPreferences(config.preferences || {});
-      setIsDirty(false);
-      return config;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+  const applyConfig = useCallback((configData) => {
+    setUserId(configData.userId);
+    setCatalogs(configData.catalogs || []);
+    setConfigName(configData.configName || '');
+    setPreferences(configData.preferences || {});
+    setIsDirty(false);
   }, []);
+
+  const loadConfig = useCallback(
+    async (id) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const config = await api.getConfig(id);
+        applyConfig(config);
+        return config;
+      } catch (err) {
+        setError(err.message);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [applyConfig]
+  );
 
   const saveConfig = useCallback(
     async (newApiKey) => {
@@ -214,6 +221,7 @@ export function useConfig(initialUserId = null) {
     markAsSaved,
     login,
     logout,
+    applyConfig,
     loadConfig,
     saveConfig,
     updateConfig,
