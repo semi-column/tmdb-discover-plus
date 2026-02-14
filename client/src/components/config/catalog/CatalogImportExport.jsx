@@ -1,7 +1,11 @@
 import { memo } from 'react';
 import { Download as ArrowDownTrayIcon, Upload as ArrowUpTrayIcon } from 'lucide-react';
 
-export const CatalogImportExport = memo(function CatalogImportExport({ localCatalog, onImport }) {
+export const CatalogImportExport = memo(function CatalogImportExport({
+  localCatalog,
+  onImport,
+  addToast,
+}) {
   const handleExport = () => {
     const dataStr = JSON.stringify(localCatalog, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
@@ -33,13 +37,15 @@ export const CatalogImportExport = memo(function CatalogImportExport({ localCata
           const { _id, ...rest } = imported;
           onImport(rest);
         } else {
-          alert(
-            'Invalid catalog format: requires name (string), type (movie|series), and filters (object)'
-          );
+          if (addToast)
+            addToast({
+              message: 'Invalid catalog format: requires name, type, and filters',
+              type: 'error',
+            });
         }
       } catch (err) {
         void err;
-        alert('Failed to parse JSON');
+        if (addToast) addToast({ message: 'Failed to parse JSON file', type: 'error' });
       }
       e.target.value = '';
     };

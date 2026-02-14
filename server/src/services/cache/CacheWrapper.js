@@ -3,6 +3,9 @@ import crypto from 'crypto';
 
 const log = createLogger('CacheWrapper');
 
+const MAX_IN_FLIGHT = 5000;
+const IN_FLIGHT_WARN_THRESHOLD = MAX_IN_FLIGHT * 0.8;
+
 /**
  * Error-type-specific TTLs (in seconds)
  * Prevents thundering herd on failed resources and protects API quota.
@@ -81,6 +84,8 @@ export class CacheWrapper {
       corruptedEntries: 0,
       deduplicatedRequests: 0,
       staleServed: 0,
+      inFlightOverflows: 0,
+      writeValidationFailures: 0,
     };
   }
 
@@ -113,6 +118,7 @@ export class CacheWrapper {
       const raw = await this.adapter.get(storageKey);
       if (raw === null || raw === undefined) {
         this.stats.misses++;
+        log.debug('Cache miss', { key: storageKey.substring(0, 80) });
         return null;
       }
 
@@ -120,14 +126,12 @@ export class CacheWrapper {
         if (typeof raw.__storedAt !== 'number' || typeof raw.__ttl !== 'number') {
           this.stats.corruptedEntries++;
           log.warn('Malformed cache wrapper entry, cleaning up', { key: storageKey });
-          await this.adapter
-            .del(storageKey)
-            .catch((e) =>
-              log.debug('Cache del failed during corruption cleanup', {
-                key: storageKey,
-                error: e.message,
-              })
-            );
+          await this.adapter.del(storageKey).catch((e) =>
+            log.debug('Cache del failed during corruption cleanup', {
+              key: storageKey,
+              error: e.message,
+            })
+          );
           await this.adapter
             .set(
               storageKey,
@@ -172,6 +176,7 @@ export class CacheWrapper {
       }
 
       this.stats.hits++;
+      log.debug('Cache hit (unwrapped)', { key: storageKey.substring(0, 80) });
       return raw;
     } catch (err) {
       this.stats.errors++;
@@ -208,6 +213,11 @@ export class CacheWrapper {
    * Set a value in cache with wrapper metadata for stale-while-revalidate.
    */
   async set(key, value, ttlSeconds) {
+    if (value === undefined) {
+      this.stats.writeValidationFailures++;
+      log.warn('Cache write validation failed: undefined value', { key: key.substring(0, 80) });
+      return;
+    }
     const storageKey = this._prefixKey(key);
     try {
       const wrapped = {
@@ -219,6 +229,17 @@ export class CacheWrapper {
       await this.adapter.set(storageKey, wrapped, Math.ceil(ttlSeconds * 2.5));
     } catch (err) {
       this.stats.errors++;
+      if (
+        err.message?.includes('ECONNREFUSED') ||
+        err.message?.includes('ECONNRESET') ||
+        err.message?.includes('ENOTCONN') ||
+        err.message?.includes('connection')
+      ) {
+        log.warn('Cache adapter connection issue, skipping set', {
+          key: storageKey.substring(0, 60),
+        });
+        return;
+      }
       log.warn('Cache set failed', { key: storageKey, error: err.message });
     }
   }
@@ -301,6 +322,19 @@ export class CacheWrapper {
       return this.inFlight.get(key);
     }
 
+    if (this.inFlight.size >= MAX_IN_FLIGHT) {
+      this.stats.inFlightOverflows++;
+      log.warn('inFlight map at capacity, executing directly', { size: this.inFlight.size });
+      return this._executeFetch(key, fetchFn, ttlSeconds);
+    }
+
+    if (this.inFlight.size >= IN_FLIGHT_WARN_THRESHOLD && this.inFlight.size % 100 === 0) {
+      log.warn('inFlight map approaching capacity', {
+        size: this.inFlight.size,
+        max: MAX_IN_FLIGHT,
+      });
+    }
+
     // 3. Execute fetch with dedup tracking
     const promise = this._executeFetch(key, fetchFn, ttlSeconds);
     this.inFlight.set(key, promise);
@@ -352,6 +386,7 @@ export class CacheWrapper {
       ...this.stats,
       hitRate: total > 0 ? ((this.stats.hits / total) * 100).toFixed(1) + '%' : 'N/A',
       inFlightRequests: this.inFlight.size,
+      inFlightMax: MAX_IN_FLIGHT,
       adapter: adapterStats,
     };
   }

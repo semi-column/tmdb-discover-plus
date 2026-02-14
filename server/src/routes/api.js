@@ -31,6 +31,7 @@ import {
   computeApiKeyId,
 } from '../utils/authMiddleware.js';
 import { config } from '../config.ts';
+import { getConfigCache } from '../infrastructure/configCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -40,8 +41,11 @@ const log = createLogger('api');
 
 router.use(apiRateLimit);
 
-// Load build metadata
+let _buildMetadata = null;
+
 function getBuildMetadata() {
+  if (_buildMetadata) return _buildMetadata;
+
   const defaultMetadata = {
     version: process.env.npm_package_version || '2.6.7',
     tag: 'unknown',
@@ -54,13 +58,15 @@ function getBuildMetadata() {
     const metadataPath = join(__dirname, '../metadata.json');
     if (existsSync(metadataPath)) {
       const data = readFileSync(metadataPath, 'utf8');
-      return { ...defaultMetadata, ...JSON.parse(data) };
+      _buildMetadata = { ...defaultMetadata, ...JSON.parse(data) };
+      return _buildMetadata;
     }
   } catch (error) {
     log.debug('Could not load build metadata', { error: error.message });
   }
 
-  return defaultMetadata;
+  _buildMetadata = defaultMetadata;
+  return _buildMetadata;
 }
 
 // Status endpoint - no auth required
@@ -637,6 +643,12 @@ router.put(
         catalogs: catalogs || [],
         preferences: preferences || {},
       });
+
+      try {
+        getConfigCache().invalidate(userId);
+      } catch {
+        /* non-critical */
+      }
 
       const baseUrl = getBaseUrl(req);
       const host = baseUrl.replace(/^https?:\/\//, '');

@@ -281,6 +281,7 @@ export const CatalogSidebar = memo(function CatalogSidebar({
   onPreferencesChange,
   onImportConfig,
   languages = [],
+  addToast,
 }) {
   const safeCatalogs = Array.isArray(catalogs) ? catalogs : [];
   const safePresetCatalogs =
@@ -383,7 +384,7 @@ export const CatalogSidebar = memo(function CatalogSidebar({
                     if (onImportConfig) onImportConfig(imported);
                   } catch (err) {
                     console.error('Import failed', err);
-                    alert('Failed to parse JSON');
+                    if (addToast) addToast({ message: 'Failed to parse JSON file', type: 'error' });
                   }
                   e.target.value = '';
                 };

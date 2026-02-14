@@ -46,6 +46,11 @@ export function useAppController() {
     }
   }, [configMgr, auth]);
 
+  const handleConfigMismatchLoginNew = useCallback(() => {
+    configMgr.setShowMismatchModal(false);
+    auth.handleLogout({ changeKey: true });
+  }, [configMgr, auth]);
+
   const state = useMemo(
     () => ({
       isSetup: auth.isSetup,
@@ -93,6 +98,7 @@ export function useAppController() {
       addToast: toast.addToast,
       removeToast: toast.removeToast,
       handleLogin: auth.handleLogin,
+      handleLogout: auth.handleLogout,
       handleValidApiKey: auth.handleValidApiKey,
       handleSave: configMgr.handleSave,
       handleDeleteConfigFromDropdown: configMgr.handleDeleteConfigFromDropdown,
@@ -106,11 +112,13 @@ export function useAppController() {
       handleCreateNewConfig: configMgr.handleCreateNewConfig,
       setShowMismatchModal: configMgr.setShowMismatchModal,
       handleConfigMismatchGoToOwn,
+      handleConfigMismatchLoginNew,
     }),
     [
       toast.addToast,
       toast.removeToast,
       auth.handleLogin,
+      auth.handleLogout,
       auth.handleValidApiKey,
       configMgr.handleSave,
       configMgr.handleDeleteConfigFromDropdown,
@@ -124,6 +132,7 @@ export function useAppController() {
       catalogs.handleDuplicateCatalog,
       catalogs.handleUpdateCatalog,
       handleConfigMismatchGoToOwn,
+      handleConfigMismatchLoginNew,
     ]
   );
 

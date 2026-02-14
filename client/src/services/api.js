@@ -8,6 +8,16 @@ class ApiService {
     this._sessionToken = null;
   }
 
+  _isTokenExpired(token) {
+    try {
+      const [, payload] = token.split('.');
+      const decoded = JSON.parse(atob(payload));
+      return decoded.exp ? decoded.exp * 1000 < Date.now() : false;
+    } catch {
+      return true;
+    }
+  }
+
   getSessionToken() {
     if (this._sessionToken) return this._sessionToken;
     try {
@@ -95,6 +105,7 @@ class ApiService {
 
     if (response.status === 401) {
       this.clearSession();
+      window.dispatchEvent(new CustomEvent('auth:session-expired'));
       const error = new Error('Session expired');
       error.status = 401;
       throw error;
@@ -126,7 +137,11 @@ class ApiService {
   }
 
   async verifySession() {
-    if (!this.getSessionToken()) {
+    const token = this.getSessionToken();
+    if (!token) return { valid: false };
+
+    if (this._isTokenExpired(token)) {
+      this.clearSession();
       return { valid: false };
     }
 

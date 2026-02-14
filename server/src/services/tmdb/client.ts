@@ -16,6 +16,8 @@ type TmdbApiParams = Record<string, string | number | boolean | undefined | null
 
 const log = createLogger('tmdb:client') as Logger;
 
+const FETCH_TIMEOUT_MS = 10_000;
+
 const CIRCUIT_BREAKER = {
   threshold: 10,
   windowMs: 60_000,
@@ -172,8 +174,19 @@ export async function tmdbFetch(
       const throttle = getTmdbThrottle();
       await throttle.acquire();
 
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => abortController.abort(), FETCH_TIMEOUT_MS);
+
       const fetchStart = Date.now();
-      const response = await fetch(url.toString(), { agent: httpsAgent });
+      let response;
+      try {
+        response = await fetch(url.toString(), {
+          agent: httpsAgent,
+          signal: abortController.signal as any,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       const fetchDuration = Date.now() - fetchStart;
 
       if (!response.ok) {

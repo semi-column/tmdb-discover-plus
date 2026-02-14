@@ -74,6 +74,21 @@ export function sanitizeFilters(filters: unknown): Record<string, unknown> {
     'type',
     'imdbOnly',
     'includeAdult',
+    'datePreset',
+    'ratingMin',
+    'ratingMax',
+    'runtimeMin',
+    'runtimeMax',
+    'withNetworks',
+    'certificationCountry',
+    'certificationMin',
+    'certificationMax',
+    'enableRatingPosters',
+    'monetizationTypes',
+    'randomize',
+    'cacheTTL',
+    'withCast',
+    'withCrew',
   ];
 
   for (const key of allowedKeys) {
@@ -117,7 +132,9 @@ export const validateRequest = {
   },
 
   apiKey: (req: Request, res: Response, next: NextFunction): void => {
-    const apiKey = (req.query as Record<string, unknown>)?.apiKey || (req.body as Record<string, unknown>)?.apiKey;
+    const apiKey =
+      (req.query as Record<string, unknown>)?.apiKey ||
+      (req.body as Record<string, unknown>)?.apiKey;
     if (apiKey && !isValidApiKeyFormat(apiKey)) {
       res.status(400).json({ error: 'Invalid API key format' });
       return;

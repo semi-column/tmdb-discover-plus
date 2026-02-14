@@ -114,9 +114,12 @@ function App() {
 
   return (
     <div className="app">
+      <a href="#main-content" className="skip-to-content">
+        Skip to content
+      </a>
       <Header userId={config.userId} stats={stats} />
 
-      <main className="main">
+      <main className="main" id="main-content">
         <div className="container">
           <div className="builder-toolbar">
             <div>
@@ -124,6 +127,19 @@ function App() {
               <p className="text-secondary">
                 Create and customize your Stremio catalogs with TMDB filters
               </p>
+
+              {tmdb.error && (
+                <div className="tmdb-error-banner" role="alert">
+                  Failed to load TMDB data: {tmdb.error}
+                  <button
+                    className="btn btn-sm btn-secondary"
+                    onClick={tmdb.refresh}
+                    style={{ marginLeft: 8 }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
 
               {stats && (
                 <div className="mobile-stats-pill">
@@ -171,11 +187,7 @@ function App() {
 
               <button
                 className="btn btn-secondary"
-                onClick={() => {
-                  config.logout();
-                  state.setWantsToChangeKey(true);
-                  state.setIsSetup(true);
-                }}
+                onClick={() => actions.handleLogout({ changeKey: true })}
               >
                 <Settings size={18} />
                 Change API Key
@@ -202,6 +214,7 @@ function App() {
               onPreferencesChange={config.setPreferences}
               onImportConfig={actions.handleImportConfig}
               languages={tmdb.languages}
+              addToast={actions.addToast}
             />
 
             <Suspense
@@ -263,12 +276,7 @@ function App() {
       <ConfigMismatchModal
         isOpen={state.showMismatchModal}
         onGoToOwn={actions.handleConfigMismatchGoToOwn}
-        onLoginNew={() => {
-          actions.setShowMismatchModal(false);
-          config.logout();
-          state.setIsSetup(true);
-          state.setWantsToChangeKey(true);
-        }}
+        onLoginNew={actions.handleConfigMismatchLoginNew}
       />
 
       <ToastContainer toasts={toasts} removeToast={actions.removeToast} />

@@ -1,100 +1,95 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useReducer, useEffect, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 
+const initialState = {
+  genres: { movie: [], series: [] },
+  languages: [],
+  originalLanguages: [],
+  countries: [],
+  sortOptions: { movie: [], series: [] },
+  listTypes: { movie: [], series: [] },
+  presetCatalogs: { movie: [], series: [] },
+  releaseTypes: [],
+  tvStatuses: [],
+  tvTypes: [],
+  monetizationTypes: [],
+  certifications: { movie: {}, series: {} },
+  watchRegions: [],
+  tvNetworks: [],
+  loading: false,
+  error: null,
+};
+
+function reducer(state, action) {
+  switch (action.type) {
+    case 'FETCH_START':
+      return { ...state, loading: true, error: null };
+    case 'FETCH_SUCCESS':
+      return {
+        ...state,
+        genres: action.payload.genres || initialState.genres,
+        languages: action.payload.languages || [],
+        originalLanguages: action.payload.originalLanguages || [],
+        countries: action.payload.countries || [],
+        sortOptions: action.payload.sortOptions || initialState.sortOptions,
+        listTypes: action.payload.listTypes || initialState.listTypes,
+        presetCatalogs: action.payload.presetCatalogs || initialState.presetCatalogs,
+        releaseTypes: action.payload.releaseTypes || [],
+        tvStatuses: action.payload.tvStatuses || [],
+        tvTypes: action.payload.tvTypes || [],
+        monetizationTypes: action.payload.monetizationTypes || [],
+        certifications: action.payload.certifications || initialState.certifications,
+        watchRegions: action.payload.watchRegions || [],
+        tvNetworks: action.payload.tvNetworks || [],
+        loading: false,
+        error: null,
+      };
+    case 'FETCH_ERROR':
+      return { ...state, loading: false, error: action.error };
+    default:
+      return state;
+  }
+}
+
 export function useTMDB(apiKey) {
-  const [genres, setGenres] = useState({ movie: [], series: [] });
-  const [languages, setLanguages] = useState([]);
-  const [originalLanguages, setOriginalLanguages] = useState([]);
-  const [countries, setCountries] = useState([]);
-  const [sortOptions, setSortOptions] = useState({ movie: [], series: [] });
-  const [listTypes, setListTypes] = useState({ movie: [], series: [] });
-  const [presetCatalogs, setPresetCatalogs] = useState({ movie: [], series: [] });
-  const [releaseTypes, setReleaseTypes] = useState([]);
-  const [tvStatuses, setTVStatuses] = useState([]);
-  const [tvTypes, setTVTypes] = useState([]);
-  const [monetizationTypes, setMonetizationTypes] = useState([]);
-  const [certifications, setCertifications] = useState({ movie: {}, series: {} });
-  const [watchRegions, setWatchRegions] = useState([]);
-  const [tvNetworks, setTVNetworks] = useState([]);
-  const [loading, setLoading] = useState(() => !!(apiKey || api.getSessionToken()));
-  const [error, setError] = useState(null);
-
   const hasAuth = !!(apiKey || api.getSessionToken());
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const [state, dispatch] = useReducer(reducer, { ...initialState, loading: hasAuth });
+  const abortRef = useRef(null);
 
   const loadMetadata = useCallback(async () => {
     if (!hasAuth) return;
-
+    dispatch({ type: 'FETCH_START' });
     try {
       const data = await api.getReferenceData();
-
-      if (!mountedRef.current) return;
-
-      setGenres(data.genres || { movie: [], series: [] });
-      setLanguages(data.languages || []);
-      setOriginalLanguages(data.originalLanguages || []);
-      setCountries(data.countries || []);
-      setSortOptions(data.sortOptions || { movie: [], series: [] });
-      setPresetCatalogs(data.presetCatalogs || { movie: [], series: [] });
-      setListTypes(data.listTypes || { movie: [], series: [] });
-      setReleaseTypes(data.releaseTypes || []);
-      setTVStatuses(data.tvStatuses || []);
-      setTVTypes(data.tvTypes || []);
-      setMonetizationTypes(data.monetizationTypes || []);
-      setCertifications(data.certifications || { movie: {}, series: {} });
-      setWatchRegions(data.watchRegions || []);
-      setTVNetworks(data.tvNetworks || []);
-
-      setError(null);
-      setLoading(false);
+      dispatch({ type: 'FETCH_SUCCESS', payload: data });
     } catch (err) {
-      if (!mountedRef.current) return;
-      setError(err.message);
-      setLoading(false);
+      if (err.name !== 'AbortError') {
+        dispatch({ type: 'FETCH_ERROR', error: err.message });
+      }
     }
   }, [hasAuth]);
 
   useEffect(() => {
     if (!hasAuth) return;
-    let cancelled = false;
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     api
       .getReferenceData()
       .then((data) => {
-        if (cancelled || !mountedRef.current) return;
-
-        setGenres(data.genres || { movie: [], series: [] });
-        setLanguages(data.languages || []);
-        setOriginalLanguages(data.originalLanguages || []);
-        setCountries(data.countries || []);
-        setSortOptions(data.sortOptions || { movie: [], series: [] });
-        setPresetCatalogs(data.presetCatalogs || { movie: [], series: [] });
-        setListTypes(data.listTypes || { movie: [], series: [] });
-        setReleaseTypes(data.releaseTypes || []);
-        setTVStatuses(data.tvStatuses || []);
-        setTVTypes(data.tvTypes || []);
-        setMonetizationTypes(data.monetizationTypes || []);
-        setCertifications(data.certifications || { movie: {}, series: {} });
-        setWatchRegions(data.watchRegions || []);
-        setTVNetworks(data.tvNetworks || []);
-
-        setError(null);
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          dispatch({ type: 'FETCH_SUCCESS', payload: data });
+        }
       })
       .catch((err) => {
-        if (cancelled || !mountedRef.current) return;
-        setError(err.message);
-        setLoading(false);
+        if (!controller.signal.aborted && err.name !== 'AbortError') {
+          dispatch({ type: 'FETCH_ERROR', error: err.message });
+        }
       });
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [hasAuth]);
 
@@ -180,22 +175,7 @@ export function useTMDB(apiKey) {
   );
 
   return {
-    genres,
-    languages,
-    originalLanguages,
-    countries,
-    sortOptions,
-    listTypes,
-    presetCatalogs,
-    releaseTypes,
-    tvStatuses,
-    tvTypes,
-    monetizationTypes,
-    certifications,
-    watchRegions,
-    tvNetworks,
-    loading,
-    error,
+    ...state,
     preview,
     searchPerson,
     searchCompany,

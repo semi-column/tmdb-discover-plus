@@ -60,3 +60,10 @@ export const addonRateLimit = rateLimit({
   limit: 1000,
   message: 'Rate limit exceeded',
 });
+
+export const monitoringRateLimit = rateLimit({
+  ...baseOptions,
+  windowMs: 60 * 1000,
+  limit: 30,
+  message: 'Too many monitoring requests, please try again later',
+});

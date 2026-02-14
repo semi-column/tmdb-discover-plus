@@ -13,6 +13,7 @@ import { authRouter } from './routes/auth.js';
 import { createLogger } from './utils/logger.ts';
 import { getBaseUrl } from './utils/helpers.js';
 import { apiRateLimit } from './utils/rateLimit.js';
+import { monitoringRateLimit } from './utils/rateLimit.js';
 import { warmEssentialCaches } from './infrastructure/cacheWarmer.js';
 import { getMetrics, destroyMetrics } from './infrastructure/metrics.js';
 import { destroyTmdbThrottle, getTmdbThrottle } from './infrastructure/tmdbThrottle.js';
@@ -121,6 +122,18 @@ app.use((req, res, next) => {
 
 app.use(requestIdMiddleware());
 
+app.use((req, res, next) => {
+  const timeout = 30000;
+  req.setTimeout(timeout);
+  res.setTimeout(timeout, () => {
+    if (!res.headersSent) {
+      log.warn('Request timeout', { url: req.originalUrl, method: req.method });
+      res.status(504).json({ error: 'Gateway Timeout' });
+    }
+  });
+  next();
+});
+
 // Global generic rate limit for all routes
 app.use(apiRateLimit);
 
@@ -175,13 +188,18 @@ app.get('/:userId/configure', (req, res) => {
   return res.status(404).send('Not Found');
 });
 
+let _clientManifestParsed = null;
+
 app.get('/manifest.json', (req, res) => {
   try {
-    if (!fs.existsSync(clientManifestPath)) {
-      log.warn('Manifest file not found', { path: clientManifestPath });
+    if (!_clientManifestParsed) {
+      if (!fs.existsSync(clientManifestPath)) {
+        log.warn('Manifest file not found', { path: clientManifestPath });
+      }
+      const raw = fs.readFileSync(clientManifestPath, 'utf8');
+      _clientManifestParsed = JSON.parse(raw);
     }
-    const raw = fs.readFileSync(clientManifestPath, 'utf8');
-    const manifest = JSON.parse(raw);
+    const manifest = { ..._clientManifestParsed };
     const baseUrl = config.baseUrl || getBaseUrl(req);
     manifest.logo = `${baseUrl.replace(/\/$/, '')}/logo.png`;
     res.setHeader('Cache-Control', 'no-store, must-revalidate');
@@ -229,7 +247,7 @@ app.get('/ready', (req, res) => {
 // ============================================
 // Enhanced Health Check Endpoint
 // ============================================
-app.get('/health', (req, res) => {
+app.get('/health', monitoringRateLimit, (req, res) => {
   // Return 503 if shutting down
   if (isShuttingDown) {
     return res.status(503).json({
@@ -283,7 +301,7 @@ app.get('/health', (req, res) => {
   res.status(httpStatus).json(health);
 });
 
-app.get('/metrics', (req, res) => {
+app.get('/metrics', monitoringRateLimit, (req, res) => {
   res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
   res.set('Cache-Control', 'no-store');
   res.send(getMetrics().toPrometheus());
