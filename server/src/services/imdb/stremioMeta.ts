@@ -50,8 +50,10 @@ export function imdbToStremioMeta(
   const stremioType = type || mapImdbTypeToContentType(item.type);
   const year = buildYear(item);
 
-  let poster = item.primaryImage?.url || null;
-  const background = item.posterImages?.[0]?.url || null;
+  let poster =
+    item.primaryImage?.url || `https://images.metahub.space/poster/medium/${item.id}/img`;
+  const background =
+    item.posterImages?.[0]?.url || `https://images.metahub.space/background/medium/${item.id}/img`;
 
   if (isValidPosterConfig(posterOptions)) {
     const enhancedPoster = generatePosterUrl({
