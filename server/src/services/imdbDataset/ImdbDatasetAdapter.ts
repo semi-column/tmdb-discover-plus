@@ -11,6 +11,7 @@ export abstract class ImdbDatasetAdapter implements IImdbDatasetAdapter {
   abstract count(type: 'movie' | 'series'): Promise<number>;
   abstract getGenres(type: 'movie' | 'series'): Promise<string[]>;
   abstract getDecades(type: 'movie' | 'series'): Promise<number[]>;
+  abstract getRegions(type: 'movie' | 'series'): Promise<string[]>;
   abstract clear(): Promise<void>;
   abstract setMeta(key: string, value: string): Promise<void>;
   abstract getMeta(key: string): Promise<string | null>;

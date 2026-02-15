@@ -36,11 +36,16 @@ import {
   queryDataset,
   getDatasetGenres,
   getDatasetDecades,
+  getDatasetRegions,
   isDatasetLoaded,
   getDatasetStats,
 } from '../services/imdbDataset/index.ts';
 import { imdbTitleToStremioMeta } from '../services/imdbDataset/stremioMeta.ts';
-import { IMDB_SORT_OPTIONS, IMDB_PRESET_CATALOGS } from '../services/imdbDataset/referenceData.ts';
+import {
+  IMDB_SORT_OPTIONS,
+  IMDB_PRESET_CATALOGS,
+  IMDB_REGION_LABELS,
+} from '../services/imdbDataset/referenceData.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -201,10 +206,18 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
           getDatasetDecades('movie'),
           getDatasetDecades('series'),
         ]);
+
+      const [imdbMovieRegions, imdbSeriesRegions] = await Promise.all([
+        getDatasetRegions('movie'),
+        getDatasetRegions('series'),
+      ]);
+
       imdbData = {
         available: true,
         genres: { movie: imdbMovieGenres, series: imdbSeriesGenres },
         decades: { movie: imdbMovieDecades, series: imdbSeriesDecades },
+        regions: { movie: imdbMovieRegions, series: imdbSeriesRegions },
+        regionLabels: IMDB_REGION_LABELS,
         sortOptions: IMDB_SORT_OPTIONS,
         presetCatalogs: IMDB_PRESET_CATALOGS,
         stats: getDatasetStats(),
@@ -591,6 +604,7 @@ router.post('/imdb-preview', requireAuth, async (req, res) => {
     const query = {
       type,
       genre: rawFilters.genre || undefined,
+      region: rawFilters.region || undefined,
       decadeStart: rawFilters.decadeStart ? parseInt(rawFilters.decadeStart) : undefined,
       decadeEnd: rawFilters.decadeEnd ? parseInt(rawFilters.decadeEnd) : undefined,
       sortBy: rawFilters.sortBy || 'rating',

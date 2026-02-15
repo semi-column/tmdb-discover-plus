@@ -7,11 +7,13 @@ export interface ImdbTitle {
   genres: string[];
   averageRating: number;
   numVotes: number;
+  regions: string[];
 }
 
 export interface ImdbDatasetQuery {
   type: 'movie' | 'series';
   genre?: string;
+  region?: string;
   decadeStart?: number;
   decadeEnd?: number;
   sortBy: 'rating' | 'votes';
@@ -34,6 +36,7 @@ export interface IImdbDatasetAdapter {
   count(type: 'movie' | 'series'): Promise<number>;
   getGenres(type: 'movie' | 'series'): Promise<string[]>;
   getDecades(type: 'movie' | 'series'): Promise<number[]>;
+  getRegions(type: 'movie' | 'series'): Promise<string[]>;
   clear(): Promise<void>;
   setMeta(key: string, value: string): Promise<void>;
   getMeta(key: string): Promise<string | null>;
@@ -43,6 +46,7 @@ export interface IImdbDatasetAdapter {
 export interface ImdbCatalogFilters {
   listType?: string;
   genre?: string;
+  region?: string;
   decadeStart?: number;
   decadeEnd?: number;
   sortBy?: string;

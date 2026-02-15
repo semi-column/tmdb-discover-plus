@@ -5,6 +5,7 @@ import {
   Eye,
   EyeOff,
   Film,
+  Globe,
   Loader,
   Settings,
   Sparkles,
@@ -28,6 +29,7 @@ export const ImdbCatalogEditor = memo(function ImdbCatalogEditor({
   const userEditedRef = useRef(false);
   const [expandedSections, setExpandedSections] = useState({
     sort: true,
+    region: false,
     genre: false,
     decade: false,
     rating: false,
@@ -114,6 +116,8 @@ export const ImdbCatalogEditor = memo(function ImdbCatalogEditor({
   const isMovie = type === 'movie';
   const genres = imdbData?.genres?.[type] || [];
   const decades = imdbData?.decades?.[type] || [];
+  const regions = imdbData?.regions?.[type] || [];
+  const regionLabels = imdbData?.regionLabels || {};
   const sortOptions = imdbData?.sortOptions || [];
 
   const getSortFilterCount = () => {
@@ -124,6 +128,8 @@ export const ImdbCatalogEditor = memo(function ImdbCatalogEditor({
   };
 
   const getGenreFilterCount = () => (filters.genre ? 1 : 0);
+
+  const getRegionFilterCount = () => (filters.region ? 1 : 0);
 
   const getDecadeFilterCount = () => {
     let count = 0;
@@ -265,8 +271,38 @@ export const ImdbCatalogEditor = memo(function ImdbCatalogEditor({
             </FilterSection>
 
             <FilterSection
+              id="region"
+              title="Region / Country"
+              description={
+                filters.region
+                  ? regionLabels[filters.region] || filters.region
+                  : 'Filter by release region'
+              }
+              icon={Globe}
+              isOpen={expandedSections.region}
+              onToggle={toggleSection}
+              badgeCount={getRegionFilterCount()}
+            >
+              <div className="input-group">
+                <label className="input-label">Region</label>
+                <select
+                  className="input"
+                  value={filters.region || ''}
+                  onChange={(e) => handleFiltersChange('region', e.target.value || undefined)}
+                >
+                  <option value="">All Regions</option>
+                  {regions.map((code) => (
+                    <option key={code} value={code}>
+                      {regionLabels[code] ? `${regionLabels[code]} (${code})` : code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </FilterSection>
+
+            <FilterSection
               id="decade"
-              title="Decade / Era"
+              title="Decade"
               description="Filter by release decade"
               icon={Calendar}
               isOpen={expandedSections.decade}
