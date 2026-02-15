@@ -14,6 +14,8 @@ const UPDATE_INTERVAL_HOURS = config.imdbDataset.updateIntervalHours;
 const MIN_VOTES = config.imdbDataset.minVotes;
 const DOWNLOAD_TIMEOUT_MS = 300_000;
 const WRITE_BATCH_SIZE = 10_000;
+// Bump this when the Redis scoring formula or data schema changes to force a re-import
+const DATA_VERSION = '2';
 
 const ALLOWED_TITLE_TYPES = new Set([
   'movie',
@@ -87,10 +89,15 @@ async function downloadAndStore() {
 
   try {
     const storedEtag = await adapter.getMeta('etag');
+    const storedVersion = await adapter.getMeta('dataVersion');
     const existingMovies = await adapter.count('movie');
     const existingSeries = await adapter.count('series');
 
-    if (storedEtag && (existingMovies > 0 || existingSeries > 0)) {
+    if (
+      storedEtag &&
+      storedVersion === DATA_VERSION &&
+      (existingMovies > 0 || existingSeries > 0)
+    ) {
       try {
         const headResp = await fetch(IMDB_BASICS_URL, {
           method: 'HEAD',
@@ -114,6 +121,13 @@ async function downloadAndStore() {
           error: headErr.message,
         });
       }
+    }
+
+    if (storedVersion !== DATA_VERSION && (existingMovies > 0 || existingSeries > 0)) {
+      log.info('Data version changed, forcing re-import', {
+        stored: storedVersion,
+        current: DATA_VERSION,
+      });
     }
 
     log.info('Downloading IMDB datasets...', { minVotes: MIN_VOTES });
@@ -216,6 +230,7 @@ async function downloadAndStore() {
     if (etag) {
       await adapter.setMeta('etag', etag);
     }
+    await adapter.setMeta('dataVersion', DATA_VERSION);
     const now = Date.now().toString();
     await adapter.setMeta('lastUpdate', now);
 
