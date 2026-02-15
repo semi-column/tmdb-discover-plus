@@ -85,8 +85,8 @@ describe('imdbToStremioMeta', () => {
     const result = imdbToStremioMeta(minimal as any, 'movie');
     expect(result).not.toBeNull();
     expect(result!.name).toBe('');
-    expect(result!.poster).toBeNull();
-    expect(result!.background).toBeNull();
+    expect(result!.poster).toBe('https://images.metahub.space/poster/medium/tt1234567/img');
+    expect(result!.background).toBe('https://images.metahub.space/background/medium/tt1234567/img');
     expect(result!.imdbRating).toBeUndefined();
     expect(result!.runtime).toBeUndefined();
   });

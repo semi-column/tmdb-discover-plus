@@ -1,6 +1,5 @@
 import fetch from 'node-fetch';
 import { getCache } from '../cache/index.js';
-import { CachedError, classifyError } from '../cache/CacheWrapper.js';
 import { createLogger } from '../../utils/logger.ts';
 import { getImdbThrottle } from '../../infrastructure/imdbThrottle.ts';
 import { recordImdbApiCall, isQuotaExceeded } from '../../infrastructure/imdbQuota.ts';
@@ -8,7 +7,7 @@ import { getMetrics } from '../../infrastructure/metrics.js';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
 
-import type { CacheErrorType, Logger } from '../../types/index.ts';
+import type { Logger } from '../../types/index.ts';
 
 type ImdbFetchError = Error & { code?: string; statusCode?: number };
 
@@ -117,19 +116,11 @@ export async function imdbFetch(
   }
 
   try {
-    const cached = (await cache.getEntry(cacheKey)) as Record<string, unknown> | null;
+    const cached = await cache.get(cacheKey);
     if (cached !== null && cached !== undefined) {
-      if (cached.__errorType) {
-        throw new CachedError(
-          cached.__errorType as CacheErrorType,
-          cached.__errorMessage as string
-        );
-      }
-      if (cached.__cacheWrapper) return cached.data;
       return cached;
     }
   } catch (err) {
-    if (err instanceof CachedError) throw err;
     log.warn('IMDb cache get failed', { error: (err as Error).message });
   }
 
@@ -244,17 +235,6 @@ export async function imdbFetch(
 
   if (shouldTrip) {
     recordCircuitFailure();
-  }
-
-  const errorType = classifyError(lastError!, lastError!.statusCode) as CacheErrorType;
-  try {
-    await cache.setError(cacheKey, errorType, lastError!.message);
-    metrics.trackError(errorType);
-  } catch (e) {
-    log.debug('Failed to cache IMDb error response', {
-      cacheKey: cacheKey.slice(0, 60),
-      error: (e as Error).message,
-    });
   }
 
   throw lastError;
