@@ -208,6 +208,8 @@ function App() {
                 config.setCatalogs(nextCatalogs);
               }}
               presetCatalogs={tmdb.presetCatalogs}
+              imdbEnabled={tmdb.imdbEnabled}
+              imdbPresetCatalogs={tmdb.imdbPresetCatalogs}
               configName={config.configName}
               onConfigNameChange={config.setConfigName}
               preferences={config.preferences}
@@ -243,6 +245,13 @@ function App() {
                 preferences={config.preferences}
                 onUpdate={actions.handleUpdateCatalog}
                 onPreview={tmdb.preview}
+                onPreviewImdb={tmdb.previewImdb}
+                imdbEnabled={tmdb.imdbEnabled}
+                imdbGenres={tmdb.imdbGenres}
+                imdbKeywords={tmdb.imdbKeywords}
+                imdbAwards={tmdb.imdbAwards}
+                imdbSortOptions={tmdb.imdbSortOptions}
+                imdbTitleTypes={tmdb.imdbTitleTypes}
                 searchPerson={tmdb.searchPerson}
                 searchCompany={tmdb.searchCompany}
                 searchKeyword={tmdb.searchKeyword}
@@ -262,6 +271,7 @@ function App() {
         isOpen={showNewCatalogModal}
         onClose={() => state.setShowNewCatalogModal(false)}
         onAdd={actions.handleAddCatalog}
+        imdbEnabled={tmdb.imdbEnabled}
       />
 
       <InstallModal

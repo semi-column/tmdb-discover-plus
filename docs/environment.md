@@ -62,6 +62,27 @@ Storage backend selection priority: explicit `DATABASE_DRIVER` → auto-detect f
 | `IMDB_RATINGS_UPDATE_HOURS` | How often (in hours) to refresh the IMDB ratings dataset         | `24`    |
 | `IMDB_MIN_VOTES`            | Minimum IMDB vote count for a title to receive rating enrichment | `100`   |
 
+## IMDb API (RapidAPI)
+
+Enables IMDb-powered catalogs alongside TMDB catalogs. Requires a RapidAPI subscription to an IMDb API. This is a server-side shared key — one key serves all users, with budget managed centrally.
+
+| Variable                    | Description                                                                          | Default                   |
+| --------------------------- | ------------------------------------------------------------------------------------ | ------------------------- |
+| `IMDB_API_KEY`              | RapidAPI key for IMDb API access. When set, IMDb features are enabled automatically. | _(empty — IMDb disabled)_ |
+| `IMDB_API_HOST`             | RapidAPI host header value (provided with your subscription)                         | _(required)_              |
+| `IMDB_RATE_LIMIT`           | Max IMDb API requests per second (separate token bucket from TMDB)                   | `5`                       |
+| `IMDB_BUDGET_MONTHLY`       | Monthly request budget cap                                                           | `500000`                  |
+| `IMDB_BUDGET_WARN_PERCENT`  | Log a warning when monthly usage reaches this percentage                             | `80`                      |
+| `IMDB_BUDGET_LIMIT_PERCENT` | Hard-stop new requests when monthly usage reaches this percentage                    | `95`                      |
+| `IMDB_CACHE_SEARCH`         | TTL in seconds for search/discover results                                           | `86400` (24h)             |
+| `IMDB_CACHE_DETAIL`         | TTL in seconds for individual title details                                          | `604800` (7d)             |
+| `IMDB_CACHE_RANKING`        | TTL in seconds for ranking lists (top 250, popular)                                  | `43200` (12h)             |
+| `IMDB_CACHE_LIST`           | TTL in seconds for user lists                                                        | `3600` (1h)               |
+| `IMDB_CACHE_REFERENCE`      | TTL in seconds for reference data (genres, keywords, etc.)                           | `604800` (7d)             |
+| `IMDB_CACHE_SUGGESTIONS`    | TTL in seconds for search suggestions                                                | `86400` (24h)             |
+
+**Budget considerations:** The IMDb API at the free tier allows ~500 requests/day. The paid Basic plan allows 500K/month. Cache aggressively (24h default for search, 7d for details) to stay within budget. The addon uses shared catalog caching, so identical filter sets from different users hit the same cached response.
+
 ## External APIs
 
 | Variable       | Description                                                                | Default   |

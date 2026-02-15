@@ -29,6 +29,9 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
         <div className="catalog-item-name">{catalog.name}</div>
         <div className="catalog-item-type">
           {catalog.type === 'series' ? 'TV Shows' : 'Movies'}
+          {catalog.source === 'imdb' && (
+            <span className="catalog-item-badge catalog-item-badge--imdb">IMDb</span>
+          )}
           {catalog.filters?.listType && catalog.filters.listType !== 'discover' && (
             <span className="catalog-item-badge">Preset</span>
           )}

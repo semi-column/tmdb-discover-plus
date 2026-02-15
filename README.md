@@ -141,6 +141,16 @@ See your catalog results before installing with clickable links to TMDB—no sur
 
 Full IMDB ID support ensures maximum compatibility with Stremio and other addons.
 
+### 🎯 IMDb API Catalogs (Optional)
+
+When configured with an IMDb RapidAPI key, unlock IMDb-powered catalogs alongside TMDB:
+
+- **IMDb Discover** — Advanced search with IMDb genres, keywords, awards, and ratings
+- **Top 250** — IMDb's all-time top rated movies and TV shows
+- **Most Popular** — Currently trending titles on IMDb
+- **Custom Lists** — Import any public IMDb list by its ID
+- Budget-managed with quota tracking, circuit breaker, and shared caching
+
 ### 🐳 Self-Hostable
 
 Complete Docker support with PostgreSQL/MongoDB and Redis/Memory cache options for full control.
@@ -310,6 +320,10 @@ REDIS_URL=redis://localhost:6379
 PORT=7000
 LOG_LEVEL=info
 CORS_ORIGIN=*
+
+# IMDb API (optional — enables IMDb catalogs)
+# IMDB_API_KEY=your_rapidapi_key
+# IMDB_API_HOST=your_rapidapi_host
 ```
 
 ### Filter Options

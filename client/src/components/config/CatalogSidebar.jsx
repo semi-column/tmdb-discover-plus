@@ -17,6 +17,8 @@ import {
   EyeOff,
   Download,
   Upload as ArrowUpTrayIcon,
+  Trophy,
+  Award,
 } from 'lucide-react';
 import { useState, useEffect, lazy, Suspense, memo } from 'react';
 
@@ -275,6 +277,8 @@ export const CatalogSidebar = memo(function CatalogSidebar({
   onDuplicateCatalog,
   onReorderCatalogs,
   presetCatalogs = { movie: [], series: [] },
+  imdbEnabled = false,
+  imdbPresetCatalogs = [],
   configName = '',
   onConfigNameChange,
   preferences = {},
@@ -291,10 +295,12 @@ export const CatalogSidebar = memo(function CatalogSidebar({
   const isMobile = useIsMobile();
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
   const [tvPresetsCollapsed, setTvPresetsCollapsed] = useState(isMobile);
+  const [imdbPresetsCollapsed, setImdbPresetsCollapsed] = useState(isMobile);
 
   useEffect(() => {
     setMoviePresetsCollapsed(isMobile);
     setTvPresetsCollapsed(isMobile);
+    setImdbPresetsCollapsed(isMobile);
   }, [isMobile]);
 
   const addedPresets = new Set(
@@ -520,6 +526,44 @@ export const CatalogSidebar = memo(function CatalogSidebar({
             })}
           </div>
         </div>
+
+        {imdbEnabled && imdbPresetCatalogs.length > 0 && (
+          <div className={`preset-group ${imdbPresetsCollapsed ? 'collapsed' : ''}`}>
+            <div
+              className="preset-group-header"
+              onClick={() => setImdbPresetsCollapsed(!imdbPresetsCollapsed)}
+            >
+              <Award size={14} style={{ color: '#F5C518' }} />
+              <span>IMDb</span>
+              <ChevronDown size={14} className="chevron" />
+            </div>
+            <div className="preset-list">
+              {imdbPresetCatalogs.map((preset) => {
+                const presetKey = `imdb-${preset.type}-${preset.value}`;
+                const isAdded = safeCatalogs.some(
+                  (c) =>
+                    c.source === 'imdb' &&
+                    c.filters?.listType === preset.value &&
+                    c.type === preset.type
+                );
+                const IconComponent = preset.value === 'top250' ? Trophy : Flame;
+                return (
+                  <button
+                    key={presetKey}
+                    className={`preset-item preset-item--imdb ${isAdded ? 'added' : ''}`}
+                    onClick={() => !isAdded && onAddPresetCatalog(preset.type, preset, 'imdb')}
+                    disabled={isAdded}
+                    title={isAdded ? 'Already added' : preset.description}
+                  >
+                    <IconComponent size={14} />
+                    <span>{preset.label}</span>
+                    {!isAdded && <Plus size={14} className="preset-add-icon" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );

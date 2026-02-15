@@ -1,5 +1,8 @@
 import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
+import { getImdbQuotaStats } from './imdbQuota.ts';
+import { getImdbCircuitBreakerState } from '../services/imdb/client.ts';
+import { isImdbApiEnabled } from '../services/imdb/index.ts';
 
 const log = createLogger('Metrics');
 
@@ -303,6 +306,45 @@ class MetricsTracker {
         lines.push('# HELP tmdb_cache_cached_errors_total Cached error responses served');
         lines.push('# TYPE tmdb_cache_cached_errors_total counter');
         lines.push(`tmdb_cache_cached_errors_total ${cs.cachedErrors}`);
+      }
+    }
+
+    if (isImdbApiEnabled()) {
+      const iq = getImdbQuotaStats();
+      const cb = getImdbCircuitBreakerState();
+
+      lines.push('# HELP imdb_api_requests_today IMDb API requests today');
+      lines.push('# TYPE imdb_api_requests_today gauge');
+      lines.push(`imdb_api_requests_today ${iq.requestsToday}`);
+
+      lines.push('# HELP imdb_api_requests_month IMDb API requests this month');
+      lines.push('# TYPE imdb_api_requests_month gauge');
+      lines.push(`imdb_api_requests_month ${iq.requestsThisMonth}`);
+
+      lines.push('# HELP imdb_api_requests_total IMDb API requests total');
+      lines.push('# TYPE imdb_api_requests_total counter');
+      lines.push(`imdb_api_requests_total ${iq.requestsTotal}`);
+
+      lines.push('# HELP imdb_api_budget_monthly IMDb API monthly budget');
+      lines.push('# TYPE imdb_api_budget_monthly gauge');
+      lines.push(`imdb_api_budget_monthly ${iq.budgetMonthly}`);
+
+      lines.push('# HELP imdb_api_quota_exceeded Whether IMDb quota is exceeded');
+      lines.push('# TYPE imdb_api_quota_exceeded gauge');
+      lines.push(`imdb_api_quota_exceeded ${iq.quotaExceeded ? 1 : 0}`);
+
+      lines.push('# HELP imdb_api_circuit_breaker_open Whether IMDb circuit breaker is open');
+      lines.push('# TYPE imdb_api_circuit_breaker_open gauge');
+      lines.push(`imdb_api_circuit_breaker_open ${cb.state === 'open' ? 1 : 0}`);
+
+      lines.push('# HELP imdb_api_circuit_breaker_failures IMDb circuit breaker failure count');
+      lines.push('# TYPE imdb_api_circuit_breaker_failures gauge');
+      lines.push(`imdb_api_circuit_breaker_failures ${cb.recentFailures}`);
+
+      lines.push('# HELP imdb_api_endpoint_requests IMDb requests per endpoint');
+      lines.push('# TYPE imdb_api_endpoint_requests counter');
+      for (const [ep, count] of Object.entries(iq.perEndpoint)) {
+        lines.push(`imdb_api_endpoint_requests{endpoint="${ep}"} ${count}`);
       }
     }
 
