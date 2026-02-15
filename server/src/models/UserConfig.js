@@ -64,6 +64,35 @@ const catalogSchema = new mongoose.Schema(
   }
 );
 
+// IMDB dataset catalog subdocument schema
+const imdbCatalogSchema = new mongoose.Schema(
+  {
+    _id: {
+      type: String,
+      required: true,
+      default: () => crypto.randomUUID(),
+    },
+    name: { type: String, required: true },
+    type: { type: String, enum: ['movie', 'series'], required: true },
+    filters: {
+      genre: String,
+      decadeStart: Number,
+      decadeEnd: Number,
+      sortBy: { type: String, default: 'rating' },
+      sortOrder: { type: String, default: 'desc' },
+      ratingMin: Number,
+      ratingMax: Number,
+      votesMin: Number,
+      enableRatingPosters: { type: Boolean, default: undefined },
+    },
+    enabled: { type: Boolean, default: true },
+  },
+  {
+    _id: false,
+    strict: true,
+  }
+);
+
 const userConfigSchema = new mongoose.Schema({
   // Unique user identifier (short, URL-friendly)
   userId: {
@@ -91,6 +120,8 @@ const userConfigSchema = new mongoose.Schema({
   },
   // Array of custom catalogs
   catalogs: [catalogSchema],
+  // Array of IMDB dataset catalogs
+  imdbCatalogs: [imdbCatalogSchema],
   // Preferences
   preferences: {
     showAdultContent: { type: Boolean, default: false },
