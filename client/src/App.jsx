@@ -230,6 +230,7 @@ function App() {
                 state.setActiveImdbCatalog(cat);
                 if (cat) state.setActiveCatalog(null);
               }}
+              onAddImdbCatalog={actions.handleAddImdbCatalog}
               onAddImdbPresetCatalog={actions.handleAddImdbPresetCatalog}
               imdbPresetCatalogs={imdbData?.presetCatalogs || { movie: [], series: [] }}
               imdbAvailable={!!imdbData?.available}
