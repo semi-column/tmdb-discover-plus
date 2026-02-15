@@ -112,6 +112,81 @@ export function sanitizeFilters(filters: unknown): Record<string, unknown> {
   return sanitized;
 }
 
+const IMDB_ALLOWED_KEYS = [
+  'source',
+  'listType',
+  'imdbListId',
+  'query',
+  'genres',
+  'sortBy',
+  'sortOrder',
+  'imdbRatingMin',
+  'totalVotesMin',
+  'releaseDateStart',
+  'releaseDateEnd',
+  'runtimeMin',
+  'runtimeMax',
+  'languages',
+  'countries',
+  'keywords',
+  'awardsWon',
+  'awardsNominated',
+  'types',
+  'enableRatingPosters',
+];
+
+const VALID_IMDB_LIST_ID = /^ls\d{1,15}$/;
+
+const VALID_IMDB_SORT_VALUES = [
+  'POPULARITY',
+  'TITLE_REGIONAL',
+  'USER_RATING',
+  'USER_RATING_COUNT',
+  'BOX_OFFICE_GROSS_DOMESTIC',
+  'RUNTIME',
+  'YEAR',
+  'RELEASE_DATE',
+];
+const VALID_IMDB_SORT_ORDERS = ['ASC', 'DESC'];
+
+export function sanitizeImdbFilters(filters: unknown): Record<string, unknown> {
+  if (!filters || typeof filters !== 'object') return {};
+
+  const filtersObj = filters as Record<string, unknown>;
+  const sanitized: Record<string, unknown> = {};
+
+  for (const key of IMDB_ALLOWED_KEYS) {
+    if (filtersObj[key] !== undefined) {
+      const value = filtersObj[key];
+      if (Array.isArray(value)) {
+        sanitized[key] = value
+          .slice(0, 50)
+          .map((v: unknown) => (typeof v === 'string' ? sanitizeString(v, 100) : v));
+      } else if (typeof value === 'boolean') {
+        sanitized[key] = value;
+      } else if (typeof value === 'number') {
+        sanitized[key] = value;
+      } else if (typeof value === 'string') {
+        sanitized[key] = sanitizeString(value, 500);
+      }
+    }
+  }
+
+  if (sanitized.imdbListId && !VALID_IMDB_LIST_ID.test(String(sanitized.imdbListId))) {
+    delete sanitized.imdbListId;
+  }
+
+  if (sanitized.sortBy && !VALID_IMDB_SORT_VALUES.includes(String(sanitized.sortBy))) {
+    delete sanitized.sortBy;
+  }
+
+  if (sanitized.sortOrder && !VALID_IMDB_SORT_ORDERS.includes(String(sanitized.sortOrder))) {
+    delete sanitized.sortOrder;
+  }
+
+  return sanitized;
+}
+
 export const validateRequest = {
   userId: (req: Request, res: Response, next: NextFunction): void => {
     const { userId } = req.params;

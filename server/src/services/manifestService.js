@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as tmdb from './tmdb/index.js';
+import { isImdbApiEnabled } from './imdb/index.ts';
 import { normalizeGenreName, parseIdArray } from '../utils/helpers.js';
 import { createLogger } from '../utils/logger.ts';
 import { getApiKeyFromConfig, updateCatalogGenres } from './configService.js';
@@ -28,15 +29,22 @@ const TMDB_PAGE_SIZE = 20;
  */
 export function buildManifest(userConfig, baseUrl) {
   const resolvedBaseUrl = config.baseUrl || baseUrl;
+  const IMDB_PAGE_SIZE = 100;
   const catalogs = (userConfig?.catalogs || [])
     .filter((c) => c.enabled !== false)
-    .map((catalog) => ({
-      id: `tmdb-${catalog._id || catalog.name.toLowerCase().replace(/\s+/g, '-')}`,
-      type: catalog.type === 'series' ? 'series' : 'movie',
-      name: catalog.name,
-      pageSize: TMDB_PAGE_SIZE,
-      extra: [{ name: 'skip' }],
-    }));
+    .map((catalog) => {
+      const isImdb = catalog.source === 'imdb';
+      const prefix = isImdb ? 'imdb' : 'tmdb';
+      const pageSize = isImdb ? IMDB_PAGE_SIZE : TMDB_PAGE_SIZE;
+
+      return {
+        id: `${prefix}-${catalog._id || catalog.name.toLowerCase().replace(/\s+/g, '-')}`,
+        type: catalog.type === 'series' ? 'series' : 'movie',
+        name: catalog.name,
+        pageSize,
+        extra: [{ name: 'skip' }],
+      };
+    });
 
   if (userConfig?.preferences?.disableSearch !== true) {
     catalogs.push({
@@ -51,6 +59,21 @@ export function buildManifest(userConfig, baseUrl) {
       name: 'TMDB Search',
       extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
     });
+
+    if (isImdbApiEnabled() && userConfig?.preferences?.disableImdbSearch !== true) {
+      catalogs.push({
+        id: 'imdb-search-movie',
+        type: 'movie',
+        name: 'IMDb Search',
+        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
+      });
+      catalogs.push({
+        id: 'imdb-search-series',
+        type: 'series',
+        name: 'IMDb Search',
+        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
+      });
+    }
   }
 
   return {
@@ -83,7 +106,27 @@ export async function enrichManifestWithGenres(manifest, config) {
     manifest.catalogs.map(async (catalog) => {
       try {
         // Skip genre enrichment for dedicated search catalogs
-        if (catalog.id.startsWith('tmdb-search-')) return;
+        if (catalog.id.startsWith('tmdb-search-') || catalog.id.startsWith('imdb-search-')) return;
+
+        if (catalog.id.startsWith('imdb-')) {
+          const savedCatalog = (config.catalogs || []).find((c) => {
+            const idFromStored = `imdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
+            return idFromStored === catalog.id;
+          });
+          if (savedCatalog?.filters?.genres?.length) {
+            const sortedGenres = [...savedCatalog.filters.genres].sort((a, b) =>
+              a.localeCompare(b)
+            );
+            catalog.extra = catalog.extra || [];
+            catalog.extra = catalog.extra.filter((e) => e.name !== 'genre');
+            catalog.extra.push({
+              name: 'genre',
+              options: sortedGenres,
+              optionsLimit: 1,
+            });
+          }
+          return;
+        }
 
         const helperType = catalog.type === 'series' ? 'series' : 'movie';
         const staticKey = catalog.type === 'series' ? 'tv' : 'movie';

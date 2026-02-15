@@ -17,6 +17,7 @@ import { monitoringRateLimit } from './utils/rateLimit.js';
 import { warmEssentialCaches } from './infrastructure/cacheWarmer.js';
 import { getMetrics, destroyMetrics } from './infrastructure/metrics.js';
 import { destroyTmdbThrottle, getTmdbThrottle } from './infrastructure/tmdbThrottle.js';
+import { destroyImdbThrottle } from './infrastructure/imdbThrottle.ts';
 import { getConfigCache } from './infrastructure/configCache.js';
 import {
   initImdbRatings,
@@ -24,6 +25,10 @@ import {
   destroyImdbRatings,
 } from './services/imdbRatings/index.js';
 import { getCircuitBreakerState } from './services/tmdb/client.ts';
+import { getImdbCircuitBreakerState } from './services/imdb/client.ts';
+import { getImdbQuotaStats } from './infrastructure/imdbQuota.ts';
+import { isImdbApiEnabled } from './services/imdb/index.ts';
+import { initImdbApi } from './services/imdb/index.ts';
 import { requestIdMiddleware } from './utils/requestContext.ts';
 import { sendError, ErrorCodes, AppError } from './utils/AppError.ts';
 
@@ -288,6 +293,13 @@ app.get('/health', monitoringRateLimit, (req, res) => {
     tmdbThrottle: throttleStats,
     tmdbCircuitBreaker: getCircuitBreakerState(),
     imdbRatings: getImdbRatingsStats(),
+    imdbApi: isImdbApiEnabled()
+      ? {
+          enabled: true,
+          circuitBreaker: getImdbCircuitBreakerState(),
+          quota: getImdbQuotaStats(),
+        }
+      : { enabled: false },
     cacheWarming: serverStatus.cacheWarming,
     metrics: metricsData,
     memory: {
@@ -341,6 +353,7 @@ function gracefulShutdown(signal) {
 
   // Cleanup singletons
   destroyTmdbThrottle();
+  destroyImdbThrottle();
   destroyMetrics();
   destroyImdbRatings().catch(() => {});
 
@@ -424,6 +437,8 @@ async function start() {
       .catch((err) => {
         log.warn('IMDb ratings initialization failed (non-critical)', { error: err.message });
       });
+
+    initImdbApi();
   } catch (error) {
     log.error('Failed to start server', { error: error.message });
     process.exit(1);

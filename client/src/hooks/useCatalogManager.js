@@ -9,7 +9,7 @@ export function useCatalogManager(config, addToast) {
     setActiveCatalog(newCatalog);
   };
 
-  const handleAddPresetCatalog = (type, preset) => {
+  const handleAddPresetCatalog = (type, preset, source = 'tmdb') => {
     const newCatalog = {
       _id: crypto.randomUUID(),
       name: preset.label.replace(/^[^\s]+\s/, ''),
@@ -17,6 +17,9 @@ export function useCatalogManager(config, addToast) {
       filters: { listType: preset.value },
       enabled: true,
     };
+    if (source === 'imdb') {
+      newCatalog.source = 'imdb';
+    }
     config.setCatalogs((prev) => [...prev, newCatalog]);
     setActiveCatalog(newCatalog);
   };

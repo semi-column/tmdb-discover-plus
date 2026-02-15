@@ -78,6 +78,26 @@ export const config = Object.freeze({
     minVotes: envInt('IMDB_MIN_VOTES', 100),
   }),
 
+  imdbApi: Object.freeze({
+    apiKey: env('IMDB_API_KEY'),
+    apiHost: env('IMDB_API_HOST'),
+    rateLimit: envInt('IMDB_API_RATE_LIMIT', 5),
+    get enabled(): boolean {
+      const explicit = process.env['IMDB_API_ENABLED'];
+      if (explicit) return explicit === 'true' || explicit === '1';
+      return !!process.env['IMDB_API_KEY'];
+    },
+    cacheTtlSearch: envInt('IMDB_CACHE_TTL_SEARCH', 86400),
+    cacheTtlDetail: envInt('IMDB_CACHE_TTL_DETAIL', 604800),
+    cacheTtlRanking: envInt('IMDB_CACHE_TTL_RANKING', 86400),
+    cacheTtlPopular: envInt('IMDB_CACHE_TTL_POPULAR', 21600),
+    cacheTtlList: envInt('IMDB_CACHE_TTL_LIST', 21600),
+    cacheTtlReference: envInt('IMDB_CACHE_TTL_REFERENCE', 2592000),
+    budgetMonthly: envInt('IMDB_BUDGET_MONTHLY', 500000),
+    budgetWarnPercent: envInt('IMDB_BUDGET_WARN_PERCENT', 80),
+    budgetLimitPercent: envInt('IMDB_BUDGET_LIMIT_PERCENT', 95),
+  }),
+
   rpdb: Object.freeze({
     apiKey: env('RPDB_API_KEY'),
   }),

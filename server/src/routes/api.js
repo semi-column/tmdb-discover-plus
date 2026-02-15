@@ -12,6 +12,7 @@ import {
   getPublicStats,
 } from '../services/configService.js';
 import * as tmdb from '../services/tmdb/index.js';
+import * as imdb from '../services/imdb/index.ts';
 import { getBaseUrl, shuffleArray } from '../utils/helpers.js';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.js';
 import { createLogger } from '../utils/logger.ts';
@@ -20,6 +21,7 @@ import {
   isValidUserId,
   isValidApiKeyFormat,
   sanitizeFilters,
+  sanitizeImdbFilters,
   sanitizePage,
   isValidContentType,
 } from '../utils/validation.ts';
@@ -89,6 +91,7 @@ router.get('/status', async (req, res) => {
       environment: config.nodeEnv,
       database: databaseType,
       cache: cacheType,
+      imdbApi: imdb.isImdbApiEnabled(),
       stats: {
         users: stats.users || 0,
         catalogs: stats.catalogs || 0,
@@ -183,6 +186,24 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
       tmdb.getNetworks(apiKey, '').catch(() => []),
     ]);
 
+    const imdbEnabled = imdb.isImdbApiEnabled();
+    let imdbData = null;
+    if (imdbEnabled) {
+      const presets = imdb.getPresetCatalogs();
+      imdbData = {
+        enabled: true,
+        genres: await imdb.getGenres(),
+        keywords: imdb.getKeywords(),
+        awards: [...imdb.IMDB_AWARDS],
+        sortOptions: imdb.getSortOptions(),
+        titleTypes: imdb.getTitleTypeOptions(),
+        presetCatalogs: [
+          ...presets.movie.map((p) => ({ ...p, type: 'movie' })),
+          ...presets.series.map((p) => ({ ...p, type: 'series' })),
+        ],
+      };
+    }
+
     const data = {
       genres: { movie: movieGenres, series: seriesGenres },
       languages,
@@ -202,6 +223,7 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
         name: n.name,
         logo: n.logo || n.logoPath || null,
       })),
+      imdb: imdbData,
     };
 
     res.set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
@@ -454,6 +476,117 @@ router.get('/tv-networks', optionalAuth, async (req, res) => {
   }
 
   return res.json(curatedMatches);
+});
+
+router.post('/imdb/preview', requireAuth, async (req, res) => {
+  try {
+    if (!imdb.isImdbApiEnabled()) {
+      return sendError(res, 503, ErrorCodes.INTERNAL_ERROR, 'IMDb API not enabled');
+    }
+
+    const { type, filters: rawFilters } = req.body;
+    if (!type || !isValidContentType(type)) {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid content type');
+    }
+
+    const filters = sanitizeImdbFilters(rawFilters);
+    const listType = filters.listType || 'discover';
+    let titles = [];
+
+    if (listType === 'top250') {
+      const result = await imdb.getTopRanking(type);
+      titles = (result.titles || []).slice(0, 20);
+    } else if (listType === 'popular') {
+      const result = await imdb.getPopular(type);
+      titles = (result.titles || []).slice(0, 20);
+    } else if (listType === 'imdb_list' && filters.imdbListId) {
+      const result = await imdb.getList(filters.imdbListId, 0);
+      titles = (result.titles || []).slice(0, 20);
+    } else {
+      const searchParams = {
+        types: filters.types,
+        genres: filters.genres,
+        sortBy: filters.sortBy || 'POPULARITY',
+        sortOrder: filters.sortOrder || 'ASC',
+        imdbRatingMin: filters.imdbRatingMin,
+        totalVotesMin: filters.totalVotesMin,
+        releaseDateStart: filters.releaseDateStart,
+        releaseDateEnd: filters.releaseDateEnd,
+        runtimeMin: filters.runtimeMin,
+        runtimeMax: filters.runtimeMax,
+        languages: filters.languages,
+        countries: filters.countries,
+        keywords: filters.keywords,
+      };
+      const result = await imdb.advancedSearch(searchParams, type, 0);
+      titles = (result.titles || []).slice(0, 20);
+    }
+
+    const metas = titles.map((item) => imdb.imdbToStremioMeta(item, type)).filter(Boolean);
+
+    res.json({
+      metas,
+      totalResults: titles.length,
+      previewEmpty: metas.length === 0,
+    });
+  } catch (error) {
+    log.error('POST /imdb/preview error', { error: error.message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, error.message);
+  }
+});
+
+router.get('/imdb/search', requireAuth, async (req, res) => {
+  try {
+    if (!imdb.isImdbApiEnabled()) {
+      return sendError(res, 503, ErrorCodes.INTERNAL_ERROR, 'IMDb API not enabled');
+    }
+
+    const { query, type } = req.query;
+    if (!query) {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
+    }
+
+    const imdbTypes =
+      type === 'series'
+        ? ['tvSeries', 'tvMiniSeries']
+        : type === 'movie'
+          ? ['movie', 'tvMovie']
+          : undefined;
+    const result = await imdb.search(String(query), imdbTypes, 20);
+    const metas = (result.titles || [])
+      .map((item) => imdb.imdbToStremioMeta(item, type || 'movie'))
+      .filter(Boolean);
+
+    res.json({ metas });
+  } catch (error) {
+    log.error('GET /imdb/search error', { error: error.message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, error.message);
+  }
+});
+
+router.get('/imdb/list/:id/validate', requireAuth, async (req, res) => {
+  try {
+    if (!imdb.isImdbApiEnabled()) {
+      return sendError(res, 503, ErrorCodes.INTERNAL_ERROR, 'IMDb API not enabled');
+    }
+
+    const { id } = req.params;
+    if (!id || !/^ls\d{1,15}$/.test(id)) {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid IMDb list ID format');
+    }
+
+    const result = await imdb.getList(id, 0);
+    const titles = result.titles || [];
+
+    res.json({
+      valid: titles.length > 0,
+      itemCount: titles.length,
+      listId: id,
+    });
+  } catch (error) {
+    log.error('GET /imdb/list/:id/validate error', { error: error.message });
+    res.json({ valid: false, listId: req.params.id, error: error.message });
+  }
 });
 
 router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {

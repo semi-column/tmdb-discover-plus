@@ -291,6 +291,21 @@ class ApiService {
     return this.request(this._buildAuthUrl(`/network/${encodeURIComponent(id)}`, apiKey));
   }
 
+  async previewImdbCatalog(type, filters) {
+    return this.request('/imdb/preview', {
+      method: 'POST',
+      body: JSON.stringify({ type, filters }),
+    });
+  }
+
+  async searchImdb(query, type, limit = 20) {
+    const params = { query };
+    if (type) params.type = type;
+    if (limit) params.limit = String(limit);
+    const qs = new URLSearchParams(params).toString();
+    return this.request(`/imdb/search?${qs}`);
+  }
+
   async saveConfig(config) {
     return this.request('/config', {
       method: 'POST',

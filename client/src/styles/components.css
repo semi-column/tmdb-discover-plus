@@ -4906,3 +4906,127 @@ input[type='date'] {
   text-decoration: none !important;
   text-shadow: 0 1px 1px rgba(34, 34, 34, 0.05);
 }
+
+/* ========================================
+   IMDb Integration Styles
+   ======================================== */
+
+.catalog-item-badge--imdb {
+  background: #f5c518 !important;
+  color: #000 !important;
+  font-weight: 700;
+}
+
+.preset-item--imdb {
+  border-color: rgba(245, 197, 24, 0.3);
+}
+
+.preset-item--imdb:hover:not(.added) {
+  border-color: #f5c518;
+  background: rgba(245, 197, 24, 0.1);
+}
+
+.imdb-source-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.imdb-source-toggle button {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.imdb-source-toggle button.active-tmdb {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+.imdb-source-toggle button.active-imdb {
+  background: #f5c518;
+  color: #000;
+}
+
+.imdb-source-toggle button:not(.active-tmdb):not(.active-imdb):hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.imdb-list-type-select {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid rgba(245, 197, 24, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.imdb-list-type-select:focus {
+  outline: none;
+  border-color: #f5c518;
+  box-shadow: 0 0 0 2px rgba(245, 197, 24, 0.15);
+}
+
+.imdb-list-id-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: monospace;
+}
+
+.imdb-list-id-input:focus {
+  outline: none;
+  border-color: #f5c518;
+  box-shadow: 0 0 0 2px rgba(245, 197, 24, 0.15);
+}
+
+.imdb-list-id-input.field-invalid {
+  border-color: var(--error);
+}
+
+.imdb-disabled-notice {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-muted);
+}
+
+.imdb-disabled-notice h3 {
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.imdb-quota-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(245, 197, 24, 0.08);
+  border: 1px solid rgba(245, 197, 24, 0.3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .imdb-source-toggle button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}

@@ -16,6 +16,13 @@ const initialState = {
   certifications: { movie: {}, series: {} },
   watchRegions: [],
   tvNetworks: [],
+  imdbEnabled: false,
+  imdbGenres: [],
+  imdbKeywords: [],
+  imdbAwards: [],
+  imdbSortOptions: [],
+  imdbTitleTypes: [],
+  imdbPresetCatalogs: [],
   loading: false,
   error: null,
 };
@@ -24,7 +31,8 @@ function reducer(state, action) {
   switch (action.type) {
     case 'FETCH_START':
       return { ...state, loading: true, error: null };
-    case 'FETCH_SUCCESS':
+    case 'FETCH_SUCCESS': {
+      const imdbData = action.payload.imdb || {};
       return {
         ...state,
         genres: action.payload.genres || initialState.genres,
@@ -41,9 +49,17 @@ function reducer(state, action) {
         certifications: action.payload.certifications || initialState.certifications,
         watchRegions: action.payload.watchRegions || [],
         tvNetworks: action.payload.tvNetworks || [],
+        imdbEnabled: imdbData.enabled || false,
+        imdbGenres: imdbData.genres || [],
+        imdbKeywords: imdbData.keywords || [],
+        imdbAwards: imdbData.awards || [],
+        imdbSortOptions: imdbData.sortOptions || [],
+        imdbTitleTypes: imdbData.titleTypes || [],
+        imdbPresetCatalogs: imdbData.presetCatalogs || [],
         loading: false,
         error: null,
       };
+    }
     case 'FETCH_ERROR':
       return { ...state, loading: false, error: action.error };
     default:
@@ -174,9 +190,27 @@ export function useTMDB(apiKey) {
     [apiKey, hasAuth]
   );
 
+  const previewImdb = useCallback(
+    async (type, filters) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.previewImdbCatalog(type, filters);
+    },
+    [hasAuth]
+  );
+
+  const searchImdb = useCallback(
+    async (query, type, limit) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.searchImdb(query, type, limit);
+    },
+    [hasAuth]
+  );
+
   return {
     ...state,
     preview,
+    previewImdb,
+    searchImdb,
     searchPerson,
     searchCompany,
     searchKeyword,

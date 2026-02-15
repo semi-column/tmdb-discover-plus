@@ -6,6 +6,7 @@ import { CatalogPreview } from './catalog/CatalogPreview';
 import { FilterPanel } from './catalog/FilterPanel';
 import { FilterSection } from './catalog/FilterSection';
 import { GenreSelector } from './catalog/GenreSelector';
+import { ImdbFilterPanel } from './catalog/ImdbFilterPanel';
 import { OptionsPanel } from './catalog/OptionsPanel';
 import { PeopleFilters } from './catalog/PeopleFilters';
 import { ReleaseFilters } from './catalog/ReleaseFilters';
@@ -46,6 +47,12 @@ export const CatalogEditor = memo(function CatalogEditor({
   tvNetworks = [],
   onUpdate,
   onPreview,
+  onPreviewImdb,
+  imdbGenres = [],
+  imdbKeywords = [],
+  imdbAwards = [],
+  imdbSortOptions = [],
+  imdbTitleTypes = [],
   preferences = {},
   searchPerson,
   searchCompany,
@@ -268,6 +275,7 @@ export const CatalogEditor = memo(function CatalogEditor({
     (type) => {
       setLocalCatalog((prev) => {
         const isNextMovie = type === 'movie';
+        const isImdb = prev.source === 'imdb';
         const updated = {
           ...prev,
           type,
@@ -275,7 +283,7 @@ export const CatalogEditor = memo(function CatalogEditor({
             ...prev.filters,
             genres: [],
             excludeGenres: [],
-            sortBy: 'popularity.desc',
+            sortBy: isImdb ? 'POPULARITY' : 'popularity.desc',
             ...(isNextMovie
               ? {
                   airDateFrom: undefined,
@@ -334,16 +342,21 @@ export const CatalogEditor = memo(function CatalogEditor({
     setPreviewLoading(true);
     setPreviewError(null);
     try {
-      const filters = {
-        ...localCatalog.filters,
-        displayLanguage: preferences?.defaultLanguage,
-        withPeople: selectedPeople.map((p) => p.id).join(',') || undefined,
-        withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
-        withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
-        excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
-        excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
-      };
-      const data = await onPreview(localCatalog.type || 'movie', filters);
+      let data;
+      if (localCatalog.source === 'imdb' && onPreviewImdb) {
+        data = await onPreviewImdb(localCatalog.type || 'movie', localCatalog.filters || {});
+      } else {
+        const filters = {
+          ...localCatalog.filters,
+          displayLanguage: preferences?.defaultLanguage,
+          withPeople: selectedPeople.map((p) => p.id).join(',') || undefined,
+          withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
+          withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
+          excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
+          excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
+        };
+        data = await onPreview(localCatalog.type || 'movie', filters);
+      }
       setPreviewData(data);
     } catch (err) {
       setPreviewError(err.message);
@@ -380,6 +393,7 @@ export const CatalogEditor = memo(function CatalogEditor({
   const currentListType = localCatalog?.filters?.listType || 'discover';
   const isPresetCatalog = currentListType && currentListType !== 'discover';
   const supportsFullFilters = !isPresetCatalog;
+  const isImdbCatalog = localCatalog?.source === 'imdb';
   const getFilterCount = (section) => activeFilters.filter((f) => f.section === section).length;
 
   return (
@@ -389,14 +403,31 @@ export const CatalogEditor = memo(function CatalogEditor({
           <div className="editor-title">
             {isMovie ? <Film size={22} /> : <Tv size={22} />}
             <div style={{ flex: 1 }}>
-              <input
-                type="text"
-                className={`editor-name-input${!localCatalog?.name?.trim() ? ' field-invalid' : ''}`}
-                placeholder="Catalog Name..."
-                value={localCatalog?.name || ''}
-                onChange={(e) => handleNameChange(e.target.value)}
-                maxLength={50}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="text"
+                  className={`editor-name-input${!localCatalog?.name?.trim() ? ' field-invalid' : ''}`}
+                  placeholder="Catalog Name..."
+                  value={localCatalog?.name || ''}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  maxLength={50}
+                />
+                {isImdbCatalog && (
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: '#F5C518',
+                      color: '#000',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    IMDb
+                  </span>
+                )}
+              </div>
               {!localCatalog?.name?.trim() && <span className="field-error">Name is required</span>}
             </div>
           </div>
@@ -436,159 +467,175 @@ export const CatalogEditor = memo(function CatalogEditor({
             onToggleSection={toggleSection}
           />
 
-          {!isPresetCatalog && (
-            <FilterSection
-              id="filters"
-              title="Sort & Filter"
-              description="Sorting, language, year, rating"
-              icon={Settings}
-              isOpen={expandedSections.filters}
-              onToggle={toggleSection}
-              badgeCount={getFilterCount('filters')}
-            >
-              <FilterPanel
-                localCatalog={localCatalog}
-                onFiltersChange={handleFiltersChange}
-                sortOptions={sortOptions}
-                originalLanguages={originalLanguages}
-                countries={countries}
-              />
-            </FilterSection>
-          )}
-
-          {supportsFullFilters && (
-            <FilterSection
-              id="release"
-              title={`${isMovie ? 'Release' : 'Air Date'} & Classification`}
-              description="Date ranges, age ratings, release type"
-              icon={Calendar}
-              isOpen={expandedSections.release}
-              onToggle={toggleSection}
-              badgeCount={getFilterCount('release')}
-            >
-              <ReleaseFilters
-                localCatalog={localCatalog}
-                onFiltersChange={handleFiltersChange}
-                isMovie={isMovie}
-                countries={countries}
-                releaseTypes={releaseTypes}
-                tvStatuses={tvStatuses}
-                tvTypes={tvTypes}
-                certOptions={certOptions}
-              />
-            </FilterSection>
-          )}
-
-          {supportsFullFilters && (
-            <FilterSection
-              id="streaming"
-              title="Where to Watch"
-              description="Filter by streaming services and original networks"
-              icon={Play}
-              isOpen={expandedSections.streaming}
-              onToggle={toggleSection}
-              badgeCount={getFilterCount('streaming')}
-            >
-              <StreamFilters
-                type={localCatalog?.type}
-                tvNetworks={tvNetworkOptions}
-                selectedNetworks={selectedNetworks}
-                watchRegions={watchRegions}
-                watchProviders={watchProviders}
-                monetizationTypes={monetizationTypes}
-                onNetworkSearch={handleTVNetworkSearch}
-                filters={localCatalog?.filters || {}}
-                onFiltersChange={handleFiltersChange}
-              />
-            </FilterSection>
-          )}
-
-          {supportsFullFilters && (
-            <FilterSection
-              id="genres"
-              title="Genres"
-              description={
-                activeFilters.find((f) => f.section === 'genres')?.label ||
-                'Select genres to include/exclude'
-              }
-              icon={Sparkles}
-              isOpen={expandedSections.genres}
-              onToggle={toggleSection}
-              badgeCount={getFilterCount('genres')}
-            >
-              <GenreSelector
-                genres={currentGenres}
-                selectedGenres={selectedGenres}
-                excludedGenres={excludedGenres}
-                genreMatchMode={localCatalog?.filters?.genreMatchMode || 'any'}
-                onInclude={handleTriStateGenreClick}
-                onExclude={handleTriStateGenreClick}
-                onClear={handleTriStateGenreClick}
-                onSetMatchMode={(mode) => handleFiltersChange('genreMatchMode', mode)}
-                loading={genresLoading}
-                onRefresh={refreshGenres}
-              />
-            </FilterSection>
-          )}
-
-          {supportsFullFilters && (
-            <FilterSection
-              id="people"
-              title={isMovie ? 'People & Studios' : 'Studios & Keywords'}
-              description={
-                isMovie
-                  ? 'Filter by cast, crew, or production company'
-                  : 'Filter by production companies and keywords'
-              }
-              icon={Users}
-              isOpen={expandedSections.people}
-              onToggle={toggleSection}
-              badgeCount={getFilterCount('people')}
-            >
-              <PeopleFilters
-                selectedPeople={selectedPeople}
-                onSelectPeople={setSelectedPeople}
-                selectedCompanies={selectedCompanies}
-                onSelectCompanies={setSelectedCompanies}
-                selectedKeywords={selectedKeywords}
-                onSelectKeywords={setSelectedKeywords}
-                excludeKeywords={excludeKeywords}
-                onExcludeKeywords={setExcludeKeywords}
-                excludeCompanies={excludeCompanies}
-                onExcludeCompanies={setExcludeCompanies}
-                searchPerson={searchPerson}
-                searchCompany={searchCompany}
-                searchKeyword={searchKeyword}
-                showPeople={isMovie}
-              />
-            </FilterSection>
-          )}
-
-          {supportsFullFilters ? (
-            <FilterSection
-              id="options"
-              title="Options"
-              description="Include adult, video, randomize, or discover-only results"
-              icon={Settings}
-              isOpen={expandedSections.options}
-              onToggle={toggleSection}
-            >
-              <OptionsPanel
-                localCatalog={localCatalog}
-                onFiltersChange={handleFiltersChange}
-                isMovie={isMovie}
-              />
-            </FilterSection>
+          {isImdbCatalog ? (
+            <ImdbFilterPanel
+              localCatalog={localCatalog}
+              onFiltersChange={handleFiltersChange}
+              imdbGenres={imdbGenres}
+              imdbKeywords={imdbKeywords}
+              imdbAwards={imdbAwards}
+              imdbSortOptions={imdbSortOptions}
+              imdbTitleTypes={imdbTitleTypes}
+              countries={safeCountries}
+              languages={safeOriginalLanguages}
+            />
           ) : (
-            <div
-              className="flex items-center gap-3 p-4 mt-6 rounded-lg border border-white/5 bg-white/5"
-              style={{ justifyContent: 'center' }}
-            >
-              <Sparkles size={16} className="text-indigo-400" />
-              <span className="text-gray-300 text-sm font-medium">
-                This is a curated preset from TMDB and cannot be modified.
-              </span>
-            </div>
+            <>
+              {!isPresetCatalog && (
+                <FilterSection
+                  id="filters"
+                  title="Sort & Filter"
+                  description="Sorting, language, year, rating"
+                  icon={Settings}
+                  isOpen={expandedSections.filters}
+                  onToggle={toggleSection}
+                  badgeCount={getFilterCount('filters')}
+                >
+                  <FilterPanel
+                    localCatalog={localCatalog}
+                    onFiltersChange={handleFiltersChange}
+                    sortOptions={sortOptions}
+                    originalLanguages={originalLanguages}
+                    countries={countries}
+                  />
+                </FilterSection>
+              )}
+
+              {supportsFullFilters && (
+                <FilterSection
+                  id="release"
+                  title={`${isMovie ? 'Release' : 'Air Date'} & Classification`}
+                  description="Date ranges, age ratings, release type"
+                  icon={Calendar}
+                  isOpen={expandedSections.release}
+                  onToggle={toggleSection}
+                  badgeCount={getFilterCount('release')}
+                >
+                  <ReleaseFilters
+                    localCatalog={localCatalog}
+                    onFiltersChange={handleFiltersChange}
+                    isMovie={isMovie}
+                    countries={countries}
+                    releaseTypes={releaseTypes}
+                    tvStatuses={tvStatuses}
+                    tvTypes={tvTypes}
+                    certOptions={certOptions}
+                  />
+                </FilterSection>
+              )}
+
+              {supportsFullFilters && (
+                <FilterSection
+                  id="streaming"
+                  title="Where to Watch"
+                  description="Filter by streaming services and original networks"
+                  icon={Play}
+                  isOpen={expandedSections.streaming}
+                  onToggle={toggleSection}
+                  badgeCount={getFilterCount('streaming')}
+                >
+                  <StreamFilters
+                    type={localCatalog?.type}
+                    tvNetworks={tvNetworkOptions}
+                    selectedNetworks={selectedNetworks}
+                    watchRegions={watchRegions}
+                    watchProviders={watchProviders}
+                    monetizationTypes={monetizationTypes}
+                    onNetworkSearch={handleTVNetworkSearch}
+                    filters={localCatalog?.filters || {}}
+                    onFiltersChange={handleFiltersChange}
+                  />
+                </FilterSection>
+              )}
+
+              {supportsFullFilters && (
+                <FilterSection
+                  id="genres"
+                  title="Genres"
+                  description={
+                    activeFilters.find((f) => f.section === 'genres')?.label ||
+                    'Select genres to include/exclude'
+                  }
+                  icon={Sparkles}
+                  isOpen={expandedSections.genres}
+                  onToggle={toggleSection}
+                  badgeCount={getFilterCount('genres')}
+                >
+                  <GenreSelector
+                    genres={currentGenres}
+                    selectedGenres={selectedGenres}
+                    excludedGenres={excludedGenres}
+                    genreMatchMode={localCatalog?.filters?.genreMatchMode || 'any'}
+                    onInclude={handleTriStateGenreClick}
+                    onExclude={handleTriStateGenreClick}
+                    onClear={handleTriStateGenreClick}
+                    onSetMatchMode={(mode) => handleFiltersChange('genreMatchMode', mode)}
+                    loading={genresLoading}
+                    onRefresh={refreshGenres}
+                  />
+                </FilterSection>
+              )}
+
+              {supportsFullFilters && (
+                <FilterSection
+                  id="people"
+                  title={isMovie ? 'People & Studios' : 'Studios & Keywords'}
+                  description={
+                    isMovie
+                      ? 'Filter by cast, crew, or production company'
+                      : 'Filter by production companies and keywords'
+                  }
+                  icon={Users}
+                  isOpen={expandedSections.people}
+                  onToggle={toggleSection}
+                  badgeCount={getFilterCount('people')}
+                >
+                  <PeopleFilters
+                    selectedPeople={selectedPeople}
+                    onSelectPeople={setSelectedPeople}
+                    selectedCompanies={selectedCompanies}
+                    onSelectCompanies={setSelectedCompanies}
+                    selectedKeywords={selectedKeywords}
+                    onSelectKeywords={setSelectedKeywords}
+                    excludeKeywords={excludeKeywords}
+                    onExcludeKeywords={setExcludeKeywords}
+                    excludeCompanies={excludeCompanies}
+                    onExcludeCompanies={setExcludeCompanies}
+                    searchPerson={searchPerson}
+                    searchCompany={searchCompany}
+                    searchKeyword={searchKeyword}
+                    showPeople={isMovie}
+                  />
+                </FilterSection>
+              )}
+
+              {supportsFullFilters ? (
+                <FilterSection
+                  id="options"
+                  title="Options"
+                  description="Include adult, video, randomize, or discover-only results"
+                  icon={Settings}
+                  isOpen={expandedSections.options}
+                  onToggle={toggleSection}
+                >
+                  <OptionsPanel
+                    localCatalog={localCatalog}
+                    onFiltersChange={handleFiltersChange}
+                    isMovie={isMovie}
+                  />
+                </FilterSection>
+              ) : (
+                <div
+                  className="flex items-center gap-3 p-4 mt-6 rounded-lg border border-white/5 bg-white/5"
+                  style={{ justifyContent: 'center' }}
+                >
+                  <Sparkles size={16} className="text-indigo-400" />
+                  <span className="text-gray-300 text-sm font-medium">
+                    This is a curated preset from TMDB and cannot be modified.
+                  </span>
+                </div>
+              )}
+            </>
           )}
 
           <div className="mobile-preview-btn-container">

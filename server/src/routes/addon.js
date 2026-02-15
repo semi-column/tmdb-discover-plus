@@ -5,6 +5,7 @@ import {
   getPosterKeyFromConfig,
 } from '../services/configService.js';
 import * as tmdb from '../services/tmdb/index.js';
+import * as imdb from '../services/imdb/index.ts';
 import { shuffleArray, getBaseUrl, normalizeGenreName, parseIdArray } from '../utils/helpers.js';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.js';
 import { createLogger } from '../utils/logger.ts';
@@ -14,7 +15,7 @@ import { fileURLToPath } from 'url';
 import { addonRateLimit } from '../utils/rateLimit.js';
 import { etagMiddleware } from '../utils/etag.js';
 import { config } from '../config.ts';
-import { isValidUserId, isValidContentType } from '../utils/validation.ts';
+import { isValidUserId, isValidContentType, sanitizeImdbFilters } from '../utils/validation.ts';
 import { sendError, ErrorCodes } from '../utils/AppError.ts';
 
 const log = createLogger('addon');
@@ -254,7 +255,134 @@ async function enrichCatalogResults(allItems, type, apiKey, displayLanguage, isS
   return { genreMap, ratingsMap };
 }
 
+async function handleImdbCatalogRequest(userId, type, catalogId, extra, res, req) {
+  const startTime = Date.now();
+  try {
+    if (!imdb.isImdbApiEnabled()) {
+      return res.json({ metas: [] });
+    }
+
+    const skip = parseInt(extra.skip) || 0;
+    const searchQuery = extra.search || null;
+
+    const userConfig = await getUserConfig(userId);
+    if (!userConfig) return res.json({ metas: [] });
+
+    const posterOptions =
+      userConfig.preferences?.posterService && userConfig.preferences.posterService !== 'none'
+        ? {
+            apiKey: getPosterKeyFromConfig(userConfig),
+            service: userConfig.preferences.posterService,
+          }
+        : null;
+
+    if (catalogId === 'imdb-search-movie' || catalogId === 'imdb-search-series') {
+      if (!searchQuery) return res.json({ metas: [] });
+      const imdbTypes = type === 'series' ? ['tvSeries', 'tvMiniSeries'] : ['movie', 'tvMovie'];
+      const result = await imdb.search(searchQuery, imdbTypes, 50);
+      const metas = (result.titles || [])
+        .map((item) => imdb.imdbToStremioMeta(item, type, posterOptions))
+        .filter(Boolean);
+      return res.etagJson(
+        { metas, cacheMaxAge: 300, staleRevalidate: 600 },
+        { extra: `${userId}:${catalogId}:${searchQuery}` }
+      );
+    }
+
+    const catalogConfig = userConfig.catalogs.find((c) => {
+      const id = `imdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
+      return id === catalogId;
+    });
+
+    if (!catalogConfig) return res.json({ metas: [] });
+
+    const filters = sanitizeImdbFilters(catalogConfig.filters || {});
+    const listType = filters.listType || 'discover';
+    let titles = [];
+
+    const effectiveFilters = { ...filters };
+    if (extra.genre && extra.genre !== 'All') {
+      effectiveFilters.genres = [extra.genre];
+    }
+
+    if (listType === 'top250') {
+      const result = await imdb.getTopRanking(type);
+      titles = (result.titles || []).slice(skip, skip + 100);
+    } else if (listType === 'popular') {
+      const result = await imdb.getPopular(type);
+      titles = (result.titles || []).slice(skip, skip + 100);
+    } else if (listType === 'imdb_list' && filters.imdbListId) {
+      const result = await imdb.getList(filters.imdbListId, skip);
+      titles = result.titles || [];
+    } else {
+      const searchParams = {
+        query: effectiveFilters.query,
+        types: effectiveFilters.types,
+        genres: effectiveFilters.genres,
+        sortBy: effectiveFilters.sortBy || 'POPULARITY',
+        sortOrder: effectiveFilters.sortOrder || 'ASC',
+        imdbRatingMin: effectiveFilters.imdbRatingMin,
+        totalVotesMin: effectiveFilters.totalVotesMin,
+        releaseDateStart: effectiveFilters.releaseDateStart,
+        releaseDateEnd: effectiveFilters.releaseDateEnd,
+        runtimeMin: effectiveFilters.runtimeMin,
+        runtimeMax: effectiveFilters.runtimeMax,
+        languages: effectiveFilters.languages,
+        countries: effectiveFilters.countries,
+        keywords: effectiveFilters.keywords,
+        awardsWon: effectiveFilters.awardsWon,
+        awardsNominated: effectiveFilters.awardsNominated,
+      };
+      const result = await imdb.advancedSearch(searchParams, type, skip);
+      titles = result.titles || [];
+    }
+
+    const catalogPosterOverride = catalogConfig.filters?.enableRatingPosters;
+    const effectivePosterOptions =
+      catalogPosterOverride === true
+        ? posterOptions || null
+        : catalogPosterOverride === false
+          ? null
+          : posterOptions;
+
+    const metas = titles
+      .map((item) => imdb.imdbToStremioMeta(item, type, effectivePosterOptions))
+      .filter(Boolean);
+
+    const baseUrl = (userConfig.baseUrl || getBaseUrl(req)).replace(/\/$/, '');
+    for (const m of metas) {
+      if (!m) continue;
+      if (!m.poster) m.poster = `${baseUrl}/placeholder-poster.svg`;
+    }
+
+    res.set('Cache-Control', 'max-age=300, stale-while-revalidate=600');
+    log.debug('Returning IMDb catalog results', {
+      count: metas.length,
+      catalogId,
+      skip,
+      durationMs: Date.now() - startTime,
+    });
+
+    res.etagJson(
+      { metas, cacheMaxAge: 300, staleRevalidate: 600 },
+      { extra: `${userId}:${catalogId}:${skip}` }
+    );
+  } catch (error) {
+    log.error('IMDb catalog error', {
+      catalogId,
+      type,
+      error: error.message,
+      durationMs: Date.now() - startTime,
+    });
+    res.json({ metas: [] });
+  }
+}
+
 async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
+  if (catalogId.startsWith('imdb-')) {
+    return handleImdbCatalogRequest(userId, type, catalogId, extra, res, req);
+  }
+
   const startTime = Date.now();
   try {
     const skip = parseInt(extra.skip) || 0;
@@ -471,6 +599,17 @@ async function handleMetaRequest(userId, type, id, extra, res, req) {
       imdbId = requestedId;
       const found = await tmdb.findByImdbId(apiKey, imdbId, type, { language });
       tmdbId = found?.tmdbId || null;
+
+      if (!tmdbId && imdb.isImdbApiEnabled()) {
+        const imdbDetail = await imdb.getTitle(imdbId);
+        if (imdbDetail) {
+          const meta = imdb.imdbToStremioFullMeta(imdbDetail, type, posterOptions);
+          return res.etagJson(
+            { meta, cacheMaxAge: 3600, staleRevalidate: 86400, staleError: 86400 },
+            { extra: `${userId}:${id}` }
+          );
+        }
+      }
     } else if (requestedId.startsWith('tmdb:')) {
       tmdbId = Number(requestedId.replace('tmdb:', ''));
     } else if (/^\d+$/.test(requestedId)) {

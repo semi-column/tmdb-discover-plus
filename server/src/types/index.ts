@@ -213,6 +213,7 @@ export interface CatalogConfig {
   id?: string;
   name: string;
   type: ContentType;
+  source?: 'tmdb' | 'imdb';
   filters: CatalogFilters;
   enabled?: boolean;
 }
