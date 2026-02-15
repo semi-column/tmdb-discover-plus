@@ -2,51 +2,6 @@ import { useState, useEffect, useRef, memo } from 'react';
 import { Eye, Loader, RefreshCw, ImageOff, Star, CheckCircle } from 'lucide-react';
 import { PreviewGridSkeleton } from '../../layout/Skeleton';
 
-function PreviewCard({ item }) {
-  const [imgFailed, setImgFailed] = useState(false);
-
-  const isImdb = item.id?.startsWith('tt');
-  const tmdbId =
-    item.tmdbId || (item.id?.startsWith('tmdb:') ? item.id.replace('tmdb:', '') : null);
-  const linkUrl = isImdb
-    ? `https://www.imdb.com/title/${item.id}/`
-    : tmdbId
-      ? `https://www.themoviedb.org/${item.type === 'series' ? 'tv' : 'movie'}/${tmdbId}`
-      : null;
-  const linkTitle = isImdb ? `View "${item.name}" on IMDB` : `View "${item.name}" on TMDB`;
-
-  return (
-    <a
-      key={item.id}
-      className="preview-card"
-      href={linkUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={linkTitle}
-    >
-      {item.poster && !imgFailed ? (
-        <img src={item.poster} alt={item.name} loading="lazy" onError={() => setImgFailed(true)} />
-      ) : (
-        <div className="preview-card-placeholder">
-          <ImageOff size={24} />
-        </div>
-      )}
-      <div className="preview-card-overlay">
-        <div className="preview-card-title">{item.name}</div>
-        <div className="preview-card-meta">
-          {item.releaseInfo && <span>{item.releaseInfo}</span>}
-          {item.imdbRating && (
-            <span className="preview-card-rating">
-              <Star size={10} fill="currentColor" />
-              {item.imdbRating}
-            </span>
-          )}
-        </div>
-      </div>
-    </a>
-  );
-}
-
 export const CatalogPreview = memo(function CatalogPreview({ loading, error, data, onRetry }) {
   const [showUpdated, setShowUpdated] = useState(false);
   const prevDataRef = useRef(null);
@@ -100,9 +55,45 @@ export const CatalogPreview = memo(function CatalogPreview({ loading, error, dat
 
           {!loading && !error && data && (
             <div className="preview-grid">
-              {(Array.isArray(data.metas) ? data.metas : []).map((item) => (
-                <PreviewCard key={item.id} item={item} />
-              ))}
+              {(Array.isArray(data.metas) ? data.metas : []).map((item) => {
+                const tmdbId =
+                  item.tmdbId ||
+                  (item.id?.startsWith('tmdb:') ? item.id.replace('tmdb:', '') : null);
+                const tmdbUrl = tmdbId
+                  ? `https://www.themoviedb.org/${item.type === 'series' ? 'tv' : 'movie'}/${tmdbId}`
+                  : null;
+
+                return (
+                  <a
+                    key={item.id}
+                    className="preview-card"
+                    href={tmdbUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`View "${item.name}" on TMDB`}
+                  >
+                    {item.poster ? (
+                      <img src={item.poster} alt={item.name} loading="lazy" />
+                    ) : (
+                      <div className="preview-card-placeholder">
+                        <ImageOff size={24} />
+                      </div>
+                    )}
+                    <div className="preview-card-overlay">
+                      <div className="preview-card-title">{item.name}</div>
+                      <div className="preview-card-meta">
+                        {item.releaseInfo && <span>{item.releaseInfo}</span>}
+                        {item.imdbRating && (
+                          <span className="preview-card-rating">
+                            <Star size={10} fill="currentColor" />
+                            {item.imdbRating}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           )}
 

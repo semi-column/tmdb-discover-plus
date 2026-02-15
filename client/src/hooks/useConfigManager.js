@@ -32,8 +32,7 @@ export function useConfigManager(config, addToast, deps) {
 
   const handleSave = async () => {
     const catalogsToSave = [...config.catalogs];
-    const imdbCatalogsToSave = [...(config.imdbCatalogs || [])];
-    if (catalogsToSave.length === 0 && imdbCatalogsToSave.length === 0) {
+    if (catalogsToSave.length === 0) {
       addToast('Add at least one catalog before saving', 'error');
       return;
     }
@@ -44,7 +43,6 @@ export function useConfigManager(config, addToast, deps) {
         tmdbApiKey: config.apiKey,
         configName: config.configName,
         catalogs: catalogsToSave,
-        imdbCatalogs: imdbCatalogsToSave,
         preferences: config.preferences,
       };
 
@@ -55,7 +53,6 @@ export function useConfigManager(config, addToast, deps) {
       config.setUserId(result.userId);
       if (result.configName !== undefined) config.setConfigName(result.configName);
       if (result.catalogs) config.setCatalogs(result.catalogs);
-      if (result.imdbCatalogs) config.setImdbCatalogs(result.imdbCatalogs);
       if (result.preferences) config.setPreferences(result.preferences);
       config.markAsSaved();
 
@@ -127,15 +124,6 @@ export function useConfigManager(config, addToast, deps) {
         if (newCatalogs.length > 0) {
           setActiveCatalog(newCatalogs[0]);
         }
-      }
-
-      if (importedData.imdbCatalogs) {
-        const newImdbCatalogs = importedData.imdbCatalogs.map((c) => ({
-          ...c,
-          _id: crypto.randomUUID(),
-          id: crypto.randomUUID(),
-        }));
-        config.setImdbCatalogs((prev) => [...prev, ...newImdbCatalogs]);
       }
 
       if (importedData.preferences) {

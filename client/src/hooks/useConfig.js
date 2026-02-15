@@ -5,7 +5,6 @@ export function useConfig(initialUserId = null) {
   const [userId, setUserId] = useState(initialUserId);
   const [apiKey, setApiKeyState] = useState('');
   const [catalogs, setCatalogs] = useState([]);
-  const [imdbCatalogs, setImdbCatalogs] = useState([]);
   const [configName, setConfigName] = useState('');
   const [preferences, setPreferences] = useState({
     showAdultContent: false,
@@ -94,7 +93,6 @@ export function useConfig(initialUserId = null) {
     setIsAuthenticated(false);
     setUserId(null);
     setCatalogs([]);
-    setImdbCatalogs([]);
     setConfigName('');
     setPreferences({ showAdultContent: false, defaultLanguage: 'en' });
     setIsDirty(false);
@@ -103,7 +101,6 @@ export function useConfig(initialUserId = null) {
   const applyConfig = useCallback((configData) => {
     setUserId(configData.userId);
     setCatalogs(configData.catalogs || []);
-    setImdbCatalogs(configData.imdbCatalogs || []);
     setConfigName(configData.configName || '');
     setPreferences(configData.preferences || {});
     setIsDirty(false);
@@ -137,7 +134,6 @@ export function useConfig(initialUserId = null) {
           tmdbApiKey: newApiKey || apiKey,
           configName,
           catalogs,
-          imdbCatalogs,
           preferences,
         });
         setUserId(result.userId);
@@ -150,7 +146,7 @@ export function useConfig(initialUserId = null) {
         setLoading(false);
       }
     },
-    [userId, apiKey, configName, catalogs, imdbCatalogs, preferences, markAsSaved]
+    [userId, apiKey, configName, catalogs, preferences, markAsSaved]
   );
 
   const updateConfig = useCallback(async () => {
@@ -162,7 +158,6 @@ export function useConfig(initialUserId = null) {
         tmdbApiKey: apiKey,
         configName,
         catalogs,
-        imdbCatalogs,
         preferences,
       });
       markAsSaved();
@@ -173,7 +168,7 @@ export function useConfig(initialUserId = null) {
     } finally {
       setLoading(false);
     }
-  }, [userId, apiKey, configName, catalogs, imdbCatalogs, preferences, markAsSaved]);
+  }, [userId, apiKey, configName, catalogs, preferences, markAsSaved]);
 
   const addCatalog = useCallback((catalog) => {
     setCatalogs((prev) => [...prev, { ...catalog, _id: crypto.randomUUID() }]);
@@ -197,11 +192,6 @@ export function useConfig(initialUserId = null) {
     setIsDirty(true);
   }, []);
 
-  const setImdbCatalogsAndDirty = useCallback((value) => {
-    setImdbCatalogs(value);
-    setIsDirty(true);
-  }, []);
-
   const setConfigNameAndDirty = useCallback((value) => {
     setConfigName(value);
     setIsDirty(true);
@@ -219,8 +209,6 @@ export function useConfig(initialUserId = null) {
     setApiKey,
     catalogs,
     setCatalogs: setCatalogsAndDirty,
-    imdbCatalogs,
-    setImdbCatalogs: setImdbCatalogsAndDirty,
     configName,
     setConfigName: setConfigNameAndDirty,
     preferences,

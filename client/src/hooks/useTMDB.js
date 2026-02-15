@@ -16,7 +16,6 @@ const initialState = {
   certifications: { movie: {}, series: {} },
   watchRegions: [],
   tvNetworks: [],
-  imdb: null,
   loading: false,
   error: null,
 };
@@ -42,7 +41,6 @@ function reducer(state, action) {
         certifications: action.payload.certifications || initialState.certifications,
         watchRegions: action.payload.watchRegions || [],
         tvNetworks: action.payload.tvNetworks || [],
-        imdb: action.payload.imdb || null,
         loading: false,
         error: null,
       };
