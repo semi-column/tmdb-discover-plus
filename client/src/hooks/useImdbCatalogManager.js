@@ -11,14 +11,16 @@ export function useImdbCatalogManager(config, addToast) {
 
   const handleAddImdbPresetCatalog = (type, preset) => {
     const presetConfig = preset.config || {};
+    const filters = {
+      sortBy: presetConfig.sortBy || 'rating',
+      sortOrder: 'desc',
+    };
+    if (presetConfig.region) filters.region = presetConfig.region;
     const newCatalog = {
       _id: crypto.randomUUID(),
       name: presetConfig.name || preset.label.replace(/^[^\s]+\s/, ''),
       type: presetConfig.type || type,
-      filters: {
-        sortBy: presetConfig.sortBy || 'rating',
-        sortOrder: 'desc',
-      },
+      filters,
       enabled: true,
     };
     config.setImdbCatalogs((prev) => [...prev, newCatalog]);

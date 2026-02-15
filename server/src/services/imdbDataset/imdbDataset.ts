@@ -10,12 +10,14 @@ const log = createLogger('ImdbDataset');
 
 const IMDB_RATINGS_URL = 'https://datasets.imdbws.com/title.ratings.tsv.gz';
 const IMDB_BASICS_URL = 'https://datasets.imdbws.com/title.basics.tsv.gz';
+const IMDB_AKAS_URL = 'https://datasets.imdbws.com/title.akas.tsv.gz';
 const UPDATE_INTERVAL_HOURS = config.imdbDataset.updateIntervalHours;
 const MIN_VOTES = config.imdbDataset.minVotes;
 const DOWNLOAD_TIMEOUT_MS = 300_000;
+const AKAS_DOWNLOAD_TIMEOUT_MS = 600_000;
 const WRITE_BATCH_SIZE = 10_000;
 // Bump this when the Redis scoring formula or data schema changes to force a re-import
-const DATA_VERSION = '2';
+const DATA_VERSION = '3';
 
 const ALLOWED_TITLE_TYPES = new Set([
   'movie',
@@ -78,6 +80,63 @@ async function downloadRatingsMap() {
   return ratingsMap;
 }
 
+async function downloadRegionsMap(validTconsts: Set<string>): Promise<Map<string, string[]>> {
+  log.info('Downloading IMDB akas dataset for region data...');
+
+  const response = await fetch(IMDB_AKAS_URL, {
+    method: 'GET',
+    headers: { 'User-Agent': 'TMDB-Discover-Plus/1.0' },
+    signal: AbortSignal.timeout(AKAS_DOWNLOAD_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Akas HTTP ${response.status} ${response.statusText}`);
+  }
+
+  const regionSets = new Map<string, Set<string>>();
+  const gunzip = createGunzip();
+  const rl = createInterface({ input: response.body!.pipe(gunzip), crlfDelay: Infinity });
+
+  let isFirstLine = true;
+  let processed = 0;
+
+  for await (const line of rl) {
+    if (isFirstLine) {
+      isFirstLine = false;
+      continue;
+    }
+    if (!line) continue;
+
+    const firstTab = line.indexOf('\t');
+    if (firstTab === -1) continue;
+
+    const titleId = line.slice(0, firstTab);
+    if (!validTconsts.has(titleId)) continue;
+
+    // Columns: titleId, ordering, title, region, language, types, attributes, isOriginalTitle
+    const parts = line.split('\t');
+    if (parts.length < 4) continue;
+
+    const region = parts[3];
+    if (!region || region === '\\N') continue;
+
+    if (!regionSets.has(titleId)) {
+      regionSets.set(titleId, new Set());
+    }
+    regionSets.get(titleId)!.add(region);
+    processed++;
+  }
+
+  // Convert sets to arrays
+  const regionsMap = new Map<string, string[]>();
+  for (const [id, regions] of regionSets) {
+    regionsMap.set(id, [...regions]);
+  }
+
+  log.info('Akas regions parsed', { titles: regionsMap.size, regionEntries: processed });
+  return regionsMap;
+}
+
 async function downloadAndStore() {
   if (!adapter) return false;
   if (downloading) {
@@ -133,6 +192,16 @@ async function downloadAndStore() {
     log.info('Downloading IMDB datasets...', { minVotes: MIN_VOTES });
 
     const ratingsMap = await downloadRatingsMap();
+
+    let regionsMap: Map<string, string[]>;
+    try {
+      regionsMap = await downloadRegionsMap(new Set(ratingsMap.keys()));
+    } catch (akasErr: any) {
+      log.warn('Failed to download akas dataset, proceeding without region data', {
+        error: akasErr.message,
+      });
+      regionsMap = new Map();
+    }
 
     log.info('Downloading IMDB basics dataset...');
     const basicsResponse = await fetch(IMDB_BASICS_URL, {
@@ -198,6 +267,7 @@ async function downloadAndStore() {
         genres,
         averageRating: ratingData.rating,
         numVotes: ratingData.votes,
+        regions: regionsMap.get(tconst) || [],
       };
 
       const mappedType =
@@ -303,6 +373,11 @@ export async function getDatasetGenres(type: string): Promise<string[]> {
 export async function getDatasetDecades(type: string): Promise<number[]> {
   if (!adapter || !datasetLoaded) return [];
   return adapter.getDecades(type as 'movie' | 'series');
+}
+
+export async function getDatasetRegions(type: string): Promise<string[]> {
+  if (!adapter || !datasetLoaded) return [];
+  return adapter.getRegions(type as 'movie' | 'series');
 }
 
 export function isDatasetLoaded() {

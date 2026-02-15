@@ -11,6 +11,7 @@ function makeTitle(overrides = {}) {
     genres: ['Action'],
     averageRating: 7.5,
     numVotes: 50000,
+    regions: [],
     ...overrides,
   };
 }
@@ -70,6 +71,7 @@ describe('MemoryDatasetAdapter', () => {
           genres: ['Drama'],
           startYear: 1994,
           primaryTitle: 'A',
+          regions: ['US', 'IN'],
         }),
         makeTitle({
           tconst: 'tt2',
@@ -79,6 +81,7 @@ describe('MemoryDatasetAdapter', () => {
           genres: ['Action', 'Drama'],
           startYear: 2008,
           primaryTitle: 'B',
+          regions: ['US', 'GB'],
         }),
         makeTitle({
           tconst: 'tt3',
@@ -88,6 +91,7 @@ describe('MemoryDatasetAdapter', () => {
           genres: ['Comedy'],
           startYear: 1990,
           primaryTitle: 'C',
+          regions: ['IN', 'JP'],
         }),
         makeTitle({
           tconst: 'tt4',
@@ -97,6 +101,7 @@ describe('MemoryDatasetAdapter', () => {
           genres: ['Drama', 'Crime'],
           startYear: 2008,
           primaryTitle: 'D',
+          regions: ['US'],
         }),
         makeTitle({
           tconst: 'tt5',
@@ -106,6 +111,7 @@ describe('MemoryDatasetAdapter', () => {
           genres: ['Comedy'],
           startYear: 2015,
           primaryTitle: 'E',
+          regions: ['IN', 'KR'],
         }),
       ]);
       adapter._finalize!();
@@ -239,6 +245,46 @@ describe('MemoryDatasetAdapter', () => {
       });
       expect(result.items[0].tconst).toBe('tt3');
     });
+
+    it('filters by region', async () => {
+      const result = await adapter.query({
+        type: 'movie',
+        sortBy: 'rating',
+        sortOrder: 'desc',
+        skip: 0,
+        limit: 10,
+        region: 'IN',
+      });
+      expect(result.total).toBe(2);
+      expect(result.items.map((i: any) => i.tconst)).toEqual(['tt1', 'tt3']);
+    });
+
+    it('filters by region and genre combined', async () => {
+      const result = await adapter.query({
+        type: 'movie',
+        sortBy: 'rating',
+        sortOrder: 'desc',
+        skip: 0,
+        limit: 10,
+        region: 'US',
+        genre: 'Drama',
+      });
+      expect(result.total).toBe(2);
+      expect(result.items.map((i: any) => i.tconst)).toEqual(['tt1', 'tt2']);
+    });
+
+    it('filters series by region', async () => {
+      const result = await adapter.query({
+        type: 'series',
+        sortBy: 'rating',
+        sortOrder: 'desc',
+        skip: 0,
+        limit: 10,
+        region: 'IN',
+      });
+      expect(result.total).toBe(1);
+      expect(result.items[0].tconst).toBe('tt5');
+    });
   });
 
   describe('getGenres and getDecades', () => {
@@ -249,13 +295,21 @@ describe('MemoryDatasetAdapter', () => {
           titleType: 'movie',
           genres: ['Action', 'Drama'],
           startYear: 1994,
+          regions: ['US', 'IN'],
         }),
-        makeTitle({ tconst: 'tt2', titleType: 'movie', genres: ['Comedy'], startYear: 2010 }),
+        makeTitle({
+          tconst: 'tt2',
+          titleType: 'movie',
+          genres: ['Comedy'],
+          startYear: 2010,
+          regions: ['GB', 'JP'],
+        }),
         makeTitle({
           tconst: 'tt3',
           titleType: 'tvSeries',
           genres: ['Drama', 'Crime'],
           startYear: 2008,
+          regions: ['US', 'IN', 'KR'],
         }),
       ]);
       adapter._finalize!();
@@ -274,6 +328,21 @@ describe('MemoryDatasetAdapter', () => {
     it('returns decades sorted descending', async () => {
       const decades = await adapter.getDecades('movie');
       expect(decades).toEqual([2010, 1990]);
+    });
+
+    it('returns sorted regions for type', async () => {
+      const regions = await adapter.getRegions('movie');
+      expect(regions).toContain('US');
+      expect(regions).toContain('IN');
+      expect(regions).toContain('GB');
+      expect(regions).toContain('JP');
+    });
+
+    it('returns regions for series', async () => {
+      const regions = await adapter.getRegions('series');
+      expect(regions).toContain('US');
+      expect(regions).toContain('IN');
+      expect(regions).toContain('KR');
     });
   });
 

@@ -9,6 +9,7 @@ const TITLES_HASH = 'imdb:dataset:titles';
 const META_HASH = 'imdb:dataset:meta';
 const GENRES_KEY = 'imdb:dataset:genres';
 const DECADES_KEY = 'imdb:dataset:decades';
+const REGIONS_KEY = 'imdb:dataset:regions';
 const PIPELINE_BATCH = 10000;
 
 const TITLE_TYPE_TO_STREMIO: Record<string, string> = {
@@ -48,6 +49,10 @@ function decadeSortedSetKey(type: string, decade: number, sortBy: string): strin
   return `imdb:dataset:${type}:decade:${decade}:by${sortBy === 'votes' ? 'Votes' : 'Rating'}`;
 }
 
+function regionSortedSetKey(type: string, region: string, sortBy: string): string {
+  return `imdb:dataset:${type}:region:${region}:by${sortBy === 'votes' ? 'Votes' : 'Rating'}`;
+}
+
 export class RedisDatasetAdapter extends ImdbDatasetAdapter {
   private client: ReturnType<typeof createClient>;
 
@@ -77,6 +82,7 @@ export class RedisDatasetAdapter extends ImdbDatasetAdapter {
 
     const genresSet = new Set<string>();
     const decadesSet = new Set<string>();
+    const regionsSet = new Set<string>();
 
     for (let i = 0; i < entries.length; i += PIPELINE_BATCH) {
       const batch = entries.slice(i, i + PIPELINE_BATCH);
@@ -118,6 +124,18 @@ export class RedisDatasetAdapter extends ImdbDatasetAdapter {
           });
           decadesSet.add(`${type}:${decade}`);
         }
+
+        for (const region of item.regions || []) {
+          pipeline.zAdd(regionSortedSetKey(type, region, 'rating'), {
+            score: rScore,
+            value: item.tconst,
+          });
+          pipeline.zAdd(regionSortedSetKey(type, region, 'votes'), {
+            score: vScore,
+            value: item.tconst,
+          });
+          regionsSet.add(`${type}:${region}`);
+        }
       }
 
       await pipeline.exec();
@@ -138,6 +156,14 @@ export class RedisDatasetAdapter extends ImdbDatasetAdapter {
       }
       await pipeline.exec();
     }
+
+    if (regionsSet.size > 0) {
+      const pipeline = this.client.multi();
+      for (const entry of regionsSet) {
+        pipeline.sAdd(REGIONS_KEY, entry as string);
+      }
+      await pipeline.exec();
+    }
   }
 
   async query(q: ImdbDatasetQuery): Promise<ImdbDatasetResult> {
@@ -147,10 +173,13 @@ export class RedisDatasetAdapter extends ImdbDatasetAdapter {
       q.ratingMin !== undefined ||
       q.ratingMax !== undefined ||
       q.votesMin !== undefined ||
-      (q.decadeEnd !== undefined && q.decadeStart !== undefined);
+      (q.decadeEnd !== undefined && q.decadeStart !== undefined) ||
+      (q.region && q.genre);
 
     let key: string;
-    if (q.genre) {
+    if (q.region) {
+      key = regionSortedSetKey(q.type, q.region, q.sortBy || 'rating');
+    } else if (q.genre) {
       key = genreSortedSetKey(q.type, q.genre, q.sortBy || 'rating');
     } else if (q.decadeStart !== undefined) {
       key = decadeSortedSetKey(q.type, q.decadeStart, q.sortBy || 'rating');
@@ -177,6 +206,7 @@ export class RedisDatasetAdapter extends ImdbDatasetAdapter {
           if (q.decadeEnd !== undefined && q.decadeStart !== undefined) {
             if (item.startYear < q.decadeStart || item.startYear > q.decadeEnd + 9) return false;
           }
+          if (q.region && q.genre && !item.genres.includes(q.genre)) return false;
           return true;
         });
 
@@ -236,6 +266,21 @@ export class RedisDatasetAdapter extends ImdbDatasetAdapter {
         .sort((a: number, b: number) => b - a);
     } catch (e: any) {
       log.debug('Redis getDecades failed', { error: e.message });
+      return [];
+    }
+  }
+
+  async getRegions(type: string): Promise<string[]> {
+    this._ensureReady();
+    try {
+      const members = await this.client.sMembers(REGIONS_KEY);
+      const prefix = `${type}:`;
+      return members
+        .filter((m: string) => m.startsWith(prefix))
+        .map((m: string) => m.slice(prefix.length))
+        .sort();
+    } catch (e: any) {
+      log.debug('Redis getRegions failed', { error: e.message });
       return [];
     }
   }

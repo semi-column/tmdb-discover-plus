@@ -287,6 +287,7 @@ async function handleImdbCatalogRequest(userId, type, catalogId, extra, res, req
     const query = {
       type,
       genre: genreFilter || undefined,
+      region: filters.region || undefined,
       decadeStart: filters.decadeStart || undefined,
       decadeEnd: filters.decadeEnd || undefined,
       sortBy: filters.sortBy || 'rating',

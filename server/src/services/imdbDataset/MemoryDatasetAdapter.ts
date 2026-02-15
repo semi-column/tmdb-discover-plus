@@ -23,6 +23,7 @@ function getDecade(year: number): number {
 
 type GenreIndex = { movie: Map<string, ImdbTitle[]>; series: Map<string, ImdbTitle[]> };
 type DecadeIndex = { movie: Map<number, ImdbTitle[]>; series: Map<number, ImdbTitle[]> };
+type RegionIndex = { movie: Map<string, ImdbTitle[]>; series: Map<string, ImdbTitle[]> };
 
 export class MemoryDatasetAdapter extends ImdbDatasetAdapter {
   private moviesByRating: ImdbTitle[] = [];
@@ -31,6 +32,7 @@ export class MemoryDatasetAdapter extends ImdbDatasetAdapter {
   private seriesByVotes: ImdbTitle[] = [];
   private genreIndex: GenreIndex = { movie: new Map(), series: new Map() };
   private decadeIndex: DecadeIndex = { movie: new Map(), series: new Map() };
+  private regionIndex: RegionIndex = { movie: new Map(), series: new Map() };
   private meta: Map<string, string> = new Map();
 
   constructor() {
@@ -61,6 +63,10 @@ export class MemoryDatasetAdapter extends ImdbDatasetAdapter {
         if (!this.decadeIndex.movie.has(decade)) this.decadeIndex.movie.set(decade, []);
         this.decadeIndex.movie.get(decade)!.push(item);
       }
+      for (const region of item.regions || []) {
+        if (!this.regionIndex.movie.has(region)) this.regionIndex.movie.set(region, []);
+        this.regionIndex.movie.get(region)!.push(item);
+      }
     }
 
     for (const item of series) {
@@ -72,6 +78,10 @@ export class MemoryDatasetAdapter extends ImdbDatasetAdapter {
         const decade = getDecade(item.startYear);
         if (!this.decadeIndex.series.has(decade)) this.decadeIndex.series.set(decade, []);
         this.decadeIndex.series.get(decade)!.push(item);
+      }
+      for (const region of item.regions || []) {
+        if (!this.regionIndex.series.has(region)) this.regionIndex.series.set(region, []);
+        this.regionIndex.series.get(region)!.push(item);
       }
     }
   }
@@ -91,13 +101,18 @@ export class MemoryDatasetAdapter extends ImdbDatasetAdapter {
     for (const [, items] of this.genreIndex.series) items.sort(byRating);
     for (const [, items] of this.decadeIndex.movie) items.sort(byRating);
     for (const [, items] of this.decadeIndex.series) items.sort(byRating);
+    for (const [, items] of this.regionIndex.movie) items.sort(byRating);
+    for (const [, items] of this.regionIndex.series) items.sort(byRating);
   }
 
   async query(q: ImdbDatasetQuery): Promise<ImdbDatasetResult> {
     const type = q.type as 'movie' | 'series';
     let source: ImdbTitle[];
 
-    if (q.genre) {
+    if (q.region) {
+      const regionItems = this.regionIndex[type]?.get(q.region);
+      source = regionItems || [];
+    } else if (q.genre) {
       const genreItems = this.genreIndex[type]?.get(q.genre);
       source = genreItems || [];
     } else if (q.decadeStart !== undefined) {
@@ -111,22 +126,35 @@ export class MemoryDatasetAdapter extends ImdbDatasetAdapter {
 
     let filtered = source;
 
-    if (q.ratingMin !== undefined || q.ratingMax !== undefined || q.votesMin !== undefined) {
+    if (
+      q.ratingMin !== undefined ||
+      q.ratingMax !== undefined ||
+      q.votesMin !== undefined ||
+      (q.region && q.genre)
+    ) {
       filtered = source.filter((item) => {
         if (q.ratingMin !== undefined && item.averageRating < q.ratingMin) return false;
         if (q.ratingMax !== undefined && item.averageRating > q.ratingMax) return false;
         if (q.votesMin !== undefined && item.numVotes < q.votesMin) return false;
+        if (q.region && q.genre && !item.genres.includes(q.genre)) return false;
         return true;
       });
     }
 
-    if (q.decadeEnd !== undefined && q.decadeStart !== undefined && !q.genre) {
+    if (q.decadeEnd !== undefined && q.decadeStart !== undefined && !q.genre && !q.region) {
       filtered = filtered.filter(
         (item) => item.startYear >= q.decadeStart! && item.startYear <= q.decadeEnd!
       );
     }
 
-    if (q.sortBy === 'votes' && (q.genre || q.decadeStart !== undefined)) {
+    if (q.region && q.decadeStart !== undefined) {
+      filtered = filtered.filter(
+        (item) =>
+          item.startYear >= q.decadeStart! && item.startYear <= (q.decadeEnd ?? q.decadeStart! + 9)
+      );
+    }
+
+    if (q.sortBy === 'votes' && (q.genre || q.decadeStart !== undefined || q.region)) {
       filtered = [...filtered].sort(
         (a, b) => b.numVotes - a.numVotes || b.averageRating - a.averageRating
       );
@@ -156,6 +184,11 @@ export class MemoryDatasetAdapter extends ImdbDatasetAdapter {
     return [...(this.decadeIndex[t]?.keys() || [])].sort((a, b) => b - a);
   }
 
+  async getRegions(type: string): Promise<string[]> {
+    const t = type as 'movie' | 'series';
+    return [...(this.regionIndex[t]?.keys() || [])].sort();
+  }
+
   async clear() {
     this.moviesByRating = [];
     this.moviesByVotes = [];
@@ -163,6 +196,7 @@ export class MemoryDatasetAdapter extends ImdbDatasetAdapter {
     this.seriesByVotes = [];
     this.genreIndex = { movie: new Map(), series: new Map() };
     this.decadeIndex = { movie: new Map(), series: new Map() };
+    this.regionIndex = { movie: new Map(), series: new Map() };
   }
 
   async setMeta(key: string, value: string): Promise<void> {
