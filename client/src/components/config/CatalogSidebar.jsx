@@ -286,6 +286,7 @@ export const CatalogSidebar = memo(function CatalogSidebar({
   imdbCatalogs = [],
   activeImdbCatalog,
   onSelectImdbCatalog,
+  onAddImdbCatalog,
   onAddImdbPresetCatalog,
   imdbPresetCatalogs = { movie: [], series: [] },
   imdbAvailable = false,
@@ -335,8 +336,19 @@ export const CatalogSidebar = memo(function CatalogSidebar({
         </div>
         <button
           className="btn btn-primary btn-sm"
-          onClick={onAddCatalog}
-          title="Add custom catalog"
+          onClick={() => {
+            if (catalogTab === 'imdb' && onAddImdbCatalog) {
+              onAddImdbCatalog({
+                name: 'New IMDB Catalog',
+                type: 'movie',
+                filters: { sortBy: 'rating', sortOrder: 'desc' },
+                enabled: true,
+              });
+            } else {
+              onAddCatalog();
+            }
+          }}
+          title={catalogTab === 'imdb' ? 'Add IMDB catalog' : 'Add custom catalog'}
         >
           <Plus size={16} />
           Add Catalog
