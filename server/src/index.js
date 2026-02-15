@@ -109,7 +109,7 @@ app.use((req, res, next) => {
       "default-src 'self'",
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' https://image.tmdb.org https://storage.ko-fi.com data:",
+      "img-src 'self' https://image.tmdb.org https://images.metahub.space https://api.ratingposterdb.com https://api.topposters.com https://storage.ko-fi.com data:",
       "font-src 'self'",
       "connect-src 'self' https://api.themoviedb.org",
       "frame-ancestors 'none'",
