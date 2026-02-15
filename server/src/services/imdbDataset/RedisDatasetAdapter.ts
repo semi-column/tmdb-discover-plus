@@ -29,7 +29,7 @@ function getDecade(year: number): number {
 }
 
 function ratingScore(item: ImdbTitle): number {
-  return item.averageRating * 1_000_000 + item.numVotes;
+  return item.averageRating * 10_000_000_000 + item.numVotes;
 }
 
 function votesScore(item: ImdbTitle): number {
