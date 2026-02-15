@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { api } from '../../services/api';
 import {
   Calendar,
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { FilterSection } from './catalog/FilterSection';
 import { CatalogPreview } from './catalog/CatalogPreview';
+import { SearchableSelect } from '../forms/SearchableSelect';
 
 export const ImdbCatalogEditor = memo(function ImdbCatalogEditor({
   catalog,
@@ -90,6 +91,18 @@ export const ImdbCatalogEditor = memo(function ImdbCatalogEditor({
     [setLocalCatalogEdited]
   );
 
+  const regionLabels = imdbData?.regionLabels || {};
+  const regionOptions = useMemo(() => {
+    const adapterRegions = imdbData?.regions?.[localCatalog?.type || 'movie'] || [];
+    const codes = adapterRegions.length > 0 ? adapterRegions : Object.keys(regionLabels);
+    return codes
+      .map((code) => ({
+        code,
+        name: regionLabels[code] ? `${regionLabels[code]} (${code})` : code,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [imdbData?.regions, localCatalog?.type, regionLabels]);
+
   if (!catalog) {
     return (
       <div className="editor-panel">
@@ -116,8 +129,6 @@ export const ImdbCatalogEditor = memo(function ImdbCatalogEditor({
   const isMovie = type === 'movie';
   const genres = imdbData?.genres?.[type] || [];
   const decades = imdbData?.decades?.[type] || [];
-  const regions = imdbData?.regions?.[type] || [];
-  const regionLabels = imdbData?.regionLabels || {};
   const sortOptions = imdbData?.sortOptions || [];
 
   const getSortFilterCount = () => {
@@ -149,286 +160,285 @@ export const ImdbCatalogEditor = memo(function ImdbCatalogEditor({
   return (
     <div className="editor-container">
       <div className="editor-panel">
-        <div className="editor-scroll">
-          <div className="editor-header">
-            <div className="editor-name-group">
+        <div className="editor-header">
+          <div className="editor-title">
+            {isMovie ? <Film size={22} /> : <Tv size={22} />}
+            <div style={{ flex: 1 }}>
               <input
                 type="text"
-                className="editor-name-input"
+                className={`editor-name-input${!localCatalog?.name?.trim() ? ' field-invalid' : ''}`}
                 value={localCatalog?.name || ''}
                 onChange={(e) =>
                   setLocalCatalogEdited((prev) => ({ ...prev, name: e.target.value }))
                 }
-                placeholder="Catalog name"
+                placeholder="Catalog Name..."
+                maxLength={50}
               />
               {!localCatalog?.name?.trim() && <span className="field-error">Name is required</span>}
             </div>
-            <div className="editor-actions">
-              <button className="btn btn-secondary" onClick={loadPreview} disabled={previewLoading}>
-                {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
-                Preview
-              </button>
+          </div>
+          <div className="editor-actions">
+            <button className="btn btn-secondary" onClick={loadPreview} disabled={previewLoading}>
+              {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
+              Preview
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={() =>
+                setLocalCatalogEdited((prev) => ({ ...prev, enabled: !prev?.enabled }))
+              }
+              title={localCatalog?.enabled !== false ? 'Disable catalog' : 'Enable catalog'}
+            >
+              {localCatalog?.enabled !== false ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+            {onDelete && (
               <button
                 className="btn btn-sm"
-                onClick={() =>
-                  setLocalCatalogEdited((prev) => ({ ...prev, enabled: !prev?.enabled }))
-                }
-                title={localCatalog?.enabled !== false ? 'Disable catalog' : 'Enable catalog'}
+                onClick={() => onDelete(catalog._id)}
+                title="Delete catalog"
+                style={{ color: 'var(--error)' }}
               >
-                {localCatalog?.enabled !== false ? <Eye size={16} /> : <EyeOff size={16} />}
+                <Trash2 size={16} />
               </button>
-              {onDelete && (
-                <button
-                  className="btn btn-sm"
-                  onClick={() => onDelete(catalog._id)}
-                  title="Delete catalog"
-                  style={{ color: 'var(--error)' }}
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
-            </div>
+            )}
+          </div>
+        </div>
+
+        <div className="editor-content">
+          <div className="content-type-toggle">
+            <button
+              className={`type-btn ${isMovie ? 'active' : ''}`}
+              onClick={() => handleTypeChange('movie')}
+            >
+              <Film size={18} /> Movies
+            </button>
+            <button
+              className={`type-btn ${!isMovie ? 'active' : ''}`}
+              onClick={() => handleTypeChange('series')}
+            >
+              <Tv size={18} /> TV Shows
+            </button>
           </div>
 
-          <div className="editor-content">
-            <div className="content-type-toggle">
-              <button
-                className={`type-btn ${isMovie ? 'active' : ''}`}
-                onClick={() => handleTypeChange('movie')}
-              >
-                <Film size={18} /> Movies
-              </button>
-              <button
-                className={`type-btn ${!isMovie ? 'active' : ''}`}
-                onClick={() => handleTypeChange('series')}
-              >
-                <Tv size={18} /> TV Shows
-              </button>
+          <FilterSection
+            id="sort"
+            title="Sort & Order"
+            description="How results are sorted"
+            icon={Settings}
+            isOpen={expandedSections.sort}
+            onToggle={toggleSection}
+            badgeCount={getSortFilterCount()}
+          >
+            <div className="filter-grid">
+              <div className="input-group">
+                <label className="input-label">Sort By</label>
+                <select
+                  className="input"
+                  value={filters.sortBy || 'rating'}
+                  onChange={(e) => handleFiltersChange('sortBy', e.target.value)}
+                >
+                  {sortOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="input-group">
+                <label className="input-label">Sort Order</label>
+                <select
+                  className="input"
+                  value={filters.sortOrder || 'desc'}
+                  onChange={(e) => handleFiltersChange('sortOrder', e.target.value)}
+                >
+                  <option value="desc">Descending (highest first)</option>
+                  <option value="asc">Ascending (lowest first)</option>
+                </select>
+              </div>
             </div>
+          </FilterSection>
 
-            <FilterSection
-              id="sort"
-              title="Sort & Order"
-              description="How results are sorted"
-              icon={Settings}
-              isOpen={expandedSections.sort}
-              onToggle={toggleSection}
-              badgeCount={getSortFilterCount()}
-            >
-              <div className="filter-grid">
-                <div className="input-group">
-                  <label className="input-label">Sort By</label>
-                  <select
-                    className="input"
-                    value={filters.sortBy || 'rating'}
-                    onChange={(e) => handleFiltersChange('sortBy', e.target.value)}
-                  >
-                    {sortOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="input-group">
-                  <label className="input-label">Sort Order</label>
-                  <select
-                    className="input"
-                    value={filters.sortOrder || 'desc'}
-                    onChange={(e) => handleFiltersChange('sortOrder', e.target.value)}
-                  >
-                    <option value="desc">Descending (highest first)</option>
-                    <option value="asc">Ascending (lowest first)</option>
-                  </select>
-                </div>
-              </div>
-            </FilterSection>
+          <FilterSection
+            id="genre"
+            title="Genre"
+            description={filters.genre || 'Filter by genre'}
+            icon={Sparkles}
+            isOpen={expandedSections.genre}
+            onToggle={toggleSection}
+            badgeCount={getGenreFilterCount()}
+          >
+            <div className="input-group">
+              <label className="input-label">Genre</label>
+              <select
+                className="input"
+                value={filters.genre || ''}
+                onChange={(e) => handleFiltersChange('genre', e.target.value || undefined)}
+              >
+                <option value="">All Genres</option>
+                {genres.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </FilterSection>
 
-            <FilterSection
-              id="genre"
-              title="Genre"
-              description={filters.genre || 'Filter by genre'}
-              icon={Sparkles}
-              isOpen={expandedSections.genre}
-              onToggle={toggleSection}
-              badgeCount={getGenreFilterCount()}
-            >
+          <FilterSection
+            id="region"
+            title="Region / Country"
+            description={
+              filters.region
+                ? regionLabels[filters.region] || filters.region
+                : 'Filter by release region'
+            }
+            icon={Globe}
+            isOpen={expandedSections.region}
+            onToggle={toggleSection}
+            badgeCount={getRegionFilterCount()}
+          >
+            <div className="filter-group">
+              <label className="filter-label">Region</label>
+              <SearchableSelect
+                options={regionOptions}
+                value={filters.region || ''}
+                onChange={(value) => handleFiltersChange('region', value || undefined)}
+                placeholder="All Regions"
+                searchPlaceholder="Search countries..."
+                labelKey="name"
+                valueKey="code"
+              />
+            </div>
+          </FilterSection>
+
+          <FilterSection
+            id="decade"
+            title="Decade"
+            description="Filter by release decade"
+            icon={Calendar}
+            isOpen={expandedSections.decade}
+            onToggle={toggleSection}
+            badgeCount={getDecadeFilterCount()}
+          >
+            <div className="filter-grid">
               <div className="input-group">
-                <label className="input-label">Genre</label>
+                <label className="input-label">From</label>
                 <select
                   className="input"
-                  value={filters.genre || ''}
-                  onChange={(e) => handleFiltersChange('genre', e.target.value || undefined)}
-                >
-                  <option value="">All Genres</option>
-                  {genres.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </FilterSection>
-
-            <FilterSection
-              id="region"
-              title="Region / Country"
-              description={
-                filters.region
-                  ? regionLabels[filters.region] || filters.region
-                  : 'Filter by release region'
-              }
-              icon={Globe}
-              isOpen={expandedSections.region}
-              onToggle={toggleSection}
-              badgeCount={getRegionFilterCount()}
-            >
-              <div className="input-group">
-                <label className="input-label">Region</label>
-                <select
-                  className="input"
-                  value={filters.region || ''}
-                  onChange={(e) => handleFiltersChange('region', e.target.value || undefined)}
-                >
-                  <option value="">All Regions</option>
-                  {regions.map((code) => (
-                    <option key={code} value={code}>
-                      {regionLabels[code] ? `${regionLabels[code]} (${code})` : code}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </FilterSection>
-
-            <FilterSection
-              id="decade"
-              title="Decade"
-              description="Filter by release decade"
-              icon={Calendar}
-              isOpen={expandedSections.decade}
-              onToggle={toggleSection}
-              badgeCount={getDecadeFilterCount()}
-            >
-              <div className="filter-grid">
-                <div className="input-group">
-                  <label className="input-label">From</label>
-                  <select
-                    className="input"
-                    value={filters.decadeStart || ''}
-                    onChange={(e) =>
-                      handleFiltersChange(
-                        'decadeStart',
-                        e.target.value ? parseInt(e.target.value) : undefined
-                      )
-                    }
-                  >
-                    <option value="">Any</option>
-                    {decades.map((d) => (
-                      <option key={d} value={d}>
-                        {d}s
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="input-group">
-                  <label className="input-label">To</label>
-                  <select
-                    className="input"
-                    value={filters.decadeEnd || ''}
-                    onChange={(e) =>
-                      handleFiltersChange(
-                        'decadeEnd',
-                        e.target.value ? parseInt(e.target.value) : undefined
-                      )
-                    }
-                  >
-                    <option value="">Any</option>
-                    {decades.map((d) => (
-                      <option key={d} value={d}>
-                        {d}s
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </FilterSection>
-
-            <FilterSection
-              id="rating"
-              title="Rating & Votes"
-              description="IMDB rating and vote count thresholds"
-              icon={Star}
-              isOpen={expandedSections.rating}
-              onToggle={toggleSection}
-              badgeCount={getRatingFilterCount()}
-            >
-              <div className="filter-grid">
-                <div className="input-group">
-                  <label className="input-label">Min Rating</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={filters.ratingMin ?? ''}
-                    onChange={(e) =>
-                      handleFiltersChange(
-                        'ratingMin',
-                        e.target.value ? parseFloat(e.target.value) : undefined
-                      )
-                    }
-                    min="0"
-                    max="10"
-                    step="0.1"
-                    placeholder="0.0"
-                  />
-                </div>
-                <div className="input-group">
-                  <label className="input-label">Max Rating</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={filters.ratingMax ?? ''}
-                    onChange={(e) =>
-                      handleFiltersChange(
-                        'ratingMax',
-                        e.target.value ? parseFloat(e.target.value) : undefined
-                      )
-                    }
-                    min="0"
-                    max="10"
-                    step="0.1"
-                    placeholder="10.0"
-                  />
-                </div>
-              </div>
-              <div className="input-group" style={{ marginTop: '12px' }}>
-                <label className="input-label">Min Votes</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={filters.votesMin ?? ''}
+                  value={filters.decadeStart || ''}
                   onChange={(e) =>
                     handleFiltersChange(
-                      'votesMin',
+                      'decadeStart',
                       e.target.value ? parseInt(e.target.value) : undefined
                     )
                   }
+                >
+                  <option value="">Any</option>
+                  {decades.map((d) => (
+                    <option key={d} value={d}>
+                      {d}s
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="input-group">
+                <label className="input-label">To</label>
+                <select
+                  className="input"
+                  value={filters.decadeEnd || ''}
+                  onChange={(e) =>
+                    handleFiltersChange(
+                      'decadeEnd',
+                      e.target.value ? parseInt(e.target.value) : undefined
+                    )
+                  }
+                >
+                  <option value="">Any</option>
+                  {decades.map((d) => (
+                    <option key={d} value={d}>
+                      {d}s
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </FilterSection>
+
+          <FilterSection
+            id="rating"
+            title="Rating & Votes"
+            description="IMDB rating and vote count thresholds"
+            icon={Star}
+            isOpen={expandedSections.rating}
+            onToggle={toggleSection}
+            badgeCount={getRatingFilterCount()}
+          >
+            <div className="filter-grid">
+              <div className="input-group">
+                <label className="input-label">Min Rating</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={filters.ratingMin ?? ''}
+                  onChange={(e) =>
+                    handleFiltersChange(
+                      'ratingMin',
+                      e.target.value ? parseFloat(e.target.value) : undefined
+                    )
+                  }
                   min="0"
-                  step="1000"
-                  placeholder="Default (1000)"
+                  max="10"
+                  step="0.1"
+                  placeholder="0.0"
                 />
               </div>
-            </FilterSection>
-
-            <div className="mobile-preview-btn-container">
-              <button
-                className="btn btn-secondary mobile-preview-btn"
-                onClick={loadPreview}
-                disabled={previewLoading}
-              >
-                {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
-                Preview
-              </button>
+              <div className="input-group">
+                <label className="input-label">Max Rating</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={filters.ratingMax ?? ''}
+                  onChange={(e) =>
+                    handleFiltersChange(
+                      'ratingMax',
+                      e.target.value ? parseFloat(e.target.value) : undefined
+                    )
+                  }
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  placeholder="10.0"
+                />
+              </div>
             </div>
+            <div className="input-group" style={{ marginTop: '12px' }}>
+              <label className="input-label">Min Votes</label>
+              <input
+                type="number"
+                className="input"
+                value={filters.votesMin ?? ''}
+                onChange={(e) =>
+                  handleFiltersChange(
+                    'votesMin',
+                    e.target.value ? parseInt(e.target.value) : undefined
+                  )
+                }
+                min="0"
+                step="1000"
+                placeholder="Default (1000)"
+              />
+            </div>
+          </FilterSection>
+
+          <div className="mobile-preview-btn-container">
+            <button
+              className="btn btn-secondary mobile-preview-btn"
+              onClick={loadPreview}
+              disabled={previewLoading}
+            >
+              {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
+              Preview
+            </button>
           </div>
         </div>
       </div>
