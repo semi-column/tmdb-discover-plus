@@ -32,20 +32,6 @@ import {
 } from '../utils/authMiddleware.js';
 import { config } from '../config.ts';
 import { getConfigCache } from '../infrastructure/configCache.js';
-import {
-  queryDataset,
-  getDatasetGenres,
-  getDatasetDecades,
-  getDatasetRegions,
-  isDatasetLoaded,
-  getDatasetStats,
-} from '../services/imdbDataset/index.ts';
-import { imdbTitleToStremioMeta } from '../services/imdbDataset/stremioMeta.ts';
-import {
-  IMDB_SORT_OPTIONS,
-  IMDB_PRESET_CATALOGS,
-  IMDB_REGION_LABELS,
-} from '../services/imdbDataset/referenceData.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -197,33 +183,6 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
       tmdb.getNetworks(apiKey, '').catch(() => []),
     ]);
 
-    let imdbData = null;
-    if (isDatasetLoaded()) {
-      const [imdbMovieGenres, imdbSeriesGenres, imdbMovieDecades, imdbSeriesDecades] =
-        await Promise.all([
-          getDatasetGenres('movie'),
-          getDatasetGenres('series'),
-          getDatasetDecades('movie'),
-          getDatasetDecades('series'),
-        ]);
-
-      const [imdbMovieRegions, imdbSeriesRegions] = await Promise.all([
-        getDatasetRegions('movie'),
-        getDatasetRegions('series'),
-      ]);
-
-      imdbData = {
-        available: true,
-        genres: { movie: imdbMovieGenres, series: imdbSeriesGenres },
-        decades: { movie: imdbMovieDecades, series: imdbSeriesDecades },
-        regions: { movie: imdbMovieRegions, series: imdbSeriesRegions },
-        regionLabels: IMDB_REGION_LABELS,
-        sortOptions: IMDB_SORT_OPTIONS,
-        presetCatalogs: IMDB_PRESET_CATALOGS,
-        stats: getDatasetStats(),
-      };
-    }
-
     const data = {
       genres: { movie: movieGenres, series: seriesGenres },
       languages,
@@ -243,7 +202,6 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
         name: n.name,
         logo: n.logo || n.logoPath || null,
       })),
-      imdb: imdbData,
     };
 
     res.set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
@@ -586,51 +544,6 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
   }
 });
 
-router.post('/imdb-preview', requireAuth, async (req, res) => {
-  try {
-    if (!isDatasetLoaded()) {
-      return res.json({ metas: [], totalResults: 0, previewEmpty: true, datasetNotLoaded: true });
-    }
-
-    const { type, filters: rawFilters = {}, page: rawPage = 1 } = req.body;
-
-    if (!type || !isValidContentType(type)) {
-      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid content type');
-    }
-
-    const page = Math.max(1, Math.min(parseInt(rawPage) || 1, 100));
-    const skip = (page - 1) * 100;
-
-    const query = {
-      type,
-      genre: rawFilters.genre || undefined,
-      region: rawFilters.region || undefined,
-      decadeStart: rawFilters.decadeStart ? parseInt(rawFilters.decadeStart) : undefined,
-      decadeEnd: rawFilters.decadeEnd ? parseInt(rawFilters.decadeEnd) : undefined,
-      sortBy: rawFilters.sortBy || 'rating',
-      sortOrder: rawFilters.sortOrder || 'desc',
-      skip,
-      limit: 20,
-      ratingMin: rawFilters.ratingMin ? parseFloat(rawFilters.ratingMin) : undefined,
-      ratingMax: rawFilters.ratingMax ? parseFloat(rawFilters.ratingMax) : undefined,
-      votesMin: rawFilters.votesMin ? parseInt(rawFilters.votesMin) : undefined,
-    };
-
-    const result = await queryDataset(query);
-
-    const metas = result.items.map((item) => imdbTitleToStremioMeta(item));
-
-    res.json({
-      metas,
-      totalResults: result.total,
-      page,
-      previewEmpty: metas.length === 0,
-    });
-  } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, error.message);
-  }
-});
-
 router.get('/stats', async (req, res) => {
   try {
     const stats = await getPublicStats();
@@ -646,7 +559,7 @@ router.get('/stats', async (req, res) => {
 
 router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, res) => {
   try {
-    const { catalogs, preferences, configName, imdbCatalogs } = req.body;
+    const { catalogs, preferences, configName } = req.body;
     const { apiKey } = req;
 
     log.info('Create config request', { catalogCount: catalogs?.length || 0 });
@@ -658,7 +571,6 @@ router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, 
       tmdbApiKey: apiKey,
       configName: configName || '',
       catalogs: catalogs || [],
-      imdbCatalogs: imdbCatalogs || [],
       preferences: preferences || {},
     });
 
@@ -670,7 +582,6 @@ router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, 
       userId: newUserId,
       configName: config.configName || '',
       catalogs: config.catalogs || [],
-      imdbCatalogs: config.imdbCatalogs || [],
       preferences: config.preferences || {},
       installUrl: manifestUrl,
       stremioUrl: `stremio://${host}/${newUserId}/manifest.json`,
@@ -697,7 +608,6 @@ router.get('/config/:userId', requireAuth, requireConfigOwnership, async (req, r
       userId: config.userId,
       configName: config.configName || '',
       catalogs: config.catalogs || [],
-      imdbCatalogs: config.imdbCatalogs || [],
       preferences: config.preferences || {},
       hasApiKey: !!config.tmdbApiKeyEncrypted,
     };
@@ -721,7 +631,7 @@ router.put(
   async (req, res) => {
     try {
       const { userId } = req.params;
-      const { catalogs, preferences, configName, imdbCatalogs } = req.body;
+      const { catalogs, preferences, configName } = req.body;
       const { apiKey } = req;
 
       log.info('Update config request', { userId, catalogCount: catalogs?.length || 0 });
@@ -731,7 +641,6 @@ router.put(
         tmdbApiKey: apiKey,
         configName: configName || '',
         catalogs: catalogs || [],
-        imdbCatalogs: imdbCatalogs || [],
         preferences: preferences || {},
       });
 
@@ -749,7 +658,6 @@ router.put(
         userId,
         configName: config.configName || '',
         catalogs: config.catalogs || [],
-        imdbCatalogs: config.imdbCatalogs || [],
         preferences: config.preferences || {},
         installUrl: manifestUrl,
         stremioUrl: `stremio://${host}/${userId}/manifest.json`,

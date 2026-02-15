@@ -16,8 +16,6 @@ import { etagMiddleware } from '../utils/etag.js';
 import { config } from '../config.ts';
 import { isValidUserId, isValidContentType } from '../utils/validation.ts';
 import { sendError, ErrorCodes } from '../utils/AppError.ts';
-import { queryDataset, isDatasetLoaded } from '../services/imdbDataset/index.ts';
-import { imdbTitleToStremioMeta } from '../services/imdbDataset/stremioMeta.ts';
 
 const log = createLogger('addon');
 
@@ -254,102 +252,6 @@ async function enrichCatalogResults(allItems, type, apiKey, displayLanguage, isS
   }
 
   return { genreMap, ratingsMap };
-}
-
-const IMDB_PAGE_SIZE = 100;
-
-async function handleImdbCatalogRequest(userId, type, catalogId, extra, res, req) {
-  const startTime = Date.now();
-  try {
-    if (!isDatasetLoaded()) {
-      log.debug('IMDB dataset not loaded yet');
-      return res.json({ metas: [] });
-    }
-
-    const skip = parseInt(extra.skip) || 0;
-    const config = await getUserConfig(userId);
-    if (!config) return res.json({ metas: [] });
-
-    const imdbCatalogs = config.imdbCatalogs || [];
-    const catalogConfig = imdbCatalogs.find((c) => {
-      const id = `imdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
-      return id === catalogId;
-    });
-
-    if (!catalogConfig) {
-      log.debug('IMDB catalog not found', { catalogId });
-      return res.json({ metas: [] });
-    }
-
-    const filters = catalogConfig.filters || {};
-    const genreFilter = extra.genre && extra.genre !== 'All' ? extra.genre : filters.genre;
-
-    const query = {
-      type,
-      genre: genreFilter || undefined,
-      region: filters.region || undefined,
-      decadeStart: filters.decadeStart || undefined,
-      decadeEnd: filters.decadeEnd || undefined,
-      sortBy: filters.sortBy || 'rating',
-      sortOrder: filters.sortOrder || 'desc',
-      skip,
-      limit: IMDB_PAGE_SIZE,
-      ratingMin: filters.ratingMin ?? undefined,
-      ratingMax: filters.ratingMax ?? undefined,
-      votesMin: filters.votesMin ?? undefined,
-    };
-
-    const result = await queryDataset(query);
-
-    const posterOptions =
-      config.preferences?.posterService && config.preferences.posterService !== 'none'
-        ? {
-            apiKey: getPosterKeyFromConfig(config),
-            service: config.preferences.posterService,
-          }
-        : null;
-
-    const catalogPosterOverride = catalogConfig.filters?.enableRatingPosters;
-    const effectivePosterOptions =
-      catalogPosterOverride === true
-        ? posterOptions || null
-        : catalogPosterOverride === false
-          ? null
-          : posterOptions;
-
-    const metas = result.items.map((item) => imdbTitleToStremioMeta(item, effectivePosterOptions));
-
-    const baseUrl = (config.baseUrl || getBaseUrl(req)).replace(/\/$/, '');
-    for (const m of metas) {
-      if (!m.poster) m.poster = `${baseUrl}/placeholder-poster.svg`;
-    }
-
-    res.set('Cache-Control', 'max-age=3600, stale-while-revalidate=7200');
-
-    log.debug('Returning IMDB catalog results', {
-      count: metas.length,
-      total: result.total,
-      skip,
-      durationMs: Date.now() - startTime,
-    });
-
-    res.etagJson(
-      {
-        metas,
-        cacheMaxAge: 3600,
-        staleRevalidate: 7200,
-      },
-      { extra: `${userId}:${catalogId}:${skip}` }
-    );
-  } catch (error) {
-    log.error('IMDB Catalog error', {
-      catalogId,
-      type,
-      error: error.message,
-      durationMs: Date.now() - startTime,
-    });
-    res.json({ metas: [] });
-  }
 }
 
 async function handleCatalogRequest(userId, type, catalogId, extra, res, req) {
@@ -711,9 +613,6 @@ router.get('/:userId/catalog/:type/:catalogId/:extra.json', async (req, res) => 
   }
 
   const extraParams = parseExtra(rawExtra);
-  if (catalogId.startsWith('imdb-')) {
-    return handleImdbCatalogRequest(userId, type, catalogId, extraParams, res, req);
-  }
   await handleCatalogRequest(userId, type, catalogId, extraParams, res, req);
 });
 
@@ -723,9 +622,6 @@ router.get('/:userId/catalog/:type/:catalogId.json', async (req, res) => {
     skip: req.query.skip || '0',
     search: req.query.search || null,
   };
-  if (catalogId.startsWith('imdb-')) {
-    return handleImdbCatalogRequest(userId, type, catalogId, extra, res, req);
-  }
   await handleCatalogRequest(userId, type, catalogId, extra, res, req);
 });
 

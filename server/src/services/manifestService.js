@@ -6,7 +6,6 @@ import { normalizeGenreName, parseIdArray } from '../utils/helpers.js';
 import { createLogger } from '../utils/logger.ts';
 import { getApiKeyFromConfig, updateCatalogGenres } from './configService.js';
 import { config } from '../config.ts';
-import { isDatasetLoaded, getDatasetGenres } from './imdbDataset/index.ts';
 
 const log = createLogger('manifestService');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,18 +53,6 @@ export function buildManifest(userConfig, baseUrl) {
     });
   }
 
-  // Add IMDB dataset catalogs
-  const imdbCatalogs = (userConfig?.imdbCatalogs || [])
-    .filter((c) => c.enabled !== false)
-    .map((catalog) => ({
-      id: `imdb-${catalog._id || catalog.name.toLowerCase().replace(/\s+/g, '-')}`,
-      type: catalog.type === 'series' ? 'series' : 'movie',
-      name: catalog.name,
-      pageSize: 100,
-      extra: [{ name: 'skip' }],
-    }));
-  catalogs.push(...imdbCatalogs);
-
   return {
     id: ADDON_ID,
     name: ADDON_NAME,
@@ -95,29 +82,6 @@ export async function enrichManifestWithGenres(manifest, config) {
   await Promise.all(
     manifest.catalogs.map(async (catalog) => {
       try {
-        // Handle IMDB dataset catalogs
-        if (catalog.id.startsWith('imdb-')) {
-          if (!isDatasetLoaded()) return;
-          try {
-            const genres = await getDatasetGenres(catalog.type);
-            if (genres && genres.length > 0) {
-              const sorted = [...genres].sort((a, b) => a.localeCompare(b));
-              sorted.unshift('All');
-              catalog.extra = catalog.extra || [];
-              catalog.extra = catalog.extra.filter((e) => e.name !== 'genre');
-              catalog.extra.push({
-                name: 'genre',
-                options: sorted,
-                optionsLimit: 1,
-                isRequired: false,
-              });
-            }
-          } catch (err) {
-            log.warn('Failed to enrich IMDB catalog with genres', { error: err.message });
-          }
-          return;
-        }
-
         // Skip genre enrichment for dedicated search catalogs
         if (catalog.id.startsWith('tmdb-search-')) return;
 

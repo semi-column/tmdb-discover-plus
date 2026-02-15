@@ -62,16 +62,6 @@ Storage backend selection priority: explicit `DATABASE_DRIVER` → auto-detect f
 | `IMDB_RATINGS_UPDATE_HOURS` | How often (in hours) to refresh the IMDB ratings dataset         | `24`    |
 | `IMDB_MIN_VOTES`            | Minimum IMDB vote count for a title to receive rating enrichment | `100`   |
 
-## IMDB Dataset Catalogs
-
-The IMDB dataset feature downloads IMDB's public TSV datasets (`title.basics.tsv.gz` and `title.ratings.tsv.gz`) to power catalog browsing sourced from real IMDB ratings and popularity data. No API key required. Uses ~200–300MB additional memory (filtered to titles with ≥1000 votes). Refreshes every 24 hours by default.
-
-| Variable                    | Description                                                                        | Default |
-| --------------------------- | ---------------------------------------------------------------------------------- | ------- |
-| `IMDB_DATASET_DISABLED`     | Disable the IMDB dataset catalogs feature entirely                                 | `false` |
-| `IMDB_DATASET_UPDATE_HOURS` | How often (in hours) to re-download and refresh the IMDB dataset                   | `24`    |
-| `IMDB_DATASET_MIN_VOTES`    | Minimum vote count for a title to be included in IMDB catalogs (quality threshold) | `1000`  |
-
 ## External APIs
 
 | Variable       | Description                                                                | Default   |

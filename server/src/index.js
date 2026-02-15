@@ -23,7 +23,6 @@ import {
   getImdbRatingsStats,
   destroyImdbRatings,
 } from './services/imdbRatings/index.js';
-import { initImdbDataset, getDatasetStats, destroyDataset } from './services/imdbDataset/index.ts';
 import { getCircuitBreakerState } from './services/tmdb/client.ts';
 import { requestIdMiddleware } from './utils/requestContext.ts';
 import { sendError, ErrorCodes, AppError } from './utils/AppError.ts';
@@ -109,7 +108,7 @@ app.use((req, res, next) => {
       "default-src 'self'",
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' https://image.tmdb.org https://images.metahub.space https://api.ratingposterdb.com https://api.topposters.com https://storage.ko-fi.com data:",
+      "img-src 'self' https://image.tmdb.org https://storage.ko-fi.com data:",
       "font-src 'self'",
       "connect-src 'self' https://api.themoviedb.org",
       "frame-ancestors 'none'",
@@ -289,7 +288,6 @@ app.get('/health', monitoringRateLimit, (req, res) => {
     tmdbThrottle: throttleStats,
     tmdbCircuitBreaker: getCircuitBreakerState(),
     imdbRatings: getImdbRatingsStats(),
-    imdbDataset: getDatasetStats(),
     cacheWarming: serverStatus.cacheWarming,
     metrics: metricsData,
     memory: {
@@ -345,7 +343,6 @@ function gracefulShutdown(signal) {
   destroyTmdbThrottle();
   destroyMetrics();
   destroyImdbRatings().catch(() => {});
-  destroyDataset().catch(() => {});
 
   if (server) {
     server.close(async (err) => {
@@ -426,15 +423,6 @@ async function start() {
       })
       .catch((err) => {
         log.warn('IMDb ratings initialization failed (non-critical)', { error: err.message });
-      });
-
-    // IMDB dataset catalogs — download in background, non-blocking.
-    initImdbDataset()
-      .then(() => {
-        log.info('IMDB dataset initialized', getDatasetStats());
-      })
-      .catch((err) => {
-        log.warn('IMDB dataset initialization failed (non-critical)', { error: err.message });
       });
   } catch (error) {
     log.error('Failed to start server', { error: error.message });
