@@ -82,6 +82,11 @@ export async function saveUserConfig(config) {
     };
   });
 
+  const processedImdbCatalogs = (config.imdbCatalogs || []).map((c) => ({
+    ...c,
+    _id: c._id || c.id || crypto.randomUUID(),
+  }));
+
   try {
     const processedPreferences = { ...(config.preferences || {}) };
 
@@ -102,6 +107,7 @@ export async function saveUserConfig(config) {
       userId: safeUserId,
       configName: config.configName || '',
       catalogs: processedCatalogs,
+      imdbCatalogs: processedImdbCatalogs,
       preferences: processedPreferences,
       updatedAt: new Date(),
     };

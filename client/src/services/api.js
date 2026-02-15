@@ -246,7 +246,12 @@ class ApiService {
     const cacheKey = 'tmdb-reference-data';
     try {
       const cached = sessionStorage.getItem(cacheKey);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.imdb) return parsed;
+        // Don't use cached data when imdb is missing — dataset may have loaded since
+        sessionStorage.removeItem(cacheKey);
+      }
     } catch {
       /* ignore */
     }
@@ -272,6 +277,13 @@ class ApiService {
     return this.request('/preview', {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+  }
+
+  async imdbPreview(type, filters, page = 1) {
+    return this.request('/imdb-preview', {
+      method: 'POST',
+      body: JSON.stringify({ type, filters, page }),
     });
   }
 

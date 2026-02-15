@@ -18,6 +18,9 @@ import './styles/components.css';
 const CatalogEditor = lazy(() =>
   import('./components/config/CatalogEditor').then((m) => ({ default: m.CatalogEditor }))
 );
+const ImdbCatalogEditor = lazy(() =>
+  import('./components/config/ImdbCatalogEditor').then((m) => ({ default: m.ImdbCatalogEditor }))
+);
 
 function App() {
   const {
@@ -38,6 +41,9 @@ function App() {
     userConfigs,
     configsLoading,
   } = state;
+
+  const activeImdbCatalog = state.activeImdbCatalog;
+  const imdbData = tmdb.imdb || null;
 
   const [stats, setStats] = useState(null);
 
@@ -167,7 +173,7 @@ function App() {
                 />
               )}
 
-              {config.catalogs.length > 0 && (
+              {(config.catalogs.length > 0 || (config.imdbCatalogs || []).length > 0) && (
                 <div className="save-button-wrapper">
                   {config.isDirty && <span className="unsaved-indicator" title="Unsaved changes" />}
                   <button
@@ -199,7 +205,10 @@ function App() {
             <CatalogSidebar
               catalogs={config.catalogs}
               activeCatalog={activeCatalog}
-              onSelectCatalog={state.setActiveCatalog}
+              onSelectCatalog={(cat) => {
+                state.setActiveCatalog(cat);
+                if (cat) state.setActiveImdbCatalog(null);
+              }}
               onAddCatalog={() => state.setShowNewCatalogModal(true)}
               onAddPresetCatalog={actions.handleAddPresetCatalog}
               onDeleteCatalog={actions.handleDeleteCatalog}
@@ -215,6 +224,15 @@ function App() {
               onImportConfig={actions.handleImportConfig}
               languages={tmdb.languages}
               addToast={actions.addToast}
+              imdbCatalogs={config.imdbCatalogs}
+              activeImdbCatalog={activeImdbCatalog}
+              onSelectImdbCatalog={(cat) => {
+                state.setActiveImdbCatalog(cat);
+                if (cat) state.setActiveCatalog(null);
+              }}
+              onAddImdbPresetCatalog={actions.handleAddImdbPresetCatalog}
+              imdbPresetCatalogs={imdbData?.presetCatalogs || { movie: [], series: [] }}
+              imdbAvailable={!!imdbData?.available}
             />
 
             <Suspense
@@ -224,35 +242,44 @@ function App() {
                 </div>
               }
             >
-              <CatalogEditor
-                catalog={activeCatalog}
-                genres={tmdb.genres}
-                genresLoading={tmdb.loading}
-                refreshGenres={tmdb.refresh}
-                languages={tmdb.languages}
-                originalLanguages={tmdb.originalLanguages}
-                countries={tmdb.countries}
-                sortOptions={tmdb.sortOptions}
-                releaseTypes={tmdb.releaseTypes}
-                tvStatuses={tmdb.tvStatuses}
-                tvTypes={tmdb.tvTypes}
-                monetizationTypes={tmdb.monetizationTypes}
-                certifications={tmdb.certifications}
-                watchRegions={tmdb.watchRegions}
-                tvNetworks={tmdb.tvNetworks}
-                preferences={config.preferences}
-                onUpdate={actions.handleUpdateCatalog}
-                onPreview={tmdb.preview}
-                searchPerson={tmdb.searchPerson}
-                searchCompany={tmdb.searchCompany}
-                searchKeyword={tmdb.searchKeyword}
-                searchTVNetworks={tmdb.searchTVNetworks}
-                getPersonById={tmdb.getPersonById}
-                getCompanyById={tmdb.getCompanyById}
-                getKeywordById={tmdb.getKeywordById}
-                getNetworkById={tmdb.getNetworkById}
-                getWatchProviders={tmdb.getWatchProviders}
-              />
+              {activeImdbCatalog ? (
+                <ImdbCatalogEditor
+                  catalog={activeImdbCatalog}
+                  imdbData={imdbData}
+                  onUpdate={actions.handleUpdateImdbCatalog}
+                  onDelete={actions.handleDeleteImdbCatalog}
+                />
+              ) : (
+                <CatalogEditor
+                  catalog={activeCatalog}
+                  genres={tmdb.genres}
+                  genresLoading={tmdb.loading}
+                  refreshGenres={tmdb.refresh}
+                  languages={tmdb.languages}
+                  originalLanguages={tmdb.originalLanguages}
+                  countries={tmdb.countries}
+                  sortOptions={tmdb.sortOptions}
+                  releaseTypes={tmdb.releaseTypes}
+                  tvStatuses={tmdb.tvStatuses}
+                  tvTypes={tmdb.tvTypes}
+                  monetizationTypes={tmdb.monetizationTypes}
+                  certifications={tmdb.certifications}
+                  watchRegions={tmdb.watchRegions}
+                  tvNetworks={tmdb.tvNetworks}
+                  preferences={config.preferences}
+                  onUpdate={actions.handleUpdateCatalog}
+                  onPreview={tmdb.preview}
+                  searchPerson={tmdb.searchPerson}
+                  searchCompany={tmdb.searchCompany}
+                  searchKeyword={tmdb.searchKeyword}
+                  searchTVNetworks={tmdb.searchTVNetworks}
+                  getPersonById={tmdb.getPersonById}
+                  getCompanyById={tmdb.getCompanyById}
+                  getKeywordById={tmdb.getKeywordById}
+                  getNetworkById={tmdb.getNetworkById}
+                  getWatchProviders={tmdb.getWatchProviders}
+                />
+              )}
             </Suspense>
           </div>
         </div>

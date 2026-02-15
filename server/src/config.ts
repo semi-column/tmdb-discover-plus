@@ -78,6 +78,12 @@ export const config = Object.freeze({
     minVotes: envInt('IMDB_MIN_VOTES', 100),
   }),
 
+  imdbDataset: Object.freeze({
+    disabled: envBool('IMDB_DATASET_DISABLED'),
+    updateIntervalHours: envInt('IMDB_DATASET_UPDATE_HOURS', 24),
+    minVotes: envInt('IMDB_DATASET_MIN_VOTES', 1000),
+  }),
+
   rpdb: Object.freeze({
     apiKey: env('RPDB_API_KEY'),
   }),

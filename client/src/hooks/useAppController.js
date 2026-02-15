@@ -4,6 +4,7 @@ import { useTMDB } from './useTMDB';
 import { useToast } from './useToast';
 import { useInstall } from './useInstall';
 import { useCatalogManager } from './useCatalogManager';
+import { useImdbCatalogManager } from './useImdbCatalogManager';
 import { useConfigManager } from './useConfigManager';
 import { useAuth, getUrlUserId } from './useAuth';
 
@@ -16,6 +17,7 @@ export function useAppController() {
   const toast = useToast();
   const install = useInstall();
   const catalogs = useCatalogManager(config, toast.addToast);
+  const imdbCatalogs = useImdbCatalogManager(config, toast.addToast);
   const configMgr = useConfigManager(config, toast.addToast, {
     setInstallData: install.setInstallData,
     setShowInstallModal: install.setShowInstallModal,
@@ -60,6 +62,8 @@ export function useAppController() {
       pageLoading: auth.pageLoading,
       activeCatalog: catalogs.activeCatalog,
       setActiveCatalog: catalogs.setActiveCatalog,
+      activeImdbCatalog: imdbCatalogs.activeImdbCatalog,
+      setActiveImdbCatalog: imdbCatalogs.setActiveImdbCatalog,
       showInstallModal: install.showInstallModal,
       setShowInstallModal: install.setShowInstallModal,
       showNewCatalogModal,
@@ -81,6 +85,8 @@ export function useAppController() {
       auth.isSessionExpired,
       catalogs.activeCatalog,
       catalogs.setActiveCatalog,
+      imdbCatalogs.activeImdbCatalog,
+      imdbCatalogs.setActiveImdbCatalog,
       install.showInstallModal,
       install.setShowInstallModal,
       install.installData,
@@ -107,6 +113,11 @@ export function useAppController() {
       handleDeleteCatalog: catalogs.handleDeleteCatalog,
       handleDuplicateCatalog: catalogs.handleDuplicateCatalog,
       handleUpdateCatalog: catalogs.handleUpdateCatalog,
+      handleAddImdbCatalog: imdbCatalogs.handleAddImdbCatalog,
+      handleAddImdbPresetCatalog: imdbCatalogs.handleAddImdbPresetCatalog,
+      handleDeleteImdbCatalog: imdbCatalogs.handleDeleteImdbCatalog,
+      handleDuplicateImdbCatalog: imdbCatalogs.handleDuplicateImdbCatalog,
+      handleUpdateImdbCatalog: imdbCatalogs.handleUpdateImdbCatalog,
       handleImportConfig: configMgr.handleImportConfig,
       handleSwitchConfig: configMgr.handleSwitchConfig,
       handleCreateNewConfig: configMgr.handleCreateNewConfig,
@@ -131,6 +142,11 @@ export function useAppController() {
       catalogs.handleDeleteCatalog,
       catalogs.handleDuplicateCatalog,
       catalogs.handleUpdateCatalog,
+      imdbCatalogs.handleAddImdbCatalog,
+      imdbCatalogs.handleAddImdbPresetCatalog,
+      imdbCatalogs.handleDeleteImdbCatalog,
+      imdbCatalogs.handleDuplicateImdbCatalog,
+      imdbCatalogs.handleUpdateImdbCatalog,
       handleConfigMismatchGoToOwn,
       handleConfigMismatchLoginNew,
     ]
