@@ -41,6 +41,12 @@ const __dirname = dirname(__filename);
 const router = Router();
 const log = createLogger('api');
 
+router.use((req, res, next) => {
+  res.set('CDN-Cache-Control', 'no-store');
+  res.set('Cloudflare-CDN-Cache-Control', 'no-store');
+  next();
+});
+
 router.use(apiRateLimit);
 
 let _buildMetadata = null;
@@ -226,7 +232,7 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
       imdb: imdbData,
     };
 
-    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     res.json(data);
   } catch (error) {
     log.error('GET /reference-data error', { error: error.message });

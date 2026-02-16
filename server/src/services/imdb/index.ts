@@ -55,8 +55,12 @@ export function isImdbApiEnabled(): boolean {
 }
 
 export function initImdbApi(): void {
-  if (!config.imdbApi.apiKey || !config.imdbApi.apiHost) {
-    log.info('IMDb API not configured — IMDb features disabled');
+  if (!isImdbApiEnabled()) {
+    log.info('IMDb API not configured — IMDb features disabled', {
+      enabled: config.imdbApi.enabled,
+      hasKey: !!config.imdbApi.apiKey,
+      hasHost: !!config.imdbApi.apiHost,
+    });
     return;
   }
   log.info('IMDb API enabled', { rateLimit: config.imdbApi.rateLimit });
