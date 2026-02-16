@@ -136,8 +136,9 @@ export async function enrichManifestWithGenres(manifest, config) {
 
         // Try fetching live genres first
         try {
-          if (config.tmdbApiKey) {
-            const live = await tmdb.getGenres(config.tmdbApiKey, helperType);
+          const resolvedApiKey = getApiKeyFromConfig(config);
+          if (resolvedApiKey) {
+            const live = await tmdb.getGenres(resolvedApiKey, helperType);
             if (Array.isArray(live) && live.length > 0) {
               live.forEach((g) => {
                 idToName[String(g.id)] = g.name;

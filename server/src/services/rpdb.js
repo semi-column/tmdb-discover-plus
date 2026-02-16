@@ -43,7 +43,7 @@ export async function getRpdbRating(apiKey, imdbId) {
   const url = `${RPDB_BASE_URL}/${apiKey}/imdb/rating/${imdbId}`;
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
 
     if (!response.ok) {
       // 404 means not found, 403 means bad key/limit/expired
@@ -70,11 +70,6 @@ export async function getRpdbRating(apiKey, imdbId) {
 
     return null;
   } catch (error) {
-    if (error.message.includes('RPDB Status 403')) {
-      // Should have been caught above, but just in case
-      log.debug('Failed to fetch RPDB rating (403)', { imdbId });
-      return null;
-    }
     log.warn('Failed to fetch RPDB rating', { imdbId, error: error.message });
     return null;
   }

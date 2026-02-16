@@ -1,5 +1,4 @@
 import { createLogger } from '../../utils/logger.ts';
-import crypto from 'crypto';
 
 const log = createLogger('CacheWrapper');
 

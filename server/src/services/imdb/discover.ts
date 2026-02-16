@@ -13,6 +13,12 @@ import type {
 } from './types.ts';
 import type { ContentType } from '../../types/index.ts';
 
+interface RawRankingResponse {
+  titles?: Array<Record<string, unknown>>;
+  titleChartRankings?: Array<Record<string, unknown>>;
+  pageInfo?: { hasNextPage: boolean; endCursor: string | null };
+}
+
 const log = createLogger('imdb:discover');
 
 function buildCursorCacheKey(filterHash: string, skip: number): string {
@@ -30,6 +36,18 @@ function hashFilters(params: Record<string, unknown>): string {
 function mapContentTypeToImdbTypes(type: ContentType): string[] {
   if (type === 'series') return ['tvSeries', 'tvMiniSeries'];
   return ['movie', 'tvMovie'];
+}
+
+function flattenNestedTitles(
+  entries: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  return entries.map((entry) => {
+    if (entry.title && typeof entry.title === 'object') {
+      const { title, ...rest } = entry;
+      return { ...(title as Record<string, unknown>), ...rest };
+    }
+    return entry;
+  });
 }
 
 export async function advancedSearch(
@@ -116,23 +134,18 @@ export async function advancedSearch(
 export async function getTopRanking(type: ContentType): Promise<ImdbRankingResult> {
   const ttl = config.imdbApi.cacheTtlRanking;
   const endpoint =
-    type === 'series' ? '/api/imdb/rankings/top/250?type=TV' : '/api/imdb/rankings/top/250?type=MOVIE';
-  const data = (await imdbFetch(endpoint, {}, ttl)) as any;
+    type === 'series'
+      ? '/api/imdb/rankings/top/250?type=TV'
+      : '/api/imdb/rankings/top/250?type=MOVIE';
+  const data = (await imdbFetch(endpoint, {}, ttl)) as RawRankingResponse;
 
-  // Handle both 'titles' and 'titleChartRankings'
   const list = data?.titles || data?.titleChartRankings;
-  
+
   if (list && Array.isArray(list)) {
-    data.titles = list.map((entry: any) => {
-      if (entry.title && typeof entry.title === 'object') {
-        const { title, ...rest } = entry;
-        return { ...title, ...rest };
-      }
-      return entry;
-    });
+    data.titles = flattenNestedTitles(list);
   }
 
-  return data as ImdbRankingResult;
+  return data as unknown as ImdbRankingResult;
 }
 
 export async function getPopular(type: ContentType): Promise<ImdbRankingResult> {
@@ -141,20 +154,13 @@ export async function getPopular(type: ContentType): Promise<ImdbRankingResult> 
     type === 'series'
       ? '/api/imdb/rankings/top/popular?type=TV'
       : '/api/imdb/rankings/top/popular?type=MOVIE';
-  const data = (await imdbFetch(endpoint, {}, ttl)) as any;
+  const data = (await imdbFetch(endpoint, {}, ttl)) as RawRankingResponse;
 
-  // Flatten nested title property if present
   if (data?.titles && Array.isArray(data.titles)) {
-    data.titles = data.titles.map((entry: any) => {
-      if (entry.title && typeof entry.title === 'object') {
-        const { title, ...rest } = entry;
-        return { ...title, ...rest };
-      }
-      return entry;
-    });
+    data.titles = flattenNestedTitles(data.titles);
   }
 
-  return data as ImdbRankingResult;
+  return data as unknown as ImdbRankingResult;
 }
 
 export async function getList(
@@ -181,17 +187,14 @@ export async function getList(
     }
   }
 
-  const data = (await imdbFetch(`/api/imdb/list/${sanitizedId}`, params, ttl)) as any;
+  const data = (await imdbFetch(
+    `/api/imdb/list/${sanitizedId}`,
+    params,
+    ttl
+  )) as RawRankingResponse;
 
-  // Flatten nested title property if present
   if (data?.titles && Array.isArray(data.titles)) {
-    data.titles = data.titles.map((entry: any) => {
-      if (entry.title && typeof entry.title === 'object') {
-        const { title, ...rest } = entry;
-        return { ...title, ...rest };
-      }
-      return entry;
-    });
+    data.titles = flattenNestedTitles(data.titles);
   }
 
   if (data.pageInfo?.endCursor) {
@@ -205,5 +208,5 @@ export async function getList(
     }
   }
 
-  return data;
+  return data as unknown as ImdbListResult;
 }

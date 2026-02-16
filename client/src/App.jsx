@@ -119,13 +119,16 @@ function App() {
       </a>
       <Header userId={config.userId} stats={stats} />
 
-      <main className={`main ${state.globalSource === 'imdb' ? 'theme-imdb' : ''}`} id="main-content">
+      <main
+        className={`main ${state.globalSource === 'imdb' ? 'theme-imdb' : ''}`}
+        id="main-content"
+      >
         <div className="container">
           <div className="builder-toolbar">
             <div>
               <h2>Catalog Builder</h2>
               <p className="text-secondary">
-                {state.globalSource === 'imdb' 
+                {state.globalSource === 'imdb'
                   ? 'Create and customize your Stremio catalogs with IMDb filters'
                   : 'Create and customize your Stremio catalogs with TMDB filters'}
               </p>
@@ -265,6 +268,7 @@ function App() {
                 getKeywordById={tmdb.getKeywordById}
                 getNetworkById={tmdb.getNetworkById}
                 getWatchProviders={tmdb.getWatchProviders}
+                addToast={actions.addToast}
               />
             </Suspense>
           </div>

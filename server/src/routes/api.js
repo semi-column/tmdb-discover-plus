@@ -75,10 +75,10 @@ function getBuildMetadata() {
 router.get('/status', async (req, res) => {
   try {
     const metadata = getBuildMetadata();
-    const stats = await getPublicStats().catch(() => ({ users: 0, catalogs: 0 }));
+    const stats = await getPublicStats().catch(() => ({ totalUsers: 0, totalCatalogs: 0 }));
 
     // Determine database and cache type from environment
-    const databaseType = config.database.databaseUrl
+    const databaseType = config.database.postgresUri
       ? 'postgres'
       : config.database.mongodbUri
         ? 'mongodb'
@@ -93,8 +93,8 @@ router.get('/status', async (req, res) => {
       cache: cacheType,
       imdbApi: imdb.isImdbApiEnabled(),
       stats: {
-        users: stats.users || 0,
-        catalogs: stats.catalogs || 0,
+        users: stats.totalUsers || 0,
+        catalogs: stats.totalCatalogs || 0,
       },
     });
   } catch (error) {
@@ -521,6 +521,8 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
         languages: filters.languages,
         countries: filters.countries,
         keywords: filters.keywords,
+        awardsWon: filters.awardsWon,
+        awardsNominated: filters.awardsNominated,
       };
       const result = await imdb.advancedSearch(searchParams, type, 0);
       titles = (result.titles || []).slice(0, 20);
@@ -551,13 +553,14 @@ router.get('/imdb/search', requireAuth, async (req, res) => {
       return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
     }
 
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20));
     const imdbTypes =
       type === 'series'
         ? ['tvSeries', 'tvMiniSeries']
         : type === 'movie'
           ? ['movie', 'tvMovie']
           : undefined;
-    const result = await imdb.search(String(query), imdbTypes, 20);
+    const result = await imdb.search(String(query), imdbTypes, limit);
     const metas = (result.titles || [])
       .map((item) => imdb.imdbToStremioMeta(item, type || 'movie'))
       .filter(Boolean);
@@ -649,15 +652,6 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
         });
       }
     }
-
-    const normalizeCsvOrArray = (val) => {
-      if (!val) return [];
-      if (Array.isArray(val)) return val.map(String).filter(Boolean);
-      return String(val)
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-    };
 
     const metas = results.results.slice(0, 20).map((item) => {
       return tmdb.toStremioMeta(item, type, null, null, genreMap);

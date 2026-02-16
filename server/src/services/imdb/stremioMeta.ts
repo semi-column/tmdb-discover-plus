@@ -1,10 +1,7 @@
-import { createLogger } from '../../utils/logger.ts';
 import { generatePosterUrl, isValidPosterConfig } from '../posterService.js';
 
 import type { ContentType } from '../../types/index.ts';
 import type { ImdbTitle, ImdbRankingEntry, ImdbListItem, ImdbPosterOptions } from './types.ts';
-
-const log = createLogger('imdb:stremioMeta');
 
 function formatRuntime(minutes: number | undefined | null): string | undefined {
   if (!minutes) return undefined;
@@ -58,7 +55,7 @@ export function imdbToStremioMeta(
   if (isValidPosterConfig(posterOptions)) {
     const enhancedPoster = generatePosterUrl({
       ...posterOptions,
-      tmdbId: 0,
+      tmdbId: null,
       type: stremioType,
       imdbId: item.id,
     });
@@ -67,7 +64,7 @@ export function imdbToStremioMeta(
 
   return {
     id: item.id,
-    tmdbId: 0,
+    tmdbId: null,
     imdbId: item.id,
     imdb_id: item.id,
     type: stremioType,

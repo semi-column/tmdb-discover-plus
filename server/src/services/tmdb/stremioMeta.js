@@ -1,5 +1,5 @@
 import { createLogger } from '../../utils/logger.ts';
-import { generatePosterUrl, generateBackdropUrl, isValidPosterConfig } from '../posterService.js';
+import { generatePosterUrl, isValidPosterConfig } from '../posterService.js';
 import { getRpdbRating } from '../rpdb.js';
 import { TMDB_IMAGE_BASE } from './constants.ts';
 import { getImdbRatingString } from '../imdbRatings/index.js';
@@ -58,12 +58,23 @@ function buildCredits(details, isMovie) {
   const writerString = writerNames.join(', ');
   const directorString = directors.join(', ');
 
-  const creators = !isMovie && Array.isArray(details.created_by)
-    ? details.created_by.map((p) => p?.name).filter(Boolean)
-    : [];
+  const creators =
+    !isMovie && Array.isArray(details.created_by)
+      ? details.created_by.map((p) => p?.name).filter(Boolean)
+      : [];
   const creatorString = creators.join(', ');
 
-  return { cast, crew, directors, writers, writerNames, writerString, directorString, creators, creatorString };
+  return {
+    cast,
+    crew,
+    directors,
+    writers,
+    writerNames,
+    writerString,
+    directorString,
+    creators,
+    creatorString,
+  };
 }
 
 function buildCertification(details, isMovie, targetLanguage, userRegion) {
@@ -144,9 +155,20 @@ function buildTrailers(details, targetLanguage) {
   return { trailer, trailerStreams, trailers };
 }
 
-async function buildLinks(
-  { effectiveImdbId, genres, cast, directors, writerNames, creators, title, type, details, posterOptions, manifestUrl, genreCatalogId }
-) {
+async function buildLinks({
+  effectiveImdbId,
+  genres,
+  cast,
+  directors,
+  writerNames,
+  creators,
+  title,
+  type,
+  details,
+  posterOptions,
+  manifestUrl,
+  genreCatalogId,
+}) {
   const links = [];
 
   let actualImdbRating = null;
@@ -184,40 +206,69 @@ async function buildLinks(
   }
 
   genres.forEach((genre) => {
-    const genreUrl = manifestUrl && genreCatalogId
-      ? `stremio:///discover/${encodeURIComponent(manifestUrl)}/${type}/${genreCatalogId}?genre=${encodeURIComponent(genre)}`
-      : `stremio:///search?search=${encodeURIComponent(genre)}`;
+    const genreUrl =
+      manifestUrl && genreCatalogId
+        ? `stremio:///discover/${encodeURIComponent(manifestUrl)}/${type}/${genreCatalogId}?genre=${encodeURIComponent(genre)}`
+        : `stremio:///search?search=${encodeURIComponent(genre)}`;
     links.push({ name: genre, category: 'Genres', url: genreUrl });
   });
 
   cast.slice(0, 5).forEach((name) => {
-    links.push({ name, category: 'Cast', url: `stremio:///search?search=${encodeURIComponent(name)}` });
+    links.push({
+      name,
+      category: 'Cast',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
   });
 
   directors.forEach((name) => {
-    links.push({ name, category: 'Directors', url: `stremio:///search?search=${encodeURIComponent(name)}` });
+    links.push({
+      name,
+      category: 'Directors',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
   });
 
   writerNames.forEach((name) => {
-    links.push({ name, category: 'Writers', url: `stremio:///search?search=${encodeURIComponent(name)}` });
+    links.push({
+      name,
+      category: 'Writers',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
   });
 
   creators.forEach((name) => {
     if (!writerNames.includes(name)) {
-      links.push({ name, category: 'Writers', url: `stremio:///search?search=${encodeURIComponent(name)}` });
+      links.push({
+        name,
+        category: 'Writers',
+        url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      });
     }
   });
 
   if (type !== 'movie' && Array.isArray(details.networks) && details.networks.length > 0) {
     const network = details.networks[0];
     if (network?.name) {
-      links.push({ name: network.name, category: 'Networks', url: `stremio:///search?search=${encodeURIComponent(network.name)}` });
+      links.push({
+        name: network.name,
+        category: 'Networks',
+        url: `stremio:///search?search=${encodeURIComponent(network.name)}`,
+      });
     }
   }
-  if (type === 'movie' && Array.isArray(details.production_companies) && details.production_companies.length > 0) {
+  if (
+    type === 'movie' &&
+    Array.isArray(details.production_companies) &&
+    details.production_companies.length > 0
+  ) {
     const studio = details.production_companies[0];
     if (studio?.name) {
-      links.push({ name: studio.name, category: 'Studios', url: `stremio:///search?search=${encodeURIComponent(studio.name)}` });
+      links.push({
+        name: studio.name,
+        category: 'Studios',
+        url: `stremio:///search?search=${encodeURIComponent(studio.name)}`,
+      });
     }
   }
 
@@ -268,8 +319,17 @@ export async function toStremioFullMeta(
     ? details.genres.map((g) => g?.name).filter(Boolean)
     : [];
 
-  const { cast, crew, directors, writers, writerNames, writerString, directorString, creators, creatorString } =
-    buildCredits(details, isMovie);
+  const {
+    cast,
+    crew,
+    directors,
+    writers,
+    writerNames,
+    writerString,
+    directorString,
+    creators,
+    creatorString,
+  } = buildCredits(details, isMovie);
 
   let runtimeMin = null;
   if (isMovie && typeof details.runtime === 'number') runtimeMin = details.runtime;
@@ -311,7 +371,18 @@ export async function toStremioFullMeta(
 
   const { trailer, trailerStreams, trailers } = buildTrailers(details, targetLanguage);
   const { links, actualImdbRating } = await buildLinks({
-    effectiveImdbId, genres, cast, directors, writerNames, creators, title, type, details, posterOptions, manifestUrl, genreCatalogId,
+    effectiveImdbId,
+    genres,
+    cast,
+    directors,
+    writerNames,
+    creators,
+    title,
+    type,
+    details,
+    posterOptions,
+    manifestUrl,
+    genreCatalogId,
   });
 
   const credits = details.credits || {};
@@ -369,9 +440,12 @@ export async function toStremioFullMeta(
   }
 
   let logo = null;
-  const logoSources = details.images?.logos?.length > 0
-    ? details.images.logos
-    : (Array.isArray(allLogos) && allLogos.length > 0 ? allLogos : []);
+  const logoSources =
+    details.images?.logos?.length > 0
+      ? details.images.logos
+      : Array.isArray(allLogos) && allLogos.length > 0
+        ? allLogos
+        : [];
 
   if (logoSources.length > 0) {
     const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
@@ -426,7 +500,7 @@ export async function toStremioFullMeta(
     genres,
     cast: cast.length > 0 ? cast : undefined,
     director: directorString || undefined,
-    writer: isMovie ? (writerString || undefined) : (creatorString || writerString || undefined),
+    writer: isMovie ? writerString || undefined : creatorString || writerString || undefined,
     runtime: formatRuntime(runtimeMin),
     language: details.original_language || undefined,
     country: Array.isArray(details.origin_country) ? details.origin_country.join(', ') : undefined,
@@ -460,7 +534,14 @@ export async function toStremioFullMeta(
  * @param {Map|null} ratingsMap - Optional Map of imdbId → rating string
  * @returns {Object} Stremio meta preview object
  */
-export function toStremioMeta(item, type, imdbId = null, posterOptions = null, genreMap = null, ratingsMap = null) {
+export function toStremioMeta(
+  item,
+  type,
+  imdbId = null,
+  posterOptions = null,
+  genreMap = null,
+  ratingsMap = null
+) {
   const isMovie = type === 'movie';
   const title = isMovie ? item.title : item.name;
   const releaseDate = isMovie ? item.release_date : item.first_air_date;
@@ -530,9 +611,10 @@ export function toStremioMeta(item, type, imdbId = null, posterOptions = null, g
     landscapePoster: background,
     description: item.overview || '',
     releaseInfo: year,
-    imdbRating: ratingsMap && effectiveImdbId && ratingsMap.has(effectiveImdbId)
-      ? ratingsMap.get(effectiveImdbId)
-      : undefined,
+    imdbRating:
+      ratingsMap && effectiveImdbId && ratingsMap.has(effectiveImdbId)
+        ? ratingsMap.get(effectiveImdbId)
+        : undefined,
     genres: mappedGenres,
     behaviorHints: {},
   };

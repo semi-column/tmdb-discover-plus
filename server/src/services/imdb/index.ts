@@ -1,4 +1,9 @@
-export { imdbFetch, getImdbCircuitBreakerState, resetImdbCircuitBreaker } from './client.ts';
+export {
+  imdbFetch,
+  getImdbCircuitBreakerState,
+  resetImdbCircuitBreaker,
+  getInFlightCount,
+} from './client.ts';
 export { advancedSearch, getTopRanking, getPopular, getList } from './discover.ts';
 export { getTitle } from './detail.ts';
 export { search, getSuggestions } from './search.ts';
@@ -6,7 +11,6 @@ export {
   getGenres,
   getTitleTypes,
   getKeywords,
-  getAwards,
   getSortOptions,
   getTitleTypeOptions,
   getPresetCatalogs,
@@ -42,6 +46,7 @@ export type {
 
 import { config } from '../../config.ts';
 import { createLogger } from '../../utils/logger.ts';
+import { initImdbQuota } from '../../infrastructure/imdbQuota.ts';
 
 const log = createLogger('imdb:init');
 
@@ -55,4 +60,5 @@ export function initImdbApi(): void {
     return;
   }
   log.info('IMDb API enabled', { rateLimit: config.imdbApi.rateLimit });
+  initImdbQuota().catch(() => {});
 }

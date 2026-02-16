@@ -1,15 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import {
-  ChevronDown,
-  Trash2,
-  Loader,
-  AlertTriangle,
-  FolderOpen,
-  Plus,
-  Film,
-  Tv,
-  X,
-} from 'lucide-react';
+import { ChevronDown, Trash2, Loader, FolderOpen, Plus, Film, Tv, X } from 'lucide-react';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 
 export function ConfigDropdown({

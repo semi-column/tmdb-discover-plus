@@ -84,9 +84,7 @@ router.get('/:userId/manifest.json', async (req, res) => {
         res.set('Pragma', 'no-cache');
         res.set('Expires', '0');
       }
-    }
-
-    if (!res.headersSent) {
+    } else {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.set('Pragma', 'no-cache');
       res.set('Expires', '0');
@@ -116,15 +114,6 @@ function parseExtra(extraString) {
   return params;
 }
 
-function extractGenreIds(item) {
-  const ids = Array.isArray(item?.genre_ids)
-    ? item.genre_ids
-    : Array.isArray(item?.genres)
-      ? item.genres.map((g) => g?.id).filter(Boolean)
-      : [];
-  return ids.map(String);
-}
-
 async function resolveGenreFilter(extra, effectiveFilters, type, apiKey) {
   if (!extra.genre) return;
 
@@ -150,9 +139,6 @@ async function resolveGenreFilter(extra, effectiveFilters, type, apiKey) {
       });
     } else {
       try {
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = path.dirname(__filename);
-        const genresPath = path.resolve(__dirname, '..', 'data', 'tmdb_genres.json');
         const staticGenreMap = STATIC_GENRE_MAP;
         const mapping = staticGenreMap[mediaType] || {};
         Object.entries(mapping).forEach(([id, name]) => {
@@ -295,14 +281,17 @@ async function handleImdbCatalogRequest(userId, type, catalogId, extra, res, req
     });
 
     if (!catalogConfig) {
-      log.debug('IMDb Catalog not found', { catalogId, available: userConfig.catalogs.map(c => c.name) });
+      log.debug('IMDb Catalog not found', {
+        catalogId,
+        available: userConfig.catalogs.map((c) => c.name),
+      });
       return res.json({ metas: [] });
     }
 
-    log.debug('IMDb Catalog matched', { 
-      name: catalogConfig.name, 
+    log.debug('IMDb Catalog matched', {
+      name: catalogConfig.name,
       id: catalogId,
-      filters: JSON.stringify(catalogConfig.filters) 
+      filters: JSON.stringify(catalogConfig.filters),
     });
 
     const filters = sanitizeImdbFilters(catalogConfig.filters || {});

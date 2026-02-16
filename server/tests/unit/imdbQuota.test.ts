@@ -4,6 +4,7 @@ import {
   isQuotaExceeded,
   getImdbQuotaStats,
   resetImdbQuota,
+  initImdbQuota,
 } from '../../src/infrastructure/imdbQuota.ts';
 
 describe('imdbQuota', () => {
@@ -64,5 +65,9 @@ describe('imdbQuota', () => {
       recordImdbApiCall('/test');
     }
     expect(isQuotaExceeded()).toBe(false);
+  });
+
+  it('exports initImdbQuota for startup loading', () => {
+    expect(typeof initImdbQuota).toBe('function');
   });
 });

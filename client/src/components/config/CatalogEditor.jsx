@@ -1,4 +1,15 @@
-import { Award, Calendar, Eye, Film, Loader, Play, Settings, Sparkles, Tv, Users } from 'lucide-react';
+import {
+  Award,
+  Calendar,
+  Eye,
+  Film,
+  Loader,
+  Play,
+  Settings,
+  Sparkles,
+  Tv,
+  Users,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActiveFiltersBar } from './catalog/ActiveFiltersBar';
 import { CatalogImportExport } from './catalog/CatalogImportExport';
@@ -63,6 +74,7 @@ export const CatalogEditor = memo(function CatalogEditor({
   getKeywordById,
   getNetworkById,
   getWatchProviders,
+  addToast,
 }) {
   const safeGenres =
     genres && typeof genres === 'object' && !Array.isArray(genres)
@@ -273,6 +285,7 @@ export const CatalogEditor = memo(function CatalogEditor({
 
   const handleTypeChange = useCallback(
     (type) => {
+      let result;
       setLocalCatalog((prev) => {
         const isNextMovie = type === 'movie';
         const isImdb = prev.source === 'imdb';
@@ -305,31 +318,70 @@ export const CatalogEditor = memo(function CatalogEditor({
                 }),
           },
         };
-        if (catalog?._id) onUpdate(catalog._id, updated);
+        result = updated;
         return updated;
       });
+      if (catalog?._id && result) onUpdate(catalog._id, result);
     },
     [catalog?._id, onUpdate]
   );
 
   const handleSourceChange = useCallback(
     (source) => {
+      let result;
       setLocalCatalog((prev) => {
         const isNextImdb = source === 'imdb';
+        const cleanedFilters = { ...prev.filters };
+
+        if (isNextImdb) {
+          delete cleanedFilters.voteCountMin;
+          delete cleanedFilters.certifications;
+          delete cleanedFilters.watchProviders;
+          delete cleanedFilters.watchRegion;
+          delete cleanedFilters.withPeople;
+          delete cleanedFilters.withCompanies;
+          delete cleanedFilters.withKeywords;
+          delete cleanedFilters.withNetworks;
+          delete cleanedFilters.monetizationType;
+          delete cleanedFilters.releaseType;
+          delete cleanedFilters.tvStatus;
+          delete cleanedFilters.tvType;
+          delete cleanedFilters.originalLanguage;
+          delete cleanedFilters.yearRange;
+          delete cleanedFilters.datePreset;
+          delete cleanedFilters.imdbOnly;
+        } else {
+          delete cleanedFilters.keywords;
+          delete cleanedFilters.awardsWon;
+          delete cleanedFilters.awardsNominated;
+          delete cleanedFilters.imdbListId;
+          delete cleanedFilters.types;
+          delete cleanedFilters.imdbRatingMin;
+          delete cleanedFilters.totalVotesMin;
+          delete cleanedFilters.releaseDateStart;
+          delete cleanedFilters.releaseDateEnd;
+          delete cleanedFilters.runtimeMin;
+          delete cleanedFilters.runtimeMax;
+          delete cleanedFilters.languages;
+          delete cleanedFilters.countries;
+          delete cleanedFilters.sortOrder;
+        }
+
         const updated = {
           ...prev,
           source: isNextImdb ? 'imdb' : 'tmdb',
           filters: {
-            ...prev.filters,
+            ...cleanedFilters,
             sortBy: isNextImdb ? 'POPULARITY' : 'popularity.desc',
             listType: 'discover',
             genres: [],
             excludeGenres: [],
           },
         };
-        if (catalog?._id) onUpdate(catalog._id, updated);
+        result = updated;
         return updated;
       });
+      if (catalog?._id && result) onUpdate(catalog._id, result);
     },
     [catalog?._id, onUpdate]
   );
@@ -441,7 +493,11 @@ export const CatalogEditor = memo(function CatalogEditor({
               {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
               Preview
             </button>
-            <CatalogImportExport localCatalog={localCatalog} onImport={handleImport} />
+            <CatalogImportExport
+              localCatalog={localCatalog}
+              onImport={handleImport}
+              addToast={addToast}
+            />
           </div>
         </div>
 

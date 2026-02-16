@@ -3,7 +3,6 @@ import { config } from '../../config.ts';
 import {
   IMDB_GENRES,
   IMDB_KEYWORDS,
-  IMDB_AWARDS,
   IMDB_SORT_OPTIONS,
   IMDB_TITLE_TYPES,
   IMDB_PRESET_CATALOGS,
@@ -33,10 +32,6 @@ export async function getTitleTypes(): Promise<string[]> {
 
 export function getKeywords(): string[] {
   return [...IMDB_KEYWORDS];
-}
-
-export function getAwards(): { won: string[]; nominated: string[] } {
-  return { won: [...IMDB_AWARDS], nominated: [...IMDB_AWARDS] };
 }
 
 export function getSortOptions(): Array<{ value: string; label: string }> {

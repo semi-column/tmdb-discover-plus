@@ -18,6 +18,7 @@ import { warmEssentialCaches } from './infrastructure/cacheWarmer.js';
 import { getMetrics, destroyMetrics } from './infrastructure/metrics.js';
 import { destroyTmdbThrottle, getTmdbThrottle } from './infrastructure/tmdbThrottle.js';
 import { destroyImdbThrottle } from './infrastructure/imdbThrottle.ts';
+import { destroySecurity } from './utils/security.ts';
 import { getConfigCache } from './infrastructure/configCache.js';
 import {
   initImdbRatings,
@@ -336,6 +337,9 @@ app.get('*', (req, res) => {
 
 app.use((err, req, res, next) => {
   log.error('Unhandled error', { error: err.message, stack: err.stack, url: req.url });
+  if (res.headersSent) {
+    return next(err);
+  }
   if (err instanceof AppError) {
     return sendError(res, err.statusCode, err.code, err.message);
   }
@@ -355,6 +359,7 @@ function gracefulShutdown(signal) {
   destroyTmdbThrottle();
   destroyImdbThrottle();
   destroyMetrics();
+  destroySecurity();
   destroyImdbRatings().catch(() => {});
 
   if (server) {
