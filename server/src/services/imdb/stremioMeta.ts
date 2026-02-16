@@ -52,10 +52,10 @@ export function imdbToStremioMeta(
   const background =
     item.posterImages?.[0]?.url || `https://images.metahub.space/background/medium/${item.id}/img`;
 
-  if (isValidPosterConfig(posterOptions)) {
+  if (posterOptions && isValidPosterConfig(posterOptions)) {
     const enhancedPoster = generatePosterUrl({
       ...posterOptions,
-      tmdbId: null,
+      tmdbId: '',
       type: stremioType,
       imdbId: item.id,
     });
