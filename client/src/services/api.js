@@ -243,7 +243,7 @@ class ApiService {
   }
 
   async getReferenceData() {
-    return this.request('/reference-data');
+    return this.request(`/reference-data?_=${Date.now()}`);
   }
 
   async getTVNetworks(apiKey = null, query = '') {
