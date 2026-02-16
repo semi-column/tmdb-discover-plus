@@ -12,6 +12,19 @@ vi.mock('../../src/services/configService.js', () => ({
   updateCatalogGenres: vi.fn(),
 }));
 
+vi.mock('../../src/config.ts', () => ({
+  config: {
+    addon: { variant: undefined },
+    baseUrl: 'https://example.com',
+    logging: { level: 'info', format: 'text' },
+    nodeEnv: 'test',
+  },
+}));
+
+vi.mock('../../src/services/imdb/index.ts', () => ({
+  isImdbApiEnabled: vi.fn(() => false),
+}));
+
 import { buildManifest } from '../../src/services/manifestService.js';
 
 describe('buildManifest', () => {
