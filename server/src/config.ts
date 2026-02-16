@@ -81,8 +81,8 @@ export const config = Object.freeze({
   imdbApi: Object.freeze({
     apiKey: env('IMDB_DATA_KEY'),
     apiHost: env('IMDB_DATA_HOST'),
-    apiKeyHeader: env('IMDB_DATA_ATTR_K', 'x-rapidapi-key'),
-    apiHostHeader: env('IMDB_DATA_ATTR_H', 'x-rapidapi-host'),
+    apiKeyHeader: env('IMDB_DATA_ATTR_K'),
+    apiHostHeader: env('IMDB_DATA_ATTR_H'),
     rateLimit: envInt('IMDB_DATA_RATE_LIMIT', 5),
     get enabled(): boolean {
       const explicit = process.env['IMDB_DATA_ENABLED'];
