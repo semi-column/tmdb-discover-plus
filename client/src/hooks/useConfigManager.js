@@ -50,11 +50,7 @@ export function useConfigManager(config, addToast, deps) {
         ? await api.updateConfig(config.userId, payload)
         : await api.saveConfig(payload);
 
-      config.setUserId(result.userId);
-      if (result.configName !== undefined) config.setConfigName(result.configName);
-      if (result.catalogs) config.setCatalogs(result.catalogs);
-      if (result.preferences) config.setPreferences(result.preferences);
-      config.markAsSaved();
+      config.applyConfig(result);
 
       if (!urlUserId) {
         window.history.pushState({}, '', `/?userId=${result.userId}`);

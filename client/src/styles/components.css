@@ -2193,6 +2193,10 @@ input[type='date'] {
   grid-column: span 2;
 }
 
+.filter-grid .span-full {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 768px) {
   .filter-grid .span-2 {
     grid-column: span 1;
@@ -5029,4 +5033,161 @@ input[type='date'] {
     padding: 6px 12px;
     font-size: 12px;
   }
+}
+
+/* ======================================
+   Catalog Type Grid (Modal)
+   ====================================== */
+
+.catalog-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.type-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.type-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+}
+
+.type-card.active {
+  background: rgba(var(--accent-primary-rgb), 0.1);
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.type-card.active::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-primary);
+}
+
+.type-card-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.type-card.active .type-card-icon {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.type-card-icon.tmdb {
+  color: #01b4e4;
+}
+
+.type-card-icon.imdb {
+  color: #f5c518;
+}
+
+.type-card.active .type-card-icon.tmdb,
+.type-card.active .type-card-icon.imdb {
+  color: white;
+}
+
+.type-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.type-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.type-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 480px) {
+  .catalog-type-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ======================================
+   Source Tabs (Sidebar)
+   ====================================== */
+
+.source-tabs {
+  display: flex;
+  background: var(--bg-tertiary);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+}
+
+.source-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: calc(var(--radius-md) - 2px);
+  transition: all 0.2s ease;
+}
+
+.source-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.source-tab.active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.source-tab.active.tmdb {
+  color: #01b4e4;
+}
+
+.source-tab.active.imdb {
+  color: #f5c518;
 }

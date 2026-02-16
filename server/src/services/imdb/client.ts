@@ -74,6 +74,8 @@ export async function imdbFetch(
 ): Promise<unknown> {
   const apiKey = config.imdbApi.apiKey;
   const apiHost = config.imdbApi.apiHost;
+  const keyHeader = config.imdbApi.apiKeyHeader;
+  const hostHeader = config.imdbApi.apiHostHeader;
 
   if (!apiKey) {
     throw new Error('IMDb API key not configured');
@@ -140,8 +142,8 @@ export async function imdbFetch(
         response = await fetch(url.toString(), {
           signal: abortController.signal as any,
           headers: {
-            'x-rapidapi-key': apiKey,
-            'x-rapidapi-host': apiHost,
+            [keyHeader]: apiKey,
+            [hostHeader]: apiHost,
             Accept: 'application/json',
           },
         });

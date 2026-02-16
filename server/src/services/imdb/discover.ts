@@ -116,19 +116,45 @@ export async function advancedSearch(
 export async function getTopRanking(type: ContentType): Promise<ImdbRankingResult> {
   const ttl = config.imdbApi.cacheTtlRanking;
   const endpoint =
-    type === 'series' ? '/api/imdb/rankings/top/250?type=tvSeries' : '/api/imdb/rankings/top/250';
-  const data = (await imdbFetch(endpoint, {}, ttl)) as ImdbRankingResult;
-  return data;
+    type === 'series' ? '/api/imdb/rankings/top/250?type=TV' : '/api/imdb/rankings/top/250?type=MOVIE';
+  const data = (await imdbFetch(endpoint, {}, ttl)) as any;
+
+  // Handle both 'titles' and 'titleChartRankings'
+  const list = data?.titles || data?.titleChartRankings;
+  
+  if (list && Array.isArray(list)) {
+    data.titles = list.map((entry: any) => {
+      if (entry.title && typeof entry.title === 'object') {
+        const { title, ...rest } = entry;
+        return { ...title, ...rest };
+      }
+      return entry;
+    });
+  }
+
+  return data as ImdbRankingResult;
 }
 
 export async function getPopular(type: ContentType): Promise<ImdbRankingResult> {
   const ttl = config.imdbApi.cacheTtlPopular;
   const endpoint =
     type === 'series'
-      ? '/api/imdb/rankings/top/popular?type=tvSeries'
-      : '/api/imdb/rankings/top/popular';
-  const data = (await imdbFetch(endpoint, {}, ttl)) as ImdbRankingResult;
-  return data;
+      ? '/api/imdb/rankings/top/popular?type=TV'
+      : '/api/imdb/rankings/top/popular?type=MOVIE';
+  const data = (await imdbFetch(endpoint, {}, ttl)) as any;
+
+  // Flatten nested title property if present
+  if (data?.titles && Array.isArray(data.titles)) {
+    data.titles = data.titles.map((entry: any) => {
+      if (entry.title && typeof entry.title === 'object') {
+        const { title, ...rest } = entry;
+        return { ...title, ...rest };
+      }
+      return entry;
+    });
+  }
+
+  return data as ImdbRankingResult;
 }
 
 export async function getList(
@@ -155,7 +181,18 @@ export async function getList(
     }
   }
 
-  const data = (await imdbFetch(`/api/imdb/list/${sanitizedId}`, params, ttl)) as ImdbListResult;
+  const data = (await imdbFetch(`/api/imdb/list/${sanitizedId}`, params, ttl)) as any;
+
+  // Flatten nested title property if present
+  if (data?.titles && Array.isArray(data.titles)) {
+    data.titles = data.titles.map((entry: any) => {
+      if (entry.title && typeof entry.title === 'object') {
+        const { title, ...rest } = entry;
+        return { ...title, ...rest };
+      }
+      return entry;
+    });
+  }
 
   if (data.pageInfo?.endCursor) {
     const nextSkip = skip + limit;

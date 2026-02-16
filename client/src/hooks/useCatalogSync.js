@@ -12,6 +12,16 @@ export function useCatalogSync({ localCatalog, catalog, onUpdate, dependencies =
       return;
     }
 
+    // Skip sync if local catalog matches the saved catalog
+    // We use a simple JSON stringify as these objects are small
+    try {
+      if (JSON.stringify(localCatalog) === JSON.stringify(catalog)) {
+        return;
+      }
+    } catch {
+      // ignore serialization errors
+    }
+
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
     syncTimeoutRef.current = setTimeout(() => {

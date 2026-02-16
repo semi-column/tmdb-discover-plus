@@ -226,7 +226,7 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
       imdb: imdbData,
     };
 
-    res.set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json(data);
   } catch (error) {
     log.error('GET /reference-data error', { error: error.message });
@@ -492,16 +492,20 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
     const filters = sanitizeImdbFilters(rawFilters);
     const listType = filters.listType || 'discover';
     let titles = [];
+    let totalResults = 0;
 
     if (listType === 'top250') {
       const result = await imdb.getTopRanking(type);
       titles = (result.titles || []).slice(0, 20);
+      totalResults = 250;
     } else if (listType === 'popular') {
       const result = await imdb.getPopular(type);
       titles = (result.titles || []).slice(0, 20);
+      totalResults = result.titles?.length || 100;
     } else if (listType === 'imdb_list' && filters.imdbListId) {
       const result = await imdb.getList(filters.imdbListId, 0);
       titles = (result.titles || []).slice(0, 20);
+      totalResults = result.titles?.length || 0;
     } else {
       const searchParams = {
         types: filters.types,
@@ -520,13 +524,14 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
       };
       const result = await imdb.advancedSearch(searchParams, type, 0);
       titles = (result.titles || []).slice(0, 20);
+      totalResults = result.totalCount || result.titles?.length || 0;
     }
 
     const metas = titles.map((item) => imdb.imdbToStremioMeta(item, type)).filter(Boolean);
 
     res.json({
       metas,
-      totalResults: titles.length,
+      totalResults,
       previewEmpty: metas.length === 0,
     });
   } catch (error) {

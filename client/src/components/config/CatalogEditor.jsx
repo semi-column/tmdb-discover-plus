@@ -1,4 +1,4 @@
-import { Calendar, Eye, Film, Loader, Play, Settings, Sparkles, Tv, Users } from 'lucide-react';
+import { Award, Calendar, Eye, Film, Loader, Play, Settings, Sparkles, Tv, Users } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActiveFiltersBar } from './catalog/ActiveFiltersBar';
 import { CatalogImportExport } from './catalog/CatalogImportExport';
@@ -312,6 +312,28 @@ export const CatalogEditor = memo(function CatalogEditor({
     [catalog?._id, onUpdate]
   );
 
+  const handleSourceChange = useCallback(
+    (source) => {
+      setLocalCatalog((prev) => {
+        const isNextImdb = source === 'imdb';
+        const updated = {
+          ...prev,
+          source: isNextImdb ? 'imdb' : 'tmdb',
+          filters: {
+            ...prev.filters,
+            sortBy: isNextImdb ? 'POPULARITY' : 'popularity.desc',
+            listType: 'discover',
+            genres: [],
+            excludeGenres: [],
+          },
+        };
+        if (catalog?._id) onUpdate(catalog._id, updated);
+        return updated;
+      });
+    },
+    [catalog?._id, onUpdate]
+  );
+
   const handleTriStateGenreClick = useCallback((genreId) => {
     setLocalCatalog((prev) => {
       const current = prev || DEFAULT_CATALOG;
@@ -403,31 +425,14 @@ export const CatalogEditor = memo(function CatalogEditor({
           <div className="editor-title">
             {isMovie ? <Film size={22} /> : <Tv size={22} />}
             <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="text"
-                  className={`editor-name-input${!localCatalog?.name?.trim() ? ' field-invalid' : ''}`}
-                  placeholder="Catalog Name..."
-                  value={localCatalog?.name || ''}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  maxLength={50}
-                />
-                {isImdbCatalog && (
-                  <span
-                    style={{
-                      fontSize: '10px',
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      background: '#F5C518',
-                      color: '#000',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    IMDb
-                  </span>
-                )}
-              </div>
+              <input
+                type="text"
+                className={`editor-name-input${!localCatalog?.name?.trim() ? ' field-invalid' : ''}`}
+                placeholder="Catalog Name..."
+                value={localCatalog?.name || ''}
+                onChange={(e) => handleNameChange(e.target.value)}
+                maxLength={50}
+              />
               {!localCatalog?.name?.trim() && <span className="field-error">Name is required</span>}
             </div>
           </div>
@@ -441,6 +446,23 @@ export const CatalogEditor = memo(function CatalogEditor({
         </div>
 
         <div className="editor-content">
+          <div className="source-tabs" style={{ marginBottom: '16px' }}>
+            <button
+              type="button"
+              className={`source-tab ${!isImdbCatalog ? 'active tmdb' : ''}`}
+              onClick={() => handleSourceChange('tmdb')}
+            >
+              <Film size={14} /> TMDB
+            </button>
+            <button
+              type="button"
+              className={`source-tab ${isImdbCatalog ? 'active imdb' : ''}`}
+              onClick={() => handleSourceChange('imdb')}
+            >
+              <Award size={14} /> IMDb
+            </button>
+          </div>
+
           <div className="content-type-toggle">
             <button
               className={`type-btn ${isMovie ? 'active' : ''}`}

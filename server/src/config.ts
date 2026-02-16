@@ -79,13 +79,15 @@ export const config = Object.freeze({
   }),
 
   imdbApi: Object.freeze({
-    apiKey: env('IMDB_API_KEY'),
-    apiHost: env('IMDB_API_HOST'),
-    rateLimit: envInt('IMDB_API_RATE_LIMIT', 5),
+    apiKey: env('IMDB_DATA_KEY'),
+    apiHost: env('IMDB_DATA_HOST'),
+    apiKeyHeader: env('IMDB_DATA_ATTR_K', 'x-rapidapi-key'),
+    apiHostHeader: env('IMDB_DATA_ATTR_H', 'x-rapidapi-host'),
+    rateLimit: envInt('IMDB_DATA_RATE_LIMIT', 5),
     get enabled(): boolean {
-      const explicit = process.env['IMDB_API_ENABLED'];
+      const explicit = process.env['IMDB_DATA_ENABLED'];
       if (explicit) return explicit === 'true' || explicit === '1';
-      return !!process.env['IMDB_API_KEY'];
+      return !!process.env['IMDB_DATA_KEY'];
     },
     cacheTtlSearch: envInt('IMDB_CACHE_TTL_SEARCH', 86400),
     cacheTtlDetail: envInt('IMDB_CACHE_TTL_DETAIL', 604800),

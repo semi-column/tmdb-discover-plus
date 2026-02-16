@@ -123,32 +123,6 @@ export function ImdbFilterPanel({
             </select>
           </div>
 
-          {imdbTitleTypes.length > 0 && (
-            <div className="filter-group">
-              <label className="filter-label">Title Types</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {imdbTitleTypes.map((tt) => {
-                  const selected = (filters.types || []).includes(tt.value);
-                  return (
-                    <button
-                      key={tt.value}
-                      type="button"
-                      className={`genre-chip ${selected ? 'selected' : ''}`}
-                      onClick={() => {
-                        const current = filters.types || [];
-                        const next = selected
-                          ? current.filter((t) => t !== tt.value)
-                          : [...current, tt.value];
-                        onFiltersChange('types', next);
-                      }}
-                    >
-                      {tt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           <div className="filter-group">
             <label className="filter-label">Min IMDb Rating</label>
@@ -188,6 +162,137 @@ export function ImdbFilterPanel({
               <option value="100000">100,000+</option>
               <option value="1000000">1,000,000+</option>
             </select>
+          </div>
+
+          {imdbTitleTypes.length > 0 && (
+            <div className="filter-group span-full">
+              <label className="filter-label">Title Types</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {imdbTitleTypes
+                  .filter((tt) => {
+                    if (localCatalog?.type === 'series') {
+                      return ['tvSeries', 'tvMiniSeries', 'tvSpecial'].includes(tt.value);
+                    }
+                    return ['movie', 'tvMovie', 'short', 'video'].includes(tt.value);
+                  })
+                  .map((tt) => {
+                  const selected = (filters.types || []).includes(tt.value);
+                  return (
+                    <button
+                      key={tt.value}
+                      type="button"
+                      className={`genre-chip ${selected ? 'selected' : ''}`}
+                      onClick={() => {
+                        const current = filters.types || [];
+                        const next = selected
+                          ? current.filter((t) => t !== tt.value)
+                          : [...current, tt.value];
+                        onFiltersChange('types', next);
+                      }}
+                    >
+                      {tt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </FilterSection>
+
+      <FilterSection
+        id="region"
+        title="Language & Region"
+        description="Filter by original language and country"
+        icon={Globe}
+        isOpen={expandedSections.region}
+        onToggle={toggleSection}
+      >
+        <div className="filter-grid">
+          <div className="filter-group">
+            <label className="filter-label">Languages</label>
+            <select
+              className="input"
+              value=""
+              onChange={(e) => {
+                if (!e.target.value) return;
+                const current = filters.languages || [];
+                if (!current.includes(e.target.value)) {
+                  onFiltersChange('languages', [...current, e.target.value]);
+                }
+              }}
+            >
+              <option value="">Add language...</option>
+              {languages
+                .filter((l) => !(filters.languages || []).includes(l.iso_639_1))
+                .map((l) => (
+                  <option key={l.iso_639_1} value={l.iso_639_1}>
+                    {l.english_name}
+                  </option>
+                ))}
+            </select>
+            {(filters.languages || []).length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                {filters.languages.map((lang) => (
+                  <span
+                    key={lang}
+                    className="genre-chip selected"
+                    onClick={() =>
+                      onFiltersChange(
+                        'languages',
+                        filters.languages.filter((l) => l !== lang)
+                      )
+                    }
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {lang} ×
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="filter-group">
+            <label className="filter-label">Countries</label>
+            <select
+              className="input"
+              value=""
+              onChange={(e) => {
+                if (!e.target.value) return;
+                const current = filters.countries || [];
+                if (!current.includes(e.target.value)) {
+                  onFiltersChange('countries', [...current, e.target.value]);
+                }
+              }}
+            >
+              <option value="">Add country...</option>
+              {countries
+                .filter((c) => !(filters.countries || []).includes(c.iso_3166_1))
+                .map((c) => (
+                  <option key={c.iso_3166_1} value={c.iso_3166_1}>
+                    {c.english_name}
+                  </option>
+                ))}
+            </select>
+            {(filters.countries || []).length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                {filters.countries.map((country) => (
+                  <span
+                    key={country}
+                    className="genre-chip selected"
+                    onClick={() =>
+                      onFiltersChange(
+                        'countries',
+                        filters.countries.filter((c) => c !== country)
+                      )
+                    }
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {country} ×
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </FilterSection>
@@ -367,102 +472,6 @@ export function ImdbFilterPanel({
         </FilterSection>
       )}
 
-      <FilterSection
-        id="region"
-        title="Language & Region"
-        description="Filter by original language and country"
-        icon={Globe}
-        isOpen={expandedSections.region}
-        onToggle={toggleSection}
-      >
-        <div className="filter-grid">
-          <div className="filter-group">
-            <label className="filter-label">Languages</label>
-            <select
-              className="input"
-              value=""
-              onChange={(e) => {
-                if (!e.target.value) return;
-                const current = filters.languages || [];
-                if (!current.includes(e.target.value)) {
-                  onFiltersChange('languages', [...current, e.target.value]);
-                }
-              }}
-            >
-              <option value="">Add language...</option>
-              {languages
-                .filter((l) => !(filters.languages || []).includes(l.iso_639_1))
-                .map((l) => (
-                  <option key={l.iso_639_1} value={l.iso_639_1}>
-                    {l.english_name}
-                  </option>
-                ))}
-            </select>
-            {(filters.languages || []).length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
-                {filters.languages.map((lang) => (
-                  <span
-                    key={lang}
-                    className="genre-chip selected"
-                    onClick={() =>
-                      onFiltersChange(
-                        'languages',
-                        filters.languages.filter((l) => l !== lang)
-                      )
-                    }
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {lang} ×
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label">Countries</label>
-            <select
-              className="input"
-              value=""
-              onChange={(e) => {
-                if (!e.target.value) return;
-                const current = filters.countries || [];
-                if (!current.includes(e.target.value)) {
-                  onFiltersChange('countries', [...current, e.target.value]);
-                }
-              }}
-            >
-              <option value="">Add country...</option>
-              {countries
-                .filter((c) => !(filters.countries || []).includes(c.iso_3166_1))
-                .map((c) => (
-                  <option key={c.iso_3166_1} value={c.iso_3166_1}>
-                    {c.english_name}
-                  </option>
-                ))}
-            </select>
-            {(filters.countries || []).length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
-                {filters.countries.map((country) => (
-                  <span
-                    key={country}
-                    className="genre-chip selected"
-                    onClick={() =>
-                      onFiltersChange(
-                        'countries',
-                        filters.countries.filter((c) => c !== country)
-                      )
-                    }
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {country} ×
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </FilterSection>
 
       {listType === 'imdb_list' && (
         <div className="filter-group" style={{ padding: '12px 0' }}>
