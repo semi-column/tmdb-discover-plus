@@ -1,5 +1,6 @@
 import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
+import { getCache } from '../services/cache/index.js';
 
 const log = createLogger('ImdbQuota');
 
@@ -20,6 +21,33 @@ const state: QuotaState = {
   lastResetMonth: new Date().getUTCMonth(),
   perEndpoint: {},
 };
+
+function getQuotaCacheKey(): string {
+  const now = new Date();
+  return `imdb:quota:${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function persistQuota(): void {
+  try {
+    const cache = getCache();
+    cache.set(getQuotaCacheKey(), state.requestsThisMonth, 86400 * 35).catch(() => {});
+  } catch {
+    // cache not ready yet
+  }
+}
+
+export async function initImdbQuota(): Promise<void> {
+  try {
+    const cache = getCache();
+    const persisted = await cache.get(getQuotaCacheKey());
+    if (typeof persisted === 'number' && persisted > state.requestsThisMonth) {
+      state.requestsThisMonth = persisted;
+      log.info('Restored IMDb quota from cache', { requestsThisMonth: persisted });
+    }
+  } catch {
+    // cache not available at startup
+  }
+}
 
 function checkResets(): void {
   const now = new Date();
@@ -44,6 +72,7 @@ export function recordImdbApiCall(endpoint: string): void {
   state.requestsThisMonth++;
   state.requestsTotal++;
   state.perEndpoint[endpoint] = (state.perEndpoint[endpoint] || 0) + 1;
+  persistQuota();
 
   const budget = config.imdbApi.budgetMonthly;
   const warnThreshold = Math.floor((budget * config.imdbApi.budgetWarnPercent) / 100);

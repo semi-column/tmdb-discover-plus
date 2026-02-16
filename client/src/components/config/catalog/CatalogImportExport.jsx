@@ -38,14 +38,11 @@ export const CatalogImportExport = memo(function CatalogImportExport({
           onImport(rest);
         } else {
           if (addToast)
-            addToast({
-              message: 'Invalid catalog format: requires name, type, and filters',
-              type: 'error',
-            });
+            addToast('Invalid catalog format: requires name, type, and filters', 'error');
         }
       } catch (err) {
         void err;
-        if (addToast) addToast({ message: 'Failed to parse JSON file', type: 'error' });
+        if (addToast) addToast('Failed to parse JSON file', 'error');
       }
       e.target.value = '';
     };

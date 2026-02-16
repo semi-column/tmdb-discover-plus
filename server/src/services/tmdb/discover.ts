@@ -279,7 +279,7 @@ export async function fetchSpecialList(
     case 'random':
       return discover(apiKey, { type, page, ...options, randomize: true });
     default:
-      break;
+      throw new Error(`Unknown special list type: ${listType}`);
   }
 
   if (options.randomize) {

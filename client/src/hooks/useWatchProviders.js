@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 
 export function useWatchProviders({ type, region, getWatchProviders }) {
   const [fetchedProviders, setFetchedProviders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [fetchedKey, setFetchedKey] = useState(null);
   const [error, setError] = useState(null);
 
   const shouldFetch = !!(region && getWatchProviders);
+  const fetchKey = shouldFetch ? `${type || 'movie'}|${region}` : null;
 
   useEffect(() => {
     if (!shouldFetch) return;
@@ -28,7 +29,7 @@ export function useWatchProviders({ type, region, getWatchProviders }) {
         setError(err);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setFetchedKey(fetchKey);
       });
 
     return () => {
@@ -37,6 +38,7 @@ export function useWatchProviders({ type, region, getWatchProviders }) {
   }, [shouldFetch, type, region, getWatchProviders]);
 
   const watchProviders = shouldFetch ? fetchedProviders : [];
+  const loading = shouldFetch && fetchKey !== fetchedKey;
 
   return { watchProviders, loading, error };
 }

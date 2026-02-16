@@ -24,7 +24,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
         sortOrder: 'ASC',
       };
       if (imdbListType === 'imdb_list' && imdbListId.trim()) {
-        filters.imdbListId = imdbListId.trim().match(/^ls\d{1,15}$/)?.[0] || imdbListId.trim();
+        filters.imdbListId = imdbListId.trim().match(/^ls\d{1,15}$/)?.[0] || '';
       }
       onAdd({
         name: name.trim(),
@@ -55,7 +55,8 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
     onClose();
   };
 
-  const isImdbListValid = source !== 'imdb' || imdbListType !== 'imdb_list' || /^ls\d{1,15}$/.test(imdbListId.trim());
+  const isImdbListValid =
+    source !== 'imdb' || imdbListType !== 'imdb_list' || /^ls\d{1,15}$/.test(imdbListId.trim());
 
   return (
     <div className="modal-overlay" onClick={onClose}>

@@ -324,7 +324,7 @@ export const CatalogSidebar = memo(function CatalogSidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-header" style={{ flexDirection: 'column', gap: 12 }}>
-         <div style={{ display: 'flex', width: '100%', gap: 8 }}>
+        <div style={{ display: 'flex', width: '100%', gap: 8 }}>
           <div className="config-name-wrapper" style={{ flex: 1 }}>
             <input
               type="text"
@@ -416,7 +416,7 @@ export const CatalogSidebar = memo(function CatalogSidebar({
                     if (onImportConfig) onImportConfig(imported);
                   } catch (err) {
                     console.error('Import failed', err);
-                    if (addToast) addToast({ message: 'Failed to parse JSON file', type: 'error' });
+                    if (addToast) addToast('Failed to parse JSON file', 'error');
                   }
                   e.target.value = '';
                 };
@@ -516,8 +516,10 @@ export const CatalogSidebar = memo(function CatalogSidebar({
                   c.filters?.listType === preset.value &&
                   c.type === type
               );
-              const IconComponent = presetIcons[preset.value] || (source === 'imdb' && preset.value === 'top250' ? Trophy : Star);
-              
+              const IconComponent =
+                presetIcons[preset.value] ||
+                (source === 'imdb' && preset.value === 'top250' ? Trophy : Star);
+
               return (
                 <button
                   key={`${source}-${preset.value}`}
@@ -558,7 +560,9 @@ export const CatalogSidebar = memo(function CatalogSidebar({
                   c.filters?.listType === preset.value &&
                   c.type === type
               );
-              const IconComponent = presetIcons[preset.value] || (source === 'imdb' && preset.value === 'top250' ? Trophy : Star);
+              const IconComponent =
+                presetIcons[preset.value] ||
+                (source === 'imdb' && preset.value === 'top250' ? Trophy : Star);
 
               return (
                 <button

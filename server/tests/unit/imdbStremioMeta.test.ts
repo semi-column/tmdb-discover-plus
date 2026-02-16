@@ -46,6 +46,7 @@ describe('imdbToStremioMeta', () => {
     expect(result).not.toBeNull();
     expect(result!.id).toBe('tt0111161');
     expect(result!.imdbId).toBe('tt0111161');
+    expect(result!.tmdbId).toBeNull();
     expect(result!.type).toBe('movie');
     expect(result!.name).toBe('The Shawshank Redemption');
     expect(result!.poster).toBe('https://example.com/poster.jpg');

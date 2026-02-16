@@ -21,12 +21,13 @@ function pbkdf2CacheKey(apiKey: string): string {
 const revokedTokens = new Map<string, number>();
 
 const REVOKE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
-setInterval(() => {
+const revokeCleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [jti, expiresAt] of revokedTokens) {
     if (expiresAt <= now) revokedTokens.delete(jti);
   }
 }, REVOKE_CLEANUP_INTERVAL_MS);
+revokeCleanupTimer.unref();
 
 const MAX_REVOKED_TOKENS = 10000;
 
@@ -109,4 +110,10 @@ export function revokeToken(token: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function destroySecurity(): void {
+  clearInterval(revokeCleanupTimer);
+  revokedTokens.clear();
+  pbkdf2Cache.clear();
 }

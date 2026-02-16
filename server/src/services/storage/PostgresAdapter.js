@@ -118,7 +118,8 @@ export class PostgresAdapter extends StorageInterface {
       SELECT COUNT(*) as count
       FROM user_configs,
       jsonb_array_elements(data->'catalogs') as cat
-      WHERE (cat->'filters'->>'listType') = 'discover'
+      WHERE (cat->'filters'->>'listType') IS NULL
+         OR (cat->'filters'->>'listType') = 'discover'
     `);
 
     const totalCatalogs = parseInt(catalogResult.rows[0].count, 10);

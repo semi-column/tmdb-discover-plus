@@ -108,13 +108,13 @@ export class ConfigCache {
    * @private
    */
   _put(key, value) {
-    // Evict oldest if at capacity
-    if (this.cache.size >= this.maxSize) {
+    if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
       const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
       this.stats.evictions++;
     }
 
+    this.cache.delete(key);
     this.cache.set(key, {
       value,
       timestamp: Date.now(),

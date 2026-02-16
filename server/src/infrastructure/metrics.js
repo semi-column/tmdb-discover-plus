@@ -155,7 +155,7 @@ class MetricsTracker {
     const raw = req.route?.path || req.path || req.url || '/unknown';
     const path = typeof raw === 'string' ? raw : String(raw);
     return path
-      .replace(/\/[a-zA-Z0-9_-]{6,30}\//g, '/:userId/')
+      .replace(/\/[a-zA-Z0-9_-]{6,30}(?=\/|$)/g, '/:userId')
       .replace(/\/tt\d+/g, '/:imdbId')
       .replace(/\/tmdb:\d+/g, '/:tmdbId')
       .replace(/\?.*/g, '');
@@ -193,6 +193,7 @@ class MetricsTracker {
   toPrometheus() {
     if (this.disabled) return '# Metrics disabled\n';
 
+    const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
     const lines = [];
     const uptimeMs = Date.now() - this.startTime;
     const hourAgo = Date.now() - 60 * 60 * 1000;
@@ -221,7 +222,7 @@ class MetricsTracker {
     lines.push('# HELP tmdb_endpoint_errors_total Errors per endpoint');
     lines.push('# TYPE tmdb_endpoint_errors_total counter');
     for (const [route, stats] of this.endpoints) {
-      const label = `route="${route}"`;
+      const label = `route="${esc(route)}"`;
       lines.push(`tmdb_endpoint_requests_total{${label}} ${stats.count}`);
       lines.push(
         `tmdb_endpoint_duration_avg_ms{${label}} ${stats.count > 0 ? Math.round(stats.totalMs / stats.count) : 0}`
@@ -236,7 +237,7 @@ class MetricsTracker {
     lines.push('# HELP tmdb_provider_errors_total Errors per provider');
     lines.push('# TYPE tmdb_provider_errors_total counter');
     for (const [name, stats] of this.providers) {
-      const label = `provider="${name}"`;
+      const label = `provider="${esc(name)}"`;
       lines.push(`tmdb_provider_requests_total{${label}} ${stats.count}`);
       lines.push(
         `tmdb_provider_duration_avg_ms{${label}} ${stats.count > 0 ? Math.round(stats.totalMs / stats.count) : 0}`
@@ -247,7 +248,7 @@ class MetricsTracker {
     lines.push('# HELP tmdb_errors_total Errors by type');
     lines.push('# TYPE tmdb_errors_total counter');
     for (const [errorType, count] of this.errorCounts) {
-      lines.push(`tmdb_errors_total{type="${errorType}"} ${count}`);
+      lines.push(`tmdb_errors_total{type="${esc(errorType)}"} ${count}`);
     }
 
     if (this._cacheStatsProvider) {

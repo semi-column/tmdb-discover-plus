@@ -1,7 +1,6 @@
 import { BuyMeACoffeeButton } from '../social/BuyMeACoffeeButton.jsx';
-import { KoFiButton } from '../social/KoFiButton.jsx';
 import { DiscordButton, DiscordIcon } from '../social/DiscordButton.jsx';
-import { Heart, Coffee, ArrowRight } from 'lucide-react';
+import { Coffee, ArrowRight } from 'lucide-react';
 
 export function Header({ stats }) {
   const isNightly = stats?.addonVariant === 'nightly';
@@ -17,9 +16,7 @@ export function Header({ stats }) {
                 <h1>
                   TMDB Discover<span className="plus">+</span>
                 </h1>
-                {isNightly && (
-                  <span className="nightly-badge">Nightly</span>
-                )}
+                {isNightly && <span className="nightly-badge">Nightly</span>}
               </div>
               <span className="logo-subtitle">Custom Catalogs for Stremio</span>
             </div>
@@ -49,7 +46,7 @@ export function Header({ stats }) {
                     alignItems: 'center',
                     gap: '4px',
                     color: 'var(--text-secondary)',
-                    textDecoration: 'none'
+                    textDecoration: 'none',
                   }}
                 >
                   Switch to Stable <ArrowRight size={14} />
@@ -78,7 +75,7 @@ export function Header({ stats }) {
                     marginRight: '8px',
                     background: 'rgba(255, 255, 255, 0.05)',
                     border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '20px'
+                    borderRadius: '20px',
                   }}
                 >
                   Switch to Stable
@@ -90,15 +87,15 @@ export function Header({ stats }) {
                 rel="noreferrer"
                 className="action-icon-btn discord-btn"
                 aria-label="Join our Discord"
-                style={{ 
+                style={{
                   backgroundColor: '#5865F2',
-                  display: 'flex', 
-                  alignItems: 'center', 
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'center',
                   width: '32px',
                   height: '32px',
                   borderRadius: '50%',
-                  color: 'white'
+                  color: 'white',
                 }}
               >
                 <DiscordIcon style={{ width: '18px', height: '14px', fill: 'white' }} />

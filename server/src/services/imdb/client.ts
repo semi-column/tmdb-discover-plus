@@ -15,6 +15,8 @@ const log = createLogger('imdb:client') as Logger;
 
 const FETCH_TIMEOUT_MS = 10_000;
 
+const inFlightRequests = new Map<string, Promise<unknown>>();
+
 const CIRCUIT_BREAKER = {
   threshold: 10,
   windowMs: 60_000,
@@ -74,8 +76,6 @@ export async function imdbFetch(
 ): Promise<unknown> {
   const apiKey = config.imdbApi.apiKey;
   const apiHost = config.imdbApi.apiHost;
-  const keyHeader = config.imdbApi.apiKeyHeader;
-  const hostHeader = config.imdbApi.apiHostHeader;
 
   if (!apiKey) {
     throw new Error('IMDb API key not configured');
@@ -108,6 +108,7 @@ export async function imdbFetch(
   });
 
   const cacheKey = `imdb:${url.pathname}${url.search}`;
+  const freshnessKey = `imdb:fresh:${url.pathname}${url.search}`;
   const cache = getCache();
   const metrics = getMetrics();
 
@@ -120,11 +121,62 @@ export async function imdbFetch(
   try {
     const cached = await cache.get(cacheKey);
     if (cached !== null && cached !== undefined) {
+      const isFresh = await cache.get(freshnessKey).catch(() => null);
+      if (isFresh) return cached;
+
+      doBackgroundRevalidation(ep, url, cacheKey, freshnessKey, cacheTtl, retries);
       return cached;
     }
   } catch (err) {
     log.warn('IMDb cache get failed', { error: (err as Error).message });
   }
+
+  const existing = inFlightRequests.get(cacheKey);
+  if (existing) return existing;
+
+  const promise = executeImdbFetch(ep, url, cacheKey, freshnessKey, cacheTtl, retries);
+  inFlightRequests.set(cacheKey, promise);
+
+  try {
+    return await promise;
+  } finally {
+    inFlightRequests.delete(cacheKey);
+  }
+}
+
+function doBackgroundRevalidation(
+  ep: string,
+  url: URL,
+  cacheKey: string,
+  freshnessKey: string,
+  cacheTtl: number,
+  retries: number
+): void {
+  if (inFlightRequests.has(cacheKey)) return;
+
+  const promise = executeImdbFetch(ep, url, cacheKey, freshnessKey, cacheTtl, retries);
+  inFlightRequests.set(cacheKey, promise);
+  promise
+    .catch((err) =>
+      log.warn('IMDb background revalidation failed', { error: (err as Error).message })
+    )
+    .finally(() => inFlightRequests.delete(cacheKey));
+}
+
+async function executeImdbFetch(
+  ep: string,
+  url: URL,
+  cacheKey: string,
+  freshnessKey: string,
+  cacheTtl: number,
+  retries: number
+): Promise<unknown> {
+  const apiKey = config.imdbApi.apiKey;
+  const apiHost = config.imdbApi.apiHost;
+  const keyHeader = config.imdbApi.apiKeyHeader;
+  const hostHeader = config.imdbApi.apiHostHeader;
+  const cache = getCache();
+  const metrics = getMetrics();
 
   let lastError: ImdbFetchError | undefined;
 
@@ -189,7 +241,8 @@ export async function imdbFetch(
       });
 
       try {
-        await cache.set(cacheKey, data, cacheTtl);
+        await cache.set(cacheKey, data, cacheTtl * 2);
+        await cache.set(freshnessKey, 1, cacheTtl);
       } catch (cacheErr) {
         log.warn('Failed to cache IMDb response', {
           key: cacheKey.substring(0, 80),
@@ -240,4 +293,8 @@ export async function imdbFetch(
   }
 
   throw lastError;
+}
+
+export function getInFlightCount(): number {
+  return inFlightRequests.size;
 }
