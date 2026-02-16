@@ -11,6 +11,7 @@ const catalogSchema = new mongoose.Schema(
     },
     name: { type: String, required: true },
     type: { type: String, enum: ['movie', 'series'], required: true },
+    source: { type: String, enum: ['tmdb', 'imdb'], default: 'tmdb' },
     filters: {
       listType: { type: String, default: 'discover' },
       genres: [Number],
@@ -55,12 +56,27 @@ const catalogSchema = new mongoose.Schema(
       watchProviders: [Number],
       watchMonetizationType: String,
       watchMonetizationTypes: [String],
+      // IMDb-specific filters
+      imdbListId: String,
+      query: String,
+      sortOrder: String,
+      imdbRatingMin: Number,
+      totalVotesMin: Number,
+      releaseDateStart: String,
+      releaseDateEnd: String,
+      languages: [String],
+      countries: [String],
+      keywords: [String],
+      awardsWon: Number,
+      awardsNominated: Number,
+      types: [String],
+      enableRatingPosters: Boolean,
     },
     enabled: { type: Boolean, default: true },
   },
   {
     _id: false,
-    strict: true,
+    strict: false,
   }
 );
 

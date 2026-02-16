@@ -82,6 +82,11 @@ export async function saveUserConfig(config) {
     };
   });
 
+  log.debug('Processed catalogs for saving', { 
+    userId: config.userId, 
+    catalogs: processedCatalogs.map(c => ({ name: c.name, source: c.source })) 
+  });
+
   try {
     const processedPreferences = { ...(config.preferences || {}) };
 

@@ -294,7 +294,16 @@ async function handleImdbCatalogRequest(userId, type, catalogId, extra, res, req
       return id === catalogId;
     });
 
-    if (!catalogConfig) return res.json({ metas: [] });
+    if (!catalogConfig) {
+      log.debug('IMDb Catalog not found', { catalogId, available: userConfig.catalogs.map(c => c.name) });
+      return res.json({ metas: [] });
+    }
+
+    log.debug('IMDb Catalog matched', { 
+      name: catalogConfig.name, 
+      id: catalogId,
+      filters: JSON.stringify(catalogConfig.filters) 
+    });
 
     const filters = sanitizeImdbFilters(catalogConfig.filters || {});
     const listType = filters.listType || 'discover';

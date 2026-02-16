@@ -41,12 +41,6 @@ TMDB Discover+ is a Stremio addon that lets users create custom content catalogs
 │  │  → HTTP Fetch (3 retries, exponential backoff)          │   │
 │  └────────────────────────┬────────────────────────────────┘   │
 │                           │                                     │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    IMDb Client                           │   │
-│  │  Quota Check → Circuit Breaker → Cache Check            │   │
-│  │  → Token Bucket (5 req/s) → RapidAPI Fetch (3 retries) │   │
-│  └────────────────────────┬────────────────────────────────┘   │
-│                           │                                     │
 │  ┌────────────────────────▼────────────────────────────────┐   │
 │  │                  Cache Wrapper                           │   │
 │  │  Stale-while-revalidate │ Error caching │ Deduplication │   │
@@ -196,94 +190,3 @@ React 19 SPA with no external state library. State management uses a hooks compo
 | `useTMDB`           | Reference data fetching, preview, entity search, IMDb reference/preview |
 | `useCatalogManager` | Catalog add/delete/duplicate/reorder, active tracking                   |
 | `useConfigManager`  | Save/install flow, multi-config management, import/export               |
-
-## IMDb Client
-
-### Overview
-
-Optional external data source for IMDb-powered catalogs. Enabled when `IMDB_API_KEY` and `IMDB_API_HOST` are set. Uses an IMDb API via RapidAPI with a shared server-side key (not per-user).
-
-### Architecture
-
-Mirrors the TMDB client pattern exactly:
-
-```
-imdbFetch(endpoint, params, cacheTtl, retries)
-  ├── Quota check (monthly budget)
-  ├── Circuit breaker check (10 failures/60s → 30s cooldown)
-  ├── Cache check (CacheWrapper with stale-while-revalidate)
-  ├── Token bucket throttle (5 req/s, separate from TMDB)
-  ├── HTTP fetch with AbortController (10s timeout)
-  └── 3 retries with exponential backoff
-```
-
-### Authentication
-
-All IMDb API requests include:
-
-```
-x-rapidapi-key: <IMDB_API_KEY>
-x-rapidapi-host: <IMDB_API_HOST>
-```
-
-### Service Modules
-
-| Module           | Responsibility                                                 |
-| ---------------- | -------------------------------------------------------------- |
-| `client.ts`      | Core fetch with auth, circuit breaker, retry, cache            |
-| `discover.ts`    | Advanced search, top rankings, popular, list fetching          |
-| `detail.ts`      | Single title details (7-day cache)                             |
-| `search.ts`      | Title search and suggestions                                   |
-| `reference.ts`   | Genres, keywords, awards, sort options (static reference data) |
-| `stremioMeta.ts` | Transforms IMDb data → Stremio meta objects                    |
-| `types.ts`       | TypeScript types, enums, constants, preset catalog definitions |
-
-### Catalog Types
-
-| Type        | API Endpoint       | Cache TTL | Description                       |
-| ----------- | ------------------ | --------- | --------------------------------- |
-| `discover`  | Advanced Search    | 24h       | Filterable by genre, year, rating |
-| `top250`    | Top Chart Ranking  | 12h       | IMDb Top 250 movies/series        |
-| `popular`   | Most Popular Chart | 12h       | Current most popular titles       |
-| `imdb_list` | User List          | 1h        | Custom IMDb lists (ls\d+ IDs)     |
-
-### Budget Management
-
-- In-memory quota tracker with daily/monthly reset
-- Warning at 80% of monthly budget
-- Hard limit at 95% — new requests rejected with 503
-- Prometheus metrics: `imdb_api_requests_month`, `imdb_api_quota_exceeded`
-- Health endpoint includes circuit breaker state and quota stats
-
-### Shared Catalog Cache
-
-Users with identical IMDb filter sets receive the same cached response. Cache keys are derived from a stable hash of the filter parameters, not the user ID. This is critical for staying within the 500K/month budget.
-
-### Pagination
-
-IMDb API uses cursor-based pagination. The addon caches cursors per filter-hash so Stremio's `skip` parameter (offset-based) works correctly.
-
-**API Service** (`api.js`): Singleton `ApiService` class handling all HTTP calls with JWT auth headers, 401 auto-logout, network retry, and `sessionStorage` caching of reference data.
-
-## Middleware Pipeline
-
-Applied in order in `server/src/index.js`:
-
-| Order | Middleware              | Purpose                                       |
-| ----- | ----------------------- | --------------------------------------------- |
-| 1     | `cors()`                | Configurable origin whitelist                 |
-| 2     | `express.json()`        | JSON body parsing                             |
-| 3     | `compression()`         | gzip/deflate for responses > 1KB              |
-| 4     | Security headers        | CSP, X-Frame-Options, HSTS, nosniff           |
-| 5     | `requestIdMiddleware()` | `X-Request-Id` via `AsyncLocalStorage`        |
-| 6     | `apiRateLimit`          | 300 req/min per IP                            |
-| 7     | `metrics.middleware()`  | Per-route latency, active users, error counts |
-| 8     | `express.static()`      | Client build artifacts                        |
-
-Per-router additional middleware:
-
-| Router             | Rate Limit | Additional                              |
-| ------------------ | ---------- | --------------------------------------- |
-| Addon (`/`)        | 1000/min   | ETag middleware                         |
-| API (`/api`)       | 300/min    | Per-route auth, strict 60/min on writes |
-| Auth (`/api/auth`) | 60/min     | On login/verify                         |

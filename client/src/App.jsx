@@ -119,13 +119,15 @@ function App() {
       </a>
       <Header userId={config.userId} stats={stats} />
 
-      <main className="main" id="main-content">
+      <main className={`main ${state.globalSource === 'imdb' ? 'theme-imdb' : ''}`} id="main-content">
         <div className="container">
           <div className="builder-toolbar">
             <div>
               <h2>Catalog Builder</h2>
               <p className="text-secondary">
-                Create and customize your Stremio catalogs with TMDB filters
+                {state.globalSource === 'imdb' 
+                  ? 'Create and customize your Stremio catalogs with IMDb filters'
+                  : 'Create and customize your Stremio catalogs with TMDB filters'}
               </p>
 
               {tmdb.error && (
@@ -208,7 +210,6 @@ function App() {
                 config.setCatalogs(nextCatalogs);
               }}
               presetCatalogs={tmdb.presetCatalogs}
-              imdbEnabled={tmdb.imdbEnabled}
               imdbPresetCatalogs={tmdb.imdbPresetCatalogs}
               configName={config.configName}
               onConfigNameChange={config.setConfigName}
@@ -217,6 +218,9 @@ function App() {
               onImportConfig={actions.handleImportConfig}
               languages={tmdb.languages}
               addToast={actions.addToast}
+              globalSource={state.globalSource}
+              setGlobalSource={state.setGlobalSource}
+              imdbEnabled={tmdb.imdbEnabled}
             />
 
             <Suspense

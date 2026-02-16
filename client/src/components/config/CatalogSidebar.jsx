@@ -277,7 +277,6 @@ export const CatalogSidebar = memo(function CatalogSidebar({
   onDuplicateCatalog,
   onReorderCatalogs,
   presetCatalogs = { movie: [], series: [] },
-  imdbEnabled = false,
   imdbPresetCatalogs = [],
   configName = '',
   onConfigNameChange,
@@ -286,6 +285,9 @@ export const CatalogSidebar = memo(function CatalogSidebar({
   onImportConfig,
   languages = [],
   addToast,
+  globalSource = 'tmdb',
+  setGlobalSource,
+  imdbEnabled = false,
 }) {
   const safeCatalogs = Array.isArray(catalogs) ? catalogs : [];
   const safePresetCatalogs =
@@ -295,19 +297,20 @@ export const CatalogSidebar = memo(function CatalogSidebar({
   const isMobile = useIsMobile();
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
   const [tvPresetsCollapsed, setTvPresetsCollapsed] = useState(isMobile);
-  const [imdbPresetsCollapsed, setImdbPresetsCollapsed] = useState(isMobile);
 
   useEffect(() => {
     setMoviePresetsCollapsed(isMobile);
     setTvPresetsCollapsed(isMobile);
-    setImdbPresetsCollapsed(isMobile);
   }, [isMobile]);
 
-  const addedPresets = new Set(
-    safeCatalogs
-      .filter((c) => c.filters?.listType && c.filters.listType !== 'discover')
-      .map((c) => `${c.type}-${c.filters.listType}`)
-  );
+  // Sync global source if active catalog changes
+  useEffect(() => {
+    if (activeCatalog?.source) {
+      if (activeCatalog.source !== globalSource) {
+        setGlobalSource(activeCatalog.source);
+      }
+    }
+  }, [activeCatalog, globalSource, setGlobalSource]);
 
   const getCatalogKey = (catalog) => String(catalog?._id || catalog?.id || catalog?.name);
 
@@ -320,24 +323,47 @@ export const CatalogSidebar = memo(function CatalogSidebar({
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-header">
-        <div className="config-name-wrapper">
-          <input
-            type="text"
-            className="config-name-input"
-            value={configName}
-            onChange={(e) => onConfigNameChange && onConfigNameChange(e.target.value)}
-            placeholder={getPlaceholder()}
-          />
+      <div className="sidebar-header" style={{ flexDirection: 'column', gap: 12 }}>
+         <div style={{ display: 'flex', width: '100%', gap: 8 }}>
+          <div className="config-name-wrapper" style={{ flex: 1 }}>
+            <input
+              type="text"
+              className="config-name-input"
+              value={configName}
+              onChange={(e) => onConfigNameChange && onConfigNameChange(e.target.value)}
+              placeholder={getPlaceholder()}
+            />
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={onAddCatalog}
+            title="Add custom catalog"
+            style={{ padding: '0 8px' }}
+          >
+            <Plus size={16} />
+          </button>
         </div>
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={onAddCatalog}
-          title="Add custom catalog"
-        >
-          <Plus size={16} />
-          Add Catalog
-        </button>
+
+        {imdbEnabled && (
+          <div className="source-tabs" style={{ width: '100%', display: 'flex' }}>
+            <button
+              className={`source-tab ${globalSource === 'tmdb' ? 'active tmdb' : ''}`}
+              onClick={() => setGlobalSource('tmdb')}
+              style={{ flex: 1 }}
+            >
+              <Film size={14} />
+              TMDB
+            </button>
+            <button
+              className={`source-tab ${globalSource === 'imdb' ? 'active imdb' : ''}`}
+              onClick={() => setGlobalSource('imdb')}
+              style={{ flex: 1 }}
+            >
+              <Award size={14} />
+              IMDb
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="sidebar-controls" style={{ padding: '0 16px 12px 16px' }}>
@@ -467,6 +493,7 @@ export const CatalogSidebar = memo(function CatalogSidebar({
       <div className="sidebar-section">
         <h4 className="sidebar-section-title">Quick Add Presets</h4>
 
+        {/* Unified Movie Presets */}
         <div className={`preset-group ${moviePresetsCollapsed ? 'collapsed' : ''}`}>
           <div
             className="preset-group-header"
@@ -477,14 +504,25 @@ export const CatalogSidebar = memo(function CatalogSidebar({
             <ChevronDown size={14} className="chevron" />
           </div>
           <div className="preset-list">
-            {(safePresetCatalogs.movie || []).map((preset) => {
-              const isAdded = addedPresets.has(`movie-${preset.value}`);
-              const IconComponent = presetIcons[preset.value] || Star;
+            {(globalSource === 'tmdb'
+              ? safePresetCatalogs.movie || []
+              : imdbPresetCatalogs.filter((p) => p.type === 'movie')
+            ).map((preset) => {
+              const source = globalSource === 'tmdb' ? 'tmdb' : 'imdb';
+              const type = 'movie';
+              const isAdded = safeCatalogs.some(
+                (c) =>
+                  (source === 'imdb' ? c.source === 'imdb' : !c.source || c.source === 'tmdb') &&
+                  c.filters?.listType === preset.value &&
+                  c.type === type
+              );
+              const IconComponent = presetIcons[preset.value] || (source === 'imdb' && preset.value === 'top250' ? Trophy : Star);
+              
               return (
                 <button
-                  key={preset.value}
-                  className={`preset-item ${isAdded ? 'added' : ''}`}
-                  onClick={() => !isAdded && onAddPresetCatalog('movie', preset)}
+                  key={`${source}-${preset.value}`}
+                  className={`preset-item ${source === 'imdb' ? 'preset-item--imdb' : ''} ${isAdded ? 'added' : ''}`}
+                  onClick={() => !isAdded && onAddPresetCatalog(type, preset, source)}
                   disabled={isAdded}
                   title={isAdded ? 'Already added' : preset.description}
                 >
@@ -497,6 +535,7 @@ export const CatalogSidebar = memo(function CatalogSidebar({
           </div>
         </div>
 
+        {/* Unified TV Presets */}
         <div className={`preset-group ${tvPresetsCollapsed ? 'collapsed' : ''}`}>
           <div
             className="preset-group-header"
@@ -507,14 +546,25 @@ export const CatalogSidebar = memo(function CatalogSidebar({
             <ChevronDown size={14} className="chevron" />
           </div>
           <div className="preset-list">
-            {(safePresetCatalogs.series || []).map((preset) => {
-              const isAdded = addedPresets.has(`series-${preset.value}`);
-              const IconComponent = presetIcons[preset.value] || Star;
+            {(globalSource === 'tmdb'
+              ? safePresetCatalogs.series || []
+              : imdbPresetCatalogs.filter((p) => p.type === 'series')
+            ).map((preset) => {
+              const source = globalSource === 'tmdb' ? 'tmdb' : 'imdb';
+              const type = 'series';
+              const isAdded = safeCatalogs.some(
+                (c) =>
+                  (source === 'imdb' ? c.source === 'imdb' : !c.source || c.source === 'tmdb') &&
+                  c.filters?.listType === preset.value &&
+                  c.type === type
+              );
+              const IconComponent = presetIcons[preset.value] || (source === 'imdb' && preset.value === 'top250' ? Trophy : Star);
+
               return (
                 <button
-                  key={preset.value}
-                  className={`preset-item ${isAdded ? 'added' : ''}`}
-                  onClick={() => !isAdded && onAddPresetCatalog('series', preset)}
+                  key={`${source}-${preset.value}`}
+                  className={`preset-item ${source === 'imdb' ? 'preset-item--imdb' : ''} ${isAdded ? 'added' : ''}`}
+                  onClick={() => !isAdded && onAddPresetCatalog(type, preset, source)}
                   disabled={isAdded}
                   title={isAdded ? 'Already added' : preset.description}
                 >
@@ -526,44 +576,6 @@ export const CatalogSidebar = memo(function CatalogSidebar({
             })}
           </div>
         </div>
-
-        {imdbEnabled && imdbPresetCatalogs.length > 0 && (
-          <div className={`preset-group ${imdbPresetsCollapsed ? 'collapsed' : ''}`}>
-            <div
-              className="preset-group-header"
-              onClick={() => setImdbPresetsCollapsed(!imdbPresetsCollapsed)}
-            >
-              <Award size={14} style={{ color: '#F5C518' }} />
-              <span>IMDb</span>
-              <ChevronDown size={14} className="chevron" />
-            </div>
-            <div className="preset-list">
-              {imdbPresetCatalogs.map((preset) => {
-                const presetKey = `imdb-${preset.type}-${preset.value}`;
-                const isAdded = safeCatalogs.some(
-                  (c) =>
-                    c.source === 'imdb' &&
-                    c.filters?.listType === preset.value &&
-                    c.type === preset.type
-                );
-                const IconComponent = preset.value === 'top250' ? Trophy : Flame;
-                return (
-                  <button
-                    key={presetKey}
-                    className={`preset-item preset-item--imdb ${isAdded ? 'added' : ''}`}
-                    onClick={() => !isAdded && onAddPresetCatalog(preset.type, preset, 'imdb')}
-                    disabled={isAdded}
-                    title={isAdded ? 'Already added' : preset.description}
-                  >
-                    <IconComponent size={14} />
-                    <span>{preset.label}</span>
-                    {!isAdded && <Plus size={14} className="preset-add-icon" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </aside>
   );

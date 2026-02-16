@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Film, Tv, Award } from 'lucide-react';
 import { useModalA11y } from '../../hooks/useModalA11y';
 
 export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false }) {
   const [name, setName] = useState('');
   const [source, setSource] = useState('tmdb');
+  const [type, setType] = useState('movie'); // 'movie' or 'series'
   const [imdbListType, setImdbListType] = useState('discover');
   const [imdbListId, setImdbListId] = useState('');
   const modalRef = useModalA11y(isOpen, onClose);
@@ -27,7 +28,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
       }
       onAdd({
         name: name.trim(),
-        type: 'movie',
+        type,
         source: 'imdb',
         filters,
         enabled: true,
@@ -35,7 +36,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
     } else {
       onAdd({
         name: name.trim(),
-        type: 'movie',
+        type,
         filters: {
           listType: 'discover',
           genres: [],
@@ -48,12 +49,13 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
 
     setName('');
     setSource('tmdb');
+    setType('movie');
     setImdbListType('discover');
     setImdbListId('');
     onClose();
   };
 
-  const isImdbListValid = imdbListType !== 'imdb_list' || /^ls\d{1,15}$/.test(imdbListId.trim());
+  const isImdbListValid = source !== 'imdb' || imdbListType !== 'imdb_list' || /^ls\d{1,15}$/.test(imdbListId.trim());
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -65,8 +67,13 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
         aria-label="Create New Catalog"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header">
-          <h3 className="modal-title">Create New Catalog</h3>
+        <div className="modal-header" style={{ paddingBottom: '8px' }}>
+          <div>
+            <h3 className="modal-title">Create New Catalog</h3>
+            <p className="text-secondary" style={{ fontSize: '13px', marginTop: '4px' }}>
+              Choose a data source and content type to get started
+            </p>
+          </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>
             <X size={20} />
           </button>
@@ -74,95 +81,126 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            {imdbEnabled && (
-              <div className="filter-group" style={{ marginBottom: '16px' }}>
-                <label className="filter-label">Data Source</label>
-                <div className="imdb-source-toggle">
-                  <button
-                    type="button"
-                    className={source === 'tmdb' ? 'active-tmdb' : ''}
-                    onClick={() => setSource('tmdb')}
-                  >
-                    TMDB
-                  </button>
-                  <button
-                    type="button"
-                    className={source === 'imdb' ? 'active-imdb' : ''}
-                    onClick={() => setSource('imdb')}
-                  >
-                    IMDb
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="filter-group">
+              <div className="catalog-type-grid">
+                <button
+                  type="button"
+                  className={`type-card ${source === 'tmdb' && type === 'movie' ? 'active' : ''}`}
+                  onClick={() => {
+                    setSource('tmdb');
+                    setType('movie');
+                  }}
+                >
+                  <div className="type-card-icon tmdb">
+                    <Film size={20} />
+                  </div>
+                  <div className="type-card-content">
+                    <span className="type-title">TMDB Movie</span>
+                    <span className="type-desc">Standard TMDB discovery</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`type-card ${source === 'tmdb' && type === 'series' ? 'active' : ''}`}
+                  onClick={() => {
+                    setSource('tmdb');
+                    setType('series');
+                  }}
+                >
+                  <div className="type-card-icon tmdb">
+                    <Tv size={20} />
+                  </div>
+                  <div className="type-card-content">
+                    <span className="type-title">TMDB Series</span>
+                    <span className="type-desc">Standard TMDB discovery</span>
+                  </div>
+                </button>
+
+                {imdbEnabled && (
+                  <>
+                    <button
+                      type="button"
+                      className={`type-card ${source === 'imdb' && type === 'movie' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSource('imdb');
+                        setType('movie');
+                      }}
+                    >
+                      <div className="type-card-icon imdb">
+                        <Award size={20} />
+                      </div>
+                      <div className="type-card-content">
+                        <span className="type-title">IMDb Movie</span>
+                        <span className="type-desc">IMDb metadata & lists</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`type-card ${source === 'imdb' && type === 'series' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSource('imdb');
+                        setType('series');
+                      }}
+                    >
+                      <div className="type-card-icon imdb">
+                        <Tv size={20} />
+                      </div>
+                      <div className="type-card-content">
+                        <span className="type-title">IMDb Series</span>
+                        <span className="type-desc">IMDb metadata & lists</span>
+                      </div>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="filter-group" style={{ marginTop: '20px' }}>
               <label className="filter-label">Catalog Name</label>
               <input
                 type="text"
                 className="input"
-                style={{ paddingLeft: '14px' }}
+                style={{ height: '42px', fontSize: '15px' }}
                 placeholder={
                   source === 'imdb'
-                    ? 'e.g., Oscar Winners, IMDb Top Rated, My Watchlist'
-                    : 'e.g., Top Rated Sci-Fi, Hindi Movies, Netflix Shows'
+                    ? 'e.g., Oscar Winners, IMDb Top Rated'
+                    : 'e.g., My Sci-Fi Collection, Netflix Picks'
                 }
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
+                required
               />
             </div>
 
             {source === 'imdb' && (
-              <div className="filter-group" style={{ marginTop: '12px' }}>
-                <label className="filter-label">Catalog Type</label>
+              <div className="filter-group" style={{ marginTop: '16px' }}>
+                <label className="filter-label">Initial Context</label>
                 <select
-                  className="imdb-list-type-select"
+                  className="input"
                   value={imdbListType}
                   onChange={(e) => setImdbListType(e.target.value)}
                 >
-                  <option value="discover">Discover (Advanced Search)</option>
-                  <option value="top250">Top 250</option>
+                  <option value="discover">Advanced Search (Default)</option>
+                  <option value="top250">IMDb Top 250</option>
                   <option value="popular">Most Popular</option>
-                  <option value="imdb_list">IMDb List</option>
+                  <option value="imdb_list">Custom IMDb List ID</option>
                 </select>
 
                 {imdbListType === 'imdb_list' && (
                   <div style={{ marginTop: '8px' }}>
                     <input
                       type="text"
-                      className={`imdb-list-id-input${imdbListId && !isImdbListValid ? ' field-invalid' : ''}`}
-                      placeholder="IMDb list ID or URL (e.g., ls597789139)"
+                      className={`input ${imdbListId && !isImdbListValid ? 'field-invalid' : ''}`}
+                      placeholder="e.g. ls597789139"
                       value={imdbListId}
                       onChange={(e) => setImdbListId(e.target.value)}
                     />
-                    {imdbListId && !isImdbListValid && (
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          color: 'var(--error)',
-                          marginTop: '4px',
-                          display: 'block',
-                        }}
-                      >
-                        Enter a valid IMDb list ID (e.g., ls597789139)
-                      </span>
-                    )}
                   </div>
                 )}
-
-                <span className="filter-label-hint" style={{ marginTop: '8px' }}>
-                  {source === 'imdb'
-                    ? 'You can configure IMDb filters after creating'
-                    : 'You can configure content type and filters after creating'}
-                </span>
               </div>
-            )}
-
-            {source === 'tmdb' && (
-              <span className="filter-label-hint" style={{ marginTop: '8px' }}>
-                You can configure content type and filters after creating
-              </span>
             )}
           </div>
 

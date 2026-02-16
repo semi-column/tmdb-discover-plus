@@ -1,7 +1,15 @@
 import { useState } from 'react';
 
 export function useCatalogManager(config, addToast) {
-  const [activeCatalog, setActiveCatalog] = useState(null);
+  const [activeCatalog, setActiveCatalogState] = useState(null);
+  const [globalSource, setGlobalSource] = useState('tmdb');
+
+  const setActiveCatalog = (catalog) => {
+    setActiveCatalogState(catalog);
+    if (catalog?.source) {
+      setGlobalSource(catalog.source);
+    }
+  };
 
   const handleAddCatalog = (catalogData) => {
     const newCatalog = { ...catalogData, _id: crypto.randomUUID() };
@@ -9,7 +17,8 @@ export function useCatalogManager(config, addToast) {
     setActiveCatalog(newCatalog);
   };
 
-  const handleAddPresetCatalog = (type, preset, source = 'tmdb') => {
+  const handleAddPresetCatalog = (type, preset, source) => {
+    const effectiveSource = source || globalSource;
     const newCatalog = {
       _id: crypto.randomUUID(),
       name: preset.label.replace(/^[^\s]+\s/, ''),
@@ -17,11 +26,19 @@ export function useCatalogManager(config, addToast) {
       filters: { listType: preset.value },
       enabled: true,
     };
-    if (source === 'imdb') {
+    if (effectiveSource === 'imdb') {
       newCatalog.source = 'imdb';
     }
     config.setCatalogs((prev) => [...prev, newCatalog]);
     setActiveCatalog(newCatalog);
+  };
+  
+  // Update global source when explicitly set, and clear active catalog if source mismatches
+  const handleSetGlobalSource = (source) => {
+    setGlobalSource(source);
+    if (activeCatalog && (activeCatalog.source || 'tmdb') !== source) {
+      setActiveCatalogState(null);
+    }
   };
 
   const handleDeleteCatalog = (catalogId) => {
@@ -56,6 +73,8 @@ export function useCatalogManager(config, addToast) {
   return {
     activeCatalog,
     setActiveCatalog,
+    globalSource,
+    setGlobalSource: handleSetGlobalSource,
     handleAddCatalog,
     handleAddPresetCatalog,
     handleDeleteCatalog,
