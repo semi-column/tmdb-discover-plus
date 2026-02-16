@@ -8,7 +8,15 @@ export { computeApiKeyId, generateToken, verifyToken } from './security.ts';
 const log = createLogger('auth');
 
 export async function requireAuth(req, res, next) {
-  const bearerToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const authHeader = req.headers.authorization;
+  let bearerToken = null;
+
+  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token.length > 0) {
+      bearerToken = token;
+    }
+  }
 
   if (!bearerToken) {
     return sendError(res, 401, ErrorCodes.UNAUTHORIZED, 'Authentication required');
@@ -64,7 +72,15 @@ export async function requireConfigOwnership(req, res, next) {
 }
 
 export async function optionalAuth(req, res, next) {
-  const bearerToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const authHeader = req.headers.authorization;
+  let bearerToken = null;
+
+  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token.length > 0) {
+      bearerToken = token;
+    }
+  }
 
   if (bearerToken) {
     const decoded = verifyToken(bearerToken);
