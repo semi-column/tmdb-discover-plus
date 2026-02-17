@@ -94,19 +94,22 @@
 }
 
 .filter-section-content {
-  padding: 0 16px 16px;
-  animation: sectionExpand 0.2s ease;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition:
+    grid-template-rows 0.25s var(--ease-out-expo),
+    padding 0.25s var(--ease-out-expo);
+  padding: 0 16px;
 }
 
-@keyframes sectionExpand {
-  from {
-    opacity: 0;
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 2000px;
-  }
+.filter-section-content.expanded {
+  grid-template-rows: 1fr;
+  padding: 0 16px 16px;
+}
+
+.filter-section-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 
 .filter-grid {
@@ -172,7 +175,7 @@
 .list-type-info {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 16px;
   margin-top: 0;
 }
@@ -239,7 +242,10 @@
   font-size: 0.8125rem;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s var(--ease-out-expo),
+    border-color 0.2s var(--ease-out-expo),
+    color 0.2s var(--ease-out-expo);
 }
 
 .genre-chip:hover {
@@ -325,7 +331,11 @@
 
 .genre-chip.tristate {
   position: relative;
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s var(--ease-out-expo),
+    border-color 0.15s var(--ease-out-expo),
+    color 0.15s var(--ease-out-expo),
+    opacity 0.15s ease;
 }
 
 .genre-chip.tristate.neutral {
@@ -389,7 +399,9 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .genre-match-option:hover {
@@ -465,7 +477,7 @@
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease;
 }
 
 .option-card:hover {
@@ -714,7 +726,10 @@
   font-size: 0.8125rem;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s var(--ease-out-expo),
+    border-color 0.2s var(--ease-out-expo),
+    color 0.2s var(--ease-out-expo);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -836,7 +851,9 @@
   border: 2px solid transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s var(--ease-out-expo),
+    border-color 0.2s var(--ease-out-expo);
 }
 
 .provider-item:hover {
@@ -882,7 +899,10 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s var(--ease-out-expo),
+    border-color 0.2s var(--ease-out-expo),
+    color 0.2s var(--ease-out-expo);
 }
 
 .date-preset:hover {
@@ -962,7 +982,9 @@
   justify-content: center;
   background: var(--bg-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .checkbox-label-row .checkbox:hover {
@@ -1020,7 +1042,9 @@
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--ease-out-expo),
+    color var(--transition-fast) var(--ease-out-expo);
   background: transparent;
   color: var(--text-muted);
 }

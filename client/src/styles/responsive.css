@@ -92,7 +92,7 @@
     background: transparent;
     border: none;
     box-shadow: none;
-    border-radius: 8px; /* Slightly softer corners */
+    border-radius: var(--radius-md);
   }
 
   .logo-image:hover {
@@ -138,7 +138,9 @@
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.05);
     color: var(--text-secondary);
-    transition: all 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
@@ -308,6 +310,10 @@
   }
 
   .filter-section-content {
+    padding: 0 12px;
+  }
+
+  .filter-section-content.expanded {
     padding: 0 12px 12px;
   }
 

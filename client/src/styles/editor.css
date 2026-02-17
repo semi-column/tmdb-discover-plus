@@ -200,7 +200,10 @@
   font-weight: 500;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s var(--ease-out-expo),
+    color 0.2s var(--ease-out-expo),
+    box-shadow 0.2s var(--ease-out-expo);
 }
 
 .type-btn:hover {
@@ -242,9 +245,42 @@
   color: white;
   font-size: 0.75rem;
   font-weight: 500;
-  border-radius: 20px;
+  border-radius: var(--radius-full);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s var(--ease-out-expo);
+  animation: chipEnter 0.2s var(--ease-out-expo);
+}
+
+@keyframes chipEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.active-filter-chip[data-section='filters'] {
+  background: #6366f1;
+}
+.active-filter-chip[data-section='genres'] {
+  background: var(--accent-primary);
+}
+.active-filter-chip[data-section='release'] {
+  background: #8b5cf6;
+}
+.active-filter-chip[data-section='streaming'] {
+  background: #0ea5e9;
+}
+.active-filter-chip[data-section='people'] {
+  background: #ec4899;
+}
+.active-filter-chip[data-section='options'] {
+  background: #f59e0b;
 }
 
 .active-filter-chip:hover {
@@ -282,7 +318,10 @@
   font-weight: 500;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s var(--ease-out-expo),
+    border-color 0.15s var(--ease-out-expo),
+    color 0.15s var(--ease-out-expo);
   white-space: nowrap;
 }
 
@@ -304,7 +343,7 @@
   color: white;
   font-size: 0.6875rem;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   margin-left: auto;
   margin-right: 8px;
 }
