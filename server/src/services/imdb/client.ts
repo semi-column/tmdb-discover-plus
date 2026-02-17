@@ -1,9 +1,9 @@
 import fetch from 'node-fetch';
-import { getCache } from '../cache/index.js';
+import { getCache } from '../cache/index.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { getImdbThrottle } from '../../infrastructure/imdbThrottle.ts';
 import { recordImdbApiCall, isQuotaExceeded } from '../../infrastructure/imdbQuota.ts';
-import { getMetrics } from '../../infrastructure/metrics.js';
+import { getMetrics } from '../../infrastructure/metrics.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
 

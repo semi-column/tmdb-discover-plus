@@ -1,0 +1,371 @@
+/* Editor Container - Wrapper for split layout */
+.editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+@media (min-width: 1024px) {
+  .editor-container {
+    height: 100%;
+  }
+}
+
+/* Editor Panel */
+.editor-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  /* Allow dropdowns inside the editor (search inputs, selects) to overflow instead
+     of being clipped by the editor panel. Previously this was set to hidden which
+     caused dropdowns to render at the bottom of the page when they were clipped. */
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  height: auto;
+}
+
+@media (min-width: 1024px) {
+  .editor-panel {
+    height: 100%;
+  }
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.editor-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-title h2 {
+  font-size: 20px;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.editor-content {
+  padding: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (min-width: 768px) {
+  .editor-content {
+    padding: 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .editor-content {
+    overflow-y: auto;
+  }
+}
+
+/* Preview Panel Container - Separate box */
+.preview-panel-container {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+}
+
+@media (min-width: 768px) {
+  .preview-panel-container {
+    padding: 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .preview-panel-container {
+    height: 100%;
+    overflow-y: auto;
+  }
+}
+
+.preview-panel-container .preview-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+  border-top: none;
+}
+
+/* Desktop: Side-by-side layout for editor and preview */
+@media (min-width: 1200px) {
+  .editor-container {
+    flex-direction: row;
+    gap: 20px;
+    align-items: stretch;
+  }
+
+  .editor-panel {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .preview-panel-container {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .preview-panel-container .preview-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 16px;
+  }
+}
+
+/* Enhanced Editor Styles */
+.editor-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.editor-panel {
+  flex: 1;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  /* Removed max-height constraint - let page scroll naturally */
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--gradient-card);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  flex-shrink: 0;
+}
+
+.editor-content {
+  flex: 1;
+  /* Removed overflow-y: auto - let page scroll naturally */
+  padding: 16px;
+}
+
+/* Ensure dropdowns appear above other sections */
+.searchable-select-dropdown,
+.multi-select-dropdown,
+.search-input-dropdown {
+  z-index: 9999 !important;
+}
+
+/* Filter section when expanded should have higher stacking context */
+.filter-section:has(.filter-section-content) {
+  z-index: auto;
+}
+
+/* Note: .filter-section-content intentionally has no position/z-index
+   to avoid stacking context issues with dropdowns */
+
+/* Content Type Toggle */
+.content-type-toggle {
+  display: flex;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  margin-bottom: 16px;
+}
+
+.type-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.type-btn:hover {
+  color: var(--text-primary);
+}
+
+.type-btn.active {
+  background: var(--accent-primary);
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+
+/* Quick Actions Bar */
+/* Active Filters Bar */
+.active-filters-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.active-filters-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1;
+}
+
+.active-filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--accent-primary);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.active-filter-chip:hover {
+  opacity: 0.9;
+}
+
+.active-filter-chip .chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease;
+}
+
+.active-filter-chip .chip-remove:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.active-filter-chip .chip-remove svg {
+  color: white;
+}
+
+.clear-all-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.clear-all-btn:hover {
+  background: var(--error);
+  border-color: var(--error);
+  color: white;
+}
+
+/* Filter Count Badge */
+.filter-count-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--accent-primary);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+/* Editor Improvements */
+.editor-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--accent-primary);
+}
+
+.editor-name-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 4px 0;
+  min-width: 200px;
+  transition: border-color 0.15s ease;
+  cursor: text;
+}
+
+.editor-name-input:hover {
+  border-bottom-color: var(--border-light);
+}
+
+.editor-name-input:focus {
+  outline: none;
+  border-bottom-color: var(--accent-primary);
+}
+
+.editor-name-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Filter Hint */
+.filter-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Filter Grid */
+
+/* ========================================
+   Editor & Form Components (Restored)
+   ======================================== */
+
+.editor-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}

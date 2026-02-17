@@ -37,14 +37,17 @@ export function useAppController() {
     try {
       const configs = await configMgr.loadUserConfigs();
       if (configs && configs.length > 0) {
-        window.location.href = `/?userId=${configs[0].userId}`;
+        window.history.replaceState({}, '', `/?userId=${configs[0].userId}`);
+        setUrlUserId(configs[0].userId);
       } else {
-        window.location.href = '/';
+        window.history.replaceState({}, '', '/');
+        setUrlUserId(null);
       }
     } catch {
-      window.location.href = '/';
+      window.history.replaceState({}, '', '/');
+      setUrlUserId(null);
     }
-  }, [configMgr, auth]);
+  }, [configMgr, auth, setUrlUserId]);
 
   const handleConfigMismatchLoginNew = useCallback(() => {
     configMgr.setShowMismatchModal(false);

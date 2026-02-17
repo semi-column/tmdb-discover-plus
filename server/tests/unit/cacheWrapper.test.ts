@@ -4,7 +4,7 @@ import {
   CachedError,
   classifyError,
   classifyResult,
-} from '../../src/services/cache/CacheWrapper.js';
+} from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter, FailingCacheAdapter } from './helpers/mocks.ts';
 
 describe('classifyError', () => {

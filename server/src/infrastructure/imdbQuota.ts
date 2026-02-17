@@ -1,6 +1,6 @@
 import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
-import { getCache } from '../services/cache/index.js';
+import { getCache } from '../services/cache/index.ts';
 
 const log = createLogger('ImdbQuota');
 
@@ -11,6 +11,8 @@ interface QuotaState {
   lastResetDay: number;
   lastResetMonth: number;
   perEndpoint: Record<string, number>;
+  warnEmitted: boolean;
+  limitEmitted: boolean;
 }
 
 const state: QuotaState = {
@@ -20,6 +22,8 @@ const state: QuotaState = {
   lastResetDay: new Date().getUTCDate(),
   lastResetMonth: new Date().getUTCMonth(),
   perEndpoint: {},
+  warnEmitted: false,
+  limitEmitted: false,
 };
 
 function getQuotaCacheKey(): string {
@@ -63,6 +67,8 @@ function checkResets(): void {
     state.requestsThisMonth = 0;
     state.lastResetMonth = currentMonth;
     state.perEndpoint = {};
+    state.warnEmitted = false;
+    state.limitEmitted = false;
   }
 }
 
@@ -78,7 +84,8 @@ export function recordImdbApiCall(endpoint: string): void {
   const warnThreshold = Math.floor((budget * config.imdbApi.budgetWarnPercent) / 100);
   const limitThreshold = Math.floor((budget * config.imdbApi.budgetLimitPercent) / 100);
 
-  if (state.requestsThisMonth === warnThreshold) {
+  if (!state.warnEmitted && state.requestsThisMonth >= warnThreshold) {
+    state.warnEmitted = true;
     log.warn('IMDb API budget warning threshold reached', {
       used: state.requestsThisMonth,
       budget,
@@ -86,7 +93,8 @@ export function recordImdbApiCall(endpoint: string): void {
     });
   }
 
-  if (state.requestsThisMonth === limitThreshold) {
+  if (!state.limitEmitted && state.requestsThisMonth >= limitThreshold) {
+    state.limitEmitted = true;
     log.warn('IMDb API budget HARD LIMIT reached — new requests will be rejected', {
       used: state.requestsThisMonth,
       budget,
@@ -130,4 +138,6 @@ export function resetImdbQuota(): void {
   state.requestsThisMonth = 0;
   state.requestsTotal = 0;
   state.perEndpoint = {};
+  state.warnEmitted = false;
+  state.limitEmitted = false;
 }

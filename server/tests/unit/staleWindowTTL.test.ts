@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CacheWrapper } from '../../src/services/cache/CacheWrapper.js';
+import { CacheWrapper } from '../../src/services/cache/CacheWrapper.ts';
 
 class TTLAwareCacheAdapter {
   store = new Map<string, { value: unknown; expiresAt: number }>();

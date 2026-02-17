@@ -2,13 +2,13 @@
   "name": "tmdb-discover-plus",
   "version": "2.7.3",
   "description": "TMDB Discover+ - Custom Catalog Builder for Stremio",
-  "main": "server/src/index.js",
+  "main": "server/src/index.ts",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "start": "node --experimental-strip-types server/src/index.js",
+    "start": "node --experimental-strip-types server/src/index.ts",
     "build": "cd client && npm install && npm run build",
     "heroku-postbuild": "cd server && npm install && cd ../client && npm install --include=dev && npm run build",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",

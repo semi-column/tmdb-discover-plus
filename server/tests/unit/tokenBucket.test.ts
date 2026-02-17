@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { TokenBucket } from '../../src/infrastructure/tmdbThrottle.js';
+import { TokenBucket } from '../../src/infrastructure/tmdbThrottle.ts';
 
 describe('TokenBucket', () => {
   let bucket: InstanceType<typeof TokenBucket>;

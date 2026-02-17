@@ -27,7 +27,6 @@ export class AppError extends Error {
 }
 
 export function formatErrorResponse(
-  statusCode: number,
   code: ErrorCode,
   message: string
 ): { error: string; code: string; requestId: string | undefined } {
@@ -39,5 +38,5 @@ export function formatErrorResponse(
 }
 
 export function sendError(res: any, statusCode: number, code: ErrorCode, message: string): void {
-  res.status(statusCode).json(formatErrorResponse(statusCode, code, message));
+  res.status(statusCode).json(formatErrorResponse(code, message));
 }

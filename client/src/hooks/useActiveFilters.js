@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 const DEFAULT_FILTERS = {
   genres: [],
@@ -39,7 +39,7 @@ export function useActiveFilters({
   excludeCompanies,
   setExcludeCompanies,
 }) {
-  const getActiveFilters = useCallback(() => {
+  const activeFilters = useMemo(() => {
     const filters = localCatalog?.filters || {};
     const active = [];
     const isMovieType = localCatalog?.type === 'movie';
@@ -528,5 +528,5 @@ export function useActiveFilters({
     setLocalCatalog,
   ]);
 
-  return { activeFilters: getActiveFilters(), clearFilter, clearAllFilters };
+  return { activeFilters, clearFilter, clearAllFilters };
 }

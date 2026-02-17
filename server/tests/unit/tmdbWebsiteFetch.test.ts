@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const acquireSpy = vi.fn(async () => {});
 
-vi.mock('../../src/services/cache/index.js', () => ({
+vi.mock('../../src/services/cache/index.ts', () => ({
   getCache: vi.fn(() => ({
     get: vi.fn(async () => null),
     set: vi.fn(async () => {}),
@@ -11,13 +11,13 @@ vi.mock('../../src/services/cache/index.js', () => ({
   })),
 }));
 
-vi.mock('../../src/infrastructure/tmdbThrottle.js', () => ({
+vi.mock('../../src/infrastructure/tmdbThrottle.ts', () => ({
   getTmdbThrottle: vi.fn(() => ({
     acquire: acquireSpy,
   })),
 }));
 
-vi.mock('../../src/infrastructure/metrics.js', () => ({
+vi.mock('../../src/infrastructure/metrics.ts', () => ({
   getMetrics: vi.fn(() => ({
     trackProviderCall: vi.fn(),
     trackError: vi.fn(),

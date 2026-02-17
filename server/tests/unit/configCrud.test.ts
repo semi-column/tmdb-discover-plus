@@ -3,10 +3,10 @@ import { MockStorageAdapter } from './helpers/mocks.ts';
 
 const mockStorage = new MockStorageAdapter();
 
-vi.mock('../../src/services/storage/index.js', () => ({
+vi.mock('../../src/services/storage/index.ts', () => ({
   getStorage: vi.fn(() => mockStorage),
 }));
-vi.mock('../../src/infrastructure/configCache.js', () => {
+vi.mock('../../src/infrastructure/configCache.ts', () => {
   const cache = new Map<string, unknown>();
   return {
     getConfigCache: vi.fn(() => ({
@@ -29,7 +29,7 @@ import {
   getConfigsByApiKey,
   getApiKeyFromConfig,
   deleteUserConfig,
-} from '../../src/services/configService.js';
+} from '../../src/services/configService.ts';
 import { encrypt } from '../../src/utils/encryption.ts';
 import { computeApiKeyId } from '../../src/utils/security.ts';
 

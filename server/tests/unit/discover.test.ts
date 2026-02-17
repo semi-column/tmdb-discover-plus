@@ -6,15 +6,15 @@ vi.mock('../../src/services/tmdb/client.ts', () => ({
   tmdbFetch: mockedFetch,
 }));
 
-vi.mock('../../src/services/cache/index.js', () => ({
+vi.mock('../../src/services/cache/index.ts', () => ({
   getCache: vi.fn(() => ({
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue(undefined),
   })),
 }));
 
-vi.mock('../../src/utils/helpers.js', async (importOriginal) => {
-  const orig = await importOriginal() as Record<string, unknown>;
+vi.mock('../../src/utils/helpers.ts', async (importOriginal) => {
+  const orig = (await importOriginal()) as Record<string, unknown>;
   return { ...orig, shuffleArray: vi.fn((arr: unknown[]) => arr) };
 });
 
@@ -31,7 +31,7 @@ describe('discover', () => {
     expect(mockedFetch).toHaveBeenCalledWith(
       '/discover/movie',
       'test-key',
-      expect.objectContaining({ sort_by: 'popularity.desc', page: 1, include_adult: false }),
+      expect.objectContaining({ sort_by: 'popularity.desc', page: 1, include_adult: false })
     );
   });
 
@@ -47,7 +47,7 @@ describe('discover', () => {
     expect(mockedFetch).toHaveBeenCalledWith(
       '/discover/movie',
       'key',
-      expect.objectContaining({ with_genres: '28,12' }),
+      expect.objectContaining({ with_genres: '28,12' })
     );
 
     mockedFetch.mockClear();
@@ -55,7 +55,7 @@ describe('discover', () => {
     expect(mockedFetch).toHaveBeenCalledWith(
       '/discover/movie',
       'key',
-      expect.objectContaining({ with_genres: '28|12' }),
+      expect.objectContaining({ with_genres: '28|12' })
     );
   });
 
@@ -68,7 +68,7 @@ describe('discover', () => {
       expect.objectContaining({
         'primary_release_date.gte': '2020-01-01',
         'primary_release_date.lte': '2025-12-31',
-      }),
+      })
     );
   });
 
@@ -81,7 +81,7 @@ describe('discover', () => {
       expect.objectContaining({
         'first_air_date.gte': '2015-01-01',
         'first_air_date.lte': '2020-12-31',
-      }),
+      })
     );
   });
 
@@ -91,7 +91,7 @@ describe('discover', () => {
     expect(mockedFetch).toHaveBeenCalledWith(
       '/discover/movie',
       'key',
-      expect.objectContaining({ 'vote_average.gte': 7, 'vote_average.lte': 10 }),
+      expect.objectContaining({ 'vote_average.gte': 7, 'vote_average.lte': 10 })
     );
   });
 
@@ -101,7 +101,7 @@ describe('discover', () => {
     expect(mockedFetch).toHaveBeenCalledWith(
       '/discover/movie',
       'key',
-      expect.objectContaining({ watch_region: 'US', with_watch_providers: '8|337' }),
+      expect.objectContaining({ watch_region: 'US', with_watch_providers: '8|337' })
     );
   });
 
@@ -111,7 +111,7 @@ describe('discover', () => {
     expect(mockedFetch).toHaveBeenCalledWith(
       '/discover/movie',
       'key',
-      expect.objectContaining({ certification: 'PG-13|R', certification_country: 'US' }),
+      expect.objectContaining({ certification: 'PG-13|R', certification_country: 'US' })
     );
   });
 });
@@ -161,7 +161,7 @@ describe('fetchSpecialList', () => {
     expect(mockedFetch).toHaveBeenCalledWith(
       '/movie/popular',
       'key',
-      expect.objectContaining({ language: 'de', region: 'DE' }),
+      expect.objectContaining({ language: 'de', region: 'DE' })
     );
   });
 });

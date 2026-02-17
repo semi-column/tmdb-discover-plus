@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../src/services/tmdb/index.js', () => ({
+vi.mock('../../src/services/tmdb/index.ts', () => ({
   getGenres: vi.fn(),
 }));
-vi.mock('../../src/utils/helpers.js', () => ({
+vi.mock('../../src/utils/helpers.ts', () => ({
   normalizeGenreName: vi.fn((s: string) => s.toLowerCase()),
   parseIdArray: vi.fn((s: string) => s.split(',')),
 }));
-vi.mock('../../src/services/configService.js', () => ({
+vi.mock('../../src/services/configService.ts', () => ({
   getApiKeyFromConfig: vi.fn(),
   updateCatalogGenres: vi.fn(),
 }));
@@ -25,7 +25,7 @@ vi.mock('../../src/services/imdb/index.ts', () => ({
   isImdbApiEnabled: vi.fn(() => false),
 }));
 
-import { buildManifest } from '../../src/services/manifestService.js';
+import { buildManifest } from '../../src/services/manifestService.ts';
 
 describe('buildManifest', () => {
   const baseUrl = 'https://example.com';
@@ -62,17 +62,14 @@ describe('buildManifest', () => {
   });
 
   it('omits search catalogs when disableSearch is true', () => {
-    const manifest = buildManifest(
-      { catalogs: [], preferences: { disableSearch: true } },
-      baseUrl,
-    );
+    const manifest = buildManifest({ catalogs: [], preferences: { disableSearch: true } }, baseUrl);
     expect(manifest.catalogs.length).toBe(0);
   });
 
   it('generates catalog ID from name when _id is missing', () => {
     const manifest = buildManifest(
       { catalogs: [{ name: 'My Custom List', type: 'movie' }] },
-      baseUrl,
+      baseUrl
     );
     expect(manifest.catalogs[0].id).toBe('tmdb-my-custom-list');
   });
@@ -93,7 +90,7 @@ describe('buildManifest', () => {
   it('sets pageSize to 20 for all catalogs', () => {
     const manifest = buildManifest(
       { catalogs: [{ _id: 'test', name: 'Test', type: 'movie' }] },
-      baseUrl,
+      baseUrl
     );
     expect(manifest.catalogs[0].pageSize).toBe(20);
   });

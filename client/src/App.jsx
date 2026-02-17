@@ -11,9 +11,19 @@ import { useAppController } from './hooks/useAppController';
 import { api } from './services/api';
 import { Download, Settings, Loader } from 'lucide-react';
 import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
+import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
+import { AppProviders } from './context/AppContext';
 
 import './styles/globals.css';
-import './styles/components.css';
+import './styles/layout.css';
+import './styles/sidebar.css';
+import './styles/editor.css';
+import './styles/filters.css';
+import './styles/forms.css';
+import './styles/modals.css';
+import './styles/preview.css';
+import './styles/social.css';
+import './styles/responsive.css';
 
 const CatalogEditor = lazy(() =>
   import('./components/config/CatalogEditor').then((m) => ({ default: m.CatalogEditor }))
@@ -29,7 +39,6 @@ function App() {
   const {
     isSetup,
     pageLoading,
-    activeCatalog,
     showInstallModal,
     showNewCatalogModal,
     installData,
@@ -119,185 +128,132 @@ function App() {
       </a>
       <Header userId={config.userId} stats={stats} />
 
-      <main
-        className={`main ${state.globalSource === 'imdb' ? 'theme-imdb' : ''}`}
-        id="main-content"
-      >
-        <div className="container">
-          <div className="builder-toolbar">
-            <div>
-              <h2>Catalog Builder</h2>
-              <p className="text-secondary">
-                {state.globalSource === 'imdb'
-                  ? 'Create and customize your Stremio catalogs with IMDb filters'
-                  : 'Create and customize your Stremio catalogs with TMDB filters'}
-              </p>
+      <AppProviders state={state} actions={actions} config={config} tmdb={tmdb}>
+        <main
+          className={`main ${state.globalSource === 'imdb' ? 'theme-imdb' : ''}`}
+          id="main-content"
+        >
+          <div className="container">
+            <div className="builder-toolbar">
+              <div>
+                <h2>Catalog Builder</h2>
+                <p className="text-secondary">
+                  {state.globalSource === 'imdb'
+                    ? 'Create and customize your Stremio catalogs with IMDb filters'
+                    : 'Create and customize your Stremio catalogs with TMDB filters'}
+                </p>
 
-              {tmdb.error && (
-                <div className="tmdb-error-banner" role="alert">
-                  Failed to load TMDB data: {tmdb.error}
-                  <button
-                    className="btn btn-sm btn-secondary"
-                    onClick={tmdb.refresh}
-                    style={{ marginLeft: 8 }}
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
+                {tmdb.error && (
+                  <div className="tmdb-error-banner" role="alert">
+                    Failed to load TMDB data: {tmdb.error}
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      onClick={tmdb.refresh}
+                      style={{ marginLeft: 8 }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
 
-              {stats && (
-                <div className="mobile-stats-pill">
-                  <span>
-                    <strong>{stats.totalUsers.toLocaleString()}</strong> Users
-                  </span>
-                  <span className="divider">•</span>
-                  <span>
-                    <strong>{stats.totalCatalogs.toLocaleString()}</strong> Catalogs
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="actions-toolbar">
-              {userConfigs.length > 0 && (
-                <ConfigDropdown
-                  configs={userConfigs}
-                  currentUserId={config.userId}
-                  currentCatalogs={config.catalogs}
-                  currentConfigName={config.configName}
-                  loading={configsLoading}
-                  onSelectConfig={actions.handleSwitchConfig}
-                  onDeleteConfig={actions.handleDeleteConfigFromDropdown}
-                  onCreateNew={actions.handleCreateNewConfig}
-                />
-              )}
+                {stats && (
+                  <div className="mobile-stats-pill">
+                    <span>
+                      <strong>{stats.totalUsers.toLocaleString()}</strong> Users
+                    </span>
+                    <span className="divider">•</span>
+                    <span>
+                      <strong>{stats.totalCatalogs.toLocaleString()}</strong> Catalogs
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="actions-toolbar">
+                {userConfigs.length > 0 && (
+                  <ConfigDropdown
+                    configs={userConfigs}
+                    currentUserId={config.userId}
+                    currentCatalogs={config.catalogs}
+                    currentConfigName={config.configName}
+                    loading={configsLoading}
+                    onSelectConfig={actions.handleSwitchConfig}
+                    onDeleteConfig={actions.handleDeleteConfigFromDropdown}
+                    onCreateNew={actions.handleCreateNewConfig}
+                  />
+                )}
 
-              {config.catalogs.length > 0 && (
-                <div className="save-button-wrapper">
-                  {config.isDirty && <span className="unsaved-indicator" title="Unsaved changes" />}
-                  <button
-                    className="btn btn-primary"
-                    onClick={actions.handleSave}
-                    disabled={isSaving}
-                  >
-                    {isSaving ? (
-                      <Loader size={18} className="animate-spin" />
-                    ) : (
-                      <Download size={18} />
+                {config.catalogs.length > 0 && (
+                  <div className="save-button-wrapper">
+                    {config.isDirty && (
+                      <span className="unsaved-indicator" title="Unsaved changes" />
                     )}
-                    Save & Install
-                  </button>
-                </div>
-              )}
+                    <button
+                      className="btn btn-primary"
+                      onClick={actions.handleSave}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <Loader size={18} className="animate-spin" />
+                      ) : (
+                        <Download size={18} />
+                      )}
+                      Save & Install
+                    </button>
+                  </div>
+                )}
 
-              <button
-                className="btn btn-secondary"
-                onClick={() => actions.handleLogout({ changeKey: true })}
-              >
-                <Settings size={18} />
-                Change API Key
-              </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => actions.handleLogout({ changeKey: true })}
+                >
+                  <Settings size={18} />
+                  Change API Key
+                </button>
+              </div>
+            </div>
+
+            <div className="builder-layout">
+              <PanelErrorBoundary fallbackMessage="The sidebar encountered an error.">
+                <CatalogSidebar />
+              </PanelErrorBoundary>
+
+              <PanelErrorBoundary fallbackMessage="The editor encountered an error.">
+                <Suspense
+                  fallback={
+                    <div className="editor-panel editor-loading">
+                      <div className="spinner" />
+                    </div>
+                  }
+                >
+                  <CatalogEditor />
+                </Suspense>
+              </PanelErrorBoundary>
             </div>
           </div>
+        </main>
 
-          <div className="builder-layout">
-            <CatalogSidebar
-              catalogs={config.catalogs}
-              activeCatalog={activeCatalog}
-              onSelectCatalog={state.setActiveCatalog}
-              onAddCatalog={() => state.setShowNewCatalogModal(true)}
-              onAddPresetCatalog={actions.handleAddPresetCatalog}
-              onDeleteCatalog={actions.handleDeleteCatalog}
-              onDuplicateCatalog={actions.handleDuplicateCatalog}
-              onReorderCatalogs={(nextCatalogs) => {
-                config.setCatalogs(nextCatalogs);
-              }}
-              presetCatalogs={tmdb.presetCatalogs}
-              imdbPresetCatalogs={tmdb.imdbPresetCatalogs}
-              configName={config.configName}
-              onConfigNameChange={config.setConfigName}
-              preferences={config.preferences}
-              onPreferencesChange={config.setPreferences}
-              onImportConfig={actions.handleImportConfig}
-              languages={tmdb.languages}
-              addToast={actions.addToast}
-              globalSource={state.globalSource}
-              setGlobalSource={state.setGlobalSource}
-              imdbEnabled={tmdb.imdbEnabled}
-            />
+        <NewCatalogModal
+          isOpen={showNewCatalogModal}
+          onClose={() => state.setShowNewCatalogModal(false)}
+          onAdd={actions.handleAddCatalog}
+          imdbEnabled={tmdb.imdbEnabled}
+        />
 
-            <Suspense
-              fallback={
-                <div className="editor-panel editor-loading">
-                  <div className="spinner" />
-                </div>
-              }
-            >
-              <CatalogEditor
-                catalog={activeCatalog}
-                genres={tmdb.genres}
-                genresLoading={tmdb.loading}
-                refreshGenres={tmdb.refresh}
-                languages={tmdb.languages}
-                originalLanguages={tmdb.originalLanguages}
-                countries={tmdb.countries}
-                sortOptions={tmdb.sortOptions}
-                releaseTypes={tmdb.releaseTypes}
-                tvStatuses={tmdb.tvStatuses}
-                tvTypes={tmdb.tvTypes}
-                monetizationTypes={tmdb.monetizationTypes}
-                certifications={tmdb.certifications}
-                watchRegions={tmdb.watchRegions}
-                tvNetworks={tmdb.tvNetworks}
-                preferences={config.preferences}
-                onUpdate={actions.handleUpdateCatalog}
-                onPreview={tmdb.preview}
-                onPreviewImdb={tmdb.previewImdb}
-                imdbEnabled={tmdb.imdbEnabled}
-                imdbGenres={tmdb.imdbGenres}
-                imdbKeywords={tmdb.imdbKeywords}
-                imdbAwards={tmdb.imdbAwards}
-                imdbSortOptions={tmdb.imdbSortOptions}
-                imdbTitleTypes={tmdb.imdbTitleTypes}
-                searchPerson={tmdb.searchPerson}
-                searchCompany={tmdb.searchCompany}
-                searchKeyword={tmdb.searchKeyword}
-                searchTVNetworks={tmdb.searchTVNetworks}
-                getPersonById={tmdb.getPersonById}
-                getCompanyById={tmdb.getCompanyById}
-                getKeywordById={tmdb.getKeywordById}
-                getNetworkById={tmdb.getNetworkById}
-                getWatchProviders={tmdb.getWatchProviders}
-                addToast={actions.addToast}
-              />
-            </Suspense>
-          </div>
-        </div>
-      </main>
+        <InstallModal
+          isOpen={showInstallModal}
+          onClose={() => state.setShowInstallModal(false)}
+          installUrl={installData?.installUrl}
+          stremioUrl={installData?.stremioUrl}
+        />
 
-      <NewCatalogModal
-        isOpen={showNewCatalogModal}
-        onClose={() => state.setShowNewCatalogModal(false)}
-        onAdd={actions.handleAddCatalog}
-        imdbEnabled={tmdb.imdbEnabled}
-      />
+        <ConfigMismatchModal
+          isOpen={state.showMismatchModal}
+          onGoToOwn={actions.handleConfigMismatchGoToOwn}
+          onLoginNew={actions.handleConfigMismatchLoginNew}
+        />
 
-      <InstallModal
-        isOpen={showInstallModal}
-        onClose={() => state.setShowInstallModal(false)}
-        installUrl={installData?.installUrl}
-        stremioUrl={installData?.stremioUrl}
-        configureUrl={installData?.configureUrl}
-        userId={installData?.userId}
-      />
-
-      <ConfigMismatchModal
-        isOpen={state.showMismatchModal}
-        onGoToOwn={actions.handleConfigMismatchGoToOwn}
-        onLoginNew={actions.handleConfigMismatchLoginNew}
-      />
-
-      <ToastContainer toasts={toasts} removeToast={actions.removeToast} />
+        <ToastContainer toasts={toasts} removeToast={actions.removeToast} />
+      </AppProviders>
     </div>
   );
 }

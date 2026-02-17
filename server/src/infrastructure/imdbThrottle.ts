@@ -1,6 +1,6 @@
 import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
-import { TokenBucket } from './tmdbThrottle.js';
+import { TokenBucket } from './tmdbThrottle.ts';
 
 const log = createLogger('ImdbThrottle');
 

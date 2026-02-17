@@ -11,94 +11,23 @@ import {
   Sparkles,
   ChevronDown,
   Shuffle,
-  Image,
-  ExternalLink,
-  Eye,
-  EyeOff,
   Download,
   Upload as ArrowUpTrayIcon,
   Trophy,
   Award,
+  EyeOff,
 } from 'lucide-react';
 import { useState, useEffect, lazy, Suspense, memo } from 'react';
 
 import { useIsMobile } from '../../hooks/useIsMobile';
-import { SearchableSelect } from '../forms/SearchableSelect';
+import { useCatalog, useTMDBData, useAppActions } from '../../context/AppContext';
 import { CatalogListSkeleton } from '../layout/Skeleton';
+import { GeneralSettingsSection } from './GeneralSettingsSection';
+import { PosterSettingsSection } from './PosterSettingsSection';
 
 const DraggableCatalogList = lazy(() =>
   import('./DraggableCatalogList').then((m) => ({ default: m.DraggableCatalogList }))
 );
-
-function GeneralSettingsSection({ preferences, onPreferencesChange, languages = [] }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  const defaultLanguage = preferences?.defaultLanguage || '';
-
-  const handleLanguageChange = (val) => {
-    onPreferencesChange({
-      ...preferences,
-      defaultLanguage: val,
-    });
-  };
-
-  return (
-    <div className="sidebar-section general-settings" style={{ marginBottom: '12px' }}>
-      <div
-        className="sidebar-section-header"
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        style={{
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '8px 0',
-        }}
-      >
-        <span className="sidebar-section-title" style={{ flex: 1, margin: 0 }}>
-          General Settings
-        </span>
-        <ChevronDown
-          size={14}
-          className="text-muted"
-          style={{
-            transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s',
-          }}
-        />
-      </div>
-
-      {!isCollapsed && (
-        <div style={{ padding: '8px 16px 16px' }}>
-          <div className="input-group">
-            <label
-              style={{
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-                marginBottom: '4px',
-                display: 'block',
-              }}
-            >
-              Global Display & Trailer Language
-            </label>
-            <SearchableSelect
-              options={languages}
-              value={defaultLanguage}
-              onChange={handleLanguageChange}
-              placeholder="Default (Auto/English)"
-              valueKey="iso_639_1"
-              labelKey="english_name"
-              renderOption={(opt) => `${opt.english_name} (${opt.name})`}
-            />
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Overrides language for all catalogs.
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 const presetIcons = {
   trending_day: Flame,
@@ -111,184 +40,34 @@ const presetIcons = {
   popular: Sparkles,
 };
 
-function PosterSettingsSection({ preferences, onPreferencesChange }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
+export const CatalogSidebar = memo(function CatalogSidebar() {
+  const {
+    catalogs,
+    activeCatalog,
+    setActiveCatalog: onSelectCatalog,
+    globalSource,
+    setGlobalSource,
+    configName,
+    setConfigName: onConfigNameChange,
+    preferences,
+    setPreferences: onPreferencesChange,
+    handleAddPresetCatalog: onAddPresetCatalog,
+    handleDeleteCatalog: onDeleteCatalog,
+    handleDuplicateCatalog: onDuplicateCatalog,
+    handleImportConfig: onImportConfig,
+    setCatalogs,
+  } = useCatalog();
+  const {
+    presetCatalogs = { movie: [], series: [] },
+    imdbPresetCatalogs = [],
+    imdbEnabled = false,
+  } = useTMDBData();
+  const { addToast, setShowNewCatalogModal } = useAppActions();
 
-  const posterService = preferences?.posterService || 'none';
-  const hasPosterKey = Boolean(preferences?.posterApiKeyEncrypted);
-
-  const handleServiceChange = (e) => {
-    const newService = e.target.value;
-    onPreferencesChange({
-      ...preferences,
-      posterService: newService,
-      ...(newService === 'none' && {
-        posterApiKey: undefined,
-        posterApiKeyEncrypted: undefined,
-      }),
-    });
-    setApiKeyInput('');
+  const onAddCatalog = () => setShowNewCatalogModal(true);
+  const onReorderCatalogs = (nextCatalogs) => {
+    setCatalogs(nextCatalogs);
   };
-
-  const handleApiKeyChange = (e) => {
-    const newKey = e.target.value;
-    setApiKeyInput(newKey);
-    if (newKey) {
-      onPreferencesChange({
-        ...preferences,
-        posterApiKey: newKey,
-      });
-    }
-  };
-
-  const serviceUrl =
-    posterService === 'rpdb'
-      ? 'https://ratingposterdb.com'
-      : posterService === 'topPosters'
-        ? 'https://api.top-streaming.stream'
-        : null;
-
-  const serviceName =
-    posterService === 'rpdb' ? 'RPDB' : posterService === 'topPosters' ? 'Top Posters' : null;
-
-  return (
-    <div className="sidebar-section poster-settings">
-      <div
-        className="sidebar-section-header"
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        style={{
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '8px 0',
-        }}
-      >
-        <Image size={14} className="text-muted" />
-        <span className="sidebar-section-title" style={{ flex: 1, margin: 0 }}>
-          Poster Support
-        </span>
-        <ChevronDown
-          size={14}
-          className="text-muted"
-          style={{
-            transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s',
-          }}
-        />
-      </div>
-
-      {!isCollapsed && (
-        <div style={{ padding: '8px 16px 16px' }}>
-          <div className="input-group" style={{ marginBottom: '12px' }}>
-            <label
-              style={{
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-                marginBottom: '4px',
-                display: 'block',
-              }}
-            >
-              Poster Service
-            </label>
-            <select
-              className="input"
-              value={posterService}
-              onChange={handleServiceChange}
-              style={{ width: '100%', fontSize: '13px' }}
-            >
-              <option value="none">Default (TMDB)</option>
-              <option value="rpdb">RPDB (Rating Posters)</option>
-              <option value="topPosters">Top Posters</option>
-            </select>
-          </div>
-
-          {posterService !== 'none' && (
-            <div className="input-group">
-              <label
-                style={{
-                  fontSize: '12px',
-                  color: 'var(--text-muted)',
-                  marginBottom: '4px',
-                  display: 'block',
-                }}
-              >
-                API Key{' '}
-                {hasPosterKey && !apiKeyInput && (
-                  <span style={{ color: 'var(--success)' }}>(set)</span>
-                )}
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type={showApiKey ? 'text' : 'password'}
-                  className="input"
-                  placeholder={hasPosterKey ? '••••••••' : 'Enter API key'}
-                  value={apiKeyInput}
-                  onChange={handleApiKeyChange}
-                  style={{ width: '100%', fontSize: '13px', paddingRight: '36px' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  style={{
-                    position: 'absolute',
-                    right: '8px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--text-muted)',
-                    padding: '4px',
-                  }}
-                  title={showApiKey ? 'Hide' : 'Show'}
-                >
-                  {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                Get key from{' '}
-                <a
-                  href={serviceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'var(--primary)' }}
-                >
-                  {serviceName} <ExternalLink size={10} style={{ verticalAlign: 'middle' }} />
-                </a>
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export const CatalogSidebar = memo(function CatalogSidebar({
-  catalogs,
-  activeCatalog,
-  onSelectCatalog,
-  onAddCatalog,
-  onAddPresetCatalog,
-  onDeleteCatalog,
-  onDuplicateCatalog,
-  onReorderCatalogs,
-  presetCatalogs = { movie: [], series: [] },
-  imdbPresetCatalogs = [],
-  configName = '',
-  onConfigNameChange,
-  preferences = {},
-  onPreferencesChange,
-  onImportConfig,
-  languages = [],
-  addToast,
-  globalSource = 'tmdb',
-  setGlobalSource,
-  imdbEnabled = false,
-}) {
   const safeCatalogs = Array.isArray(catalogs) ? catalogs : [];
   const safePresetCatalogs =
     presetCatalogs && typeof presetCatalogs === 'object' && !Array.isArray(presetCatalogs)
@@ -458,13 +237,9 @@ export const CatalogSidebar = memo(function CatalogSidebar({
         </label>
       </div>
 
-      <GeneralSettingsSection
-        preferences={preferences}
-        onPreferencesChange={onPreferencesChange}
-        languages={languages}
-      />
+      <GeneralSettingsSection />
 
-      <PosterSettingsSection preferences={preferences} onPreferencesChange={onPreferencesChange} />
+      <PosterSettingsSection />
 
       <div className="catalog-list">
         {safeCatalogs.length === 0 ? (

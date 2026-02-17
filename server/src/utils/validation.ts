@@ -93,19 +93,7 @@ export function sanitizeFilters(filters: unknown): Record<string, unknown> {
 
   for (const key of allowedKeys) {
     if (filtersObj[key] !== undefined) {
-      const value = filtersObj[key];
-
-      if (Array.isArray(value)) {
-        sanitized[key] = value
-          .slice(0, 50)
-          .map((v: unknown) => (typeof v === 'string' ? sanitizeString(v, 100) : v));
-      } else if (typeof value === 'boolean') {
-        sanitized[key] = value;
-      } else if (typeof value === 'number') {
-        sanitized[key] = value;
-      } else if (typeof value === 'string') {
-        sanitized[key] = sanitizeString(value, 500);
-      }
+      sanitized[key] = sanitizeFilterValue(filtersObj[key]);
     }
   }
 
@@ -149,6 +137,18 @@ const VALID_IMDB_SORT_VALUES = [
 ];
 const VALID_IMDB_SORT_ORDERS = ['ASC', 'DESC'];
 
+function sanitizeFilterValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 50)
+      .map((v: unknown) => (typeof v === 'string' ? sanitizeString(v, 100) : v));
+  }
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return sanitizeString(value, 500);
+  return value;
+}
+
 export function sanitizeImdbFilters(filters: unknown): Record<string, unknown> {
   if (!filters || typeof filters !== 'object') return {};
 
@@ -157,18 +157,7 @@ export function sanitizeImdbFilters(filters: unknown): Record<string, unknown> {
 
   for (const key of IMDB_ALLOWED_KEYS) {
     if (filtersObj[key] !== undefined) {
-      const value = filtersObj[key];
-      if (Array.isArray(value)) {
-        sanitized[key] = value
-          .slice(0, 50)
-          .map((v: unknown) => (typeof v === 'string' ? sanitizeString(v, 100) : v));
-      } else if (typeof value === 'boolean') {
-        sanitized[key] = value;
-      } else if (typeof value === 'number') {
-        sanitized[key] = value;
-      } else if (typeof value === 'string') {
-        sanitized[key] = sanitizeString(value, 500);
-      }
+      sanitized[key] = sanitizeFilterValue(filtersObj[key]);
     }
   }
 

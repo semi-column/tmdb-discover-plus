@@ -1,9 +1,9 @@
 import fetch from 'node-fetch';
-import { getCache } from '../cache/index.js';
-import { CachedError, classifyError } from '../cache/CacheWrapper.js';
+import { getCache } from '../cache/index.ts';
+import { CachedError, classifyError } from '../cache/CacheWrapper.ts';
 import { createLogger } from '../../utils/logger.ts';
-import { getTmdbThrottle } from '../../infrastructure/tmdbThrottle.js';
-import { getMetrics } from '../../infrastructure/metrics.js';
+import { getTmdbThrottle } from '../../infrastructure/tmdbThrottle.ts';
+import { getMetrics } from '../../infrastructure/metrics.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
 import { httpsAgent, TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
@@ -17,6 +17,9 @@ type TmdbApiParams = Record<string, string | number | boolean | undefined | null
 const log = createLogger('tmdb:client') as Logger;
 
 const FETCH_TIMEOUT_MS = 10_000;
+const MAX_IN_FLIGHT = 5000;
+
+const inFlightRequests = new Map<string, Promise<unknown>>();
 
 const CIRCUIT_BREAKER = {
   threshold: 10,
@@ -135,7 +138,27 @@ export async function tmdbFetch(
     }
   });
 
-  const cacheKey = url.toString();
+  const cacheUrl = new URL(url.toString());
+  cacheUrl.searchParams.delete('api_key');
+  const cacheKey = cacheUrl.toString();
+
+  const existingRequest = inFlightRequests.get(cacheKey);
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const requestPromise = _tmdbFetchInner(url, cacheKey, retries);
+
+  if (inFlightRequests.size < MAX_IN_FLIGHT) {
+    inFlightRequests.set(cacheKey, requestPromise);
+  }
+
+  return requestPromise.finally(() => {
+    inFlightRequests.delete(cacheKey);
+  });
+}
+
+async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Promise<unknown> {
   const cache = getCache();
   const metrics = getMetrics();
 
@@ -254,7 +277,7 @@ export async function tmdbFetch(
 
   log.error('TMDB fetch error after retries', {
     error: redactTmdbUrl(lastError!.message),
-    endpoint: endpoint.slice(0, 80),
+    endpoint: url.pathname.slice(0, 80),
     statusCode: lastError!.statusCode,
     requestId: getRequestId(),
   });

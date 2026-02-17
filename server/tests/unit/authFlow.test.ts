@@ -7,13 +7,13 @@ import {
 } from '../../src/utils/security.ts';
 import { sendError } from '../../src/utils/AppError.ts';
 
-vi.mock('../../src/services/storage/index.js', () => ({
+vi.mock('../../src/services/storage/index.ts', () => ({
   getStorage: vi.fn(() => ({
     getUserConfig: vi.fn(),
     saveUserConfig: vi.fn(),
   })),
 }));
-vi.mock('../../src/infrastructure/configCache.js', () => ({
+vi.mock('../../src/infrastructure/configCache.ts', () => ({
   getConfigCache: vi.fn(() => ({
     getOrLoad: vi.fn(async (_key: string, loader: () => Promise<unknown>) => loader()),
     invalidate: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock('../../src/infrastructure/configCache.js', () => ({
   })),
 }));
 
-import { requireAuth, optionalAuth } from '../../src/utils/authMiddleware.js';
+import { requireAuth, optionalAuth } from '../../src/utils/authMiddleware.ts';
 
 function mockReq(overrides: Record<string, unknown> = {}) {
   return { headers: {}, params: {}, ...overrides };
@@ -43,7 +43,7 @@ describe('Auth flow', () => {
   describe('JWT generation and verification', () => {
     it('generates a token with apiKeyId and jti', async () => {
       const { token } = await generateToken('test-api-key-abc');
-      const decoded = verifyToken(token) as Record<string, unknown>;
+      const decoded = (await verifyToken(token)) as Record<string, unknown>;
       expect(decoded).not.toBeNull();
       expect(decoded.apiKeyId).toBeTruthy();
       expect(decoded.jti).toBeTruthy();
@@ -65,9 +65,9 @@ describe('Auth flow', () => {
   describe('Token revocation via JTI blacklist', () => {
     it('revoked token fails verification', async () => {
       const { token } = await generateToken('revoke-test');
-      expect(verifyToken(token)).not.toBeNull();
+      expect(await verifyToken(token)).not.toBeNull();
       revokeToken(token);
-      expect(verifyToken(token)).toBeNull();
+      expect(await verifyToken(token)).toBeNull();
     });
 
     it('revoking invalid token returns false', () => {

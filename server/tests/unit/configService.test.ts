@@ -1,19 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../src/services/storage/index.js', () => ({
+vi.mock('../../src/services/storage/index.ts', () => ({
   getStorage: vi.fn(() => ({
     getUserConfig: vi.fn(),
     saveUserConfig: vi.fn(),
   })),
 }));
-vi.mock('../../src/infrastructure/configCache.js', () => ({
+vi.mock('../../src/infrastructure/configCache.ts', () => ({
   getConfigCache: vi.fn(() => ({
     getOrLoad: vi.fn(async (_key: string, loader: () => Promise<unknown>) => loader()),
     invalidate: vi.fn(),
   })),
 }));
 
-import { getApiKeyFromConfig, getPosterKeyFromConfig } from '../../src/services/configService.js';
+import { getApiKeyFromConfig, getPosterKeyFromConfig } from '../../src/services/configService.ts';
 import { encrypt } from '../../src/utils/encryption.ts';
 
 describe('getApiKeyFromConfig', () => {
