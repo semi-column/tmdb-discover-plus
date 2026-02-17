@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatRuntime, generateSlug } from '../../src/services/tmdb/stremioMeta.js';
+import { formatRuntime, generateSlug } from '../../src/services/tmdb/stremioMeta.ts';
 
 describe('formatRuntime', () => {
   it('formats hours and minutes', () => {

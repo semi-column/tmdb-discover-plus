@@ -1,4 +1,4 @@
-import { generatePosterUrl, isValidPosterConfig } from '../posterService.js';
+import { generatePosterUrl, isValidPosterConfig } from '../posterService.ts';
 
 import type { ContentType } from '../../types/index.ts';
 import type { ImdbTitle, ImdbRankingEntry, ImdbListItem, ImdbPosterOptions } from './types.ts';

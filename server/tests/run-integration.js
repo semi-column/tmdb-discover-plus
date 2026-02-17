@@ -30,7 +30,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Load .env from server directory
 dotenvConfig({ path: path.join(__dirname, '..', '.env') });
 
-const SERVER_PATH = path.join(__dirname, '..', 'src', 'index.js');
+const SERVER_PATH = path.join(__dirname, '..', 'src', 'index.ts');
 const INTEGRATION_DIR = path.join(__dirname, 'integration');
 
 const PORT = parseInt(process.env.PORT, 10) || 7000;

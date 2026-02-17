@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyError } from '../../src/services/cache/CacheWrapper.js';
+import { classifyError } from '../../src/services/cache/CacheWrapper.ts';
 
 describe('classifyError edge cases', () => {
   it('does not falsely match message containing "5" as a 5xx status pattern', () => {

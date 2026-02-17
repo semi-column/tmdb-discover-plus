@@ -1,8 +1,8 @@
 import { createLogger } from '../../utils/logger.ts';
-import { getCache } from '../cache/index.js';
+import { getCache } from '../cache/index.ts';
 import { tmdbFetch } from './client.ts';
 import { TMDB_IMAGE_BASE } from './constants.ts';
-import { formatRuntime } from './stremioMeta.js';
+import { formatRuntime } from './stremioMeta.ts';
 
 import type {
   ContentType,
@@ -24,7 +24,7 @@ export async function getDetails(
   apiKey: string,
   tmdbId: number | string,
   type: ContentType = 'movie',
-  options?: DetailsOptions,
+  options?: DetailsOptions
 ): Promise<unknown> {
   const mediaType = type === 'series' ? 'tv' : 'movie';
   const languageParam = options?.displayLanguage || options?.language;
@@ -48,7 +48,7 @@ export async function getDetails(
 export async function getLogos(
   apiKey: string,
   tmdbId: number | string,
-  type: ContentType = 'movie',
+  type: ContentType = 'movie'
 ): Promise<TmdbImage[]> {
   const mediaType = type === 'series' ? 'tv' : 'movie';
   const cacheKey = `logos_${mediaType}_${tmdbId}`;
@@ -82,7 +82,7 @@ export async function getSeasonDetails(
   apiKey: string,
   tmdbId: number | string,
   seasonNumber: number,
-  options: DetailsOptions = {},
+  options: DetailsOptions = {}
 ): Promise<unknown> {
   const languageParam = options?.displayLanguage || options?.language;
   const cacheKey = `season_${tmdbId}_${seasonNumber}_${languageParam || 'en'}`;
@@ -138,7 +138,7 @@ export async function getSeriesEpisodes(
   apiKey: string,
   tmdbId: number | string,
   details: TvDetailsForEpisodes,
-  options: DetailsOptions = {},
+  options: DetailsOptions = {}
 ): Promise<StremioVideo[]> {
   if (!details?.seasons || !Array.isArray(details.seasons)) {
     return [];
@@ -172,7 +172,7 @@ export async function getSeriesEpisodes(
           apiKey,
           tmdbId,
           season.season_number,
-          options,
+          options
         )) as SeasonDetailsResult | null;
         if (!seasonData?.episodes) return [];
 
@@ -197,7 +197,7 @@ export async function getSeriesEpisodes(
             runtime: formatRuntime(ep.runtime),
           };
         });
-      }),
+      })
     );
     seasonResults.push(...batchResults);
   }

@@ -9,12 +9,16 @@ const log = createLogger('encryption') as Logger;
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 
+let cachedKey: Buffer | null = null;
+
 function getEncryptionKey(): Buffer {
+  if (cachedKey) return cachedKey;
   const key = Buffer.from(config.encryption.key, 'hex');
   if (key.length !== 32) {
     throw new Error(`ENCRYPTION_KEY must be 64 hex chars (32 bytes), got ${key.length} bytes`);
   }
-  return key;
+  cachedKey = key;
+  return cachedKey;
 }
 
 export function encrypt(plaintext: string | null | undefined): string | null {

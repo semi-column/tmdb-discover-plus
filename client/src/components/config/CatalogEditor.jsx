@@ -27,6 +27,7 @@ import { useActiveFilters } from '../../hooks/useActiveFilters';
 import { useCatalogSync } from '../../hooks/useCatalogSync';
 import { useResolvedFilters } from '../../hooks/useResolvedFilters';
 import { useWatchProviders } from '../../hooks/useWatchProviders';
+import { useCatalog, useTMDBData, useAppActions } from '../../context/AppContext';
 
 const DEFAULT_CATALOG = {
   name: '',
@@ -41,42 +42,41 @@ const DEFAULT_CATALOG = {
   enabled: true,
 };
 
-export const CatalogEditor = memo(function CatalogEditor({
-  catalog,
-  genres = { movie: [], series: [] },
-  genresLoading = false,
-  refreshGenres = () => {},
-  originalLanguages = [],
-  countries = [],
-  sortOptions = { movie: [], series: [] },
-  releaseTypes = [],
-  tvStatuses = [],
-  tvTypes = [],
-  monetizationTypes = [],
-  certifications = { movie: {}, series: {} },
-  watchRegions = [],
-  tvNetworks = [],
-  onUpdate,
-  onPreview,
-  onPreviewImdb,
-  imdbGenres = [],
-  imdbKeywords = [],
-  imdbAwards = [],
-  imdbSortOptions = [],
-  imdbTitleTypes = [],
-  preferences = {},
-  searchPerson,
-  searchCompany,
-  searchKeyword,
-  searchTVNetworks,
-  getPersonById,
-  getCompanyById,
-  getKeywordById,
-  getNetworkById,
-  getWatchProviders,
-  addToast,
-  imdbEnabled = false,
-}) {
+export const CatalogEditor = memo(function CatalogEditor() {
+  const { activeCatalog: catalog, preferences = {}, handleUpdateCatalog: onUpdate } = useCatalog();
+  const {
+    genres = { movie: [], series: [] },
+    loading: genresLoading = false,
+    refresh: refreshGenres = () => {},
+    originalLanguages = [],
+    countries = [],
+    sortOptions = { movie: [], series: [] },
+    releaseTypes = [],
+    tvStatuses = [],
+    tvTypes = [],
+    monetizationTypes = [],
+    certifications = { movie: {}, series: {} },
+    watchRegions = [],
+    tvNetworks = [],
+    preview: onPreview,
+    previewImdb: onPreviewImdb,
+    imdbGenres = [],
+    imdbKeywords = [],
+    imdbAwards = [],
+    imdbSortOptions = [],
+    imdbTitleTypes = [],
+    imdbEnabled = false,
+    searchPerson,
+    searchCompany,
+    searchKeyword,
+    searchTVNetworks,
+    getPersonById,
+    getCompanyById,
+    getKeywordById,
+    getNetworkById,
+    getWatchProviders,
+  } = useTMDBData();
+  const { addToast } = useAppActions();
   const safeGenres =
     genres && typeof genres === 'object' && !Array.isArray(genres)
       ? genres

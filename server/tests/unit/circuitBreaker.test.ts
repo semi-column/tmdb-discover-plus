@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../../src/services/cache/index.js', () => ({
+vi.mock('../../src/services/cache/index.ts', () => ({
   getCache: vi.fn(() => ({
     getEntry: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue(undefined),
@@ -9,13 +9,13 @@ vi.mock('../../src/services/cache/index.js', () => ({
   })),
 }));
 
-vi.mock('../../src/infrastructure/tmdbThrottle.js', () => ({
+vi.mock('../../src/infrastructure/tmdbThrottle.ts', () => ({
   getTmdbThrottle: vi.fn(() => ({
     acquire: vi.fn().mockResolvedValue(undefined),
   })),
 }));
 
-vi.mock('../../src/infrastructure/metrics.js', () => ({
+vi.mock('../../src/infrastructure/metrics.ts', () => ({
   getMetrics: vi.fn(() => ({
     trackProviderCall: vi.fn(),
     trackError: vi.fn(),

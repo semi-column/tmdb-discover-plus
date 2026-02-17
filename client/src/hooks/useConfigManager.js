@@ -63,8 +63,6 @@ export function useConfigManager(config, addToast, deps) {
       setInstallData({
         installUrl: result.installUrl,
         stremioUrl: result.stremioUrl,
-        configureUrl: result.configureUrl,
-        userId: result.userId,
       });
       setShowInstallModal(true);
       addToast('Configuration saved successfully!');
@@ -92,10 +90,12 @@ export function useConfigManager(config, addToast, deps) {
 
     if (userId === config.userId) {
       if (remaining.length > 0) {
-        window.location.href = `/?userId=${remaining[0].userId}`;
+        window.history.replaceState({}, '', `/?userId=${remaining[0].userId}`);
+        setUrlUserId(remaining[0].userId);
       } else {
         await config.logout();
-        window.location.href = '/';
+        window.history.replaceState({}, '', '/');
+        setUrlUserId(null);
       }
     }
   };
@@ -138,7 +138,8 @@ export function useConfigManager(config, addToast, deps) {
   };
 
   const handleSwitchConfig = (uid) => {
-    window.location.href = `/?userId=${uid}`;
+    window.history.replaceState({}, '', `/?userId=${uid}`);
+    setUrlUserId(uid);
   };
 
   const handleCreateNewConfig = async () => {
@@ -148,7 +149,8 @@ export function useConfigManager(config, addToast, deps) {
         catalogs: [],
         preferences: {},
       });
-      window.location.href = `/?userId=${newConfig.userId}`;
+      window.history.replaceState({}, '', `/?userId=${newConfig.userId}`);
+      setUrlUserId(newConfig.userId);
     } catch {
       addToast('Failed to create new configuration', 'error');
     }

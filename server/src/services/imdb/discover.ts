@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { imdbFetch } from './client.ts';
-import { getCache } from '../cache/index.js';
+import { getCache } from '../cache/index.ts';
 import { config } from '../../config.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { stableStringify } from '../../utils/stableStringify.ts';

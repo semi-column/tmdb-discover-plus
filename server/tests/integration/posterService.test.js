@@ -8,7 +8,7 @@ import {
   generateBackdropUrl,
   isValidPosterConfig,
   PosterService,
-} from '../../src/services/posterService.js';
+} from '../../src/services/posterService.ts';
 
 const SUITE = 'Poster Service';
 

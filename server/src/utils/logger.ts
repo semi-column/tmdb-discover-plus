@@ -24,14 +24,20 @@ const SENSITIVE_KEYS = [
   'auth',
   'authorization',
   'bearer',
-  'key',
+  'secretkey',
+  'privatekey',
+  'encryptionkey',
+  'encryption_key',
   'credential',
   'pass',
   'email',
 ];
 
-function sanitizeValue(value: unknown, key: string = ''): unknown {
+const MAX_SANITIZE_DEPTH = 10;
+
+function sanitizeValue(value: unknown, key: string = '', depth: number = 0): unknown {
   if (value === null || value === undefined) return value;
+  if (depth > MAX_SANITIZE_DEPTH) return '[Object]';
 
   const lowerKey = String(key).toLowerCase();
   if (SENSITIVE_KEYS.some((sk) => lowerKey.includes(sk))) {
@@ -53,13 +59,13 @@ function sanitizeValue(value: unknown, key: string = ''): unknown {
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => sanitizeValue(item));
+    return value.map((item) => sanitizeValue(item, '', depth + 1));
   }
 
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = sanitizeValue(v, k);
+      out[k] = sanitizeValue(v, k, depth + 1);
     }
     return out;
   }

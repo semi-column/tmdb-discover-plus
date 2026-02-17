@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CacheWrapper, CachedError } from '../../src/services/cache/CacheWrapper.js';
+import { CacheWrapper, CachedError } from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter, FailingCacheAdapter } from './helpers/mocks.ts';
 
 describe('CacheWrapper edge cases', () => {

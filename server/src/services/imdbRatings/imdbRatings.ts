@@ -1,0 +1,323 @@
+import { createGunzip } from 'zlib';
+import { createInterface } from 'readline';
+import fetch from 'node-fetch';
+import { createLogger } from '../../utils/logger.ts';
+import { config } from '../../config.ts';
+import type { IImdbRatingsAdapter } from '../../types/index.ts';
+
+const log = createLogger('ImdbRatings');
+
+const IMDB_RATINGS_URL = 'https://datasets.imdbws.com/title.ratings.tsv.gz';
+const UPDATE_INTERVAL_HOURS = config.imdbRatings.updateIntervalHours;
+const MIN_VOTES = config.imdbRatings.minVotes;
+const DOWNLOAD_TIMEOUT_MS = 120_000; // 2 minutes
+const WRITE_BATCH_SIZE = 10_000;
+
+let adapter: IImdbRatingsAdapter | null = null;
+
+let ratingsLoaded = false;
+let ratingsCount = 0;
+let updateTimer: ReturnType<typeof setInterval> | null = null;
+let downloading = false;
+
+// Stats
+let totalRequests = 0;
+let datasetHits = 0;
+let datasetMisses = 0;
+
+function parseRating(value: string): { rating: number; votes: number } | null {
+  const sep = value.indexOf('|');
+  if (sep === -1) return null;
+  const rating = parseFloat(value.slice(0, sep));
+  const votes = parseInt(value.slice(sep + 1), 10);
+  if (Number.isNaN(rating) || Number.isNaN(votes)) return null;
+  return { rating, votes };
+}
+
+async function downloadAndCacheRatings(): Promise<boolean> {
+  if (!adapter) return false;
+  if (downloading) {
+    log.warn('Download already in progress, skipping');
+    return ratingsLoaded;
+  }
+
+  downloading = true;
+
+  try {
+    const storedEtag = await adapter.getMeta('etag');
+    const existingCount = await adapter.count();
+
+    if (storedEtag && existingCount > 0) {
+      try {
+        const headResp = await fetch(IMDB_RATINGS_URL, {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(15_000),
+        });
+        const remoteEtag = headResp.headers.get('etag');
+
+        if (remoteEtag && remoteEtag === storedEtag) {
+          log.info('IMDb dataset unchanged (ETag match), reusing existing data', {
+            count: existingCount,
+            etag: remoteEtag.slice(0, 20),
+          });
+          ratingsLoaded = true;
+          ratingsCount = existingCount;
+          return true;
+        }
+        log.info('IMDb dataset changed, downloading fresh copy', {
+          oldEtag: storedEtag.slice(0, 20),
+          newEtag: remoteEtag?.slice(0, 20),
+        });
+      } catch (headErr) {
+        log.warn('ETag HEAD request failed, proceeding with download', {
+          error: (headErr as Error).message,
+        });
+      }
+    }
+
+    log.info('Downloading IMDb ratings dataset (streaming)...', {
+      url: IMDB_RATINGS_URL,
+      minVotes: MIN_VOTES,
+    });
+
+    const response = await fetch(IMDB_RATINGS_URL, {
+      method: 'GET',
+      headers: { 'User-Agent': 'TMDB-Discover-Plus/1.0' },
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+
+    const gunzip = createGunzip();
+    const body = response.body;
+    if (!body) throw new Error('Response body is null');
+    const rl = createInterface({
+      input: body.pipe(gunzip),
+      crlfDelay: Infinity,
+    });
+
+    let count = 0;
+    let filtered = 0;
+    let isFirstLine = true;
+    const allEntries: [string, string][] = [];
+
+    for await (const line of rl) {
+      if (isFirstLine) {
+        isFirstLine = false;
+        continue;
+      }
+      if (!line) continue;
+
+      const firstTab = line.indexOf('\t');
+      const secondTab = line.indexOf('\t', firstTab + 1);
+      if (firstTab === -1 || secondTab === -1) continue;
+
+      const id = line.slice(0, firstTab);
+      const rating = parseFloat(line.slice(firstTab + 1, secondTab));
+      const votes = parseInt(line.slice(secondTab + 1), 10);
+
+      if (!id || Number.isNaN(rating) || Number.isNaN(votes)) continue;
+
+      if (votes < MIN_VOTES) {
+        filtered++;
+        continue;
+      }
+
+      allEntries.push([id, `${rating}|${votes}`]);
+      count++;
+    }
+
+    log.info('Download complete, swapping dataset', { parsed: count, filtered });
+
+    await adapter.replaceAll(allEntries);
+
+    log.info('IMDb dataset import complete', {
+      imported: count,
+      filtered,
+      minVotes: MIN_VOTES,
+    });
+
+    // Store ETag for next conditional download
+    const etag = response.headers.get('etag');
+    if (etag) {
+      await adapter.setMeta('etag', etag);
+    }
+    await adapter.setMeta('lastUpdate', Date.now().toString());
+
+    ratingsLoaded = true;
+    ratingsCount = count;
+
+    return true;
+  } catch (error) {
+    log.error('Failed to download/import IMDb ratings', { error: (error as Error).message });
+
+    // If we had data before, keep using it
+    const existingCount = await adapter.count().catch(() => 0);
+    if (existingCount > 0) {
+      log.info('Falling back to existing dataset', { count: existingCount });
+      ratingsLoaded = true;
+      ratingsCount = existingCount;
+      return true;
+    }
+
+    return false;
+  } finally {
+    downloading = false;
+  }
+}
+
+export async function initializeRatings(ratingsAdapter: IImdbRatingsAdapter): Promise<void> {
+  adapter = ratingsAdapter;
+
+  log.info('Initializing IMDb ratings...', {
+    adapter: adapter.constructor.name,
+    updateIntervalHours: UPDATE_INTERVAL_HOURS,
+    minVotes: MIN_VOTES,
+  });
+
+  await downloadAndCacheRatings();
+
+  // Schedule periodic refresh
+  if (!updateTimer) {
+    const intervalMs = UPDATE_INTERVAL_HOURS * 60 * 60 * 1000;
+    updateTimer = setInterval(async () => {
+      log.info('Running scheduled IMDb ratings update...');
+      try {
+        await downloadAndCacheRatings();
+        log.info('Scheduled update completed', { count: ratingsCount });
+      } catch (err) {
+        log.error('Scheduled update failed', { error: (err as Error).message });
+      }
+    }, intervalMs);
+
+    // Don't let the timer block process exit
+    if (updateTimer.unref) updateTimer.unref();
+
+    log.info(`Scheduled IMDb ratings refresh every ${UPDATE_INTERVAL_HOURS}h`);
+  }
+}
+
+export async function getImdbRating(
+  imdbId: string
+): Promise<{ rating: number; votes: number } | null> {
+  if (!imdbId || !adapter) return null;
+  totalRequests++;
+
+  try {
+    const val = await adapter.get(imdbId);
+    if (val) {
+      datasetHits++;
+      return parseRating(val);
+    }
+    datasetMisses++;
+    return null;
+  } catch (err) {
+    datasetMisses++;
+    return null;
+  }
+}
+
+export async function getImdbRatingString(imdbId: string): Promise<string | null> {
+  const result = await getImdbRating(imdbId);
+  return result ? String(result.rating) : null;
+}
+
+export async function batchGetImdbRatings(
+  items: { imdb_id?: string }[],
+  _type?: string
+): Promise<Map<string, string>> {
+  const ratingsMap = new Map<string, string>();
+  if (!adapter || !items?.length) return ratingsMap;
+
+  const imdbIds = items
+    .map((item) => item.imdb_id)
+    .filter((id): id is string => !!id && /^tt\d{7,10}$/.test(id));
+
+  if (imdbIds.length === 0) return ratingsMap;
+
+  const unique = [...new Set(imdbIds)];
+  totalRequests += unique.length;
+
+  try {
+    const results = await adapter.getMany(unique);
+
+    for (const [id, val] of results) {
+      const parsed = parseRating(val);
+      if (parsed) {
+        ratingsMap.set(id, String(parsed.rating));
+        datasetHits++;
+      }
+    }
+
+    datasetMisses += unique.length - results.size;
+  } catch (err) {
+    log.warn('Batch lookup failed', { error: (err as Error).message });
+    datasetMisses += unique.length;
+  }
+
+  return ratingsMap;
+}
+
+export async function forceUpdate(): Promise<{ success: boolean; message: string; count: number }> {
+  if (!adapter) {
+    return { success: false, message: 'Not initialized', count: 0 };
+  }
+
+  log.info('Force update requested');
+  await adapter.delMeta('etag');
+
+  try {
+    const success = await downloadAndCacheRatings();
+    return {
+      success,
+      message: success ? `Updated (${ratingsCount.toLocaleString()} ratings)` : 'Download failed',
+      count: ratingsCount,
+    };
+  } catch (err) {
+    return { success: false, message: (err as Error).message, count: 0 };
+  }
+}
+
+export function isLoaded(): boolean {
+  return ratingsLoaded;
+}
+
+export function getStats(): Record<string, unknown> {
+  const hitPct =
+    totalRequests > 0 ? parseFloat(((datasetHits / totalRequests) * 100).toFixed(1)) : 0;
+  const missPct =
+    totalRequests > 0 ? parseFloat(((datasetMisses / totalRequests) * 100).toFixed(1)) : 0;
+
+  return {
+    loaded: ratingsLoaded,
+    count: ratingsCount,
+    downloading,
+    adapter: adapter?.constructor.name || 'none',
+    updateIntervalHours: UPDATE_INTERVAL_HOURS,
+    minVotes: MIN_VOTES,
+    totalRequests,
+    datasetHits,
+    hitPercentage: hitPct,
+    datasetMisses,
+    missPercentage: missPct,
+  };
+}
+
+export async function destroyRatings(): Promise<void> {
+  if (updateTimer) {
+    clearInterval(updateTimer);
+    updateTimer = null;
+  }
+  if (adapter) {
+    await adapter.destroy();
+    adapter = null;
+  }
+  ratingsLoaded = false;
+  ratingsCount = 0;
+  totalRequests = 0;
+  datasetHits = 0;
+  datasetMisses = 0;
+  log.info('IMDb ratings service destroyed');
+}

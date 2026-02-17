@@ -28,7 +28,7 @@ describe('generateToken / verifyToken', () => {
     const { token, expiresIn } = await generateToken('test-api-key', true);
     expect(token).toBeTruthy();
     expect(expiresIn).toBe('7d');
-    const decoded = verifyToken(token);
+    const decoded = await verifyToken(token);
     expect(decoded).not.toBeNull();
     expect(decoded).toHaveProperty('apiKeyId');
     expect(decoded).toHaveProperty('jti');
@@ -42,11 +42,11 @@ describe('generateToken / verifyToken', () => {
   it('rejects tampered tokens', async () => {
     const { token } = await generateToken('key');
     const tampered = token.slice(0, -3) + 'xxx';
-    expect(verifyToken(tampered)).toBeNull();
+    expect(await verifyToken(tampered)).toBeNull();
   });
 
-  it('rejects garbage input', () => {
-    expect(verifyToken('not-a-jwt')).toBeNull();
+  it('rejects garbage input', async () => {
+    expect(await verifyToken('not-a-jwt')).toBeNull();
   });
 });
 
@@ -54,7 +54,7 @@ describe('revokeToken', () => {
   it('revokes a valid token', async () => {
     const { token } = await generateToken('revoke-test-key');
     expect(revokeToken(token)).toBe(true);
-    expect(verifyToken(token)).toBeNull();
+    expect(await verifyToken(token)).toBeNull();
   });
 
   it('returns false for invalid token', () => {
@@ -63,8 +63,8 @@ describe('revokeToken', () => {
 
   it('previously verified token fails after revocation', async () => {
     const { token } = await generateToken('key2');
-    expect(verifyToken(token)).not.toBeNull();
+    expect(await verifyToken(token)).not.toBeNull();
     revokeToken(token);
-    expect(verifyToken(token)).toBeNull();
+    expect(await verifyToken(token)).toBeNull();
   });
 });

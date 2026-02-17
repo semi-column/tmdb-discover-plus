@@ -73,4 +73,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Start the server
 # Start the server using ENTRYPOINT to ignore any overridden CMD (like /start)
-ENTRYPOINT ["node", "--experimental-strip-types", "server/src/index.js"]
+ENTRYPOINT ["node", "--experimental-strip-types", "server/src/index.ts"]

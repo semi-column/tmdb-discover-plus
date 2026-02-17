@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, memo } from 'react';
 import { FilterSection } from './FilterSection';
 import { Settings, Sparkles, Calendar, Award, Tag, Globe } from 'lucide-react';
 
-export function ImdbFilterPanel({
+export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   localCatalog,
   onFiltersChange,
   imdbGenres = [],
@@ -123,7 +123,6 @@ export function ImdbFilterPanel({
             </select>
           </div>
 
-
           <div className="filter-group">
             <label className="filter-label">Min IMDb Rating</label>
             <select
@@ -176,24 +175,24 @@ export function ImdbFilterPanel({
                     return ['movie', 'tvMovie', 'short', 'video'].includes(tt.value);
                   })
                   .map((tt) => {
-                  const selected = (filters.types || []).includes(tt.value);
-                  return (
-                    <button
-                      key={tt.value}
-                      type="button"
-                      className={`genre-chip ${selected ? 'selected' : ''}`}
-                      onClick={() => {
-                        const current = filters.types || [];
-                        const next = selected
-                          ? current.filter((t) => t !== tt.value)
-                          : [...current, tt.value];
-                        onFiltersChange('types', next);
-                      }}
-                    >
-                      {tt.label}
-                    </button>
-                  );
-                })}
+                    const selected = (filters.types || []).includes(tt.value);
+                    return (
+                      <button
+                        key={tt.value}
+                        type="button"
+                        className={`genre-chip ${selected ? 'selected' : ''}`}
+                        onClick={() => {
+                          const current = filters.types || [];
+                          const next = selected
+                            ? current.filter((t) => t !== tt.value)
+                            : [...current, tt.value];
+                          onFiltersChange('types', next);
+                        }}
+                      >
+                        {tt.label}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           )}
@@ -472,7 +471,6 @@ export function ImdbFilterPanel({
         </FilterSection>
       )}
 
-
       {listType === 'imdb_list' && (
         <div className="filter-group" style={{ padding: '12px 0' }}>
           <label className="filter-label">IMDb List ID</label>
@@ -487,4 +485,4 @@ export function ImdbFilterPanel({
       )}
     </>
   );
-}
+});

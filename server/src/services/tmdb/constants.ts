@@ -7,7 +7,9 @@ export const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
 
 export const httpsAgent: https.Agent = new https.Agent({
   keepAlive: true,
-  rejectUnauthorized: !config.tmdb.disableTlsVerify,
+  rejectUnauthorized: !(
+    config.tmdb.disableTlsVerify && ['development', 'test'].includes(config.nodeEnv)
+  ),
 });
 
 export const TMDB_BASE_URL = 'https://api.themoviedb.org/3';

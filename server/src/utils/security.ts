@@ -20,6 +20,18 @@ function pbkdf2CacheKey(apiKey: string): string {
 
 const revokedTokens = new Map<string, number>();
 
+interface RevocationStore {
+  add(jti: string, expiresAtMs: number): Promise<void>;
+  has(jti: string): Promise<boolean>;
+}
+
+let externalStore: RevocationStore | null = null;
+
+export function setRevocationStore(store: RevocationStore): void {
+  externalStore = store;
+  log.info('External revocation store configured');
+}
+
 const REVOKE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const revokeCleanupTimer = setInterval(() => {
   const now = Date.now();
@@ -76,12 +88,27 @@ export async function generateToken(
   return { token, expiresIn };
 }
 
-export function verifyToken(token: string): jwt.JwtPayload | string | null {
+export async function verifyToken(token: string): Promise<jwt.JwtPayload | string | null> {
   try {
     const decoded = jwt.verify(token, getJwtSecret());
-    if (typeof decoded === 'object' && decoded.jti && revokedTokens.has(decoded.jti)) {
-      log.debug('Rejected revoked token', { jti: decoded.jti });
-      return null;
+    if (typeof decoded === 'object' && decoded.jti) {
+      if (revokedTokens.has(decoded.jti)) {
+        log.debug('Rejected revoked token', { jti: decoded.jti });
+        return null;
+      }
+      if (externalStore) {
+        try {
+          if (await externalStore.has(decoded.jti)) {
+            revokedTokens.set(decoded.jti, (decoded.exp ?? 0) * 1000);
+            log.debug('Rejected revoked token (external store)', { jti: decoded.jti });
+            return null;
+          }
+        } catch (err) {
+          log.warn('External revocation check failed, using in-memory only', {
+            error: (err as Error).message,
+          });
+        }
+      }
     }
     return decoded;
   } catch (error) {
@@ -104,7 +131,18 @@ export function revokeToken(token: string): boolean {
         if (oldest) revokedTokens.delete(oldest);
       }
     }
-    revokedTokens.set(decoded.jti as string, decoded.exp * 1000);
+    const expiresAtMs = decoded.exp * 1000;
+    revokedTokens.set(decoded.jti as string, expiresAtMs);
+
+    if (externalStore) {
+      externalStore.add(decoded.jti as string, expiresAtMs).catch((err) => {
+        log.warn('Failed to persist revocation externally', {
+          jti: decoded.jti,
+          error: (err as Error).message,
+        });
+      });
+    }
+
     log.debug('Token revoked', { jti: decoded.jti });
     return true;
   } catch {

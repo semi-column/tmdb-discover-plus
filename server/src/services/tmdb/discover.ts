@@ -1,6 +1,6 @@
 import { tmdbFetch } from './client.ts';
-import { shuffleArray } from '../../utils/helpers.js';
-import { getCache } from '../cache/index.js';
+import { shuffleArray } from '../../utils/helpers.ts';
+import { getCache } from '../cache/index.ts';
 import { stableStringify } from '../../utils/stableStringify.ts';
 import { createLogger } from '../../utils/logger.ts';
 

@@ -50,7 +50,7 @@ jobs:
         run: cd client && npm run lint
 
       - name: Check server syntax
-        run: node --check server/src/index.js
+        run: node --check server/src/index.ts
 
       - name: Typecheck server
         run: cd server && npx tsc --noEmit
