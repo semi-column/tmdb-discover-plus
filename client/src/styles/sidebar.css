@@ -40,6 +40,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
 }
 
 .config-name-edit-icon {
@@ -51,7 +52,7 @@
   background: transparent;
   border: none;
   border-bottom: 1px solid transparent;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   color: var(--text-primary);
   padding: 4px 0;
@@ -75,7 +76,7 @@
 }
 
 .sidebar-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   margin: 0;
   white-space: nowrap;
@@ -119,7 +120,7 @@
 
 .sidebar-title-input {
   flex: 1;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   padding: 4px 8px;
   background: var(--bg-tertiary);
@@ -138,6 +139,7 @@
 /* Sidebar Controls */
 .sidebar-controls {
   margin-bottom: 8px;
+  padding: 0 16px 12px 16px;
 }
 
 .sidebar-checkbox {
@@ -148,7 +150,7 @@
   background: transparent;
   border: 1px dashed var(--border-color);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
@@ -229,7 +231,7 @@
 }
 
 .catalog-item-type {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -254,7 +256,7 @@
 
 .catalog-item-badge {
   display: inline-block;
-  font-size: 10px;
+  font-size: 0.625rem;
   padding: 2px 6px;
   background: var(--accent-primary);
   color: white;
@@ -271,7 +273,7 @@
 }
 
 .sidebar-section-title {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -291,6 +293,117 @@
   color: var(--text-primary);
 }
 
+.poster-settings .sidebar-section-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.poster-settings .sidebar-section-title {
+  flex: 1;
+  margin: 0;
+}
+
+.poster-settings-chevron {
+  transition: transform 0.2s;
+}
+
+.poster-settings-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.poster-settings-body {
+  padding: 8px 16px 16px;
+}
+
+.poster-settings-service-group {
+  margin-bottom: 12px;
+}
+
+.poster-settings-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.poster-settings-select {
+  width: 100%;
+  font-size: 0.8125rem;
+}
+
+.poster-settings-status {
+  color: var(--success);
+}
+
+.poster-settings-input-wrapper {
+  position: relative;
+}
+
+.poster-settings-input {
+  width: 100%;
+  font-size: 0.8125rem;
+  padding-right: 36px;
+}
+
+.poster-settings-toggle-visibility {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px;
+}
+
+.poster-settings-hint {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.poster-settings-link {
+  color: var(--primary);
+}
+
+.poster-settings-link-icon {
+  vertical-align: middle;
+}
+
+.sidebar-header-actions {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+}
+
+.sidebar-add-btn {
+  padding: 0 8px;
+}
+
+.sidebar-actions-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sidebar-action-btn {
+  flex: 1;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.sidebar-checkbox--spaced {
+  margin-top: 8px;
+}
+
 /* Preset Groups */
 .preset-group {
   margin-bottom: 16px;
@@ -304,7 +417,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-secondary);
   margin-bottom: 8px;
@@ -353,7 +466,7 @@
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -394,7 +507,7 @@
 
 .preset-catalog-badge {
   display: inline-block;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--accent-light);
   margin-bottom: 8px;
@@ -421,7 +534,7 @@
 }
 
 .config-selector-header h3 {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 600;
   margin: 0;
   color: var(--text-primary);
@@ -430,7 +543,7 @@
 .config-selector-description {
   color: var(--text-secondary);
   margin-bottom: 24px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .config-selector-loading {
@@ -490,7 +603,7 @@
 }
 
 .config-card-id {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   margin: 0 0 4px;
   color: var(--text-primary);
@@ -500,18 +613,18 @@
   background: var(--bg-secondary);
   padding: 4px 8px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
 .config-card-catalogs {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   margin: 0 0 4px;
 }
 
 .config-card-date {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   margin: 0;
 }
@@ -551,7 +664,7 @@
   background: rgba(248, 81, 73, 0.1);
   border-top: 1px solid rgba(248, 81, 73, 0.2);
   color: var(--error);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 /* Wider setup card for config selector */
@@ -566,7 +679,7 @@
   top: 16px;
   left: 16px;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
 }
 
@@ -630,7 +743,7 @@
 }
 
 .config-dropdown-count {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   white-space: nowrap;
   flex-shrink: 0;
@@ -645,7 +758,7 @@
   padding: 0 6px;
   background: var(--accent-primary);
   color: white;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   border-radius: var(--radius-full);
   margin-left: 4px;
@@ -679,7 +792,7 @@
 .config-dropdown-header {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -713,8 +826,8 @@
 
 /* Sophisticated backdrop and alert border for confirmation state */
 .config-dropdown-item:has(.config-dropdown-confirm-inline) {
-  background: rgba(239, 68, 68, 0.06) !important;
-  border-left-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.06);
+  border-left-color: var(--error);
 }
 
 .config-dropdown-item-content {
@@ -744,16 +857,16 @@
 }
 
 .config-dropdown-item-name .config-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .config-dropdown-item-badge {
-  font-size: 10px;
+  font-size: 0.625rem;
   padding: 2px 8px;
   background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
+  color: var(--accent-light);
   border-radius: 10px;
   font-weight: 600;
   letter-spacing: 0.2px;
@@ -771,7 +884,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px; /* Slightly smaller font to save space */
+  font-size: 0.625rem; /* Slightly smaller font to save space */
   font-weight: 500;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.04);
@@ -793,7 +906,7 @@
 }
 
 .empty-stats {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   font-style: italic;
 }
@@ -805,23 +918,23 @@
   flex-shrink: 0;
 }
 
-.config-dropdown-delete {
+.config-dropdown-item-actions .config-dropdown-delete {
   color: var(--text-muted);
   opacity: 0.4;
-  padding: 8px !important;
-  border-radius: 50% !important;
-  transition: all 0.2s ease !important;
-  background: transparent !important;
-  border: none !important;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  background: transparent;
+  border: none;
 }
 
 .config-dropdown-item:hover .config-dropdown-delete {
   opacity: 1;
 }
 
-.config-dropdown-delete:hover {
-  color: var(--error) !important;
-  background: rgba(239, 68, 68, 0.1) !important;
+.config-dropdown-item-actions .config-dropdown-delete:hover {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.1);
   transform: scale(1.1);
 }
 
@@ -844,40 +957,40 @@
   }
 }
 
-.confirm-btn-yes,
-.confirm-btn-no {
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
-  border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  transition: all 0.2s ease !important;
-  border: none !important;
-  padding: 0 !important;
+.config-dropdown-confirm-inline .confirm-btn-yes,
+.config-dropdown-confirm-inline .confirm-btn-no {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  border: none;
+  padding: 0;
 }
 
-.confirm-btn-yes {
-  background: #ef4444 !important;
-  color: white !important;
+.config-dropdown-confirm-inline .confirm-btn-yes {
+  background: var(--error);
+  color: white;
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
 }
 
-.confirm-btn-yes:hover {
-  background: #dc2626 !important;
+.config-dropdown-confirm-inline .confirm-btn-yes:hover {
+  background: #dc2626;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
 }
 
-.confirm-btn-no {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: var(--text-secondary) !important;
+.config-dropdown-confirm-inline .confirm-btn-no {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
 }
 
-.confirm-btn-no:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  color: var(--text-primary) !important;
+.config-dropdown-confirm-inline .confirm-btn-no:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
 }
 
 .config-dropdown-footer {
@@ -890,7 +1003,7 @@
   width: 100%;
   justify-content: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 /* Mobile responsive for config dropdown */
@@ -932,7 +1045,7 @@
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   border-radius: calc(var(--radius-md) - 2px);

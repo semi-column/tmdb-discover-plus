@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo } from 'react';
+import { useState, useRef, useEffect, useId, memo } from 'react';
 import { ChevronDown, Check, X, Search } from 'lucide-react';
 
 export const MultiSelect = memo(function MultiSelect({
@@ -28,6 +28,7 @@ export const MultiSelect = memo(function MultiSelect({
   const containerRef = useRef(null);
   const optionsRef = useRef(null);
   const searchRequestIdRef = useRef(0);
+  const listboxId = useId();
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -162,6 +163,11 @@ export const MultiSelect = memo(function MultiSelect({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         role="combobox"
         aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-controls={isOpen ? listboxId : undefined}
+        aria-activedescendant={
+          isOpen && focusedIndex >= 0 ? `${listboxId}-option-${focusedIndex}` : undefined
+        }
         aria-disabled={disabled}
         tabIndex={disabled ? -1 : 0}
         onKeyDown={(e) => !disabled && e.key === 'Enter' && setIsOpen(!isOpen)}
@@ -212,7 +218,7 @@ export const MultiSelect = memo(function MultiSelect({
               )}
             </div>
           )}
-          <div className="multi-select-options" ref={optionsRef} role="listbox">
+          <div className="multi-select-options" ref={optionsRef} role="listbox" id={listboxId}>
             {isSearchEnabled && isSearching && <div className="multi-select-empty">Searching…</div>}
             {!isSearching && filteredOptions.length === 0 && (
               <div className="multi-select-empty">{emptyMessage}</div>
@@ -224,10 +230,12 @@ export const MultiSelect = memo(function MultiSelect({
                 return (
                   <div
                     key={option[valueKey]}
+                    id={`${listboxId}-option-${index}`}
                     className={`multi-select-option ${isSelected ? 'selected' : ''} ${isFocused ? 'focused' : ''}`}
                     onClick={() => handleToggle(option[valueKey])}
                     role="option"
                     aria-selected={isSelected}
+                    tabIndex={-1}
                   >
                     <div className={`multi-select-checkbox ${isSelected ? 'checked' : ''}`}>
                       {isSelected && <Check size={12} />}

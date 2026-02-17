@@ -31,7 +31,7 @@
 }
 
 .modal-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
 }
 
@@ -56,7 +56,7 @@
 }
 
 .install-link-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -65,7 +65,7 @@
 
 .install-link {
   font-family: monospace;
-  font-size: 14px;
+  font-size: 0.875rem;
   word-break: break-all;
   color: var(--accent-light);
 }
@@ -117,7 +117,7 @@
 }
 
 .toast-message {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 @keyframes fadeIn {
@@ -219,13 +219,13 @@
 }
 
 .type-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .type-desc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;

@@ -47,7 +47,7 @@
 }
 
 .editor-title h2 {
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 
 .editor-actions {
@@ -131,7 +131,7 @@
 
 /* Enhanced Editor Styles */
 .editor-subtitle {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
 }
 
@@ -196,7 +196,7 @@
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -240,7 +240,7 @@
   padding: 6px 10px;
   background: var(--accent-primary);
   color: white;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   border-radius: 20px;
   cursor: pointer;
@@ -278,7 +278,7 @@
   background: transparent;
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -302,7 +302,7 @@
   padding: 0 6px;
   background: var(--accent-primary);
   color: white;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   border-radius: 10px;
   margin-left: auto;
@@ -321,7 +321,7 @@
   background: transparent;
   border: none;
   border-bottom: 1px solid transparent;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   color: var(--text-primary);
   padding: 4px 0;
@@ -351,7 +351,7 @@
 
 /* Filter Hint */
 .filter-hint {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   margin-top: 8px;
   font-style: italic;
@@ -368,4 +368,8 @@
   flex-direction: column;
   gap: 12px;
   margin-bottom: 24px;
+}
+
+.btn-file-label {
+  cursor: pointer;
 }

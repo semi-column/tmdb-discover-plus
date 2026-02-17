@@ -4,7 +4,7 @@
 }
 
 .filter-section-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -25,7 +25,7 @@
 }
 
 .filter-label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-secondary);
   display: inline-flex;
@@ -34,7 +34,7 @@
 }
 
 .filter-label-hint {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 400;
   color: var(--text-muted);
 }
@@ -82,13 +82,13 @@
 }
 
 .filter-section-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   margin: 0;
 }
 
 .filter-section-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   margin-top: 2px;
 }
@@ -158,13 +158,13 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
 .filter-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   margin-top: 4px;
 }
@@ -179,7 +179,7 @@
 
 .list-type-info .filter-hint {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
@@ -236,7 +236,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -285,7 +285,7 @@
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   margin-bottom: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -369,7 +369,7 @@
 }
 
 .genre-match-mode-label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
   margin-bottom: 10px;
@@ -406,7 +406,7 @@
 }
 
 .genre-match-option .option-text {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -426,7 +426,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .genre-summary-row.include {
@@ -446,7 +446,7 @@
   background: rgba(130, 87, 229, 0.1);
   border-radius: var(--radius-md);
   margin-bottom: 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--accent-light);
 }
 
@@ -479,13 +479,13 @@
 }
 
 .option-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .option-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -498,13 +498,13 @@
 }
 
 .range-slider-label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
 .range-slider-value {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
   background: var(--bg-tertiary);
@@ -527,7 +527,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   text-align: center;
   transition:
@@ -558,7 +558,7 @@
 
 .range-separator {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 
@@ -583,7 +583,7 @@
   background: transparent;
   border: 0;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   text-align: center;
   padding: 0;
@@ -684,7 +684,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: center;
 }
 
@@ -695,7 +695,7 @@
 
 .range-slider-separator {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* Quick Filters / Pills */
@@ -711,7 +711,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -767,7 +767,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-muted);
   letter-spacing: 0.5px;
@@ -807,7 +807,7 @@
   outline: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .provider-search-clear {
@@ -857,7 +857,7 @@
 }
 
 .provider-name {
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-align: center;
   color: var(--text-secondary);
   line-height: 1.2;
@@ -879,7 +879,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -904,7 +904,7 @@
   padding: 3px 8px;
   background: var(--gradient-primary);
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: white;
 }
@@ -948,7 +948,7 @@
   align-items: center;
   gap: 12px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
 }
 
@@ -1017,7 +1017,7 @@
   padding: 8px 16px;
   border: none;
   border-radius: calc(var(--radius-md) - 2px);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -1047,7 +1047,7 @@
   border: 1px solid rgba(245, 197, 24, 0.3);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .imdb-list-type-select:focus {
@@ -1063,7 +1063,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-family: monospace;
 }
 
@@ -1084,7 +1084,7 @@
 }
 
 .imdb-disabled-notice h3 {
-  font-size: 16px;
+  font-size: 1rem;
   margin-bottom: 8px;
   color: var(--text-secondary);
 }
@@ -1097,13 +1097,87 @@
   background: rgba(245, 197, 24, 0.08);
   border: 1px solid rgba(245, 197, 24, 0.3);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 
 @media (max-width: 768px) {
   .imdb-source-toggle button {
     padding: 6px 12px;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
+}
+
+/* Filter Spacing Utilities */
+.filter-spacer-lg {
+  margin-top: 24px;
+}
+
+.filter-spacer {
+  margin-top: 20px;
+}
+
+.filter-spacer-sm {
+  margin-top: 8px;
+}
+
+/* Runtime Presets base styles */
+.runtime-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Provider Grid Utilities */
+.provider-no-results {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+.provider-logo-placeholder {
+  background: var(--bg-tertiary);
+}
+
+.imdb-preset-notice {
+  justify-content: center;
+}
+
+.imdb-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.imdb-chip-wrap--scrollable {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.imdb-selected-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.imdb-chip--clickable {
+  cursor: pointer;
+}
+
+.imdb-awards-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.imdb-section-label {
+  margin-bottom: 6px;
+  display: block;
+}
+
+.imdb-list-group {
+  padding: 12px 0;
 }

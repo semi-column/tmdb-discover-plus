@@ -47,49 +47,26 @@ export function PosterSettingsSection() {
 
   return (
     <div className="sidebar-section poster-settings">
-      <div
-        className="sidebar-section-header"
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        style={{
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '8px 0',
-        }}
-      >
+      <div className="sidebar-section-header" onClick={() => setIsCollapsed(!isCollapsed)}>
         <Image size={14} className="text-muted" />
-        <span className="sidebar-section-title" style={{ flex: 1, margin: 0 }}>
-          Poster Support
-        </span>
+        <span className="sidebar-section-title">Poster Support</span>
         <ChevronDown
           size={14}
-          className="text-muted"
-          style={{
-            transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s',
-          }}
+          className={`text-muted poster-settings-chevron${isCollapsed ? ' collapsed' : ''}`}
         />
       </div>
 
       {!isCollapsed && (
-        <div style={{ padding: '8px 16px 16px' }}>
-          <div className="input-group" style={{ marginBottom: '12px' }}>
-            <label
-              style={{
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-                marginBottom: '4px',
-                display: 'block',
-              }}
-            >
+        <div className="poster-settings-body">
+          <div className="input-group poster-settings-service-group">
+            <label htmlFor="poster-service" className="poster-settings-label">
               Poster Service
             </label>
             <select
-              className="input"
+              id="poster-service"
+              className="input poster-settings-select"
               value={posterService}
               onChange={handleServiceChange}
-              style={{ width: '100%', fontSize: '13px' }}
             >
               <option value="none">Default (TMDB)</option>
               <option value="rpdb">RPDB (Rating Posters)</option>
@@ -99,56 +76,39 @@ export function PosterSettingsSection() {
 
           {posterService !== 'none' && (
             <div className="input-group">
-              <label
-                style={{
-                  fontSize: '12px',
-                  color: 'var(--text-muted)',
-                  marginBottom: '4px',
-                  display: 'block',
-                }}
-              >
+              <label htmlFor="poster-api-key" className="poster-settings-label">
                 API Key{' '}
                 {hasPosterKey && !apiKeyInput && (
-                  <span style={{ color: 'var(--success)' }}>(set)</span>
+                  <span className="poster-settings-status">(set)</span>
                 )}
               </label>
-              <div style={{ position: 'relative' }}>
+              <div className="poster-settings-input-wrapper">
                 <input
+                  id="poster-api-key"
                   type={showApiKey ? 'text' : 'password'}
-                  className="input"
+                  className="input poster-settings-input"
                   placeholder={hasPosterKey ? '••••••••' : 'Enter API key'}
                   value={apiKeyInput}
                   onChange={handleApiKeyChange}
-                  style={{ width: '100%', fontSize: '13px', paddingRight: '36px' }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowApiKey(!showApiKey)}
-                  style={{
-                    position: 'absolute',
-                    right: '8px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--text-muted)',
-                    padding: '4px',
-                  }}
+                  className="poster-settings-toggle-visibility"
                   title={showApiKey ? 'Hide' : 'Show'}
                 >
                   {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+              <p className="poster-settings-hint">
                 Get key from{' '}
                 <a
                   href={serviceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: 'var(--primary)' }}
+                  className="poster-settings-link"
                 >
-                  {serviceName} <ExternalLink size={10} style={{ verticalAlign: 'middle' }} />
+                  {serviceName} <ExternalLink size={10} className="poster-settings-link-icon" />
                 </a>
               </p>
             </div>

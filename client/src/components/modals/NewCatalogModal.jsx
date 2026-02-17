@@ -159,8 +159,11 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
             </div>
 
             <div className="filter-group" style={{ marginTop: '20px' }}>
-              <label className="filter-label">Catalog Name</label>
+              <label className="filter-label" htmlFor="new-catalog-name">
+                Catalog Name
+              </label>
               <input
+                id="new-catalog-name"
                 type="text"
                 className="input"
                 style={{ height: '42px', fontSize: '15px' }}
@@ -178,8 +181,11 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
 
             {source === 'imdb' && (
               <div className="filter-group" style={{ marginTop: '16px' }}>
-                <label className="filter-label">Initial Context</label>
+                <label className="filter-label" htmlFor="new-catalog-context">
+                  Initial Context
+                </label>
                 <select
+                  id="new-catalog-context"
                   className="input"
                   value={imdbListType}
                   onChange={(e) => setImdbListType(e.target.value)}

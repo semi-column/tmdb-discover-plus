@@ -54,13 +54,14 @@ export const CatalogImportExport = memo(function CatalogImportExport({
       <button className="btn btn-secondary" title="Export Catalog Config" onClick={handleExport}>
         <ArrowDownTrayIcon size={16} />
       </button>
-      <label
-        className="btn btn-secondary"
-        title="Import Catalog Config"
-        style={{ cursor: 'pointer' }}
-      >
+      <label className="btn btn-secondary btn-file-label" title="Import Catalog Config">
         <ArrowUpTrayIcon size={16} />
-        <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportFile} />
+        <input
+          type="file"
+          accept=".json"
+          className="hidden-file-input"
+          onChange={handleImportFile}
+        />
       </label>
     </>
   );

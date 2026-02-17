@@ -100,7 +100,7 @@
   }
 
   .logo h1 {
-    font-size: 18px;
+    font-size: 1.125rem;
     background: none;
     -webkit-text-fill-color: initial;
     color: var(--text-primary);
@@ -127,15 +127,15 @@
     gap: 12px;
   }
 
-  .action-icon-btn {
+  .mobile-actions .action-icon-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
-    padding: 0 !important;
-    border-radius: 50% !important;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0;
+    border-radius: 50%;
     background: rgba(255, 255, 255, 0.05);
     color: var(--text-secondary);
     transition: all 0.2s ease;
@@ -245,7 +245,7 @@
   }
 
   .catalog-item-name {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 }
 
@@ -269,11 +269,11 @@
   }
 
   .editor-title h2 {
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 
   .editor-name-input {
-    font-size: 16px;
+    font-size: 1rem;
     min-width: 100%;
     text-align: center;
   }
@@ -304,7 +304,7 @@
   }
 
   .filter-section-title {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .filter-section-content {
@@ -374,7 +374,7 @@
 
   .genre-chip {
     padding: 8px 12px;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 }
 
@@ -457,7 +457,7 @@
   }
 
   .install-link {
-    font-size: 12px;
+    font-size: 0.75rem;
     word-break: break-all;
   }
 }
@@ -480,11 +480,11 @@
   }
 
   .setup-card h2 {
-    font-size: 22px;
+    font-size: 1.375rem;
   }
 
   .setup-card p {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 }
 
@@ -514,7 +514,7 @@
   }
 
   .provider-name {
-    font-size: 10px;
+    font-size: 0.625rem;
   }
 }
 
@@ -522,7 +522,7 @@
 @media (max-width: 768px) {
   .preset-item {
     padding: 10px 12px;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 }
 
@@ -530,12 +530,12 @@
 @media (max-width: 768px) {
   .btn {
     padding: 12px 20px;
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .btn-sm {
     padding: 10px 14px;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 }
 
@@ -556,13 +556,13 @@
 @media (max-width: 768px) {
   .input {
     padding: 14px;
-    font-size: 16px;
+    font-size: 1rem;
     /* Prevents zoom on iOS */
   }
 
   .select {
     padding: 14px;
-    font-size: 16px;
+    font-size: 1rem;
   }
 }
 
@@ -573,7 +573,7 @@
   }
 
   .empty-state h3 {
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 }
 
@@ -589,7 +589,7 @@
 
   .date-preset {
     padding: 10px 14px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     min-height: 44px;
     display: inline-flex;
     align-items: center;

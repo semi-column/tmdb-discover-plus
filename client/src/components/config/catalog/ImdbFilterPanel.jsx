@@ -73,10 +73,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
 
   if (isPreset) {
     return (
-      <div
-        className="flex items-center gap-3 p-4 mt-6 rounded-lg border border-white/5 bg-white/5"
-        style={{ justifyContent: 'center' }}
-      >
+      <div className="flex items-center gap-3 p-4 mt-6 rounded-lg border border-white/5 bg-white/5 imdb-preset-notice">
         <Sparkles size={16} className="text-indigo-400" />
         <span className="text-gray-300 text-sm font-medium">
           This is a curated IMDb preset and cannot be modified.
@@ -97,8 +94,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       >
         <div className="filter-grid">
           <div className="filter-group">
-            <label className="filter-label">Sort By</label>
+            <label className="filter-label" htmlFor="imdb-sort-by">
+              Sort By
+            </label>
             <select
+              id="imdb-sort-by"
               className="input"
               value={filters.sortBy || 'POPULARITY'}
               onChange={(e) => onFiltersChange('sortBy', e.target.value)}
@@ -112,8 +112,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           </div>
 
           <div className="filter-group">
-            <label className="filter-label">Sort Order</label>
+            <label className="filter-label" htmlFor="imdb-sort-order">
+              Sort Order
+            </label>
             <select
+              id="imdb-sort-order"
               className="input"
               value={filters.sortOrder || 'ASC'}
               onChange={(e) => onFiltersChange('sortOrder', e.target.value)}
@@ -124,8 +127,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           </div>
 
           <div className="filter-group">
-            <label className="filter-label">Min IMDb Rating</label>
+            <label className="filter-label" htmlFor="imdb-rating-min">
+              Min IMDb Rating
+            </label>
             <select
+              id="imdb-rating-min"
               className="input"
               value={filters.imdbRatingMin || ''}
               onChange={(e) =>
@@ -144,8 +150,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           </div>
 
           <div className="filter-group">
-            <label className="filter-label">Min Vote Count</label>
+            <label className="filter-label" htmlFor="imdb-vote-min">
+              Min Vote Count
+            </label>
             <select
+              id="imdb-vote-min"
               className="input"
               value={filters.totalVotesMin || ''}
               onChange={(e) =>
@@ -165,8 +174,8 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
 
           {imdbTitleTypes.length > 0 && (
             <div className="filter-group span-full">
-              <label className="filter-label">Title Types</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              <span className="filter-label">Title Types</span>
+              <div className="imdb-chip-wrap">
                 {imdbTitleTypes
                   .filter((tt) => {
                     if (localCatalog?.type === 'series') {
@@ -209,8 +218,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       >
         <div className="filter-grid">
           <div className="filter-group">
-            <label className="filter-label">Languages</label>
+            <label className="filter-label" htmlFor="imdb-languages">
+              Languages
+            </label>
             <select
+              id="imdb-languages"
               className="input"
               value=""
               onChange={(e) => {
@@ -231,18 +243,17 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                 ))}
             </select>
             {(filters.languages || []).length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+              <div className="imdb-selected-chips">
                 {filters.languages.map((lang) => (
                   <span
                     key={lang}
-                    className="genre-chip selected"
+                    className="genre-chip selected imdb-chip--clickable"
                     onClick={() =>
                       onFiltersChange(
                         'languages',
                         filters.languages.filter((l) => l !== lang)
                       )
                     }
-                    style={{ cursor: 'pointer' }}
                   >
                     {lang} ×
                   </span>
@@ -252,8 +263,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           </div>
 
           <div className="filter-group">
-            <label className="filter-label">Countries</label>
+            <label className="filter-label" htmlFor="imdb-countries">
+              Countries
+            </label>
             <select
+              id="imdb-countries"
               className="input"
               value=""
               onChange={(e) => {
@@ -274,18 +288,17 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                 ))}
             </select>
             {(filters.countries || []).length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+              <div className="imdb-selected-chips">
                 {filters.countries.map((country) => (
                   <span
                     key={country}
-                    className="genre-chip selected"
+                    className="genre-chip selected imdb-chip--clickable"
                     onClick={() =>
                       onFiltersChange(
                         'countries',
                         filters.countries.filter((c) => c !== country)
                       )
                     }
-                    style={{ cursor: 'pointer' }}
                   >
                     {country} ×
                   </span>
@@ -305,7 +318,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         onToggle={toggleSection}
         badgeCount={(filters.genres || []).length}
       >
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        <div className="imdb-chip-wrap">
           {imdbGenres.map((genre) => {
             const selected = (filters.genres || []).includes(genre);
             return (
@@ -332,8 +345,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       >
         <div className="filter-grid">
           <div className="filter-group">
-            <label className="filter-label">Release Date From</label>
+            <label className="filter-label" htmlFor="imdb-date-from">
+              Release Date From
+            </label>
             <input
+              id="imdb-date-from"
               type="date"
               className="input"
               value={filters.releaseDateStart || ''}
@@ -341,8 +357,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             />
           </div>
           <div className="filter-group">
-            <label className="filter-label">Release Date To</label>
+            <label className="filter-label" htmlFor="imdb-date-to">
+              Release Date To
+            </label>
             <input
+              id="imdb-date-to"
               type="date"
               className="input"
               value={filters.releaseDateEnd || ''}
@@ -350,8 +369,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             />
           </div>
           <div className="filter-group">
-            <label className="filter-label">Min Runtime (min)</label>
+            <label className="filter-label" htmlFor="imdb-runtime-min">
+              Min Runtime (min)
+            </label>
             <input
+              id="imdb-runtime-min"
               type="number"
               className="input"
               min="0"
@@ -364,8 +386,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             />
           </div>
           <div className="filter-group">
-            <label className="filter-label">Max Runtime (min)</label>
+            <label className="filter-label" htmlFor="imdb-runtime-max">
+              Max Runtime (min)
+            </label>
             <input
+              id="imdb-runtime-max"
               type="number"
               className="input"
               min="0"
@@ -390,15 +415,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           onToggle={toggleSection}
           badgeCount={(filters.keywords || []).length}
         >
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '6px',
-              maxHeight: '300px',
-              overflowY: 'auto',
-            }}
-          >
+          <div className="imdb-chip-wrap--scrollable">
             {imdbKeywords.map((kw) => {
               const selected = (filters.keywords || []).includes(kw);
               return (
@@ -426,12 +443,10 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           onToggle={toggleSection}
           badgeCount={(filters.awardsWon || []).length + (filters.awardsNominated || []).length}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="imdb-awards-section">
             <div>
-              <label className="filter-label" style={{ marginBottom: '6px', display: 'block' }}>
-                Awards Won
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              <span className="filter-label imdb-section-label">Awards Won</span>
+              <div className="imdb-chip-wrap">
                 {imdbAwards.map((award) => {
                   const selected = (filters.awardsWon || []).includes(award);
                   return (
@@ -448,10 +463,8 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
               </div>
             </div>
             <div>
-              <label className="filter-label" style={{ marginBottom: '6px', display: 'block' }}>
-                Awards Nominated
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              <span className="filter-label imdb-section-label">Awards Nominated</span>
+              <div className="imdb-chip-wrap">
                 {imdbAwards.map((award) => {
                   const selected = (filters.awardsNominated || []).includes(award);
                   return (
@@ -472,9 +485,12 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       )}
 
       {listType === 'imdb_list' && (
-        <div className="filter-group" style={{ padding: '12px 0' }}>
-          <label className="filter-label">IMDb List ID</label>
+        <div className="filter-group imdb-list-group">
+          <label className="filter-label" htmlFor="imdb-list-id">
+            IMDb List ID
+          </label>
           <input
+            id="imdb-list-id"
             type="text"
             className="input"
             placeholder="ls597789139"

@@ -10,7 +10,7 @@ import {
   Tv,
   Users,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo } from 'react';
 import { ActiveFiltersBar } from './catalog/ActiveFiltersBar';
 import { CatalogImportExport } from './catalog/CatalogImportExport';
 import { CatalogPreview } from './catalog/CatalogPreview';
@@ -23,96 +23,46 @@ import { PeopleFilters } from './catalog/PeopleFilters';
 import { ReleaseFilters } from './catalog/ReleaseFilters';
 import { StreamFilters } from './catalog/StreamFilters';
 
-import { useActiveFilters } from '../../hooks/useActiveFilters';
-import { useCatalogSync } from '../../hooks/useCatalogSync';
-import { useResolvedFilters } from '../../hooks/useResolvedFilters';
-import { useWatchProviders } from '../../hooks/useWatchProviders';
-import { useCatalog, useTMDBData, useAppActions } from '../../context/AppContext';
-
-const DEFAULT_CATALOG = {
-  name: '',
-  type: 'movie',
-  filters: {
-    genres: [],
-    excludeGenres: [],
-    sortBy: 'popularity.desc',
-    imdbOnly: false,
-    voteCountMin: 0,
-  },
-  enabled: true,
-};
+import { useCatalogEditor } from '../../hooks/useCatalogEditor';
+import { useCatalogEditorHandlers } from '../../hooks/useCatalogEditorHandlers';
 
 export const CatalogEditor = memo(function CatalogEditor() {
-  const { activeCatalog: catalog, preferences = {}, handleUpdateCatalog: onUpdate } = useCatalog();
+  const state = useCatalogEditor();
+  const handlers = useCatalogEditorHandlers(state);
+
   const {
-    genres = { movie: [], series: [] },
-    loading: genresLoading = false,
-    refresh: refreshGenres = () => {},
-    originalLanguages = [],
-    countries = [],
-    sortOptions = { movie: [], series: [] },
-    releaseTypes = [],
-    tvStatuses = [],
-    tvTypes = [],
-    monetizationTypes = [],
-    certifications = { movie: {}, series: {} },
-    watchRegions = [],
-    tvNetworks = [],
-    preview: onPreview,
-    previewImdb: onPreviewImdb,
-    imdbGenres = [],
-    imdbKeywords = [],
-    imdbAwards = [],
-    imdbSortOptions = [],
-    imdbTitleTypes = [],
-    imdbEnabled = false,
+    catalog,
+    addToast,
+    localCatalog,
+    previewData,
+    previewLoading,
+    previewError,
+    tvNetworkOptions,
+    expandedSections,
+    safeGenres,
+    safeOriginalLanguages,
+    safeCountries,
+    safeCertifications,
+    sortOptions,
+    originalLanguages,
+    countries,
+    releaseTypes,
+    tvStatuses,
+    tvTypes,
+    monetizationTypes,
+    watchRegions,
+    watchProviders,
+    genresLoading,
+    refreshGenres,
+    imdbGenres,
+    imdbKeywords,
+    imdbAwards,
+    imdbSortOptions,
+    imdbTitleTypes,
+    imdbEnabled,
     searchPerson,
     searchCompany,
     searchKeyword,
-    searchTVNetworks,
-    getPersonById,
-    getCompanyById,
-    getKeywordById,
-    getNetworkById,
-    getWatchProviders,
-  } = useTMDBData();
-  const { addToast } = useAppActions();
-  const safeGenres =
-    genres && typeof genres === 'object' && !Array.isArray(genres)
-      ? genres
-      : { movie: [], series: [] };
-  const safeOriginalLanguages = Array.isArray(originalLanguages) ? originalLanguages : [];
-  const safeCountries = Array.isArray(countries) ? countries : [];
-  const safeSortOptions =
-    sortOptions && typeof sortOptions === 'object' && !Array.isArray(sortOptions)
-      ? sortOptions
-      : { movie: [], series: [] };
-  const safeTvStatuses = Array.isArray(tvStatuses) ? tvStatuses : [];
-  const safeTvTypes = Array.isArray(tvTypes) ? tvTypes : [];
-  const safeMonetizationTypes = Array.isArray(monetizationTypes) ? monetizationTypes : [];
-  const safeCertifications =
-    certifications && typeof certifications === 'object' && !Array.isArray(certifications)
-      ? certifications
-      : { movie: {}, series: {} };
-  const safeWatchRegions = Array.isArray(watchRegions) ? watchRegions : [];
-
-  const [localCatalog, setLocalCatalog] = useState(catalog || DEFAULT_CATALOG);
-  const [previewData, setPreviewData] = useState(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState(null);
-  const [tvNetworkOptions, setTVNetworkOptions] = useState(tvNetworks || []);
-  const [expandedSections, setExpandedSections] = useState({
-    basic: false,
-    genres: false,
-    filters: false,
-    release: false,
-    streaming: false,
-    people: false,
-    options: false,
-  });
-
-  const prevCatalogIdRef = useRef(null);
-  const {
     selectedPeople,
     setSelectedPeople,
     selectedCompanies,
@@ -124,325 +74,22 @@ export const CatalogEditor = memo(function CatalogEditor() {
     excludeCompanies,
     setExcludeCompanies,
     selectedNetworks,
-  } = useResolvedFilters({
-    catalog,
-    getPersonById,
-    searchPerson,
-    getCompanyById,
-    searchCompany,
-    getKeywordById,
-    searchKeyword,
-    getNetworkById,
-  });
+    activeFilters,
+    clearFilter,
+    clearAllFilters,
+  } = state;
 
-  const { watchProviders } = useWatchProviders({
-    type: localCatalog?.type,
-    region: localCatalog?.filters?.watchRegion,
-    getWatchProviders,
-  });
-
-  const mergedLocalCatalog = useMemo(
-    () => ({
-      ...localCatalog,
-      filters: {
-        ...localCatalog.filters,
-        withPeople: selectedPeople.map((p) => p.id).join(',') || undefined,
-        withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
-        withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
-        excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
-        excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
-      },
-    }),
-    [
-      localCatalog,
-      selectedPeople,
-      selectedCompanies,
-      selectedKeywords,
-      excludeKeywords,
-      excludeCompanies,
-    ]
-  );
-
-  useCatalogSync({ localCatalog: mergedLocalCatalog, catalog, onUpdate });
-
-  const { activeFilters, clearFilter, clearAllFilters } = useActiveFilters({
-    localCatalog,
-    setLocalCatalog,
-    genres: safeGenres,
-    sortOptions: safeSortOptions,
-    originalLanguages: safeOriginalLanguages,
-    countries: safeCountries,
-    tvStatuses: safeTvStatuses,
-    tvTypes: safeTvTypes,
-    watchRegions: safeWatchRegions,
-    monetizationTypes: safeMonetizationTypes,
-    selectedPeople,
-    setSelectedPeople,
-    selectedCompanies,
-    setSelectedCompanies,
-    selectedKeywords,
-    setSelectedKeywords,
-    excludeKeywords,
-    setExcludeKeywords,
-    excludeCompanies,
-    setExcludeCompanies,
-  });
-
-  useEffect(() => {
-    setTVNetworkOptions((prev) => {
-      const byId = new Map();
-      (prev || []).forEach((n) => {
-        if (n && n.id != null) byId.set(String(n.id), n);
-      });
-      (tvNetworks || []).forEach((n) => {
-        if (n && n.id != null) {
-          const key = String(n.id);
-          const existing = byId.get(key);
-          const existingHasProperName = existing && existing.name && existing.name !== key;
-          const newHasProperName = n.name && n.name !== key;
-          if (!existing || (!existingHasProperName && newHasProperName)) {
-            byId.set(key, n);
-          }
-        }
-      });
-      return Array.from(byId.values());
-    });
-  }, [tvNetworks]);
-
-  const handleTVNetworkSearch = useCallback(
-    async (query) => {
-      if (!searchTVNetworks) return;
-      const q = String(query || '').trim();
-      if (q.length < 2) return;
-      try {
-        const results = await searchTVNetworks(q);
-        if (!Array.isArray(results) || results.length === 0) return;
-        setTVNetworkOptions((prev) => {
-          const byId = new Map();
-          (prev || []).forEach((n) => {
-            if (n && n.id != null) byId.set(String(n.id), n);
-          });
-          results.forEach((n) => {
-            if (n && n.id != null) {
-              const key = String(n.id);
-              const existing = byId.get(key);
-              const existingHasProperName = existing && existing.name && existing.name !== key;
-              const newHasProperName = n.name && n.name !== key;
-              if (!existing || (!existingHasProperName && newHasProperName) || newHasProperName) {
-                byId.set(key, n);
-              }
-            }
-          });
-          return Array.from(byId.values());
-        });
-      } catch (e) {
-        void e;
-      }
-    },
-    [searchTVNetworks]
-  );
-
-  const catalogIdForSync = catalog?._id;
-  const catalogRef = useRef(catalog);
-  catalogRef.current = catalog;
-
-  useEffect(() => {
-    const currentCatalog = catalogRef.current;
-    if (currentCatalog) {
-      setLocalCatalog(currentCatalog);
-      const prevId = prevCatalogIdRef.current;
-      const newId = currentCatalog._id || null;
-      if (prevId !== newId) setPreviewData(null);
-      prevCatalogIdRef.current = newId;
-    } else {
-      setLocalCatalog(DEFAULT_CATALOG);
-      setPreviewData(null);
-      prevCatalogIdRef.current = null;
-    }
-  }, [catalogIdForSync]);
-
-  const toggleSection = (section) => {
-    setExpandedSections((prev) => {
-      if (prev[section]) return { ...prev, [section]: false };
-      const allClosed = Object.keys(prev).reduce((acc, key) => {
-        acc[key] = false;
-        return acc;
-      }, {});
-      return { ...allClosed, [section]: true };
-    });
-  };
-
-  const handleFiltersChange = useCallback((key, value) => {
-    setLocalCatalog((prev) => {
-      const current = prev || DEFAULT_CATALOG;
-      return { ...current, filters: { ...current.filters, [key]: value } };
-    });
-  }, []);
-
-  const handleNameChange = useCallback((name) => {
-    if (name.length > 50) return;
-    setLocalCatalog((prev) => ({ ...prev, name }));
-  }, []);
-
-  const handleTypeChange = useCallback(
-    (type) => {
-      let result;
-      setLocalCatalog((prev) => {
-        const isNextMovie = type === 'movie';
-        const isImdb = prev.source === 'imdb';
-        const updated = {
-          ...prev,
-          type,
-          filters: {
-            ...prev.filters,
-            genres: [],
-            excludeGenres: [],
-            sortBy: isImdb ? 'POPULARITY' : 'popularity.desc',
-            ...(isNextMovie
-              ? {
-                  airDateFrom: undefined,
-                  airDateTo: undefined,
-                  firstAirDateFrom: undefined,
-                  firstAirDateTo: undefined,
-                  firstAirDateYear: undefined,
-                  includeNullFirstAirDates: undefined,
-                  screenedTheatrically: undefined,
-                  timezone: undefined,
-                }
-              : {
-                  includeVideo: undefined,
-                  primaryReleaseYear: undefined,
-                  certifications: undefined,
-                  certificationMin: undefined,
-                  certificationMax: undefined,
-                  certificationCountry: undefined,
-                }),
-          },
-        };
-        result = updated;
-        return updated;
-      });
-      if (catalog?._id && result) onUpdate(catalog._id, result);
-    },
-    [catalog?._id, onUpdate]
-  );
-
-  const handleSourceChange = useCallback(
-    (source) => {
-      let result;
-      setLocalCatalog((prev) => {
-        const isNextImdb = source === 'imdb';
-        const cleanedFilters = { ...prev.filters };
-
-        if (isNextImdb) {
-          delete cleanedFilters.voteCountMin;
-          delete cleanedFilters.certifications;
-          delete cleanedFilters.watchProviders;
-          delete cleanedFilters.watchRegion;
-          delete cleanedFilters.withPeople;
-          delete cleanedFilters.withCompanies;
-          delete cleanedFilters.withKeywords;
-          delete cleanedFilters.withNetworks;
-          delete cleanedFilters.monetizationType;
-          delete cleanedFilters.releaseType;
-          delete cleanedFilters.tvStatus;
-          delete cleanedFilters.tvType;
-          delete cleanedFilters.originalLanguage;
-          delete cleanedFilters.yearRange;
-          delete cleanedFilters.datePreset;
-          delete cleanedFilters.imdbOnly;
-        } else {
-          delete cleanedFilters.keywords;
-          delete cleanedFilters.awardsWon;
-          delete cleanedFilters.awardsNominated;
-          delete cleanedFilters.imdbListId;
-          delete cleanedFilters.types;
-          delete cleanedFilters.imdbRatingMin;
-          delete cleanedFilters.totalVotesMin;
-          delete cleanedFilters.releaseDateStart;
-          delete cleanedFilters.releaseDateEnd;
-          delete cleanedFilters.runtimeMin;
-          delete cleanedFilters.runtimeMax;
-          delete cleanedFilters.languages;
-          delete cleanedFilters.countries;
-          delete cleanedFilters.sortOrder;
-        }
-
-        const updated = {
-          ...prev,
-          source: isNextImdb ? 'imdb' : 'tmdb',
-          filters: {
-            ...cleanedFilters,
-            sortBy: isNextImdb ? 'POPULARITY' : 'popularity.desc',
-            listType: 'discover',
-            genres: [],
-            excludeGenres: [],
-          },
-        };
-        result = updated;
-        return updated;
-      });
-      if (catalog?._id && result) onUpdate(catalog._id, result);
-    },
-    [catalog?._id, onUpdate]
-  );
-
-  const handleTriStateGenreClick = useCallback((genreId) => {
-    setLocalCatalog((prev) => {
-      const current = prev || DEFAULT_CATALOG;
-      const included = current.filters?.genres || [];
-      const excluded = current.filters?.excludeGenres || [];
-      const isIncluded = included.includes(genreId);
-      const isExcluded = excluded.includes(genreId);
-      let newIncluded, newExcluded;
-      if (isIncluded) {
-        newIncluded = included.filter((id) => id !== genreId);
-        newExcluded = [...excluded, genreId];
-      } else if (isExcluded) {
-        newIncluded = included;
-        newExcluded = excluded.filter((id) => id !== genreId);
-      } else {
-        newIncluded = [...included, genreId];
-        newExcluded = excluded;
-      }
-      return {
-        ...current,
-        filters: { ...current.filters, genres: newIncluded, excludeGenres: newExcluded },
-      };
-    });
-  }, []);
-
-  const loadPreview = async () => {
-    if (!localCatalog) return;
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      let data;
-      if (localCatalog.source === 'imdb' && onPreviewImdb) {
-        data = await onPreviewImdb(localCatalog.type || 'movie', localCatalog.filters || {});
-      } else {
-        const filters = {
-          ...localCatalog.filters,
-          displayLanguage: preferences?.defaultLanguage,
-          withPeople: selectedPeople.map((p) => p.id).join(',') || undefined,
-          withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
-          withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
-          excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
-          excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
-        };
-        data = await onPreview(localCatalog.type || 'movie', filters);
-      }
-      setPreviewData(data);
-    } catch (err) {
-      setPreviewError(err.message);
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const handleImport = useCallback((data) => {
-    setLocalCatalog((prev) => ({ ...prev, ...data }));
-  }, []);
+  const {
+    toggleSection,
+    handleFiltersChange,
+    handleNameChange,
+    handleTypeChange,
+    handleSourceChange,
+    handleTriStateGenreClick,
+    loadPreview,
+    handleImport,
+    handleTVNetworkSearch,
+  } = handlers;
 
   if (!catalog) {
     return (

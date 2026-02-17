@@ -29,7 +29,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
 }
 
 .input-hint {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   margin-top: 8px;
 }
@@ -40,13 +40,13 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
 
 .error-message {
   color: var(--error);
-  font-size: 14px;
+  font-size: 0.875rem;
   margin-top: 8px;
 }
 
 .field-error {
   color: var(--error);
-  font-size: 11px;
+  font-size: 0.6875rem;
   margin-top: 4px;
 }
 
@@ -66,7 +66,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   gap: 8px;
   padding: 14px 24px;
   border-radius: var(--radius-md);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   transition: all var(--transition-fast);
   cursor: pointer;
@@ -160,7 +160,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
 
 .btn-sm {
   padding: 8px 14px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .btn-icon {
@@ -174,7 +174,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -192,7 +192,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
 .select-prominent {
   width: 100%;
   padding: 14px 16px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   background: linear-gradient(135deg, var(--bg-tertiary) 0%, rgba(99, 102, 241, 0.05) 100%);
   border: 1px solid var(--accent-primary);
 }
@@ -207,7 +207,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
 
 .list-type-select .filter-hint {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 8px 12px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
@@ -232,7 +232,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
 }
 
 .checkbox-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 
@@ -256,7 +256,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
   min-height: 42px;
 }
@@ -347,7 +347,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   background: none;
   border: none;
   outline: none;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
 }
 
@@ -364,7 +364,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   padding: 10px 14px;
   cursor: pointer;
   transition: all 0.15s ease;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 
@@ -383,7 +383,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   padding: 16px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* Multi Select */
@@ -406,7 +406,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
   min-height: 42px;
 }
@@ -485,7 +485,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   outline: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .multi-select-search-clear {
@@ -512,7 +512,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
 .multi-select-empty {
   padding: 12px 14px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .multi-select-option {
@@ -522,7 +522,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   padding: 10px 14px;
   cursor: pointer;
   transition: all 0.15s ease;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 
@@ -587,7 +587,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary);
 }
 
@@ -626,7 +626,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
   outline: none;
   transition: all 0.2s ease;
@@ -696,12 +696,12 @@ input[type='date'].input::-webkit-calendar-picker-indicator {
 }
 
 .search-input-option-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
 }
 
 .search-input-option-meta {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -714,7 +714,7 @@ input[type='date'] {
 
 .filter-label {
   display: block;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-secondary);
   margin-bottom: 8px;
@@ -759,7 +759,7 @@ input[type='date'] {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* Template Grid (if missing) */
@@ -790,12 +790,12 @@ input[type='date'] {
 
 .template-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
 }
 
 .template-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -813,7 +813,7 @@ input[type='date'] {
     border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 6px 16px;
     border-radius: 20px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--text-secondary);
     margin-top: 12px;
     backdrop-filter: blur(8px);
@@ -827,6 +827,6 @@ input[type='date'] {
 
   .mobile-stats-pill .divider {
     color: rgba(255, 255, 255, 0.2);
-    font-size: 10px;
+    font-size: 0.625rem;
   }
 }
