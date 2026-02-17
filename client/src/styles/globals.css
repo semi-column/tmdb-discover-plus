@@ -25,13 +25,14 @@
 
   --gradient-primary: linear-gradient(135deg, #4a9eff 0%, #4ade80 100%);
   --gradient-tmdb: linear-gradient(135deg, #4a9eff 0%, #1e3a5f 100%);
-  --gradient-card: linear-gradient(180deg, rgba(74, 158, 255, 0.02) 0%, transparent 100%);
+  --gradient-card: linear-gradient(180deg, rgba(74, 158, 255, 0.05) 0%, transparent 100%);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.6);
-  --shadow-glow: none;
-  --shadow-glow-green: none;
+  --surface-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-glow: 0 0 20px rgba(74, 158, 255, 0.15);
+  --shadow-glow-green: 0 0 20px rgba(74, 222, 128, 0.15);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -41,6 +42,15 @@
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar,
+.editor-panel,
+.preview-panel-container,
+.filter-section,
+.config-card {
+  box-shadow: var(--surface-highlight);
 }
 
 /* IMDb Theme Overrides */

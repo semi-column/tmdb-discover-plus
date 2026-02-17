@@ -27,11 +27,12 @@ export const FilterSection = memo(function FilterSection({
         {badgeCount > 0 && <span className="filter-count-badge">{badgeCount}</span>}
         {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </button>
-      {isOpen && (
-        <div id={`filter-section-${id}`} className="filter-section-content">
-          {children}
-        </div>
-      )}
+      <div
+        id={`filter-section-${id}`}
+        className={`filter-section-content ${isOpen ? 'expanded' : ''}`}
+      >
+        <div className="filter-section-inner">{children}</div>
+      </div>
     </div>
   );
 });

@@ -154,7 +154,10 @@
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) ease,
+    color var(--transition-fast) ease,
+    border-color var(--transition-fast) ease;
   user-select: none;
 }
 
@@ -194,7 +197,9 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    border-color var(--transition-fast) var(--ease-out-expo),
+    background-color var(--transition-fast) var(--ease-out-expo);
 }
 
 .catalog-item:hover {
@@ -260,7 +265,7 @@
   padding: 2px 6px;
   background: var(--accent-primary);
   color: white;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   margin-left: 8px;
   font-weight: 500;
 }
@@ -273,7 +278,7 @@
 }
 
 .sidebar-section-title {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -469,7 +474,9 @@
   font-size: 0.8125rem;
   color: var(--text-primary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    border-color var(--transition-fast) var(--ease-out-expo),
+    background-color var(--transition-fast) var(--ease-out-expo);
 }
 
 .preset-item:hover:not(.added) {
@@ -580,7 +587,9 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
   overflow: hidden;
 }
 
@@ -639,7 +648,9 @@
   padding: 8px;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  transition: all 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .config-card-actions .btn-icon:hover {
@@ -812,7 +823,9 @@
   border-bottom: 1px solid var(--border-color);
   border-left: 3px solid transparent; /* Reserve space for active/delete states */
   position: relative;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    border-left-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .config-dropdown-item:last-child {
@@ -867,7 +880,7 @@
   padding: 2px 8px;
   background: rgba(59, 130, 246, 0.15);
   color: var(--accent-light);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-weight: 600;
   letter-spacing: 0.2px;
   border: 1px solid rgba(59, 130, 246, 0.2);
@@ -889,9 +902,12 @@
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.04);
   padding: 2px 8px; /* Compact padding */
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .stat-badge:hover {
@@ -923,7 +939,10 @@
   opacity: 0.4;
   padding: 8px;
   border-radius: 50%;
-  transition: all 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
   background: transparent;
   border: none;
 }
@@ -966,7 +985,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   border: none;
   padding: 0;
 }
@@ -1049,7 +1071,10 @@
   font-weight: 600;
   cursor: pointer;
   border-radius: calc(var(--radius-md) - 2px);
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s var(--ease-out-expo),
+    color 0.2s var(--ease-out-expo),
+    box-shadow 0.2s var(--ease-out-expo);
 }
 
 .source-tab:hover {

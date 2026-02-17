@@ -11,7 +11,7 @@
   background-color: #5865f2;
   padding: 2px 12px !important;
   text-align: center !important;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: #fff;
   cursor: pointer;
   overflow-wrap: break-word;
@@ -67,7 +67,7 @@
   background-color: #72a4f2;
   padding: 2px 12px !important;
   text-align: center !important;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   color: #fff;
   cursor: pointer;
   overflow-wrap: break-word;

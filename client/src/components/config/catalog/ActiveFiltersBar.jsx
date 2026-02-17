@@ -16,6 +16,7 @@ export const ActiveFiltersBar = memo(function ActiveFiltersBar({
           <div
             key={filter.key}
             className="active-filter-chip"
+            data-section={filter.section}
             onClick={() => onToggleSection(filter.section)}
           >
             <span>{filter.label}</span>

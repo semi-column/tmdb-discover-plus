@@ -47,7 +47,9 @@
 .tooltip-icon {
   color: var(--text-muted);
   opacity: 0.7;
-  transition: all 0.15s ease;
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .tooltip-wrapper:hover .tooltip-icon {
@@ -175,7 +177,7 @@
   background: linear-gradient(135deg, #ffdd00 0%, #ff813f 100%);
   color: #000;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   letter-spacing: 0.5px;
   box-shadow: 0 2px 4px rgba(255, 129, 63, 0.2);
 }
@@ -238,7 +240,7 @@
   gap: 16px;
   padding: 8px 20px;
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
+  border-radius: var(--radius-full);
   border: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 0.875rem;
   color: var(--text-secondary);
@@ -296,7 +298,9 @@
   font-size: 0.8125rem;
   font-weight: 600;
   text-decoration: none;
-  transition: all var(--transition-fast);
+  transition:
+    transform var(--transition-fast) var(--ease-out-expo),
+    box-shadow var(--transition-fast) var(--ease-out-expo);
   box-shadow: 0 2px 8px rgba(234, 74, 170, 0.3);
 }
 
@@ -321,7 +325,9 @@
   font-size: 0.8125rem;
   font-weight: 600;
   text-decoration: none;
-  transition: all var(--transition-fast);
+  transition:
+    transform var(--transition-fast) var(--ease-out-expo),
+    box-shadow var(--transition-fast) var(--ease-out-expo);
   box-shadow: 0 2px 8px rgba(255, 129, 63, 0.3);
 }
 
@@ -446,7 +452,7 @@
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.875rem;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast) ease;
 }
 
 .input:focus {
@@ -481,7 +487,9 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  transition: all 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
   z-index: 2;
 }
 
@@ -557,7 +565,7 @@
 }
 
 .builder-toolbar h2 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   margin-bottom: 4px;
 }
 
