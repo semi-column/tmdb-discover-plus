@@ -39,7 +39,7 @@ export const CatalogPreview = memo(function CatalogPreview({ loading, error, dat
           {loading && (
             <div className="preview-loading">
               <PreviewGridSkeleton count={10} />
-              <p style={{ textAlign: 'center', marginTop: 12 }}>Loading preview...</p>
+              <p className="preview-loading-text">Loading preview...</p>
             </div>
           )}
 

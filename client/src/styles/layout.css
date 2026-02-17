@@ -29,7 +29,7 @@
   border: 1px solid var(--error);
   border-radius: var(--radius-sm);
   color: var(--error);
-  font-size: 13px;
+  font-size: 0.8125rem;
   display: flex;
   align-items: center;
 }
@@ -64,7 +64,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--accent-primary);
   border-radius: var(--radius-md);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.5;
   color: var(--text-secondary);
@@ -150,7 +150,7 @@
 }
 
 .logo h1 {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -163,13 +163,13 @@
 }
 
 .logo-subtitle {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   margin-top: 4px;
 }
 
 .nightly-badge {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   text-transform: uppercase;
   background: linear-gradient(135deg, #ffdd00 0%, #ff813f 100%);
@@ -178,6 +178,55 @@
   border-radius: 4px;
   letter-spacing: 0.5px;
   box-shadow: 0 2px 4px rgba(255, 129, 63, 0.2);
+}
+
+.header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-switch-stable {
+  font-size: 0.8125rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.btn-switch-stable-mobile {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  height: 32px;
+  color: var(--text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+  margin-right: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+}
+
+.discord-icon-circle {
+  background-color: #5865f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: white;
+}
+
+.discord-icon-sm {
+  width: 18px;
+  height: 14px;
+  fill: white;
 }
 
 .header-stats {
@@ -191,7 +240,7 @@
   background: rgba(255, 255, 255, 0.05);
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -244,7 +293,7 @@
   background: linear-gradient(135deg, #ea4aaa 0%, #d63384 100%);
   color: white;
   border-radius: var(--radius-full);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   text-decoration: none;
   transition: all var(--transition-fast);
@@ -269,7 +318,7 @@
   background: linear-gradient(135deg, #ffdd00 0%, #ff813f 100%);
   color: #000;
   border-radius: var(--radius-full);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   text-decoration: none;
   transition: all var(--transition-fast);
@@ -305,7 +354,7 @@
 }
 
 .bmc-header-button .bmc-btn-text {
-  font-size: 13px !important;
+  font-size: 0.8125rem !important;
   line-height: 1 !important;
 }
 
@@ -349,7 +398,7 @@
 }
 
 .setup-card h2 {
-  font-size: 28px;
+  font-size: 1.75rem;
   margin-bottom: 8px;
 }
 
@@ -370,7 +419,7 @@
 
 .input-group label {
   display: block;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-secondary);
   margin-bottom: 8px;
@@ -396,7 +445,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   transition: all var(--transition-fast);
 }
 
@@ -508,7 +557,7 @@
 }
 
 .builder-toolbar h2 {
-  font-size: 24px;
+  font-size: 1.5rem;
   margin-bottom: 4px;
 }
 
@@ -541,7 +590,7 @@
 }
 
 .no-preview h3 {
-  font-size: 16px;
+  font-size: 1rem;
   margin-bottom: 8px;
   color: var(--text-secondary);
 }
@@ -562,7 +611,7 @@
 }
 
 .empty-state h3 {
-  font-size: 20px;
+  font-size: 1.25rem;
   margin-bottom: 8px;
   color: var(--text-secondary);
 }

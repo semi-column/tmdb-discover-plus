@@ -162,10 +162,7 @@ export const StreamFilters = memo(function StreamFilters({
 
                   if (filtered.length === 0) {
                     return (
-                      <div
-                        className="filter-hint"
-                        style={{ gridColumn: '1 / -1', marginTop: '4px' }}
-                      >
+                      <div className="filter-hint provider-no-results">
                         No streaming services match your search.
                       </div>
                     );
@@ -189,10 +186,7 @@ export const StreamFilters = memo(function StreamFilters({
                       {provider.logo ? (
                         <img src={provider.logo} alt={provider.name} className="provider-logo" />
                       ) : (
-                        <div
-                          className="provider-logo"
-                          style={{ background: 'var(--bg-tertiary)' }}
-                        />
+                        <div className="provider-logo provider-logo-placeholder" />
                       )}
                       <span className="provider-name">{provider.name}</span>
                     </div>

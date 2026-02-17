@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo } from 'react';
+import { useState, useRef, useEffect, useId, memo } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 
 export const SearchableSelect = memo(function SearchableSelect({
@@ -11,6 +11,7 @@ export const SearchableSelect = memo(function SearchableSelect({
   labelKey = 'name',
   valueKey = 'code',
   allowClear = true,
+  'aria-label': ariaLabel,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -18,6 +19,7 @@ export const SearchableSelect = memo(function SearchableSelect({
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const optionsRef = useRef(null);
+  const listboxId = useId();
 
   const safeOptions = Array.isArray(options) ? options : [];
   const selectedOption = safeOptions.find((opt) => opt[valueKey] === value);
@@ -137,6 +139,11 @@ export const SearchableSelect = memo(function SearchableSelect({
         role="combobox"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        aria-controls={isOpen ? listboxId : undefined}
+        aria-activedescendant={
+          isOpen && highlightedIndex >= 0 ? `${listboxId}-option-${highlightedIndex}` : undefined
+        }
+        aria-label={ariaLabel}
         tabIndex={0}
         onKeyDown={handleTriggerKeyDown}
       >
@@ -170,14 +177,16 @@ export const SearchableSelect = memo(function SearchableSelect({
               className="searchable-select-input"
             />
           </div>
-          <div className="searchable-select-options" ref={optionsRef}>
+          <div className="searchable-select-options" ref={optionsRef} role="listbox" id={listboxId}>
             {allowClear && (
               <div
                 className={`searchable-select-option ${!value ? 'selected' : ''} ${highlightedIndex === 0 ? 'highlighted' : ''}`}
+                id={`${listboxId}-option-0`}
                 onClick={() => handleSelect('')}
                 onMouseMove={() => setHighlightedIndex(0)}
                 role="option"
                 aria-selected={!value}
+                tabIndex={-1}
               >
                 {placeholder}
               </div>
@@ -188,11 +197,13 @@ export const SearchableSelect = memo(function SearchableSelect({
                 return (
                   <div
                     key={option[valueKey]}
+                    id={`${listboxId}-option-${navIndex}`}
                     className={`searchable-select-option ${value === option[valueKey] ? 'selected' : ''} ${highlightedIndex === navIndex ? 'highlighted' : ''}`}
                     onClick={() => handleSelect(option[valueKey])}
                     onMouseMove={() => setHighlightedIndex(navIndex)}
                     role="option"
                     aria-selected={value === option[valueKey]}
+                    tabIndex={-1}
                   >
                     {option[labelKey]}
                   </div>

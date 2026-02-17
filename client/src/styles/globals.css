@@ -10,7 +10,7 @@
 
   --text-primary: #e8e8e8;
   --text-secondary: #a0a0a0;
-  --text-muted: #666666;
+  --text-muted: #8a8a8a;
 
   /* Neutral accent with occasional color pop */
   --accent-primary: #4a9eff;
@@ -49,15 +49,15 @@
   --accent-secondary: #e2b616;
   --accent-tertiary: #ffd700;
   --accent-light: #fcd53f;
-  
+
   /* Darker backgrounds for IMDb contrast */
   --bg-secondary: #161616;
   --bg-tertiary: #1f1f1f;
   --bg-hover: #2a2a2a;
-  
+
   --gradient-primary: linear-gradient(135deg, #f5c518 0%, #e2b616 100%);
   --gradient-tmdb: linear-gradient(135deg, #f5c518 0%, #161616 100%);
-  
+
   /* Text adjustments for yellow */
   --text-on-accent: #000000;
 }
@@ -200,22 +200,22 @@ a:hover {
   text-align: center;
 }
 .text-sm {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .text-xs {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .text-lg {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 .text-xl {
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 .text-2xl {
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 .text-3xl {
-  font-size: 30px;
+  font-size: 1.875rem;
 }
 
 .font-medium {
@@ -297,4 +297,14 @@ a:hover {
 
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

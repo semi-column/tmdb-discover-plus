@@ -96,7 +96,7 @@ export const FilterPanel = memo(function FilterPanel({
         </div>
       </div>
 
-      <div style={{ marginTop: '24px' }}>
+      <div className="filter-spacer-lg">
         <RangeSlider
           label="Year Range"
           tooltip="Filter by release year or first air date. Great for finding classics or recent releases."
@@ -113,7 +113,7 @@ export const FilterPanel = memo(function FilterPanel({
         />
       </div>
 
-      <div style={{ marginTop: '20px' }}>
+      <div className="filter-spacer">
         <RangeSlider
           label="Rating"
           tooltip="TMDB average user rating (0-10 scale). Higher ratings indicate better reviews."
@@ -127,7 +127,7 @@ export const FilterPanel = memo(function FilterPanel({
         />
       </div>
 
-      <div style={{ marginTop: '20px' }}>
+      <div className="filter-spacer">
         <RangeSlider
           label="Runtime (minutes)"
           tooltip="Filter by total runtime. Perfect for finding quick watches or epic adventures."
@@ -139,10 +139,7 @@ export const FilterPanel = memo(function FilterPanel({
           formatValue={(v) => (v === 0 ? 'Any' : v === 400 ? '400+' : `${v}m`)}
           showInputs
         />
-        <div
-          className="runtime-presets"
-          style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}
-        >
+        <div className="runtime-presets filter-spacer-sm">
           <button
             type="button"
             className={`date-preset ${localCatalog?.filters?.runtimeMax === 60 && !localCatalog?.filters?.runtimeMin ? 'active' : ''}`}
@@ -181,7 +178,7 @@ export const FilterPanel = memo(function FilterPanel({
         </div>
       </div>
 
-      <div style={{ marginTop: '20px' }}>
+      <div className="filter-spacer">
         <SingleSlider
           label="Minimum Votes"
           tooltip="Requires this many user ratings. Higher values filter out obscure titles and ensure quality."

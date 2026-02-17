@@ -46,7 +46,7 @@ export function GeneralSettingsSection() {
       {!isCollapsed && (
         <div style={{ padding: '8px 16px 16px' }}>
           <div className="input-group">
-            <label
+            <span
               style={{
                 fontSize: '12px',
                 color: 'var(--text-muted)',
@@ -55,7 +55,7 @@ export function GeneralSettingsSection() {
               }}
             >
               Global Display & Trailer Language
-            </label>
+            </span>
             <SearchableSelect
               options={languages}
               value={defaultLanguage}
@@ -63,6 +63,7 @@ export function GeneralSettingsSection() {
               placeholder="Default (Auto/English)"
               valueKey="iso_639_1"
               labelKey="english_name"
+              aria-label="Global Display & Trailer Language"
               renderOption={(opt) => `${opt.english_name} (${opt.name})`}
             />
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>

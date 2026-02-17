@@ -102,9 +102,9 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-header" style={{ flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', width: '100%', gap: 8 }}>
-          <div className="config-name-wrapper" style={{ flex: 1 }}>
+      <div className="sidebar-header">
+        <div className="sidebar-header-actions">
+          <div className="config-name-wrapper">
             <input
               type="text"
               className="config-name-input"
@@ -114,21 +114,19 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
             />
           </div>
           <button
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary btn-sm sidebar-add-btn"
             onClick={onAddCatalog}
             title="Add custom catalog"
-            style={{ padding: '0 8px' }}
           >
             <Plus size={16} />
           </button>
         </div>
 
         {imdbEnabled && (
-          <div className="source-tabs" style={{ width: '100%', display: 'flex' }}>
+          <div className="source-tabs">
             <button
               className={`source-tab ${globalSource === 'tmdb' ? 'active tmdb' : ''}`}
               onClick={() => setGlobalSource('tmdb')}
-              style={{ flex: 1 }}
             >
               <Film size={14} />
               TMDB
@@ -136,7 +134,6 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
             <button
               className={`source-tab ${globalSource === 'imdb' ? 'active imdb' : ''}`}
               onClick={() => setGlobalSource('imdb')}
-              style={{ flex: 1 }}
             >
               <Award size={14} />
               IMDb
@@ -145,11 +142,10 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
         )}
       </div>
 
-      <div className="sidebar-controls" style={{ padding: '0 16px 12px 16px' }}>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+      <div className="sidebar-controls">
+        <div className="sidebar-actions-row">
           <button
-            className="btn btn-secondary btn-sm"
-            style={{ flex: 1, justifyContent: 'center' }}
+            className="btn btn-secondary btn-sm sidebar-action-btn"
             title="Export full configuration (catalogs + preferences)"
             onClick={() => {
               const exportData = {
@@ -175,8 +171,7 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
           </button>
 
           <label
-            className="btn btn-secondary btn-sm"
-            style={{ flex: 1, justifyContent: 'center', cursor: 'pointer' }}
+            className="btn btn-secondary btn-sm sidebar-action-btn"
             title="Import full configuration"
           >
             <ArrowUpTrayIcon size={14} />
@@ -184,7 +179,7 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
             <input
               type="file"
               accept=".json"
-              style={{ display: 'none' }}
+              className="hidden-file-input"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
@@ -221,9 +216,8 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
         </label>
 
         <label
-          className="sidebar-checkbox"
+          className="sidebar-checkbox sidebar-checkbox--spaced"
           title="Disable search catalogs if you want to use other addons for search"
-          style={{ marginTop: '8px' }}
         >
           <input
             type="checkbox"

@@ -12,7 +12,7 @@ export function Header({ stats }) {
           <div className="logo">
             <img src="/logo.png" alt="TMDB Discover+" className="logo-image" />
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="header-title-row">
                 <h1>
                   TMDB Discover<span className="plus">+</span>
                 </h1>
@@ -39,15 +39,7 @@ export function Header({ stats }) {
               {isNightly && (
                 <a
                   href="https://tmdb-discover-plus.elfhosted.com/"
-                  className="btn-ghost"
-                  style={{
-                    fontSize: '13px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    color: 'var(--text-secondary)',
-                    textDecoration: 'none',
-                  }}
+                  className="btn-ghost btn-switch-stable"
                 >
                   Switch to Stable <ArrowRight size={14} />
                 </a>
@@ -60,23 +52,7 @@ export function Header({ stats }) {
               {isNightly && (
                 <a
                   href="https://tmdb-discover-plus.elfhosted.com/"
-                  className="btn-ghost"
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 12px',
-                    height: '32px',
-                    color: 'var(--text-primary)',
-                    textDecoration: 'none',
-                    whiteSpace: 'nowrap',
-                    marginRight: '8px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '20px',
-                  }}
+                  className="btn-ghost btn-switch-stable-mobile"
                 >
                   Switch to Stable
                 </a>
@@ -85,20 +61,10 @@ export function Header({ stats }) {
                 href="https://discord.gg/uJ8CY5Et2"
                 target="_blank"
                 rel="noreferrer"
-                className="action-icon-btn discord-btn"
+                className="action-icon-btn discord-btn discord-icon-circle"
                 aria-label="Join our Discord"
-                style={{
-                  backgroundColor: '#5865F2',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  color: 'white',
-                }}
               >
-                <DiscordIcon style={{ width: '18px', height: '14px', fill: 'white' }} />
+                <DiscordIcon className="discord-icon-sm" />
               </a>
               <a
                 href="https://buymeacoffee.com/semi.column"
