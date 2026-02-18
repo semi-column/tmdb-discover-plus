@@ -110,6 +110,12 @@
 .filter-section-inner {
   overflow: hidden;
   min-height: 0;
+  transition: overflow 0.25s step-start;
+}
+
+.filter-section-content.expanded .filter-section-inner {
+  overflow: visible;
+  transition: overflow 0.25s step-end;
 }
 
 .filter-grid {
@@ -888,8 +894,24 @@
 .date-presets {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 12px;
+}
+
+.date-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.date-preset-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 36px;
+  flex-shrink: 0;
 }
 
 .date-preset-group {
@@ -921,6 +943,49 @@
   background: var(--accent-primary);
   border-color: var(--accent-primary);
   color: white;
+}
+
+.date-preset-clear {
+  align-self: flex-start;
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.2s var(--ease-out-expo),
+    border-color 0.2s var(--ease-out-expo),
+    color 0.2s var(--ease-out-expo);
+}
+
+.date-preset-clear:hover {
+  border-color: var(--error);
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.date-today-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: var(--radius-sm);
+  color: var(--accent-light);
+  font-size: 0.875rem;
+  font-weight: 600;
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.date-today-hint {
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
 /* TMDB Branded Elements */

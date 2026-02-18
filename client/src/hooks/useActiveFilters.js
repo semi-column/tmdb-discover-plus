@@ -151,8 +151,15 @@ export function useActiveFilters({
       filters.airDateFrom ||
       filters.airDateTo
     ) {
-      const from = filters.releaseDateFrom || filters.airDateFrom || '…';
-      const to = filters.releaseDateTo || filters.airDateTo || '…';
+      const DATE_TAG_LABELS = {
+        'today': 'Today', 'today-30d': 'Today − 30d', 'today-90d': 'Today − 90d',
+        'today-6mo': 'Today − 6mo', 'today-12mo': 'Today − 12mo',
+        'today+30d': 'Today + 30d', 'today+3mo': 'Today + 3mo',
+      };
+      const rawFrom = filters.releaseDateFrom || filters.airDateFrom || '…';
+      const rawTo = filters.releaseDateTo || filters.airDateTo || '…';
+      const from = DATE_TAG_LABELS[rawFrom] || rawFrom;
+      const to = DATE_TAG_LABELS[rawTo] || rawTo;
       active.push({
         key: 'releaseDate',
         label: `${isMovieType ? 'Release' : 'Air'}: ${from} – ${to}`,
@@ -419,7 +426,13 @@ export function useActiveFilters({
           update({ voteCountMin: 0 });
           break;
         case 'datePreset':
-          update({ datePreset: undefined });
+          update({
+            datePreset: undefined,
+            releaseDateFrom: undefined,
+            releaseDateTo: undefined,
+            airDateFrom: undefined,
+            airDateTo: undefined,
+          });
           break;
         case 'releaseDate':
           update({

@@ -219,7 +219,20 @@
     justify-content: center;
     margin-top: 0;
   }
+
+  /* TMDB/IMDb toggle -> Full width */
+  .actions-toolbar > .source-tabs-compact {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  .actions-toolbar > .source-tabs-compact .source-tab {
+    flex: 1;
+    justify-content: center;
+  }
 }
+
 
 /* Mobile Main Content */
 

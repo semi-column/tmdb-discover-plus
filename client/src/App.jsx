@@ -9,7 +9,7 @@ import { ConfigDropdown } from './components/config/ConfigDropdown';
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useAppController } from './hooks/useAppController';
 import { api } from './services/api';
-import { Download, Settings, Loader } from 'lucide-react';
+import { Award, Download, Film, Settings, Loader } from 'lucide-react';
 import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
 import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
 import { AppProviders } from './context/AppContext';
@@ -169,6 +169,24 @@ function App() {
                 )}
               </div>
               <div className="actions-toolbar">
+                {tmdb.imdbEnabled && (
+                  <div className="source-tabs source-tabs-compact">
+                    <button
+                      type="button"
+                      className={`source-tab ${state.globalSource === 'tmdb' ? 'active tmdb' : ''}`}
+                      onClick={() => state.setGlobalSource('tmdb')}
+                    >
+                      <Film size={14} /> TMDB
+                    </button>
+                    <button
+                      type="button"
+                      className={`source-tab ${state.globalSource === 'imdb' ? 'active imdb' : ''}`}
+                      onClick={() => state.setGlobalSource('imdb')}
+                    >
+                      <Award size={14} /> IMDb
+                    </button>
+                  </div>
+                )}
                 {userConfigs.length > 0 && (
                   <ConfigDropdown
                     configs={userConfigs}

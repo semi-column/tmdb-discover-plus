@@ -6,18 +6,19 @@ import { LabelWithTooltip } from '../../forms/Tooltip';
 const CURRENT_YEAR = new Date().getFullYear();
 
 const DATE_PRESETS = [
-  { label: 'Last 30 days', value: 'last_30_days', group: 'relative' },
-  { label: 'Last 90 days', value: 'last_90_days', group: 'relative' },
-  { label: 'Last 6 months', value: 'last_180_days', group: 'relative' },
-  { label: 'Last 12 months', value: 'last_365_days', group: 'relative' },
-  { label: 'Next 30 days', value: 'next_30_days', group: 'relative' },
-  { label: 'Next 3 months', value: 'next_90_days', group: 'relative' },
+  { label: 'Last 30 days', value: 'last_30_days', group: 'last' },
+  { label: 'Last 90 days', value: 'last_90_days', group: 'last' },
+  { label: 'Last 6 months', value: 'last_180_days', group: 'last' },
+  { label: 'Last 12 months', value: 'last_365_days', group: 'last' },
+  { label: 'Next 30 days', value: 'next_30_days', group: 'next' },
+  { label: 'Next 3 months', value: 'next_90_days', group: 'next' },
   { label: '2020s', value: 'era_2020s', group: 'decade' },
   { label: '2010s', value: 'era_2010s', group: 'decade' },
   { label: '2000s', value: 'era_2000s', group: 'decade' },
   { label: '1990s', value: 'era_1990s', group: 'decade' },
   { label: '1980s', value: 'era_1980s', group: 'decade' },
 ];
+
 
 export const ReleaseFilters = memo(function ReleaseFilters({
   localCatalog,
@@ -34,6 +35,14 @@ export const ReleaseFilters = memo(function ReleaseFilters({
   const safeTvStatuses = Array.isArray(tvStatuses) ? tvStatuses : [];
   const safeTvTypes = Array.isArray(tvTypes) ? tvTypes : [];
 
+  const yearOptions = useMemo(() => {
+    const years = [];
+    for (let year = CURRENT_YEAR + 5; year >= 1900; year--) {
+      years.push({ value: year, label: String(year) });
+    }
+    return years;
+  }, []);
+
   const selectedDatePreset =
     DATE_PRESETS.find((p) => p.value === localCatalog?.filters?.datePreset)?.label || null;
 
@@ -42,7 +51,7 @@ export const ReleaseFilters = memo(function ReleaseFilters({
     const toKey = isMovie ? 'releaseDateTo' : 'airDateTo';
     const from = localCatalog?.filters?.[fromKey];
     const to = localCatalog?.filters?.[toKey];
-    if (from && to && from > to) return '"From" date must be before "To" date';
+    if (from && to && !from.startsWith('today') && !to.startsWith('today') && from > to) return '"From" date must be before "To" date';
     return null;
   }, [localCatalog?.filters, isMovie]);
 
@@ -53,40 +62,105 @@ export const ReleaseFilters = memo(function ReleaseFilters({
     return null;
   }, [localCatalog?.filters?.firstAirDateFrom, localCatalog?.filters?.firstAirDateTo]);
 
+  const getPresetDates = useCallback((presetValue) => {
+    const presetMap = {
+      last_30_days:  { from: 'today-30d',  to: 'today' },
+      last_90_days:  { from: 'today-90d',  to: 'today' },
+      last_180_days: { from: 'today-6mo',  to: 'today' },
+      last_365_days: { from: 'today-12mo', to: 'today' },
+      next_30_days:  { from: 'today',      to: 'today+30d' },
+      next_90_days:  { from: 'today',      to: 'today+3mo' },
+      era_2020s: { from: '2020-01-01', to: '2030-01-01' },
+      era_2010s: { from: '2010-01-01', to: '2020-01-01' },
+      era_2000s: { from: '2000-01-01', to: '2010-01-01' },
+      era_1990s: { from: '1990-01-01', to: '2000-01-01' },
+      era_1980s: { from: '1980-01-01', to: '1990-01-01' },
+    };
+    return presetMap[presetValue] || null;
+  }, []);
+
+  const DATE_TAG_LABELS = {
+    'today':       'Today',
+    'today-30d':   'Today − 30 days',
+    'today-90d':   'Today − 90 days',
+    'today-6mo':   'Today − 6 months',
+    'today-12mo':  'Today − 12 months',
+    'today+30d':   'Today + 30 days',
+    'today+3mo':   'Today + 3 months',
+  };
+
+  const getDateTagLabel = (value) => DATE_TAG_LABELS[value] || null;
+
   const handleDatePreset = useCallback(
     (preset) => {
+      const dates = getPresetDates(preset.value);
+      const fromKey = isMovie ? 'releaseDateFrom' : 'airDateFrom';
+      const toKey = isMovie ? 'releaseDateTo' : 'airDateTo';
       onFiltersChange('datePreset', preset.value);
-      onFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', undefined);
-      onFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', undefined);
+      onFiltersChange(fromKey, dates?.from);
+      onFiltersChange(toKey, dates?.to);
     },
-    [isMovie, onFiltersChange]
+    [isMovie, onFiltersChange, getPresetDates]
   );
+
+  const handleClearDatePreset = useCallback(() => {
+    const fromKey = isMovie ? 'releaseDateFrom' : 'airDateFrom';
+    const toKey = isMovie ? 'releaseDateTo' : 'airDateTo';
+    onFiltersChange('datePreset', undefined);
+    onFiltersChange(fromKey, undefined);
+    onFiltersChange(toKey, undefined);
+  }, [isMovie, onFiltersChange]);
 
   return (
     <>
       <div className="date-presets">
-        <div className="date-preset-group">
-          {DATE_PRESETS.filter((p) => p.group === 'relative').map((preset) => (
-            <button
-              key={preset.label}
-              className={`date-preset ${selectedDatePreset === preset.label ? 'active' : ''}`}
-              onClick={() => handleDatePreset(preset)}
-            >
-              {preset.label}
-            </button>
-          ))}
+        <div className="date-preset-row">
+          <span className="date-preset-label">Last</span>
+          <div className="date-preset-group">
+            {DATE_PRESETS.filter((p) => p.group === 'last').map((preset) => (
+              <button
+                key={preset.label}
+                className={`date-preset ${selectedDatePreset === preset.label ? 'active' : ''}`}
+                onClick={() => handleDatePreset(preset)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="date-preset-group">
-          {DATE_PRESETS.filter((p) => p.group === 'decade').map((preset) => (
-            <button
-              key={preset.label}
-              className={`date-preset ${selectedDatePreset === preset.label ? 'active' : ''}`}
-              onClick={() => handleDatePreset(preset)}
-            >
-              {preset.label}
-            </button>
-          ))}
+        <div className="date-preset-row">
+          <span className="date-preset-label">Next</span>
+          <div className="date-preset-group">
+            {DATE_PRESETS.filter((p) => p.group === 'next').map((preset) => (
+              <button
+                key={preset.label}
+                className={`date-preset ${selectedDatePreset === preset.label ? 'active' : ''}`}
+                onClick={() => handleDatePreset(preset)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
         </div>
+        <div className="date-preset-row">
+          <span className="date-preset-label">Era</span>
+          <div className="date-preset-group">
+            {DATE_PRESETS.filter((p) => p.group === 'decade').map((preset) => (
+              <button
+                key={preset.label}
+                className={`date-preset ${selectedDatePreset === preset.label ? 'active' : ''}`}
+                onClick={() => handleDatePreset(preset)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {selectedDatePreset && (
+          <button className="date-preset-clear" onClick={handleClearDatePreset}>
+            ✕ Clear
+          </button>
+        )}
       </div>
 
       <div className="filter-two-col">
@@ -99,15 +173,26 @@ export const ReleaseFilters = memo(function ReleaseFilters({
                 : 'Filter shows that had episodes airing on or after this date'
             }
           />
-          <input
-            type="date"
-            className="input"
-            value={localCatalog?.filters?.[isMovie ? 'releaseDateFrom' : 'airDateFrom'] || ''}
-            onChange={(e) => {
-              onFiltersChange('datePreset', undefined);
-              onFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', e.target.value);
-            }}
-          />
+          {(() => {
+            const val = localCatalog?.filters?.[isMovie ? 'releaseDateFrom' : 'airDateFrom'] || '';
+            const tag = getDateTagLabel(val);
+            return tag ? (
+              <div className="date-today-badge">
+                <span>{tag}</span>
+                <span className="date-today-hint">Recalculates daily</span>
+              </div>
+            ) : (
+              <input
+                type="date"
+                className="input"
+                value={val}
+                onChange={(e) => {
+                  onFiltersChange('datePreset', undefined);
+                  onFiltersChange(isMovie ? 'releaseDateFrom' : 'airDateFrom', e.target.value);
+                }}
+              />
+            );
+          })()}
         </div>
         <div className="filter-group">
           <LabelWithTooltip
@@ -118,15 +203,26 @@ export const ReleaseFilters = memo(function ReleaseFilters({
                 : 'Filter shows that had episodes airing on or before this date'
             }
           />
-          <input
-            type="date"
-            className={`input${dateRangeError ? ' field-invalid' : ''}`}
-            value={localCatalog?.filters?.[isMovie ? 'releaseDateTo' : 'airDateTo'] || ''}
-            onChange={(e) => {
-              onFiltersChange('datePreset', undefined);
-              onFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', e.target.value);
-            }}
-          />
+          {(() => {
+            const val = localCatalog?.filters?.[isMovie ? 'releaseDateTo' : 'airDateTo'] || '';
+            const tag = getDateTagLabel(val);
+            return tag ? (
+              <div className="date-today-badge">
+                <span>{tag}</span>
+                <span className="date-today-hint">Recalculates daily</span>
+              </div>
+            ) : (
+              <input
+                type="date"
+                className={`input${dateRangeError ? ' field-invalid' : ''}`}
+                value={val}
+                onChange={(e) => {
+                  onFiltersChange('datePreset', undefined);
+                  onFiltersChange(isMovie ? 'releaseDateTo' : 'airDateTo', e.target.value);
+                }}
+              />
+            );
+          })()}
         </div>
       </div>
       {dateRangeError && <span className="field-error">{dateRangeError}</span>}
@@ -230,17 +326,16 @@ export const ReleaseFilters = memo(function ReleaseFilters({
                 label="Primary Release Year"
                 tooltip="Filter by the year of a movie's primary (worldwide) release."
               />
-              <input
-                type="number"
-                className="input"
-                min="1900"
-                max={CURRENT_YEAR + 1}
-                placeholder="e.g. 2015"
+              <SearchableSelect
+                options={yearOptions}
                 value={localCatalog?.filters?.primaryReleaseYear || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
+                onChange={(value) => {
                   onFiltersChange('primaryReleaseYear', value ? Number(value) : undefined);
                 }}
+                placeholder="Any year"
+                searchPlaceholder="Search year..."
+                labelKey="label"
+                valueKey="value"
               />
             </div>
             <div className="filter-group">

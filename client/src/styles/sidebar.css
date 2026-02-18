@@ -24,10 +24,52 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 0;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: none;
 }
+
+.sidebar-tabs {
+  display: flex;
+  background: var(--bg-tertiary);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+}
+
+.sidebar-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: calc(var(--radius-md) - 2px);
+  transition:
+    background-color 0.2s var(--ease-out-expo),
+    color 0.2s var(--ease-out-expo),
+    box-shadow 0.2s var(--ease-out-expo);
+}
+
+.sidebar-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-tab.active {
+  background: var(--bg-secondary);
+  color: var(--accent-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+
 
 .sidebar-header-row {
   display: flex;
@@ -1104,4 +1146,15 @@
 
 .source-tab.active.imdb {
   color: #f5c518;
+}
+
+.source-tabs-compact {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.source-tabs-compact .source-tab {
+  flex: none;
+  padding: 12px 18px;
+  font-size: 0.875rem;
 }

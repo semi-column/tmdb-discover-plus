@@ -150,24 +150,6 @@ export const CatalogEditor = memo(function CatalogEditor() {
         </div>
 
         <div className="editor-content">
-          {imdbEnabled && (
-            <div className="source-tabs" style={{ marginBottom: '16px' }}>
-              <button
-                type="button"
-                className={`source-tab ${!isImdbCatalog ? 'active tmdb' : ''}`}
-                onClick={() => handleSourceChange('tmdb')}
-              >
-                <Film size={14} /> TMDB
-              </button>
-              <button
-                type="button"
-                className={`source-tab ${isImdbCatalog ? 'active imdb' : ''}`}
-                onClick={() => handleSourceChange('imdb')}
-              >
-                <Award size={14} /> IMDb
-              </button>
-            </div>
-          )}
 
           <div className="content-type-toggle">
             <button
