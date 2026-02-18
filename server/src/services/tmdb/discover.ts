@@ -67,6 +67,7 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
     watchProviders = [],
     watchMonetizationTypes = [],
     watchMonetizationType,
+    releasedOnly,
   } = options;
 
   const mediaType = type === 'series' ? 'tv' : 'movie';
@@ -187,6 +188,23 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
     params.with_watch_monetization_types = watchMonetizationType;
   } else if (watchMonetizationTypes.length > 0) {
     params.with_watch_monetization_types = watchMonetizationTypes.join('|');
+  }
+
+  if (releasedOnly) {
+    const today = new Date().toISOString().split('T')[0];
+    if (mediaType === 'movie') {
+      if (!params.with_release_type) {
+        params.with_release_type = '4|5|6';
+      }
+      const releaseDateKey = params.region ? 'release_date' : 'primary_release_date';
+      if (!params[`${releaseDateKey}.lte`]) {
+        params[`${releaseDateKey}.lte`] = today;
+      }
+    } else {
+      if (!params.with_status) {
+        params.with_status = '0|3|4|5';
+      }
+    }
   }
 
   if (randomize) {

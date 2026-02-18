@@ -87,6 +87,31 @@ export function resolveDynamicDatePreset(
       }
       break;
     }
+    case 'era_2020s': {
+      resolved[fromField] = '2020-01-01';
+      resolved[toField] = '2029-12-31';
+      break;
+    }
+    case 'era_2010s': {
+      resolved[fromField] = '2010-01-01';
+      resolved[toField] = '2019-12-31';
+      break;
+    }
+    case 'era_2000s': {
+      resolved[fromField] = '2000-01-01';
+      resolved[toField] = '2009-12-31';
+      break;
+    }
+    case 'era_1990s': {
+      resolved[fromField] = '1990-01-01';
+      resolved[toField] = '1999-12-31';
+      break;
+    }
+    case 'era_1980s': {
+      resolved[fromField] = '1980-01-01';
+      resolved[toField] = '1989-12-31';
+      break;
+    }
     default:
       // Unknown preset, ignore
       break;

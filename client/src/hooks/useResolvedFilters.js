@@ -182,6 +182,7 @@ export function useResolvedFilters({
   }, []);
 
   const catalogId = catalog?._id;
+  const catalogFormState = catalog?.formState;
   const withPeople = catalog?.filters?.withPeople;
   const withPeopleResolved = catalog?.filters?.withPeopleResolved;
   const withCompanies = catalog?.filters?.withCompanies;
@@ -192,11 +193,8 @@ export function useResolvedFilters({
   const catalogExcludeCompanies = catalog?.filters?.excludeCompanies;
   const withNetworks = catalog?.filters?.withNetworks;
 
-  // Effect for resolving filter values - only runs when we have a valid catalog
   useEffect(() => {
     if (!catalogId) {
-      // Reset state in a microtask to avoid synchronous setState warning
-      // This defers the state update to after the effect completes
       queueMicrotask(() => {
         setSelectedPeople([]);
         setSelectedCompanies([]);
@@ -204,7 +202,6 @@ export function useResolvedFilters({
         setExcludeKeywords([]);
         setExcludeCompanies([]);
         setSelectedNetworks([]);
-        // Reset the resolution tracking ref
         resolvedRef.current = {
           people: undefined,
           companies: undefined,
@@ -217,7 +214,53 @@ export function useResolvedFilters({
       return;
     }
 
-    // Defer resolve calls to avoid synchronous setState in effect body
+    if (catalogFormState) {
+      queueMicrotask(() => {
+        if (catalogFormState.selectedPeople?.length > 0) {
+          resolvedRef.current.people = withPeople;
+          setSelectedPeople(catalogFormState.selectedPeople);
+        } else {
+          resolvePeople(withPeople, withPeopleResolved);
+        }
+
+        if (catalogFormState.selectedCompanies?.length > 0) {
+          resolvedRef.current.companies = withCompanies;
+          setSelectedCompanies(catalogFormState.selectedCompanies);
+        } else {
+          resolveCompanies(withCompanies, withCompaniesResolved);
+        }
+
+        if (catalogFormState.selectedKeywords?.length > 0) {
+          resolvedRef.current.keywords = withKeywords;
+          setSelectedKeywords(catalogFormState.selectedKeywords);
+        } else {
+          resolveKeywords(withKeywords, withKeywordsResolved);
+        }
+
+        if (catalogFormState.excludeKeywords?.length > 0) {
+          resolvedRef.current.excludeKeywords = catalogExcludeKeywords;
+          setExcludeKeywords(catalogFormState.excludeKeywords);
+        } else {
+          resolveExcludeKeywords(catalogExcludeKeywords);
+        }
+
+        if (catalogFormState.excludeCompanies?.length > 0) {
+          resolvedRef.current.excludeCompanies = catalogExcludeCompanies;
+          setExcludeCompanies(catalogFormState.excludeCompanies);
+        } else {
+          resolveExcludeCompanies(catalogExcludeCompanies);
+        }
+
+        if (catalogFormState.selectedNetworks?.length > 0) {
+          resolvedRef.current.networks = withNetworks;
+          setSelectedNetworks(catalogFormState.selectedNetworks);
+        } else {
+          resolveNetworks(withNetworks);
+        }
+      });
+      return;
+    }
+
     queueMicrotask(() => {
       resolvePeople(withPeople, withPeopleResolved);
       resolveCompanies(withCompanies, withCompaniesResolved);
@@ -228,6 +271,7 @@ export function useResolvedFilters({
     });
   }, [
     catalogId,
+    catalogFormState,
     withPeople,
     withPeopleResolved,
     withCompanies,

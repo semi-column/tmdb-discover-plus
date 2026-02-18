@@ -73,6 +73,7 @@ const catalogSchema = new mongoose.Schema(
       enableRatingPosters: Boolean,
     },
     enabled: { type: Boolean, default: true },
+    formState: { type: mongoose.Schema.Types.Mixed },
   },
   {
     _id: false,

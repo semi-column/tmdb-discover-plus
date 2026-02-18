@@ -18,6 +18,26 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
     <div className="checkbox-grid">
       <label
         className="checkbox-label-row"
+        onClick={() => toggle('releasedOnly')}
+        style={{ cursor: 'pointer' }}
+      >
+        <div
+          className={`checkbox ${filters.releasedOnly ? 'checked' : ''}`}
+          role="checkbox"
+          aria-checked={!!filters.releasedOnly}
+          tabIndex={0}
+          onKeyDown={(e) => handleKeyDown('releasedOnly', e)}
+        >
+          {filters.releasedOnly && <Check size={14} />}
+        </div>
+        <LabelWithTooltip
+          label="Released only"
+          tooltip="Only show content that has been released (digital, physical, or TV release for movies; ended or airing shows for series). Filters out announced and in-production titles."
+        />
+      </label>
+
+      <label
+        className="checkbox-label-row"
         onClick={() => toggle('includeAdult')}
         style={{ cursor: 'pointer' }}
       >

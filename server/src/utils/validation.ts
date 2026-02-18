@@ -38,6 +38,8 @@ export function normalizeContentType(type: string): string {
   return type;
 }
 
+const VALID_FILTER_KEY = /^[a-zA-Z0-9_]+$/;
+
 export function sanitizeFilters(filters: unknown): Record<string, unknown> {
   if (!filters || typeof filters !== 'object') return {};
 
@@ -48,6 +50,7 @@ export function sanitizeFilters(filters: unknown): Record<string, unknown> {
     'listType',
     'genres',
     'excludeGenres',
+    'genreMatchMode',
     'language',
     'displayLanguage',
     'originCountry',
@@ -58,43 +61,98 @@ export function sanitizeFilters(filters: unknown): Record<string, unknown> {
     'voteAverageFrom',
     'voteAverageTo',
     'voteCount',
+    'voteCountMin',
     'runtime',
     'runtimeFrom',
     'runtimeTo',
+    'runtimeMin',
+    'runtimeMax',
     'certifications',
+    'certification',
+    'certificationCountry',
+    'certificationMin',
+    'certificationMax',
     'watchProviders',
     'watchRegion',
+    'watchMonetizationType',
+    'watchMonetizationTypes',
     'monetization',
+    'monetizationTypes',
     'withPeople',
     'withCompanies',
     'withKeywords',
+    'excludeKeywords',
+    'excludeCompanies',
+    'withCast',
+    'withCrew',
     'releaseTypes',
     'networks',
+    'withNetworks',
     'status',
     'type',
     'imdbOnly',
     'includeAdult',
+    'includeVideo',
     'datePreset',
+    'releaseDateFrom',
+    'releaseDateTo',
+    'airDateFrom',
+    'airDateTo',
+    'firstAirDateFrom',
+    'firstAirDateTo',
+    'firstAirDateYear',
+    'primaryReleaseYear',
+    'includeNullFirstAirDates',
+    'screenedTheatrically',
+    'region',
+    'timezone',
+    'tvStatus',
+    'tvType',
     'ratingMin',
     'ratingMax',
-    'runtimeMin',
-    'runtimeMax',
-    'withNetworks',
-    'certificationCountry',
-    'certificationMin',
-    'certificationMax',
     'enableRatingPosters',
-    'monetizationTypes',
     'randomize',
+    'discoverOnly',
+    'releasedOnly',
     'cacheTTL',
-    'withCast',
-    'withCrew',
   ];
 
   for (const key of allowedKeys) {
-    if (filtersObj[key] !== undefined) {
+    if (filtersObj[key] !== undefined && VALID_FILTER_KEY.test(key)) {
       sanitized[key] = sanitizeFilterValue(filtersObj[key]);
     }
+  }
+
+  if (sanitized.certification && !sanitized.certificationCountry) {
+    delete sanitized.certification;
+  }
+  if (
+    sanitized.certificationCountry &&
+    !sanitized.certification &&
+    !sanitized.certifications &&
+    !sanitized.certificationMin &&
+    !sanitized.certificationMax
+  ) {
+    delete sanitized.certificationCountry;
+  }
+  if (sanitized.watchProviders && !sanitized.watchRegion) {
+    delete sanitized.watchProviders;
+    delete sanitized.watchMonetizationTypes;
+  }
+  if (typeof sanitized.voteCountMin === 'number') {
+    sanitized.voteCountMin = Math.min(Math.max(sanitized.voteCountMin as number, 0), 10000);
+  }
+  if (typeof sanitized.ratingMin === 'number') {
+    sanitized.ratingMin = Math.min(Math.max(sanitized.ratingMin as number, 0), 10);
+  }
+  if (typeof sanitized.ratingMax === 'number') {
+    sanitized.ratingMax = Math.min(Math.max(sanitized.ratingMax as number, 0), 10);
+  }
+  if (typeof sanitized.runtimeMin === 'number') {
+    sanitized.runtimeMin = Math.min(Math.max(sanitized.runtimeMin as number, 0), 400);
+  }
+  if (typeof sanitized.runtimeMax === 'number') {
+    sanitized.runtimeMax = Math.min(Math.max(sanitized.runtimeMax as number, 0), 400);
   }
 
   return sanitized;

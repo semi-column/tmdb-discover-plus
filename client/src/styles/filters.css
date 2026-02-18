@@ -887,8 +887,15 @@
 /* Date Preset Buttons */
 .date-presets {
   display: flex;
+  flex-direction: column;
   gap: 6px;
   margin-bottom: 12px;
+}
+
+.date-preset-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .date-preset {
