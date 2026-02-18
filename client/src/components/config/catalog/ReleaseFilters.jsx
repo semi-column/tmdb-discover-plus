@@ -6,12 +6,17 @@ import { LabelWithTooltip } from '../../forms/Tooltip';
 const CURRENT_YEAR = new Date().getFullYear();
 
 const DATE_PRESETS = [
-  { label: 'Last 30 days', value: 'last_30_days', days: 30 },
-  { label: 'Last 90 days', value: 'last_90_days', days: 90 },
-  { label: 'Last 6 months', value: 'last_180_days', days: 180 },
-  { label: 'Last 12 months', value: 'last_365_days', days: 365 },
-  { label: 'Next 30 days', value: 'next_30_days', future: true },
-  { label: 'Next 3 months', value: 'next_90_days', future: true },
+  { label: 'Last 30 days', value: 'last_30_days', group: 'relative' },
+  { label: 'Last 90 days', value: 'last_90_days', group: 'relative' },
+  { label: 'Last 6 months', value: 'last_180_days', group: 'relative' },
+  { label: 'Last 12 months', value: 'last_365_days', group: 'relative' },
+  { label: 'Next 30 days', value: 'next_30_days', group: 'relative' },
+  { label: 'Next 3 months', value: 'next_90_days', group: 'relative' },
+  { label: '2020s', value: 'era_2020s', group: 'decade' },
+  { label: '2010s', value: 'era_2010s', group: 'decade' },
+  { label: '2000s', value: 'era_2000s', group: 'decade' },
+  { label: '1990s', value: 'era_1990s', group: 'decade' },
+  { label: '1980s', value: 'era_1980s', group: 'decade' },
 ];
 
 export const ReleaseFilters = memo(function ReleaseFilters({
@@ -60,15 +65,28 @@ export const ReleaseFilters = memo(function ReleaseFilters({
   return (
     <>
       <div className="date-presets">
-        {DATE_PRESETS.map((preset) => (
-          <button
-            key={preset.label}
-            className={`date-preset ${selectedDatePreset === preset.label ? 'active' : ''}`}
-            onClick={() => handleDatePreset(preset)}
-          >
-            {preset.label}
-          </button>
-        ))}
+        <div className="date-preset-group">
+          {DATE_PRESETS.filter((p) => p.group === 'relative').map((preset) => (
+            <button
+              key={preset.label}
+              className={`date-preset ${selectedDatePreset === preset.label ? 'active' : ''}`}
+              onClick={() => handleDatePreset(preset)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        <div className="date-preset-group">
+          {DATE_PRESETS.filter((p) => p.group === 'decade').map((preset) => (
+            <button
+              key={preset.label}
+              className={`date-preset ${selectedDatePreset === preset.label ? 'active' : ''}`}
+              onClick={() => handleDatePreset(preset)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="filter-two-col">

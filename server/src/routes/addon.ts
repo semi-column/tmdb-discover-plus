@@ -153,7 +153,7 @@ async function resolveGenreFilter(
   type: string,
   apiKey: string
 ): Promise<void> {
-  if (!extra.genre) return;
+  if (!extra.genre || extra.genre === 'All') return;
 
   try {
     const selected = String(extra.genre)
@@ -540,6 +540,24 @@ async function handleCatalogRequest(
         region: resolvedFilters?.originCountry || catalogConfig.filters?.originCountry,
         randomize,
       })) as { results?: unknown[] } | null;
+
+      if (result?.results && effectiveFilters.genres) {
+        const genreIds = new Set(
+          (Array.isArray(effectiveFilters.genres)
+            ? effectiveFilters.genres
+            : [effectiveFilters.genres]
+          )
+            .map((id: unknown) => Number(id))
+            .filter((id: number) => !isNaN(id))
+        );
+        if (genreIds.size > 0) {
+          result.results = result.results.filter((item: unknown) => {
+            const ids = (item as { genre_ids?: number[] }).genre_ids;
+            if (!Array.isArray(ids)) return true;
+            return ids.some((gid: number) => genreIds.has(gid));
+          });
+        }
+      }
     } else {
       result = (await tmdb.discover(apiKey, {
         type,

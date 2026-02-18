@@ -31,6 +31,7 @@ export interface CatalogFilters {
   originCountry?: string;
   region?: string;
   includeAdult?: boolean;
+  includeVideo?: boolean;
   genreNames?: string[];
   discoverOnly?: boolean;
   randomize?: boolean;
@@ -45,8 +46,17 @@ export interface CatalogFilters {
   certification?: string;
   certifications?: string[];
   certificationCountry?: string;
+  certificationMin?: string;
+  certificationMax?: string;
   airDateFrom?: string;
   airDateTo?: string;
+  firstAirDateFrom?: string;
+  firstAirDateTo?: string;
+  firstAirDateYear?: number;
+  primaryReleaseYear?: number;
+  includeNullFirstAirDates?: boolean;
+  screenedTheatrically?: boolean;
+  timezone?: string;
   datePreset?: string;
   withNetworks?: string;
   tvStatus?: string;
@@ -57,11 +67,23 @@ export interface CatalogFilters {
   withCompanies?: string;
   withKeywords?: string;
   excludeKeywords?: string;
+  excludeCompanies?: string;
   watchRegion?: string;
   watchProviders?: number[];
   watchMonetizationType?: string;
   watchMonetizationTypes?: string[];
   enableRatingPosters?: boolean;
+  releasedOnly?: boolean;
+}
+
+export interface CatalogFormState {
+  selectedPeople?: Array<{ id: number | string; name: string; profile_path?: string }>;
+  selectedCompanies?: Array<{ id: number | string; name: string; logo_path?: string }>;
+  selectedKeywords?: Array<{ id: number | string; name: string }>;
+  excludeKeywords?: Array<{ id: number | string; name: string }>;
+  excludeCompanies?: Array<{ id: number | string; name: string; logo_path?: string }>;
+  selectedNetworks?: Array<{ id: number | string; name: string; logo_path?: string }>;
+  expandedSections?: Record<string, boolean>;
 }
 
 export interface CatalogConfig {
@@ -71,6 +93,7 @@ export interface CatalogConfig {
   type: ContentType;
   source?: 'tmdb' | 'imdb';
   filters: CatalogFilters;
+  formState?: CatalogFormState;
   enabled?: boolean;
 }
 

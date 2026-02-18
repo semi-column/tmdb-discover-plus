@@ -1,6 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Film, Tv, GripVertical, Trash2, Copy } from 'lucide-react';
+import { getActiveFilterCount } from '../../utils/catalogFilters.ts';
 
 export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onDuplicate }) {
   const getCatalogKey = (cat) => String(cat?._id || cat?.id || cat?.name);
@@ -9,6 +10,8 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
   });
+
+  const filterCount = getActiveFilterCount(catalog?.filters);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -26,7 +29,17 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
         {catalog.type === 'series' ? <Tv size={20} /> : <Film size={20} />}
       </div>
       <div className="catalog-item-info">
-        <div className="catalog-item-name">{catalog.name}</div>
+        <div className="catalog-item-name">
+          {catalog.name}
+          {filterCount > 0 && (
+            <span
+              className="catalog-item-badge catalog-item-badge--filter-count"
+              title={`${filterCount} active filter${filterCount === 1 ? '' : 's'}`}
+            >
+              {filterCount}
+            </span>
+          )}
+        </div>
         <div className="catalog-item-type">
           {catalog.type === 'series' ? 'TV Shows' : 'Movies'}
           {catalog.source === 'imdb' && (

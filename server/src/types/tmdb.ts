@@ -407,6 +407,7 @@ export interface DiscoverOptions {
   watchProviders?: number[];
   watchMonetizationTypes?: string[];
   watchMonetizationType?: string;
+  releasedOnly?: boolean;
 }
 
 export interface SpecialListOptions {

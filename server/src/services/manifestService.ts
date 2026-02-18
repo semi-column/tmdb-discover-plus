@@ -109,6 +109,7 @@ export async function enrichManifestWithGenres(
             const sortedGenres = [...(savedCatalog.filters.genres as unknown as string[])].sort(
               (a, b) => a.localeCompare(b)
             );
+            sortedGenres.unshift('All');
             catalog.extra = catalog.extra || [];
             catalog.extra = catalog.extra.filter((e) => e.name !== 'genre');
             catalog.extra.push({
@@ -253,10 +254,7 @@ export async function enrichManifestWithGenres(
 
         if (options && options.length > 0) {
           const sortedOptions = [...options].sort((a, b) => a.localeCompare(b));
-
-          if (isDiscoverOnly) {
-            sortedOptions.unshift('All');
-          }
+          sortedOptions.unshift('All');
 
           catalog.extra = catalog.extra || [];
           catalog.extra = catalog.extra.filter((e) => e.name !== 'genre');

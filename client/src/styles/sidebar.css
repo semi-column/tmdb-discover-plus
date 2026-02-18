@@ -270,6 +270,16 @@
   font-weight: 500;
 }
 
+.catalog-item-badge--filter-count {
+  background: var(--text-muted);
+  font-size: 0.575rem;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  min-width: 16px;
+  text-align: center;
+  cursor: default;
+}
+
 /* Sidebar Section */
 .sidebar-section {
   border-top: 1px solid var(--border-color);

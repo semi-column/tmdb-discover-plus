@@ -131,6 +131,15 @@ export function useCatalogEditor() {
         excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
         excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
       },
+      formState: {
+        selectedPeople: selectedPeople.length > 0 ? selectedPeople : undefined,
+        selectedCompanies: selectedCompanies.length > 0 ? selectedCompanies : undefined,
+        selectedKeywords: selectedKeywords.length > 0 ? selectedKeywords : undefined,
+        excludeKeywords: excludeKeywords.length > 0 ? excludeKeywords : undefined,
+        excludeCompanies: excludeCompanies.length > 0 ? excludeCompanies : undefined,
+        selectedNetworks: selectedNetworks.length > 0 ? selectedNetworks : undefined,
+        expandedSections,
+      },
     }),
     [
       localCatalog,
@@ -139,6 +148,8 @@ export function useCatalogEditor() {
       selectedKeywords,
       excludeKeywords,
       excludeCompanies,
+      selectedNetworks,
+      expandedSections,
     ]
   );
 
@@ -198,7 +209,22 @@ export function useCatalogEditor() {
       setLocalCatalog(currentCatalog);
       const prevId = prevCatalogIdRef.current;
       const newId = currentCatalog._id || null;
-      if (prevId !== newId) setPreviewData(null);
+      if (prevId !== newId) {
+        setPreviewData(null);
+        if (currentCatalog.formState?.expandedSections) {
+          setExpandedSections(currentCatalog.formState.expandedSections);
+        } else {
+          setExpandedSections({
+            basic: false,
+            genres: false,
+            filters: false,
+            release: false,
+            streaming: false,
+            people: false,
+            options: false,
+          });
+        }
+      }
       prevCatalogIdRef.current = newId;
     } else {
       setLocalCatalog(DEFAULT_CATALOG);
