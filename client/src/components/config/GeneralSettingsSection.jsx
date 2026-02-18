@@ -22,6 +22,14 @@ export function GeneralSettingsSection() {
       <div
         className="sidebar-section-header"
         onClick={() => setIsCollapsed(!isCollapsed)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsCollapsed(!isCollapsed);
+          }
+        }}
+        role="button"
+        tabIndex={0}
         style={{
           cursor: 'pointer',
           display: 'flex',

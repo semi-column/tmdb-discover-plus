@@ -133,6 +133,17 @@ export function ConfigDropdown({
                     }
                     setIsOpen(false);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (config.userId !== currentUserId) {
+                        onSelectConfig(config.userId);
+                      }
+                      setIsOpen(false);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   style={{
                     opacity: confirmId === config.userId ? 0.4 : 1,
                     pointerEvents: confirmId === config.userId ? 'none' : 'auto',

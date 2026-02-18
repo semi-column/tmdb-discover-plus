@@ -47,7 +47,18 @@ export function PosterSettingsSection() {
 
   return (
     <div className="sidebar-section poster-settings">
-      <div className="sidebar-section-header" onClick={() => setIsCollapsed(!isCollapsed)}>
+      <div
+        className="sidebar-section-header"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsCollapsed(!isCollapsed);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+      >
         <Image size={14} className="text-muted" />
         <span className="sidebar-section-title">Poster Support</span>
         <ChevronDown

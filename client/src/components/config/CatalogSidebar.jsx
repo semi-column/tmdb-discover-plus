@@ -62,7 +62,6 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
   const {
     presetCatalogs = { movie: [], series: [] },
     imdbPresetCatalogs = [],
-    imdbEnabled = false,
   } = useTMDBData();
   const { addToast, setShowNewCatalogModal } = useAppActions();
 
@@ -274,6 +273,14 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
               <div
                 className="preset-group-header"
                 onClick={() => setMoviePresetsCollapsed(!moviePresetsCollapsed)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setMoviePresetsCollapsed(!moviePresetsCollapsed);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
               >
                 <Film size={14} />
                 <span>Movies</span>
@@ -318,6 +325,14 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
               <div
                 className="preset-group-header"
                 onClick={() => setTvPresetsCollapsed(!tvPresetsCollapsed)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setTvPresetsCollapsed(!tvPresetsCollapsed);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
               >
                 <Tv size={14} />
                 <span>TV Shows</span>
