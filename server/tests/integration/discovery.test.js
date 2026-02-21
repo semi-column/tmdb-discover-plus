@@ -280,7 +280,7 @@ export async function run() {
   });
 
   await runTest(SUITE, 'Origin country filter (India)', async () => {
-    const data = await testPreview({ originCountry: 'IN' });
+    const data = await testPreview({ countries: 'IN' });
     assertArray(data.metas, 1, 'Should return Indian films');
   });
 

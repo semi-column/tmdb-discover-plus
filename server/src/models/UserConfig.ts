@@ -24,7 +24,7 @@ const catalogSchema = new mongoose.Schema(
       sortBy: { type: String, default: 'popularity.desc' },
       language: String,
       displayLanguage: String,
-      originCountry: String,
+      countries: String,
       region: String, // Release region (e.g. for release dates)
       includeAdult: { type: Boolean, default: false },
       discoverOnly: { type: Boolean, default: false },

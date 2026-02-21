@@ -643,7 +643,7 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
         page,
         displayLanguage: resolvedFilters?.displayLanguage,
         language: resolvedFilters?.language,
-        region: resolvedFilters?.originCountry,
+        region: resolvedFilters?.countries,
         randomize,
       })) as PreviewResult;
     } else {

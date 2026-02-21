@@ -53,7 +53,7 @@ export function sanitizeFilters(filters: unknown): Record<string, unknown> {
     'genreMatchMode',
     'language',
     'displayLanguage',
-    'originCountry',
+    'countries',
     'year',
     'yearFrom',
     'yearTo',

@@ -13,7 +13,7 @@ export interface UserPreferences {
   disableImdbSearch?: boolean;
   includeAdult?: boolean;
   region?: string;
-  originCountry?: string;
+  countries?: string;
 }
 
 export interface CatalogFilters {
@@ -28,7 +28,7 @@ export interface CatalogFilters {
   sortBy?: string;
   language?: string;
   displayLanguage?: string;
-  originCountry?: string;
+  countries?: string;
   region?: string;
   includeAdult?: boolean;
   includeVideo?: boolean;

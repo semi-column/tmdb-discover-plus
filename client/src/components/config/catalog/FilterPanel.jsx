@@ -86,8 +86,8 @@ export const FilterPanel = memo(function FilterPanel({
           />
           <SearchableSelect
             options={safeCountries}
-            value={localCatalog?.filters?.originCountry || ''}
-            onChange={(value) => onFiltersChange('originCountry', value)}
+            value={localCatalog?.filters?.countries || ''}
+            onChange={(value) => onFiltersChange('countries', value)}
             placeholder="Any"
             searchPlaceholder="Search countries..."
             labelKey="english_name"

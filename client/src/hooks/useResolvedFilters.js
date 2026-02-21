@@ -38,7 +38,6 @@ export async function resolveItems(items, fetchById, search) {
           }
         }
       } catch {
-        // silence
       }
       return item;
     })

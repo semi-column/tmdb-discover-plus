@@ -166,6 +166,67 @@
   }
 }
 
+/* ============================================
+   LAPTOP / MEDIUM DESKTOP (1024px to 1440px)
+   ============================================ */
+@media (min-width: 1024px) and (max-width: 1440px) {
+  .container {
+    padding: 0 16px;
+  }
+
+  .builder-toolbar {
+    margin-bottom: 16px;
+  }
+
+  .builder-toolbar h2 {
+    font-size: 1.125rem;
+  }
+
+  .builder-toolbar p {
+    font-size: 0.75rem;
+  }
+
+  .actions-toolbar {
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 8px 12px;
+    font-size: 0.8125rem;
+  }
+
+  .editor-header {
+    padding: 12px 16px;
+  }
+
+  .editor-name-input {
+    font-size: 1rem;
+    min-width: 150px;
+  }
+
+  .filter-section-header {
+    padding: 12px;
+  }
+
+  .filter-section-title {
+    font-size: 0.8125rem;
+  }
+
+  .filter-section-desc {
+    font-size: 0.6875rem;
+  }
+
+  .active-filters-bar {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .active-filter-chip {
+    padding: 4px 8px;
+    font-size: 0.6875rem;
+  }
+}
+
 /* Mobile Main Content */
 @media (max-width: 768px) {
   .main {

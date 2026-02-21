@@ -4,6 +4,7 @@
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+  height: auto;
 }
 
 @media (min-width: 1024px) {
@@ -111,20 +112,23 @@
     flex-direction: row;
     gap: 20px;
     align-items: stretch;
+    /* Ensure child flex items take full height */
+    height: 100%;
+    min-height: 0;
   }
 
   .editor-panel {
-    flex: 1;
+    flex: 1.2; /* Give more space to editor */
     min-width: 0;
   }
 
   .preview-panel-container {
-    flex: 1;
-    min-width: 0;
+    flex: 0.8; /* Slightly less space for preview items */
+    min-width: 320px;
   }
 
   .preview-panel-container .preview-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     gap: 16px;
   }
 }
@@ -136,13 +140,17 @@
 }
 
 .editor-panel {
-  flex: 1;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  /* Removed max-height constraint - let page scroll naturally */
+  /* Restore height for internal scrolling */
+  max-height: 100%;
+}
+
+@media (min-width: 1024px) {
+  .editor-panel {
+    height: 100%;
+    max-height: 100%;
+  }
 }
 
 .editor-header {
@@ -158,8 +166,10 @@
 
 .editor-content {
   flex: 1;
-  /* Removed overflow-y: auto - let page scroll naturally */
+  /* Restore overflow for panel-based scrolling */
+  overflow-y: auto;
   padding: 16px;
+  min-height: 0;
 }
 
 /* Ensure dropdowns appear above other sections */

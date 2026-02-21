@@ -537,7 +537,7 @@ async function handleCatalogRequest(
         page,
         displayLanguage: config.preferences?.defaultLanguage,
         language: resolvedFilters?.language || catalogConfig.filters?.language,
-        region: resolvedFilters?.originCountry || catalogConfig.filters?.originCountry,
+        region: resolvedFilters?.countries || catalogConfig.filters?.countries,
         randomize,
       })) as { results?: unknown[] } | null;
 
@@ -724,7 +724,7 @@ async function handleMetaRequest(
         .filter((c) => c.enabled !== false && (c.type === type || (!c.type && type === 'movie')))
         .map((c) => `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`)[0] || null;
 
-    let userRegion = config.preferences?.region || config.preferences?.originCountry || null;
+    let userRegion = config.preferences?.region || config.preferences?.countries || null;
 
     if (!userRegion && Array.isArray(config.catalogs)) {
       const certCatalog = config.catalogs.find(
@@ -733,9 +733,9 @@ async function handleMetaRequest(
       if (certCatalog) {
         userRegion = certCatalog.filters.certificationCountry ?? null;
       } else {
-        const originCatalog = config.catalogs.find((c) => c.filters?.originCountry);
+        const originCatalog = config.catalogs.find((c) => c.filters?.countries);
         if (originCatalog) {
-          userRegion = originCatalog.filters.originCountry ?? null;
+          userRegion = originCatalog.filters.countries ?? null;
         }
       }
     }

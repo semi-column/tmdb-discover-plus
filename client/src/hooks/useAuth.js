@@ -60,7 +60,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
   // Global 401 handler — smoothly redirect to login when any API call gets 401
   useEffect(() => {
     const handleSessionExpired = () => {
-      if (isSetup) return; // Already showing setup, ignore
+      if (isSetup) return;
       setIsSessionExpired(true);
       setIsSetup(true);
       setPageLoading(false);
@@ -152,7 +152,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
       setIsSessionExpired(false);
       setWantsToChangeKey(changeKey);
       configsLoadedRef.current = false;
-      config.logout(); // fire-and-forget — local state reset is immediate
+      config.logout();
       setIsSetup(true);
       setPageLoading(false);
     },
@@ -169,7 +169,6 @@ export function useAuth(config, addToast, urlUserId, deps) {
 
     try {
       if (configs && configs.length > 0) {
-        // Returning user: populate state directly from login response (no extra API calls)
         configs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
         setUserConfigs(configs);
         configsLoadedRef.current = true;
@@ -181,7 +180,6 @@ export function useAuth(config, addToast, urlUserId, deps) {
           setActiveCatalog(target.catalogs[0]);
         }
       } else {
-        // New user: apply known empty config, load config list in background
         config.applyConfig({ userId, configName: '', catalogs: [], preferences: {} });
         configsLoadedRef.current = true;
         loadUserConfigs();

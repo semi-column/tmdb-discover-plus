@@ -366,7 +366,7 @@ export interface DiscoverOptions {
   sortBy?: string;
   language?: string;
   displayLanguage?: string;
-  originCountry?: string | string[];
+  countries?: string | string[];
   includeAdult?: boolean;
   includeVideo?: boolean;
   voteCountMin?: number;

@@ -265,7 +265,6 @@ app.get('/ready', (req, res) => {
 // Enhanced Health Check Endpoint
 // ============================================
 app.get('/health', monitoringRateLimit, (req, res) => {
-  // Return 503 if shutting down
   if (isShuttingDown) {
     return res.status(503).json({
       status: 'shutting_down',
@@ -410,12 +409,9 @@ process.on('unhandledRejection', (reason, promise) => {
 
 async function start() {
   try {
-    // ---- Critical initialization ----
-    // Cache and storage are critical — if both fail, we can't serve users.
     try {
       await initCache();
     } catch (cacheErr) {
-      // Cache failure is degraded, not fatal (memory fallback already handled in initCache)
       log.warn('Cache initialization issue (degraded mode)', {
         error: (cacheErr as Error).message,
       });
@@ -423,7 +419,6 @@ async function start() {
       serverStatus.reason = 'Cache initialization failed — using memory fallback';
     }
 
-    // Wire up cache-backed token revocation persistence
     const { getCache } = await import('./services/cache/index.ts');
     const cache = getCache();
     setRevocationStore({
@@ -438,7 +433,6 @@ async function start() {
 
     await initStorage();
 
-    // Mark server as healthy (can serve requests)
     serverStatus.healthy = true;
     serverStatus.startedAt = new Date().toISOString();
 
@@ -448,8 +442,6 @@ async function start() {
       log.info(`Health check at http://localhost:${PORT}/health`);
     });
 
-    // ---- Non-critical initialization (background, fire-and-forget) ----
-    // Cache warming runs after server is already listening so it doesn't block startup.
     const defaultApiKey = config.tmdb.apiKey;
     warmEssentialCaches(defaultApiKey)
       .then((result) => {
@@ -460,7 +452,6 @@ async function start() {
         log.warn('Background cache warming failed (non-critical)', { error: err.message });
       });
 
-    // IMDb ratings dataset — download in background, non-blocking.
     initImdbRatings()
       .then(() => {
         log.info('IMDb ratings initialized', getImdbRatingsStats());

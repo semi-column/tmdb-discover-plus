@@ -33,7 +33,6 @@ export function useCatalogManager(config, addToast) {
     setActiveCatalog(newCatalog);
   };
   
-  // Update global source when explicitly set, and clear active catalog if source mismatches
   const handleSetGlobalSource = (source) => {
     setGlobalSource(source);
     if (activeCatalog && (activeCatalog.source || 'tmdb') !== source) {

@@ -102,11 +102,11 @@ export function useActiveFilters({
       });
     }
 
-    if (filters.originCountry) {
-      const country = countries.find((c) => c.iso_3166_1 === filters.originCountry);
+    if (filters.countries) {
+      const country = countries.find((c) => c.iso_3166_1 === filters.countries);
       active.push({
-        key: 'originCountry',
-        label: `Country: ${country?.english_name || filters.originCountry}`,
+        key: 'countries',
+        label: `Country: ${country?.english_name || filters.countries}`,
         section: 'filters',
       });
     }
@@ -410,8 +410,8 @@ export function useActiveFilters({
         case 'language':
           update({ language: undefined });
           break;
-        case 'originCountry':
-          update({ originCountry: undefined });
+        case 'countries':
+          update({ countries: undefined });
           break;
         case 'year':
           update({ yearFrom: undefined, yearTo: undefined });

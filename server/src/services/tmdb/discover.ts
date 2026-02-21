@@ -25,7 +25,7 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
     sortBy = 'popularity.desc',
     language,
     displayLanguage,
-    originCountry,
+    countries,
     includeAdult = false,
     includeVideo,
     voteCountMin = 0,
@@ -111,10 +111,10 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
     params.include_image_language = `${displayLanguage},null`;
   }
 
-  if (originCountry) {
-    params.with_origin_country = Array.isArray(originCountry)
-      ? originCountry.join('|')
-      : String(originCountry).replace(/,/g, '|');
+  if (countries) {
+    params.with_origin_country = Array.isArray(countries)
+      ? countries.join('|')
+      : String(countries).replace(/,/g, '|');
   }
 
   if (runtimeMin) params['with_runtime.gte'] = runtimeMin;

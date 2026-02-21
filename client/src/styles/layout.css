@@ -513,7 +513,9 @@
     grid-template-columns: 280px 1fr;
     gap: 24px;
     height: calc(100vh - 160px);
+    max-height: 850px; /* Limit height on very tall laptop screens but keep it functional */
     align-items: stretch;
+    min-height: 600px;
   }
 }
 
@@ -521,6 +523,7 @@
 @media (min-width: 1400px) {
   .builder-layout {
     grid-template-columns: 320px 1fr;
+    height: calc(100vh - 180px); /* Slightly more padding for ultra large */
   }
 }
 
