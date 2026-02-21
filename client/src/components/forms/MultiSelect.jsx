@@ -233,9 +233,10 @@ export const MultiSelect = memo(function MultiSelect({
                     id={`${listboxId}-option-${index}`}
                     className={`multi-select-option ${isSelected ? 'selected' : ''} ${isFocused ? 'focused' : ''}`}
                     onClick={() => handleToggle(option[valueKey])}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleToggle(option[valueKey]); }}
                     role="option"
                     aria-selected={isSelected}
-                    tabIndex={-1}
+                    tabIndex={0}
                   >
                     <div className={`multi-select-checkbox ${isSelected ? 'checked' : ''}`}>
                       {isSelected && <Check size={12} />}

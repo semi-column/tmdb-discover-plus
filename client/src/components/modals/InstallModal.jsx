@@ -32,7 +32,13 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl }) {
   const manifestUrl = installUrl;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+    >
       <div
         className="modal"
         ref={modalRef}

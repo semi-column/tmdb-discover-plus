@@ -34,7 +34,7 @@ export class MongoAdapter extends StorageInterface {
 
   async getUserConfig(userId: string): Promise<UserConfigType | null> {
     if (!userId) return null;
-    return UserConfig.findOne({ userId: String(userId) }).lean() as Promise<UserConfigType | null>;
+    return UserConfig.findOne({ userId: String(userId) }).lean().exec() as unknown as Promise<UserConfigType | null>;
   }
 
   async saveUserConfig(config: UserConfigType): Promise<UserConfigType> {
@@ -42,14 +42,14 @@ export class MongoAdapter extends StorageInterface {
       { userId: String(config.userId) },
       { $set: config },
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
-    ).lean() as Promise<UserConfigType>;
+    ).lean().exec() as unknown as Promise<UserConfigType>;
   }
 
   async getConfigsByApiKeyId(apiKeyId: string): Promise<UserConfigType[]> {
     if (!apiKeyId) return [];
     return UserConfig.find({ apiKeyId: String(apiKeyId) })
       .sort({ updatedAt: -1 })
-      .lean() as Promise<UserConfigType[]>;
+      .lean().exec() as unknown as Promise<UserConfigType[]>;
   }
 
   async deleteUserConfig(userId: string): Promise<boolean> {

@@ -168,7 +168,24 @@ export function SearchInput({
         createPortal(
           <div className="search-input-dropdown" ref={dropdownRef} style={dropdownStyle}>
             {results.map((item) => (
-              <div key={item.id} className="search-input-option" onClick={() => handleSelect(item)}>
+              <button
+                key={item.id}
+                type="button"
+                className="search-input-option"
+                onClick={() => handleSelect(item)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  textAlign: 'left',
+                  background: 'none',
+                  border: 'none',
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  color: 'inherit',
+                  font: 'inherit'
+                }}
+              >
                 {item.profilePath || item.logoPath ? (
                   <img
                     src={item.profilePath || item.logoPath}
@@ -184,7 +201,7 @@ export function SearchInput({
                     <span className="search-input-option-meta">{item.knownFor}</span>
                   )}
                 </div>
-              </div>
+              </button>
             ))}
           </div>,
           document.body

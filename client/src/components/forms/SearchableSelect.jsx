@@ -183,10 +183,11 @@ export const SearchableSelect = memo(function SearchableSelect({
                 className={`searchable-select-option ${!value ? 'selected' : ''} ${highlightedIndex === 0 ? 'highlighted' : ''}`}
                 id={`${listboxId}-option-0`}
                 onClick={() => handleSelect('')}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelect(''); }}
                 onMouseMove={() => setHighlightedIndex(0)}
                 role="option"
                 aria-selected={!value}
-                tabIndex={-1}
+                tabIndex={0}
               >
                 {placeholder}
               </div>
@@ -200,10 +201,11 @@ export const SearchableSelect = memo(function SearchableSelect({
                     id={`${listboxId}-option-${navIndex}`}
                     className={`searchable-select-option ${value === option[valueKey] ? 'selected' : ''} ${highlightedIndex === navIndex ? 'highlighted' : ''}`}
                     onClick={() => handleSelect(option[valueKey])}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelect(option[valueKey]); }}
                     onMouseMove={() => setHighlightedIndex(navIndex)}
                     role="option"
                     aria-selected={value === option[valueKey]}
-                    tabIndex={-1}
+                    tabIndex={0}
                   >
                     {option[labelKey]}
                   </div>
