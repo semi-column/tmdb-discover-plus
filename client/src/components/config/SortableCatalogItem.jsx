@@ -19,7 +19,8 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
   };
 
   return (
-    <div
+    <button
+      type="button"
       ref={setNodeRef}
       style={style}
       className={`catalog-item ${isActive ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
@@ -77,6 +78,6 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
           <Trash2 size={16} />
         </button>
       </div>
-    </div>
+    </button>
   );
 }

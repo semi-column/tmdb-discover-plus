@@ -16,7 +16,7 @@ export function useCatalogSync({ localCatalog, catalog, onUpdate, dependencies =
       if (JSON.stringify(localCatalog) === JSON.stringify(catalog)) {
         return;
       }
-    } catch {
+    } catch (_e) {
     }
 
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);

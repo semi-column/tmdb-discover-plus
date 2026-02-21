@@ -6,9 +6,8 @@ export function useCatalogManager(config, addToast) {
 
   const setActiveCatalog = (catalog) => {
     setActiveCatalogState(catalog);
-    if (catalog?.source) {
-      setGlobalSource(catalog.source);
-    }
+    // Always sync the theme — TMDB catalogs have no source field, so default to 'tmdb'
+    setGlobalSource(catalog?.source || 'tmdb');
   };
 
   const handleAddCatalog = (catalogData) => {

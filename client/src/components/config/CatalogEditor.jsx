@@ -147,6 +147,34 @@ export const CatalogEditor = memo(function CatalogEditor() {
           </div>
         </div>
 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '4px',
+          padding: '6px 16px',
+          borderBottom: '1px solid var(--border-color)',
+          fontSize: '11px',
+          color: 'var(--text-muted)',
+          letterSpacing: '0.02em',
+        }}>
+          Powered by{' '}
+          <a
+            href={isImdbCatalog ? 'https://sleeyax.dev/' : 'https://www.themoviedb.org/'}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: 'var(--accent-primary)',
+              textDecoration: 'none',
+              fontWeight: 600,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+            onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+          >
+            {isImdbCatalog ? 'Sleeyax' : 'TMDB'}
+          </a>
+        </div>
+
         <div className="editor-content">
 
           <div className="content-type-toggle">
@@ -168,12 +196,14 @@ export const CatalogEditor = memo(function CatalogEditor() {
             </button>
           </div>
 
-          <ActiveFiltersBar
-            activeFilters={activeFilters}
-            onClearFilter={clearFilter}
-            onClearAll={clearAllFilters}
-            onToggleSection={toggleSection}
-          />
+          {!(isImdbCatalog && isPresetCatalog) && (
+            <ActiveFiltersBar
+              activeFilters={activeFilters}
+              onClearFilter={clearFilter}
+              onClearAll={clearAllFilters}
+              onToggleSection={toggleSection}
+            />
+          )}
 
           {isImdbCatalog ? (
             <ImdbFilterPanel

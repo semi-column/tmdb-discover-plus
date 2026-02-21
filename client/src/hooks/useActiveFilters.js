@@ -43,13 +43,28 @@ export function useActiveFilters({
   setExcludeKeywords,
   excludeCompanies,
   setExcludeCompanies,
+  imdbSortOptions = [],
 }) {
   const activeFilters = useMemo(() => {
     const filters = localCatalog?.filters || {};
     const active = [];
     const isMovieType = localCatalog?.type === 'movie';
 
-    if (filters.sortBy && filters.sortBy !== 'popularity.desc') {
+    const isImdb = localCatalog?.source === 'imdb';
+    const imdbSortDefault = 'POPULARITY';
+    const tmdbSortDefault = 'popularity.desc';
+
+    if (isImdb) {
+      // For IMDB: only show sort chip when it differs from the IMDB default
+      if (filters.sortBy && filters.sortBy !== imdbSortDefault) {
+        const match = imdbSortOptions.find((s) => s.value === filters.sortBy);
+        active.push({
+          key: 'sortBy',
+          label: `Sort: ${match?.label || filters.sortBy}`,
+          section: 'filters',
+        });
+      }
+    } else if (filters.sortBy && filters.sortBy !== tmdbSortDefault) {
       const sortOpts = sortOptions[localCatalog?.type] || sortOptions.movie || [];
       const match = sortOpts.find((s) => s.value === filters.sortBy);
       active.push({
@@ -387,6 +402,7 @@ export function useActiveFilters({
     selectedKeywords,
     excludeKeywords,
     excludeCompanies,
+    imdbSortOptions,
   ]);
 
   const clearFilter = useCallback(

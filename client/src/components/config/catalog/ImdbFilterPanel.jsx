@@ -1,6 +1,9 @@
 import { useState, useCallback, useMemo, memo } from 'react';
 import { FilterSection } from './FilterSection';
 import { Settings, Sparkles, Calendar, Award, Tag, Globe } from 'lucide-react';
+import { SearchableSelect } from '../../forms/SearchableSelect';
+import { RangeSlider, SingleSlider } from '../../forms/RangeSlider';
+import { LabelWithTooltip } from '../../forms/Tooltip';
 
 export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   localCatalog,
@@ -12,27 +15,33 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   imdbTitleTypes = [],
   countries = [],
   languages = [],
+  expandedSections,
+  onToggleSection,
 }) {
-  const [expandedSections, setExpandedSections] = useState({
+  const [internalSections, setInternalSections] = useState({
     basic: true,
     genres: false,
-    filters: false,
     release: false,
     keywords: false,
     awards: false,
     region: false,
   });
 
-  const toggleSection = (section) => {
-    setExpandedSections((prev) => {
-      if (prev[section]) return { ...prev, [section]: false };
-      const allClosed = Object.keys(prev).reduce((acc, key) => {
-        acc[key] = false;
-        return acc;
-      }, {});
-      return { ...allClosed, [section]: true };
-    });
-  };
+  const localExpandedSections = expandedSections || internalSections;
+
+  const toggleSection = useCallback(
+    (section) => {
+      if (onToggleSection) {
+        onToggleSection(section);
+      } else {
+        setInternalSections((prev) => ({
+          ...prev,
+          [section]: !prev[section],
+        }));
+      }
+    },
+    [onToggleSection]
+  );
 
   const filters = useMemo(() => localCatalog?.filters || {}, [localCatalog?.filters]);
   const listType = filters.listType || 'discover';
@@ -71,6 +80,74 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     [filters, onFiltersChange]
   );
 
+  const handleRuntimeChange = useCallback(
+    (range) => {
+      onFiltersChange('runtimeMin', range[0] === 0 ? undefined : range[0]);
+      onFiltersChange('runtimeMax', range[1] === 400 ? undefined : range[1]);
+    },
+    [onFiltersChange]
+  );
+
+  const handleAddLanguage = useCallback(
+    (value) => {
+      if (!value) return;
+      const current = filters.languages || [];
+      if (!current.includes(value)) {
+        onFiltersChange('languages', [...current, value]);
+      }
+    },
+    [filters.languages, onFiltersChange]
+  );
+
+  const handleRemoveLanguage = useCallback(
+    (lang) => {
+      onFiltersChange(
+        'languages',
+        (filters.languages || []).filter((l) => l !== lang)
+      );
+    },
+    [filters.languages, onFiltersChange]
+  );
+
+  const handleAddCountry = useCallback(
+    (value) => {
+      if (!value) return;
+      const current = filters.countries || [];
+      if (!current.includes(value)) {
+        onFiltersChange('countries', [...current, value]);
+      }
+    },
+    [filters.countries, onFiltersChange]
+  );
+
+  const handleRemoveCountry = useCallback(
+    (country) => {
+      onFiltersChange(
+        'countries',
+        (filters.countries || []).filter((c) => c !== country)
+      );
+    },
+    [filters.countries, onFiltersChange]
+  );
+
+  const availableLanguages = useMemo(
+    () => languages.filter((l) => !(filters.languages || []).includes(l.iso_639_1)),
+    [languages, filters.languages]
+  );
+
+  const availableCountries = useMemo(
+    () => countries.filter((c) => !(filters.countries || []).includes(c.iso_3166_1)),
+    [countries, filters.countries]
+  );
+
+  const sortOrderOptions = useMemo(
+    () => [
+      { value: 'ASC', label: 'Ascending' },
+      { value: 'DESC', label: 'Descending' },
+    ],
+    []
+  );
+
   if (isPreset) {
     return (
       <div className="flex items-center gap-3 p-4 mt-6 rounded-lg border border-white/5 bg-white/5 imdb-preset-notice">
@@ -89,87 +166,42 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         title="Sort & Filter"
         description="Sort order and basic filters"
         icon={Settings}
-        isOpen={expandedSections.basic}
+        isOpen={localExpandedSections.basic}
         onToggle={toggleSection}
       >
         <div className="filter-grid">
           <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-sort-by">
-              Sort By
-            </label>
-            <select
-              id="imdb-sort-by"
-              className="input"
+            <LabelWithTooltip
+              label="Sort By"
+              tooltip="How to order your IMDb results."
+            />
+            <SearchableSelect
+              options={imdbSortOptions}
               value={filters.sortBy || 'POPULARITY'}
-              onChange={(e) => onFiltersChange('sortBy', e.target.value)}
-            >
-              {imdbSortOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => onFiltersChange('sortBy', value)}
+              placeholder="Most Popular"
+              searchPlaceholder="Search..."
+              labelKey="label"
+              valueKey="value"
+              allowClear={false}
+            />
           </div>
 
           <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-sort-order">
-              Sort Order
-            </label>
-            <select
-              id="imdb-sort-order"
-              className="input"
-              value={filters.sortOrder || 'ASC'}
-              onChange={(e) => onFiltersChange('sortOrder', e.target.value)}
-            >
-              <option value="ASC">Ascending</option>
-              <option value="DESC">Descending</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-rating-min">
-              Min IMDb Rating
-            </label>
-            <select
-              id="imdb-rating-min"
-              className="input"
-              value={filters.imdbRatingMin || ''}
-              onChange={(e) =>
-                onFiltersChange(
-                  'imdbRatingMin',
-                  e.target.value ? Number(e.target.value) : undefined
-                )
-              }
-            >
-              <option value="">Any</option>
-              <option value="6">6+</option>
-              <option value="7">7+</option>
-              <option value="8">8+</option>
-              <option value="9">9+</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-vote-min">
-              Min Vote Count
-            </label>
-            <select
-              id="imdb-vote-min"
-              className="input"
-              value={filters.totalVotesMin || ''}
-              onChange={(e) =>
-                onFiltersChange(
-                  'totalVotesMin',
-                  e.target.value ? Number(e.target.value) : undefined
-                )
-              }
-            >
-              <option value="">Any</option>
-              <option value="1000">1,000+</option>
-              <option value="10000">10,000+</option>
-              <option value="100000">100,000+</option>
-              <option value="1000000">1,000,000+</option>
-            </select>
+            <LabelWithTooltip
+              label="Sort Order"
+              tooltip="Direction of sorting — ascending or descending."
+            />
+            <SearchableSelect
+              options={sortOrderOptions}
+              value={filters.sortOrder || 'DESC'}
+              onChange={(value) => onFiltersChange('sortOrder', value)}
+              placeholder="Descending"
+              searchPlaceholder="Search..."
+              labelKey="label"
+              valueKey="value"
+              allowClear={false}
+            />
           </div>
 
           {imdbTitleTypes.length > 0 && (
@@ -206,6 +238,34 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             </div>
           )}
         </div>
+
+        <div className="filter-spacer-lg">
+          <SingleSlider
+            label="Min IMDb Rating"
+            tooltip="Minimum IMDb user rating (0–10). Higher values surface only highly-rated titles."
+            min={0}
+            max={10}
+            step={0.1}
+            value={filters.imdbRatingMin ?? 0}
+            onChange={(v) => onFiltersChange('imdbRatingMin', v === 0 ? undefined : v)}
+            formatValue={(v) => (v === 0 ? 'Any' : v.toFixed(1) + '+')}
+            showInput
+          />
+        </div>
+
+        <div className="filter-spacer">
+          <SingleSlider
+            label="Min Vote Count"
+            tooltip="Minimum number of user ratings. Higher values filter out obscure titles."
+            min={0}
+            max={1000000}
+            step={1000}
+            value={filters.totalVotesMin ?? 0}
+            onChange={(v) => onFiltersChange('totalVotesMin', v === 0 ? undefined : v)}
+            formatValue={(v) => (v === 0 ? 'Any' : v.toLocaleString() + '+')}
+            showInput
+          />
+        </div>
       </FilterSection>
 
       <FilterSection
@@ -213,96 +273,78 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         title="Language & Region"
         description="Filter by original language and country"
         icon={Globe}
-        isOpen={expandedSections.region}
+        isOpen={localExpandedSections.region}
         onToggle={toggleSection}
       >
         <div className="filter-grid">
           <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-languages">
-              Languages
-            </label>
-            <select
-              id="imdb-languages"
-              className="input"
+            <LabelWithTooltip
+              label="Languages"
+              tooltip="Filter by the original language of the content. Select multiple."
+            />
+            <SearchableSelect
+              options={availableLanguages}
               value=""
-              onChange={(e) => {
-                if (!e.target.value) return;
-                const current = filters.languages || [];
-                if (!current.includes(e.target.value)) {
-                  onFiltersChange('languages', [...current, e.target.value]);
-                }
-              }}
-            >
-              <option value="">Add language...</option>
-              {languages
-                .filter((l) => !(filters.languages || []).includes(l.iso_639_1))
-                .map((l) => (
-                  <option key={l.iso_639_1} value={l.iso_639_1}>
-                    {l.english_name}
-                  </option>
-                ))}
-            </select>
+              onChange={handleAddLanguage}
+              placeholder="Add language..."
+              searchPlaceholder="Search languages..."
+              labelKey="english_name"
+              valueKey="iso_639_1"
+              allowClear={false}
+            />
             {(filters.languages || []).length > 0 && (
               <div className="imdb-selected-chips">
-                {filters.languages.map((lang) => (
-                  <span
-                    key={lang}
-                    className="genre-chip selected imdb-chip--clickable"
-                    onClick={() =>
-                      onFiltersChange(
-                        'languages',
-                        filters.languages.filter((l) => l !== lang)
-                      )
-                    }
-                  >
-                    {lang} ×
-                  </span>
-                ))}
+                {filters.languages.map((lang) => {
+                  const langObj = languages.find((l) => l.iso_639_1 === lang);
+                  return (
+                    <span
+                      key={lang}
+                      className="genre-chip selected imdb-chip--clickable"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleRemoveLanguage(lang)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRemoveLanguage(lang); }}
+                    >
+                      {langObj?.english_name || lang} ×
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
 
           <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-countries">
-              Countries
-            </label>
-            <select
-              id="imdb-countries"
-              className="input"
+            <LabelWithTooltip
+              label="Countries"
+              tooltip="Filter by country of origin. Select multiple."
+            />
+            <SearchableSelect
+              options={availableCountries}
               value=""
-              onChange={(e) => {
-                if (!e.target.value) return;
-                const current = filters.countries || [];
-                if (!current.includes(e.target.value)) {
-                  onFiltersChange('countries', [...current, e.target.value]);
-                }
-              }}
-            >
-              <option value="">Add country...</option>
-              {countries
-                .filter((c) => !(filters.countries || []).includes(c.iso_3166_1))
-                .map((c) => (
-                  <option key={c.iso_3166_1} value={c.iso_3166_1}>
-                    {c.english_name}
-                  </option>
-                ))}
-            </select>
+              onChange={handleAddCountry}
+              placeholder="Add country..."
+              searchPlaceholder="Search countries..."
+              labelKey="english_name"
+              valueKey="iso_3166_1"
+              allowClear={false}
+            />
             {(filters.countries || []).length > 0 && (
               <div className="imdb-selected-chips">
-                {filters.countries.map((country) => (
-                  <span
-                    key={country}
-                    className="genre-chip selected imdb-chip--clickable"
-                    onClick={() =>
-                      onFiltersChange(
-                        'countries',
-                        filters.countries.filter((c) => c !== country)
-                      )
-                    }
-                  >
-                    {country} ×
-                  </span>
-                ))}
+                {filters.countries.map((country) => {
+                  const countryObj = countries.find((c) => c.iso_3166_1 === country);
+                  return (
+                    <span
+                      key={country}
+                      className="genre-chip selected imdb-chip--clickable"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleRemoveCountry(country)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRemoveCountry(country); }}
+                    >
+                      {countryObj?.english_name || country} ×
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -314,7 +356,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         title="Genres"
         description="Filter by IMDb genre"
         icon={Sparkles}
-        isOpen={expandedSections.genres}
+        isOpen={localExpandedSections.genres}
         onToggle={toggleSection}
         badgeCount={(filters.genres || []).length}
       >
@@ -340,14 +382,12 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         title="Release Date & Runtime"
         description="Date range and runtime filters"
         icon={Calendar}
-        isOpen={expandedSections.release}
+        isOpen={localExpandedSections.release}
         onToggle={toggleSection}
       >
         <div className="filter-grid">
           <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-date-from">
-              Release Date From
-            </label>
+            <LabelWithTooltip label="Release Date From" tooltip="Include titles released on or after this date." />
             <input
               id="imdb-date-from"
               type="date"
@@ -357,9 +397,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             />
           </div>
           <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-date-to">
-              Release Date To
-            </label>
+            <LabelWithTooltip label="Release Date To" tooltip="Include titles released on or before this date." />
             <input
               id="imdb-date-to"
               type="date"
@@ -368,39 +406,49 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
               onChange={(e) => onFiltersChange('releaseDateEnd', e.target.value || undefined)}
             />
           </div>
-          <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-runtime-min">
-              Min Runtime (min)
-            </label>
-            <input
-              id="imdb-runtime-min"
-              type="number"
-              className="input"
-              min="0"
-              max="600"
-              placeholder="e.g., 90"
-              value={filters.runtimeMin || ''}
-              onChange={(e) =>
-                onFiltersChange('runtimeMin', e.target.value ? Number(e.target.value) : undefined)
-              }
-            />
-          </div>
-          <div className="filter-group">
-            <label className="filter-label" htmlFor="imdb-runtime-max">
-              Max Runtime (min)
-            </label>
-            <input
-              id="imdb-runtime-max"
-              type="number"
-              className="input"
-              min="0"
-              max="600"
-              placeholder="e.g., 180"
-              value={filters.runtimeMax || ''}
-              onChange={(e) =>
-                onFiltersChange('runtimeMax', e.target.value ? Number(e.target.value) : undefined)
-              }
-            />
+        </div>
+
+        <div className="filter-spacer">
+          <RangeSlider
+            label="Runtime (minutes)"
+            tooltip="Filter by total runtime in minutes."
+            min={0}
+            max={400}
+            step={1}
+            value={[filters.runtimeMin || 0, filters.runtimeMax || 400]}
+            onChange={handleRuntimeChange}
+            formatValue={(v) => (v === 0 ? 'Any' : v === 400 ? '400+' : `${v}m`)}
+            showInputs
+          />
+          <div className="runtime-presets filter-spacer-sm">
+            <button
+              type="button"
+              className={`date-preset ${filters.runtimeMax === 60 && !filters.runtimeMin ? 'active' : ''}`}
+              onClick={() => handleRuntimeChange([0, 60])}
+            >
+              Short (&lt;60m)
+            </button>
+            <button
+              type="button"
+              className={`date-preset ${filters.runtimeMin === 90 && filters.runtimeMax === 120 ? 'active' : ''}`}
+              onClick={() => handleRuntimeChange([90, 120])}
+            >
+              Standard (90-120m)
+            </button>
+            <button
+              type="button"
+              className={`date-preset ${filters.runtimeMin === 150 ? 'active' : ''}`}
+              onClick={() => handleRuntimeChange([150, 400])}
+            >
+              Long (&gt;150m)
+            </button>
+            <button
+              type="button"
+              className="date-preset"
+              onClick={() => handleRuntimeChange([0, 400])}
+            >
+              Any
+            </button>
           </div>
         </div>
       </FilterSection>
@@ -411,7 +459,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           title="Keywords"
           description="Filter by predefined IMDb keywords"
           icon={Tag}
-          isOpen={expandedSections.keywords}
+          isOpen={localExpandedSections.keywords}
           onToggle={toggleSection}
           badgeCount={(filters.keywords || []).length}
         >
@@ -439,7 +487,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           title="Awards"
           description="Filter by award wins or nominations"
           icon={Award}
-          isOpen={expandedSections.awards}
+          isOpen={localExpandedSections.awards}
           onToggle={toggleSection}
           badgeCount={(filters.awardsWon || []).length + (filters.awardsNominated || []).length}
         >

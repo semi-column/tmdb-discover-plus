@@ -176,6 +176,7 @@ export function useCatalogEditor() {
     setExcludeKeywords,
     excludeCompanies,
     setExcludeCompanies,
+    imdbSortOptions,
   });
 
   const tvNetworkOptions = useMemo(() => {

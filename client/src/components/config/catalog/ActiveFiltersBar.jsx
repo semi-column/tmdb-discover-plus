@@ -17,7 +17,10 @@ export const ActiveFiltersBar = memo(function ActiveFiltersBar({
             key={filter.key}
             className="active-filter-chip"
             data-section={filter.section}
+            role="button"
+            tabIndex={0}
             onClick={() => onToggleSection(filter.section)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onToggleSection(filter.section); }}
           >
             <span>{filter.label}</span>
             <button

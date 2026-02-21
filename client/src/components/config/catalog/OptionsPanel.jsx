@@ -18,7 +18,6 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
     <div className="checkbox-grid">
       <label
         className="checkbox-label-row"
-        onClick={() => toggle('releasedOnly')}
         style={{ cursor: 'pointer' }}
       >
         <div
@@ -26,6 +25,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
           role="checkbox"
           aria-checked={!!filters.releasedOnly}
           tabIndex={0}
+          onClick={() => toggle('releasedOnly')}
           onKeyDown={(e) => handleKeyDown('releasedOnly', e)}
         >
           {filters.releasedOnly && <Check size={14} />}
