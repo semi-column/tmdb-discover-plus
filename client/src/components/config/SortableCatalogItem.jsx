@@ -19,12 +19,18 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
   };
 
   return (
-    <button
-      type="button"
+    <div
       ref={setNodeRef}
       style={style}
       className={`catalog-item ${isActive ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
       onClick={() => onSelect(catalog)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          onSelect(catalog);
+        }
+      }}
+      role="listitem"
+      tabIndex={0}
     >
       <div className="catalog-item-icon">
         {catalog.type === 'series' ? <Tv size={20} /> : <Film size={20} />}
@@ -78,6 +84,6 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
           <Trash2 size={16} />
         </button>
       </div>
-    </button>
+    </div>
   );
 }

@@ -303,6 +303,7 @@ export interface ImdbAdvancedSearchParams {
   runtimeMax?: number;
   languages?: string[];
   countries?: string[];
+  imdbCountries?: string[];
   keywords?: string[];
   awardsWon?: string[];
   awardsNominated?: string[];

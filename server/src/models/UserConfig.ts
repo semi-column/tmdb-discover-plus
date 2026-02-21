@@ -65,7 +65,7 @@ const catalogSchema = new mongoose.Schema(
       releaseDateStart: String,
       releaseDateEnd: String,
       languages: [String],
-      countries: [String],
+      imdbCountries: [String],
       keywords: [String],
       awardsWon: Number,
       awardsNominated: Number,

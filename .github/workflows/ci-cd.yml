@@ -1,4 +1,4 @@
-name: CI/CD
+name: Lint & Test
 
 on:
   push:

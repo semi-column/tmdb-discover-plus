@@ -74,6 +74,20 @@ export interface CatalogFilters {
   watchMonetizationTypes?: string[];
   enableRatingPosters?: boolean;
   releasedOnly?: boolean;
+  // IMDb-specific filters
+  imdbCountries?: string[];
+  imdbListId?: string;
+  imdbRatingMin?: number;
+  totalVotesMin?: number;
+  releaseDateStart?: string;
+  releaseDateEnd?: string;
+  languages?: string[];
+  keywords?: string[];
+  awardsWon?: number;
+  awardsNominated?: number;
+  types?: string[];
+  query?: string;
+  sortOrder?: string;
 }
 
 export interface CatalogFormState {

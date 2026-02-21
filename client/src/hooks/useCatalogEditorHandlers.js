@@ -133,7 +133,7 @@ export function useCatalogEditorHandlers({
           delete cleanedFilters.runtimeMin;
           delete cleanedFilters.runtimeMax;
           delete cleanedFilters.languages;
-          delete cleanedFilters.countries;
+          delete cleanedFilters.imdbCountries;
           delete cleanedFilters.sortOrder;
         }
 

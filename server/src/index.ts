@@ -123,9 +123,9 @@ app.use((req, res, next) => {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self'",
+      "script-src 'self' https://cdnjs.buymeacoffee.com",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' https://image.tmdb.org https://storage.ko-fi.com https://m.media-amazon.com https://ia.media-imdb.com  https://cdnjs.buymeacoffee.com data:",
+      "img-src 'self' https://image.tmdb.org https://storage.ko-fi.com https://m.media-amazon.com https://ia.media-imdb.com data:",
       "font-src 'self'",
       "connect-src 'self' https://api.themoviedb.org",
       "frame-ancestors 'none'",

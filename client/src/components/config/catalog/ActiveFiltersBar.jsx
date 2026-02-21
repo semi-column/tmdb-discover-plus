@@ -13,17 +13,17 @@ export const ActiveFiltersBar = memo(function ActiveFiltersBar({
     <div className="active-filters-bar">
       <div className="active-filters-chips">
         {activeFilters.map((filter) => (
-          <div
-            key={filter.key}
-            className="active-filter-chip"
-            data-section={filter.section}
-            role="button"
-            tabIndex={0}
-            onClick={() => onToggleSection(filter.section)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onToggleSection(filter.section); }}
-          >
-            <span>{filter.label}</span>
+          <div key={filter.key} className="active-filter-chip">
             <button
+              type="button"
+              className="active-filter-chip-label"
+              onClick={() => onToggleSection(filter.section)}
+              aria-label={`Show ${filter.label} section`}
+            >
+              {filter.label}
+            </button>
+            <button
+              type="button"
               className="chip-remove"
               aria-label={`Remove ${filter.label} filter`}
               onClick={(e) => {

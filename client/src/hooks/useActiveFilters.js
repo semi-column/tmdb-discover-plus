@@ -126,6 +126,21 @@ export function useActiveFilters({
       });
     }
 
+    if (filters.imdbCountries?.length > 0) {
+      const countryNames = filters.imdbCountries
+        .map((code) => {
+          const country = countries.find((c) => c.iso_3166_1 === code);
+          return country?.english_name || code;
+        })
+        .slice(0, 2);
+      const extra = filters.imdbCountries.length > 2 ? ` +${filters.imdbCountries.length - 2}` : '';
+      active.push({
+        key: 'imdbCountries',
+        label: `IMDb Countries: ${countryNames.join(', ')}${extra}`,
+        section: 'region',
+      });
+    }
+
     if (filters.yearFrom || filters.yearTo) {
       const from = filters.yearFrom || 'Any';
       const to = filters.yearTo || 'Now';
@@ -428,6 +443,9 @@ export function useActiveFilters({
           break;
         case 'countries':
           update({ countries: undefined });
+          break;
+        case 'imdbCountries':
+          update({ imdbCountries: [] });
           break;
         case 'year':
           update({ yearFrom: undefined, yearTo: undefined });

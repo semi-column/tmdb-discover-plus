@@ -76,6 +76,7 @@ export async function advancedSearch(
   if (params.runtimeMax) queryParams.runtimeMax = params.runtimeMax;
   if (params.languages?.length) queryParams.languages = params.languages;
   if (params.countries?.length) queryParams.countries = params.countries;
+  if (params.imdbCountries?.length) queryParams.countries = params.imdbCountries;
   if (params.keywords?.length) queryParams.keywords = params.keywords;
   if (params.awardsWon?.length) queryParams.awardsWon = params.awardsWon;
   if (params.awardsNominated?.length) queryParams.awardsNominated = params.awardsNominated;

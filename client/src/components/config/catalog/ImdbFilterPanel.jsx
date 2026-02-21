@@ -112,22 +112,22 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   const handleAddCountry = useCallback(
     (value) => {
       if (!value) return;
-      const current = filters.countries || [];
+      const current = filters.imdbCountries || [];
       if (!current.includes(value)) {
-        onFiltersChange('countries', [...current, value]);
+        onFiltersChange('imdbCountries', [...current, value]);
       }
     },
-    [filters.countries, onFiltersChange]
+    [filters.imdbCountries, onFiltersChange]
   );
 
   const handleRemoveCountry = useCallback(
     (country) => {
       onFiltersChange(
-        'countries',
-        (filters.countries || []).filter((c) => c !== country)
+        'imdbCountries',
+        (filters.imdbCountries || []).filter((c) => c !== country)
       );
     },
-    [filters.countries, onFiltersChange]
+    [filters.imdbCountries, onFiltersChange]
   );
 
   const availableLanguages = useMemo(
@@ -136,8 +136,8 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   );
 
   const availableCountries = useMemo(
-    () => countries.filter((c) => !(filters.countries || []).includes(c.iso_3166_1)),
-    [countries, filters.countries]
+    () => countries.filter((c) => !(filters.imdbCountries || []).includes(c.iso_3166_1)),
+    [countries, filters.imdbCountries]
   );
 
   const sortOrderOptions = useMemo(
@@ -297,16 +297,15 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                 {filters.languages.map((lang) => {
                   const langObj = languages.find((l) => l.iso_639_1 === lang);
                   return (
-                    <span
+                    <button
                       key={lang}
+                      type="button"
                       className="genre-chip selected imdb-chip--clickable"
-                      role="button"
-                      tabIndex={0}
                       onClick={() => handleRemoveLanguage(lang)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRemoveLanguage(lang); }}
+                      aria-label={`Remove ${langObj?.english_name || lang} language filter`}
                     >
                       {langObj?.english_name || lang} ×
-                    </span>
+                    </button>
                   );
                 })}
               </div>
@@ -328,21 +327,20 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
               valueKey="iso_3166_1"
               allowClear={false}
             />
-            {(filters.countries || []).length > 0 && (
+            {(filters.imdbCountries || []).length > 0 && (
               <div className="imdb-selected-chips">
-                {filters.countries.map((country) => {
+                {filters.imdbCountries.map((country) => {
                   const countryObj = countries.find((c) => c.iso_3166_1 === country);
                   return (
-                    <span
+                    <button
                       key={country}
+                      type="button"
                       className="genre-chip selected imdb-chip--clickable"
-                      role="button"
-                      tabIndex={0}
                       onClick={() => handleRemoveCountry(country)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRemoveCountry(country); }}
+                      aria-label={`Remove ${countryObj?.english_name || country} country filter`}
                     >
                       {countryObj?.english_name || country} ×
-                    </span>
+                    </button>
                   );
                 })}
               </div>

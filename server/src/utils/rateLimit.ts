@@ -13,7 +13,9 @@ if (config.cache.redisUrl) {
     const { createClient } = await import('redis');
     const redisClient = createClient({ url: config.cache.redisUrl });
     await redisClient.connect();
-    store = new RedisStore({ sendCommand: (...args) => redisClient.sendCommand(args) });
+    store = new RedisStore({ 
+      sendCommand: (...args: string[]) => redisClient.sendCommand(args) 
+    });
     log.info('Rate limiting backed by Redis');
   } catch (err) {
     log.warn('Redis rate-limit store unavailable, using in-memory', {
