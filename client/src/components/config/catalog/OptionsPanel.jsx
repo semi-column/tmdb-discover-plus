@@ -38,7 +38,6 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
 
       <label
         className="checkbox-label-row"
-        onClick={() => toggle('includeAdult')}
         style={{ cursor: 'pointer' }}
       >
         <div
@@ -46,6 +45,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
           role="checkbox"
           aria-checked={!!filters.includeAdult}
           tabIndex={0}
+          onClick={() => toggle('includeAdult')}
           onKeyDown={(e) => handleKeyDown('includeAdult', e)}
         >
           {filters.includeAdult && <Check size={14} />}
@@ -59,7 +59,6 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
       {isMovie && (
         <label
           className="checkbox-label-row"
-          onClick={() => toggle('includeVideo')}
           style={{ cursor: 'pointer' }}
         >
           <div
@@ -67,6 +66,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
             role="checkbox"
             aria-checked={!!filters.includeVideo}
             tabIndex={0}
+            onClick={() => toggle('includeVideo')}
             onKeyDown={(e) => handleKeyDown('includeVideo', e)}
           >
             {filters.includeVideo && <Check size={14} />}
@@ -80,7 +80,6 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
 
       <label
         className="checkbox-label-row"
-        onClick={() => toggle('randomize')}
         style={{ cursor: 'pointer' }}
       >
         <div
@@ -88,6 +87,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
           role="checkbox"
           aria-checked={!!filters.randomize}
           tabIndex={0}
+          onClick={() => toggle('randomize')}
           onKeyDown={(e) => handleKeyDown('randomize', e)}
         >
           {filters.randomize && <Check size={14} />}
@@ -100,7 +100,6 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
 
       <label
         className="checkbox-label-row"
-        onClick={() => toggle('discoverOnly')}
         style={{ cursor: 'pointer' }}
       >
         <div
@@ -108,6 +107,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
           role="checkbox"
           aria-checked={!!filters.discoverOnly}
           tabIndex={0}
+          onClick={() => toggle('discoverOnly')}
           onKeyDown={(e) => handleKeyDown('discoverOnly', e)}
         >
           {filters.discoverOnly && <Check size={14} />}
@@ -120,7 +120,6 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
 
       <label
         className="checkbox-label-row"
-        onClick={() => toggle('enableRatingPosters')}
         style={{ cursor: 'pointer' }}
       >
         <div
@@ -128,6 +127,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
           role="checkbox"
           aria-checked={!!filters.enableRatingPosters}
           tabIndex={0}
+          onClick={() => toggle('enableRatingPosters')}
           onKeyDown={(e) => handleKeyDown('enableRatingPosters', e)}
         >
           {filters.enableRatingPosters && <Check size={14} />}
@@ -141,7 +141,6 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
       {!isMovie && (
         <label
           className="checkbox-label-row"
-          onClick={() => toggle('includeNullFirstAirDates')}
           style={{ cursor: 'pointer' }}
         >
           <div
@@ -149,6 +148,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
             role="checkbox"
             aria-checked={!!filters.includeNullFirstAirDates}
             tabIndex={0}
+            onClick={() => toggle('includeNullFirstAirDates')}
             onKeyDown={(e) => handleKeyDown('includeNullFirstAirDates', e)}
           >
             {filters.includeNullFirstAirDates && <Check size={14} />}
@@ -163,7 +163,6 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
       {!isMovie && (
         <label
           className="checkbox-label-row"
-          onClick={() => toggle('screenedTheatrically')}
           style={{ cursor: 'pointer' }}
         >
           <div
@@ -171,6 +170,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
             role="checkbox"
             aria-checked={!!filters.screenedTheatrically}
             tabIndex={0}
+            onClick={() => toggle('screenedTheatrically')}
             onKeyDown={(e) => handleKeyDown('screenedTheatrically', e)}
           >
             {filters.screenedTheatrically && <Check size={14} />}
