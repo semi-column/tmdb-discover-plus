@@ -62,6 +62,44 @@ export function imdbToStremioMeta(
     if (enhancedPoster) poster = enhancedPoster;
   }
 
+  const imdbRating = item.averageRating ? String(item.averageRating) : undefined;
+  const genres = item.genres || [];
+  const castNames =
+    item.cast
+      ?.slice(0, 20)
+      .map((c) => c.fullName)
+      .filter(Boolean) || [];
+  const directorNames = item.directors?.map((d) => d.fullName).filter(Boolean) || [];
+  const writerNames = item.writers?.map((w) => w.fullName).filter(Boolean) || [];
+
+  const links: Array<{ name: string; category: string; url: string }> = [];
+  links.push({
+    name: imdbRating ? `${imdbRating}/10` : 'IMDb',
+    category: 'imdb',
+    url: `https://www.imdb.com/title/${item.id}/`,
+  });
+  genres.forEach((genre) => {
+    links.push({
+      name: genre,
+      category: 'Genres',
+      url: `stremio:///search?search=${encodeURIComponent(genre)}`,
+    });
+  });
+  castNames.slice(0, 5).forEach((name) => {
+    links.push({
+      name,
+      category: 'Cast',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
+  });
+  directorNames.forEach((name) => {
+    links.push({
+      name,
+      category: 'Directors',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
+  });
+
   return {
     id: item.id,
     tmdbId: null,
@@ -78,23 +116,13 @@ export function imdbToStremioMeta(
     description: item.description || '',
     year,
     releaseInfo: buildReleaseInfo(item),
-    imdbRating: item.averageRating ? String(item.averageRating) : undefined,
-    genres: item.genres || [],
+    imdbRating,
+    genres,
     runtime: formatRuntime(item.runtimeMinutes),
-    cast: item.cast
-      ?.slice(0, 20)
-      .map((c) => c.fullName)
-      .filter(Boolean),
-    director:
-      item.directors
-        ?.map((d) => d.fullName)
-        .filter(Boolean)
-        .join(', ') || undefined,
-    writer:
-      item.writers
-        ?.map((w) => w.fullName)
-        .filter(Boolean)
-        .join(', ') || undefined,
+    cast: castNames,
+    director: directorNames.join(', ') || undefined,
+    writer: writerNames.join(', ') || undefined,
+    links: links.length > 0 ? links : undefined,
     contentRating: item.contentRating || undefined,
     country: item.countriesOfOrigin?.join(', ') || undefined,
     language: item.spokenLanguages?.[0] || undefined,

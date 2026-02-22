@@ -574,6 +574,27 @@ export function toStremioMeta(
   }
   const primaryId = effectiveImdbId || `tmdb:${item.id}`;
 
+  const imdbRating =
+    ratingsMap && effectiveImdbId && ratingsMap.has(effectiveImdbId)
+      ? ratingsMap.get(effectiveImdbId)
+      : undefined;
+
+  const links: StremioLink[] = [];
+  if (effectiveImdbId) {
+    links.push({
+      name: imdbRating || 'IMDb',
+      category: 'imdb',
+      url: `https://imdb.com/title/${effectiveImdbId}`,
+    });
+  }
+  mappedGenres.forEach((genre) => {
+    links.push({
+      name: genre,
+      category: 'Genres',
+      url: `stremio:///search?search=${encodeURIComponent(genre)}`,
+    });
+  });
+
   const meta: StremioMetaPreview = {
     id: primaryId,
     tmdbId: item.id,
@@ -589,11 +610,9 @@ export function toStremioMeta(
     landscapePoster: background,
     description: item.overview || '',
     releaseInfo: year,
-    imdbRating:
-      ratingsMap && effectiveImdbId && ratingsMap.has(effectiveImdbId)
-        ? ratingsMap.get(effectiveImdbId)
-        : undefined,
+    imdbRating,
     genres: mappedGenres,
+    links: links.length > 0 ? links : undefined,
     behaviorHints: {},
   };
 

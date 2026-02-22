@@ -114,6 +114,8 @@ export interface StremioMetaPreview {
   releaseInfo: string;
   imdbRating?: string;
   genres: string[];
+  runtime?: string;
+  links?: StremioLink[];
   behaviorHints: Record<string, unknown>;
 }
 
