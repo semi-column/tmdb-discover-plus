@@ -15,7 +15,13 @@ export {
 
 export { discover, fetchSpecialList } from './discover.ts';
 
-export { getDetails, getLogos, getSeasonDetails, getSeriesEpisodes } from './details.ts';
+export {
+  getDetails,
+  getLogos,
+  getSeasonDetails,
+  getSeriesEpisodes,
+  batchGetDetails,
+} from './details.ts';
 
 export {
   search,
@@ -25,7 +31,12 @@ export {
   comprehensiveSearch,
 } from './search.ts';
 
-export { getExternalIds, enrichItemsWithImdbIds, findByImdbId } from './lookup.ts';
+export {
+  getExternalIds,
+  enrichItemsWithImdbIds,
+  findByImdbId,
+  batchResolveImdbIds,
+} from './lookup.ts';
 
 export {
   getPersonById,
@@ -35,7 +46,13 @@ export {
   getNetworks,
 } from './entityLookup.ts';
 
-export { formatRuntime, generateSlug, toStremioFullMeta, toStremioMeta } from './stremioMeta.ts';
+export {
+  formatRuntime,
+  generateSlug,
+  toStremioFullMeta,
+  toStremioMeta,
+  toStremioMetaPreview,
+} from './stremioMeta.ts';
 
 export {
   LIST_TYPES,

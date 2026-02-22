@@ -15,6 +15,8 @@ import type {
 
 const log = createLogger('tmdb:details') as Logger;
 
+const DETAIL_CONCURRENCY = 5;
+
 interface DetailsOptions {
   displayLanguage?: string;
   language?: string;
@@ -212,4 +214,31 @@ export async function getSeriesEpisodes(
   });
 
   return videos;
+}
+
+export async function batchGetDetails(
+  apiKey: string,
+  tmdbIds: number[],
+  type: ContentType,
+  options?: { displayLanguage?: string }
+): Promise<Map<number, unknown>> {
+  const results = new Map<number, unknown>();
+
+  for (let i = 0; i < tmdbIds.length; i += DETAIL_CONCURRENCY) {
+    const batch = tmdbIds.slice(i, i + DETAIL_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (tmdbId) => {
+        try {
+          const details = await getDetails(apiKey, tmdbId, type, {
+            displayLanguage: options?.displayLanguage,
+          });
+          if (details) results.set(tmdbId, details);
+        } catch {
+          log.debug('Detail fetch failed for catalog item', { tmdbId });
+        }
+      })
+    );
+  }
+
+  return results;
 }

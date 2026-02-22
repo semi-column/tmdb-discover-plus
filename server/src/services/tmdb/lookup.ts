@@ -119,3 +119,28 @@ export async function findByImdbId(
     return null;
   }
 }
+
+const RESOLVE_CONCURRENCY = 5;
+
+export async function batchResolveImdbIds(
+  apiKey: string,
+  imdbIds: string[],
+  type: string,
+  options: { language?: string } = {}
+): Promise<Map<string, number>> {
+  const results = new Map<string, number>();
+
+  for (let i = 0; i < imdbIds.length; i += RESOLVE_CONCURRENCY) {
+    const batch = imdbIds.slice(i, i + RESOLVE_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (imdbId) => {
+        try {
+          const found = await findByImdbId(apiKey, imdbId, type, options);
+          if (found?.tmdbId) results.set(imdbId, found.tmdbId);
+        } catch {}
+      })
+    );
+  }
+
+  return results;
+}

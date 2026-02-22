@@ -608,6 +608,9 @@ export function toStremioMeta(
     background,
     fanart: background,
     landscapePoster: background,
+    logo: effectiveImdbId
+      ? `https://images.metahub.space/logo/medium/${effectiveImdbId}/img`
+      : undefined,
     description: item.overview || '',
     releaseInfo: year,
     imdbRating,
@@ -617,4 +620,158 @@ export function toStremioMeta(
   };
 
   return meta;
+}
+
+export async function toStremioMetaPreview(
+  rawDetails: TmdbDetails | null,
+  type: ContentType,
+  posterOptions: PosterOptions | null = null,
+  targetLanguage: string | null = null,
+  ratingsMap: Map<string, string> | null = null
+): Promise<StremioMetaPreview | null> {
+  if (!rawDetails) return null;
+  const details = rawDetails as AnyTmdbDetails;
+  const isMovie = type === 'movie';
+  const title = (isMovie ? details.title : details.name) || '';
+  const releaseDate = isMovie ? details.release_date : details.first_air_date;
+  const year = releaseDate ? String(releaseDate).split('-')[0] : '';
+
+  const genres = Array.isArray(details.genres)
+    ? details.genres.map((g) => g?.name).filter(Boolean)
+    : [];
+
+  const { cast, directors, writerNames, creators, directorString, writerString, creatorString } =
+    buildCredits(details, isMovie);
+
+  let runtimeMin = null;
+  if (isMovie && typeof details.runtime === 'number') runtimeMin = details.runtime;
+  if (!isMovie) {
+    if (Array.isArray(details.episode_run_time) && details.episode_run_time.length > 0) {
+      const first = details.episode_run_time.find((v) => typeof v === 'number');
+      if (typeof first === 'number') runtimeMin = first;
+    }
+    if (!runtimeMin && details.last_episode_to_air?.runtime) {
+      runtimeMin = details.last_episode_to_air.runtime;
+    }
+  }
+
+  const effectiveImdbId = details?.external_ids?.imdb_id || null;
+
+  let logo: string | undefined;
+  const logoList = details.images?.logos;
+  if (logoList && logoList.length > 0) {
+    const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
+    const originalLang = details.original_language || null;
+
+    const candidates = [
+      logoList.find((l) => l.iso_639_1 === lang),
+      lang !== 'en' ? logoList.find((l) => l.iso_639_1 === 'en') : null,
+      originalLang && originalLang !== lang && originalLang !== 'en'
+        ? logoList.find((l) => l.iso_639_1 === originalLang)
+        : null,
+      logoList.find((l) => l.iso_639_1 === null),
+      [...logoList].sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))[0],
+    ];
+    const best = candidates.find(Boolean);
+    if (best) logo = `${TMDB_IMAGE_BASE}/original${best.file_path}`;
+  }
+  if (!logo && effectiveImdbId) {
+    logo = `https://images.metahub.space/logo/medium/${effectiveImdbId}/img`;
+  }
+
+  let poster = details.poster_path ? `${TMDB_IMAGE_BASE}/w500${details.poster_path}` : null;
+  let background = details.backdrop_path
+    ? `${TMDB_IMAGE_BASE}/w1280${details.backdrop_path}`
+    : null;
+
+  if (posterOptions && isValidPosterConfig(posterOptions)) {
+    const enhancedPoster = generatePosterUrl({
+      ...posterOptions,
+      tmdbId: details.id,
+      type,
+      imdbId: effectiveImdbId,
+    });
+    if (enhancedPoster) poster = enhancedPoster;
+  }
+
+  const primaryId = effectiveImdbId || `tmdb:${details.id}`;
+
+  let imdbRating: string | undefined;
+  if (ratingsMap && effectiveImdbId && ratingsMap.has(effectiveImdbId)) {
+    imdbRating = ratingsMap.get(effectiveImdbId);
+  }
+
+  const links: StremioLink[] = [];
+  if (effectiveImdbId) {
+    links.push({
+      name: imdbRating || 'IMDb',
+      category: 'imdb',
+      url: `https://imdb.com/title/${effectiveImdbId}`,
+    });
+  }
+  genres.forEach((genre) => {
+    links.push({
+      name: genre,
+      category: 'Genres',
+      url: `stremio:///search?search=${encodeURIComponent(genre)}`,
+    });
+  });
+  cast.slice(0, 5).forEach((name) => {
+    links.push({
+      name,
+      category: 'Cast',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
+  });
+  directors.forEach((name) => {
+    links.push({
+      name,
+      category: 'Directors',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
+  });
+  writerNames.forEach((name) => {
+    links.push({
+      name,
+      category: 'Writers',
+      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+    });
+  });
+  if (!isMovie) {
+    creators.forEach((name) => {
+      if (!writerNames.includes(name)) {
+        links.push({
+          name,
+          category: 'Writers',
+          url: `stremio:///search?search=${encodeURIComponent(name)}`,
+        });
+      }
+    });
+  }
+
+  return {
+    id: primaryId,
+    tmdbId: details.id,
+    imdbId: effectiveImdbId,
+    imdb_id: effectiveImdbId,
+    type: type === 'series' ? 'series' : 'movie',
+    name: title,
+    slug: generateSlug(type === 'series' ? 'series' : 'movie', title, primaryId),
+    poster,
+    posterShape: 'poster',
+    background,
+    fanart: background,
+    landscapePoster: background,
+    logo,
+    description: details.overview || '',
+    releaseInfo: year,
+    imdbRating,
+    genres,
+    cast: cast.length > 0 ? cast : undefined,
+    director: directorString || undefined,
+    writer: isMovie ? writerString || undefined : creatorString || writerString || undefined,
+    runtime: formatRuntime(runtimeMin),
+    links: links.length > 0 ? links : undefined,
+    behaviorHints: {},
+  };
 }

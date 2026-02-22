@@ -113,6 +113,7 @@ export function imdbToStremioMeta(
     background,
     fanart: background,
     landscapePoster: background,
+    logo: `https://images.metahub.space/logo/medium/${item.id}/img`,
     description: item.description || '',
     year,
     releaseInfo: buildReleaseInfo(item),

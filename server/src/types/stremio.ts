@@ -110,10 +110,14 @@ export interface StremioMetaPreview {
   background: string | null;
   fanart: string | null;
   landscapePoster: string | null;
+  logo?: string;
   description: string;
   releaseInfo: string;
   imdbRating?: string;
   genres: string[];
+  cast?: string[];
+  director?: string;
+  writer?: string;
   runtime?: string;
   links?: StremioLink[];
   behaviorHints: Record<string, unknown>;
