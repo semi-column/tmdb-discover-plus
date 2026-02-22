@@ -404,16 +404,8 @@ async function handleImdbCatalogRequest(
       titles = result.titles || [];
     }
 
-    const catalogPosterOverride = catalogConfig.filters?.enableRatingPosters;
-    const effectivePosterOptions =
-      catalogPosterOverride === true
-        ? posterOptions || null
-        : catalogPosterOverride === false
-          ? null
-          : posterOptions;
-
     const metas = titles
-      .map((item) => imdb.imdbToStremioMeta(item, type, effectivePosterOptions))
+      .map((item) => imdb.imdbToStremioMeta(item, type, posterOptions))
       .filter(Boolean);
 
     const baseUrl = (userConfig.baseUrl || getBaseUrl(req)).replace(/\/$/, '');
@@ -588,14 +580,6 @@ async function handleCatalogRequest(
     const allItems = (result?.results || []) as TmdbResult[];
     const displayLanguage = config.preferences?.defaultLanguage;
 
-    const catalogPosterOverride = catalogConfig.filters?.enableRatingPosters;
-    const effectivePosterOptions =
-      catalogPosterOverride === true
-        ? posterOptions || null
-        : catalogPosterOverride === false
-          ? null
-          : posterOptions;
-
     const { genreMap, ratingsMap } = await enrichCatalogResults(
       allItems,
       type,
@@ -605,7 +589,7 @@ async function handleCatalogRequest(
     );
 
     const metas = allItems.map((item) => {
-      return tmdb.toStremioMeta(item, type, null, effectivePosterOptions, genreMap, ratingsMap);
+      return tmdb.toStremioMeta(item, type, null, posterOptions, genreMap, ratingsMap);
     });
 
     const baseUrl = (config.baseUrl || getBaseUrl(req)).replace(/\/$/, '');

@@ -16,30 +16,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
 
   return (
     <div className="checkbox-grid">
-      <label
-        className="checkbox-label-row"
-        style={{ cursor: 'pointer' }}
-      >
-        <div
-          className={`checkbox ${filters.releasedOnly ? 'checked' : ''}`}
-          role="checkbox"
-          aria-checked={!!filters.releasedOnly}
-          tabIndex={0}
-          onClick={() => toggle('releasedOnly')}
-          onKeyDown={(e) => handleKeyDown('releasedOnly', e)}
-        >
-          {filters.releasedOnly && <Check size={14} />}
-        </div>
-        <LabelWithTooltip
-          label="Released only"
-          tooltip="Only show content that has been released (digital, physical, or TV release for movies; ended or airing shows for series). Filters out announced and in-production titles."
-        />
-      </label>
-
-      <label
-        className="checkbox-label-row"
-        style={{ cursor: 'pointer' }}
-      >
+      <label className="checkbox-label-row" style={{ cursor: 'pointer' }}>
         <div
           className={`checkbox ${filters.includeAdult ? 'checked' : ''}`}
           role="checkbox"
@@ -57,10 +34,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
       </label>
 
       {isMovie && (
-        <label
-          className="checkbox-label-row"
-          style={{ cursor: 'pointer' }}
-        >
+        <label className="checkbox-label-row" style={{ cursor: 'pointer' }}>
           <div
             className={`checkbox ${filters.includeVideo ? 'checked' : ''}`}
             role="checkbox"
@@ -78,10 +52,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
         </label>
       )}
 
-      <label
-        className="checkbox-label-row"
-        style={{ cursor: 'pointer' }}
-      >
+      <label className="checkbox-label-row" style={{ cursor: 'pointer' }}>
         <div
           className={`checkbox ${filters.randomize ? 'checked' : ''}`}
           role="checkbox"
@@ -98,10 +69,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
         />
       </label>
 
-      <label
-        className="checkbox-label-row"
-        style={{ cursor: 'pointer' }}
-      >
+      <label className="checkbox-label-row" style={{ cursor: 'pointer' }}>
         <div
           className={`checkbox ${filters.discoverOnly ? 'checked' : ''}`}
           role="checkbox"
@@ -118,31 +86,8 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
         />
       </label>
 
-      <label
-        className="checkbox-label-row"
-        style={{ cursor: 'pointer' }}
-      >
-        <div
-          className={`checkbox ${filters.enableRatingPosters ? 'checked' : ''}`}
-          role="checkbox"
-          aria-checked={!!filters.enableRatingPosters}
-          tabIndex={0}
-          onClick={() => toggle('enableRatingPosters')}
-          onKeyDown={(e) => handleKeyDown('enableRatingPosters', e)}
-        >
-          {filters.enableRatingPosters && <Check size={14} />}
-        </div>
-        <LabelWithTooltip
-          label="Rating posters"
-          tooltip="Show rating overlay on posters for this catalog. Requires a poster service to be configured in your preferences."
-        />
-      </label>
-
       {!isMovie && (
-        <label
-          className="checkbox-label-row"
-          style={{ cursor: 'pointer' }}
-        >
+        <label className="checkbox-label-row" style={{ cursor: 'pointer' }}>
           <div
             className={`checkbox ${filters.includeNullFirstAirDates ? 'checked' : ''}`}
             role="checkbox"
@@ -161,10 +106,7 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
       )}
 
       {!isMovie && (
-        <label
-          className="checkbox-label-row"
-          style={{ cursor: 'pointer' }}
-        >
+        <label className="checkbox-label-row" style={{ cursor: 'pointer' }}>
           <div
             className={`checkbox ${filters.screenedTheatrically ? 'checked' : ''}`}
             role="checkbox"

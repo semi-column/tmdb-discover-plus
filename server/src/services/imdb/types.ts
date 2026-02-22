@@ -331,7 +331,6 @@ export interface ImdbCatalogFilters {
   awardsWon?: string[];
   awardsNominated?: string[];
   types?: ImdbTitleType[];
-  enableRatingPosters?: boolean;
 }
 
 export interface ImdbPosterOptions {

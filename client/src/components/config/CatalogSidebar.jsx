@@ -62,6 +62,7 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
   const {
     presetCatalogs = { movie: [], series: [] },
     imdbPresetCatalogs = [],
+    imdbEnabled = false,
   } = useTMDBData();
   const { addToast, setShowNewCatalogModal } = useAppActions();
 
@@ -268,6 +269,25 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
           <div className="sidebar-section">
             <h4 className="sidebar-section-title">Quick Add Presets</h4>
 
+            {imdbEnabled && (
+              <div className="source-tabs" style={{ marginBottom: '12px' }}>
+                <button
+                  type="button"
+                  className={`source-tab ${globalSource === 'tmdb' ? 'active tmdb' : ''}`}
+                  onClick={() => setGlobalSource('tmdb')}
+                >
+                  <Film size={14} /> TMDB
+                </button>
+                <button
+                  type="button"
+                  className={`source-tab ${globalSource === 'imdb' ? 'active imdb' : ''}`}
+                  onClick={() => setGlobalSource('imdb')}
+                >
+                  <Award size={14} /> IMDb
+                </button>
+              </div>
+            )}
+
             {/* Unified Movie Presets */}
             <div className={`preset-group ${moviePresetsCollapsed ? 'collapsed' : ''}`}>
               <div
@@ -295,7 +315,9 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
                   const type = 'movie';
                   const isAdded = safeCatalogs.some(
                     (c) =>
-                      (source === 'imdb' ? c.source === 'imdb' : !c.source || c.source === 'tmdb') &&
+                      (source === 'imdb'
+                        ? c.source === 'imdb'
+                        : !c.source || c.source === 'tmdb') &&
                       c.filters?.listType === preset.value &&
                       c.type === type
                   );
@@ -347,7 +369,9 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
                   const type = 'series';
                   const isAdded = safeCatalogs.some(
                     (c) =>
-                      (source === 'imdb' ? c.source === 'imdb' : !c.source || c.source === 'tmdb') &&
+                      (source === 'imdb'
+                        ? c.source === 'imdb'
+                        : !c.source || c.source === 'tmdb') &&
                       c.filters?.listType === preset.value &&
                       c.type === type
                   );

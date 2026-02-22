@@ -14,6 +14,7 @@ client/dist/
 
 # Generated files
 server/src/metadata.json
+.github/prompts/
 
 # Logs
 *.log

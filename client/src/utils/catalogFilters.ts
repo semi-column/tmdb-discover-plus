@@ -4,7 +4,6 @@ interface CatalogFilters {
   voteCountMin?: number;
   genreMatchMode?: string;
   imdbOnly?: boolean;
-  enableRatingPosters?: boolean;
   discoverOnly?: boolean;
   [key: string]: unknown;
 }
@@ -15,7 +14,6 @@ const BASE_KEYS = new Set([
   'voteCountMin',
   'genreMatchMode',
   'imdbOnly',
-  'enableRatingPosters',
   'discoverOnly',
 ]);
 
@@ -25,7 +23,6 @@ function isDefaultValue(key: string, value: unknown): boolean {
   if (key === 'genreMatchMode') return value === 'any' || !value;
   if (key === 'listType') return value === 'discover' || !value;
   if (key === 'imdbOnly') return !value;
-  if (key === 'enableRatingPosters') return value === undefined || value === null;
   if (key === 'discoverOnly') return !value;
   return false;
 }

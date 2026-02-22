@@ -30,7 +30,7 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
       tabIndex={0}
     >
       <div className="catalog-item-icon">
-        {catalog.type === 'series' ? <Tv size={20} /> : <Film size={20} />}
+        {catalog.type === 'series' ? <Tv size={16} /> : <Film size={16} />}
       </div>
       <div className="catalog-item-info">
         <div className="catalog-item-name">{catalog.name}</div>

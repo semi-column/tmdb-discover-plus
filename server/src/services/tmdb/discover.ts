@@ -204,6 +204,9 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
       if (!params.with_status) {
         params.with_status = '0|3|4|5';
       }
+      if (!params['air_date.lte']) {
+        params['air_date.lte'] = today;
+      }
     }
   }
 

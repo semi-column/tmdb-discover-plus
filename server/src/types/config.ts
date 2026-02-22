@@ -72,7 +72,6 @@ export interface CatalogFilters {
   watchProviders?: number[];
   watchMonetizationType?: string;
   watchMonetizationTypes?: string[];
-  enableRatingPosters?: boolean;
   releasedOnly?: boolean;
   // IMDb-specific filters
   imdbCountries?: string[];

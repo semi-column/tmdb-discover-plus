@@ -9,7 +9,7 @@ import { ConfigDropdown } from './components/config/ConfigDropdown';
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useAppController } from './hooks/useAppController';
 import { api } from './services/api';
-import { Award, Download, Film, Settings, Loader } from 'lucide-react';
+import { Download, Settings, Loader } from 'lucide-react';
 import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
 import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
 import { AppProviders } from './context/AppContext';
@@ -130,18 +130,14 @@ function App() {
 
       <AppProviders state={state} actions={actions} config={config} tmdb={tmdb}>
         <main
-          className={`main ${state.globalSource === 'imdb' ? 'theme-imdb' : ''}`}
+          className={`main ${state.activeCatalog?.source === 'imdb' ? 'theme-imdb' : ''}`}
           id="main-content"
         >
           <div className="container">
             <div className="builder-toolbar">
               <div>
                 <h2>Catalog Builder</h2>
-                <p className="text-secondary">
-                  {state.globalSource === 'imdb'
-                    ? 'Create and customize your Stremio catalogs with IMDb filters'
-                    : 'Create and customize your Stremio catalogs with TMDB filters'}
-                </p>
+                <p className="text-secondary">Create and customize your Stremio catalogs</p>
 
                 {tmdb.error && (
                   <div className="tmdb-error-banner" role="alert">
@@ -169,24 +165,6 @@ function App() {
                 )}
               </div>
               <div className="actions-toolbar">
-                {tmdb.imdbEnabled && (
-                  <div className="source-tabs source-tabs-compact">
-                    <button
-                      type="button"
-                      className={`source-tab ${state.globalSource === 'tmdb' ? 'active tmdb' : ''}`}
-                      onClick={() => state.setGlobalSource('tmdb')}
-                    >
-                      <Film size={14} /> TMDB
-                    </button>
-                    <button
-                      type="button"
-                      className={`source-tab ${state.globalSource === 'imdb' ? 'active imdb' : ''}`}
-                      onClick={() => state.setGlobalSource('imdb')}
-                    >
-                      <Award size={14} /> IMDb
-                    </button>
-                  </div>
-                )}
                 {userConfigs.length > 0 && (
                   <ConfigDropdown
                     configs={userConfigs}

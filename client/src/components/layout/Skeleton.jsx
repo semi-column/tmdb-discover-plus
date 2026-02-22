@@ -12,7 +12,7 @@ export function CatalogListSkeleton({ count = 4 }) {
     <div className="catalog-list">
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="catalog-item skeleton-item">
-          <Skeleton width={40} height={40} borderRadius="var(--radius-sm)" />
+          <Skeleton width={32} height={32} borderRadius="var(--radius-sm)" />
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <Skeleton width="70%" height={14} borderRadius={4} />
             <Skeleton width="40%" height={10} borderRadius={4} />

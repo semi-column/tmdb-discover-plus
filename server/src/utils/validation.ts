@@ -111,7 +111,6 @@ export function sanitizeFilters(filters: unknown): Record<string, unknown> {
     'tvType',
     'ratingMin',
     'ratingMax',
-    'enableRatingPosters',
     'randomize',
     'discoverOnly',
     'releasedOnly',
@@ -174,13 +173,12 @@ const IMDB_ALLOWED_KEYS = [
   'runtimeMin',
   'runtimeMax',
   'languages',
-   'countries',
+  'countries',
   'imdbCountries',
   'keywords',
   'awardsWon',
   'awardsNominated',
   'types',
-  'enableRatingPosters',
 ];
 
 const VALID_IMDB_LIST_ID = /^ls\d{1,15}$/;

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, memo } from 'react';
+import { Check } from 'lucide-react';
 import { MultiSelect } from '../../forms/MultiSelect';
 import { SearchableSelect } from '../../forms/SearchableSelect';
 import { LabelWithTooltip } from '../../forms/Tooltip';
@@ -18,7 +19,6 @@ const DATE_PRESETS = [
   { label: '1990s', value: 'era_1990s', group: 'decade' },
   { label: '1980s', value: 'era_1980s', group: 'decade' },
 ];
-
 
 export const ReleaseFilters = memo(function ReleaseFilters({
   localCatalog,
@@ -51,7 +51,8 @@ export const ReleaseFilters = memo(function ReleaseFilters({
     const toKey = isMovie ? 'releaseDateTo' : 'airDateTo';
     const from = localCatalog?.filters?.[fromKey];
     const to = localCatalog?.filters?.[toKey];
-    if (from && to && !from.startsWith('today') && !to.startsWith('today') && from > to) return '"From" date must be before "To" date';
+    if (from && to && !from.startsWith('today') && !to.startsWith('today') && from > to)
+      return '"From" date must be before "To" date';
     return null;
   }, [localCatalog?.filters, isMovie]);
 
@@ -64,12 +65,12 @@ export const ReleaseFilters = memo(function ReleaseFilters({
 
   const getPresetDates = useCallback((presetValue) => {
     const presetMap = {
-      last_30_days:  { from: 'today-30d',  to: 'today' },
-      last_90_days:  { from: 'today-90d',  to: 'today' },
-      last_180_days: { from: 'today-6mo',  to: 'today' },
+      last_30_days: { from: 'today-30d', to: 'today' },
+      last_90_days: { from: 'today-90d', to: 'today' },
+      last_180_days: { from: 'today-6mo', to: 'today' },
       last_365_days: { from: 'today-12mo', to: 'today' },
-      next_30_days:  { from: 'today',      to: 'today+30d' },
-      next_90_days:  { from: 'today',      to: 'today+3mo' },
+      next_30_days: { from: 'today', to: 'today+30d' },
+      next_90_days: { from: 'today', to: 'today+3mo' },
       era_2020s: { from: '2020-01-01', to: '2030-01-01' },
       era_2010s: { from: '2010-01-01', to: '2020-01-01' },
       era_2000s: { from: '2000-01-01', to: '2010-01-01' },
@@ -80,13 +81,13 @@ export const ReleaseFilters = memo(function ReleaseFilters({
   }, []);
 
   const DATE_TAG_LABELS = {
-    'today':       'Today',
-    'today-30d':   'Today − 30 days',
-    'today-90d':   'Today − 90 days',
-    'today-6mo':   'Today − 6 months',
-    'today-12mo':  'Today − 12 months',
-    'today+30d':   'Today + 30 days',
-    'today+3mo':   'Today + 3 months',
+    today: 'Today',
+    'today-30d': 'Today − 30 days',
+    'today-90d': 'Today − 90 days',
+    'today-6mo': 'Today − 6 months',
+    'today-12mo': 'Today − 12 months',
+    'today+30d': 'Today + 30 days',
+    'today+3mo': 'Today + 3 months',
   };
 
   const getDateTagLabel = (value) => DATE_TAG_LABELS[value] || null;
@@ -113,6 +114,32 @@ export const ReleaseFilters = memo(function ReleaseFilters({
 
   return (
     <>
+      <label className="checkbox-label-row" style={{ cursor: 'pointer', marginBottom: '12px' }}>
+        <div
+          className={`checkbox ${localCatalog?.filters?.releasedOnly ? 'checked' : ''}`}
+          role="checkbox"
+          aria-checked={!!localCatalog?.filters?.releasedOnly}
+          tabIndex={0}
+          onClick={() => onFiltersChange('releasedOnly', !localCatalog?.filters?.releasedOnly)}
+          onKeyDown={(e) => {
+            if (e.key === ' ' || e.key === 'Enter') {
+              e.preventDefault();
+              onFiltersChange('releasedOnly', !localCatalog?.filters?.releasedOnly);
+            }
+          }}
+        >
+          {localCatalog?.filters?.releasedOnly && <Check size={14} />}
+        </div>
+        <LabelWithTooltip
+          label="Released only"
+          tooltip={
+            isMovie
+              ? 'Only show movies with a digital, physical, or TV release on or before today. Filters out announced and in-production titles.'
+              : 'Only show TV series that have already started airing. Filters out announced shows with future air dates.'
+          }
+        />
+      </label>
+
       <div className="date-presets">
         <div className="date-preset-row">
           <span className="date-preset-label">Last</span>

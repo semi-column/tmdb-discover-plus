@@ -182,9 +182,13 @@ export function useActiveFilters({
       filters.airDateTo
     ) {
       const DATE_TAG_LABELS = {
-        'today': 'Today', 'today-30d': 'Today − 30d', 'today-90d': 'Today − 90d',
-        'today-6mo': 'Today − 6mo', 'today-12mo': 'Today − 12mo',
-        'today+30d': 'Today + 30d', 'today+3mo': 'Today + 3mo',
+        today: 'Today',
+        'today-30d': 'Today − 30d',
+        'today-90d': 'Today − 90d',
+        'today-6mo': 'Today − 6mo',
+        'today-12mo': 'Today − 12mo',
+        'today+30d': 'Today + 30d',
+        'today+3mo': 'Today + 3mo',
       };
       const rawFrom = filters.releaseDateFrom || filters.airDateFrom || '…';
       const rawTo = filters.releaseDateTo || filters.airDateTo || '…';
@@ -398,7 +402,7 @@ export function useActiveFilters({
     }
 
     if (filters.releasedOnly) {
-      active.push({ key: 'releasedOnly', label: 'Released only', section: 'options' });
+      active.push({ key: 'releasedOnly', label: 'Released only', section: 'release' });
     }
 
     return active;
