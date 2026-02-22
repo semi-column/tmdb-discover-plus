@@ -65,6 +65,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
       role="presentation"
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
     >
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className="modal"
         ref={modalRef}

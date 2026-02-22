@@ -153,6 +153,7 @@ export const MultiSelect = memo(function MultiSelect({
   }, [focusedIndex]);
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className={`multi-select ${isOpen ? 'open' : ''} ${disabled ? 'disabled' : ''}`}
       ref={containerRef}

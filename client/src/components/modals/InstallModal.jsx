@@ -38,6 +38,7 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl }) {
       role="presentation"
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
     >
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className="modal"
         ref={modalRef}

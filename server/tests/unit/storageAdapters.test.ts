@@ -55,7 +55,9 @@ describe('MongoAdapter', () => {
   describe('getUserConfig', () => {
     it('returns config for valid userId', async () => {
       const mockConfig = { userId: 'user1', catalogs: [] };
-      mockModel.findOne.mockReturnValue({ lean: () => Promise.resolve(mockConfig) });
+      mockModel.findOne.mockReturnValue({
+        lean: () => ({ exec: () => Promise.resolve(mockConfig) }),
+      });
 
       const result = await adapter.getUserConfig('user1');
       expect(result).toEqual(mockConfig);
@@ -69,7 +71,7 @@ describe('MongoAdapter', () => {
     });
 
     it('returns null when not found', async () => {
-      mockModel.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
+      mockModel.findOne.mockReturnValue({ lean: () => ({ exec: () => Promise.resolve(null) }) });
 
       const result = await adapter.getUserConfig('missing');
       expect(result).toBeNull();
@@ -79,7 +81,9 @@ describe('MongoAdapter', () => {
   describe('saveUserConfig', () => {
     it('upserts config', async () => {
       const config = { userId: 'user1', catalogs: [], apiKeyId: 'key1' };
-      mockModel.findOneAndUpdate.mockReturnValue({ lean: () => Promise.resolve(config) });
+      mockModel.findOneAndUpdate.mockReturnValue({
+        lean: () => ({ exec: () => Promise.resolve(config) }),
+      });
 
       const result = await adapter.saveUserConfig(config as any);
       expect(result).toEqual(config);
@@ -96,7 +100,7 @@ describe('MongoAdapter', () => {
       const configs = [{ userId: 'a' }, { userId: 'b' }];
       mockModel.find.mockReturnValue({
         sort: vi.fn().mockReturnValue({
-          lean: () => Promise.resolve(configs),
+          lean: () => ({ exec: () => Promise.resolve(configs) }),
         }),
       });
 
