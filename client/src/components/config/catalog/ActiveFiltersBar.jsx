@@ -13,7 +13,7 @@ export const ActiveFiltersBar = memo(function ActiveFiltersBar({
     <div className="active-filters-bar">
       <div className="active-filters-chips">
         {activeFilters.map((filter) => (
-          <div key={filter.key} className="active-filter-chip">
+          <div key={filter.key} className="active-filter-chip" data-section={filter.section}>
             <button
               type="button"
               className="active-filter-chip-label"

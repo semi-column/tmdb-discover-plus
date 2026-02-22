@@ -249,8 +249,7 @@
 .active-filter-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  padding: 0;
   background: var(--accent-primary);
   color: white;
   font-size: 0.75rem;
@@ -261,6 +260,16 @@
     opacity 0.15s ease,
     transform 0.15s var(--ease-out-expo);
   animation: chipEnter 0.2s var(--ease-out-expo);
+}
+
+.active-filter-chip-label {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: 6px 6px 6px 12px;
+  cursor: pointer;
+  text-align: left;
 }
 
 @keyframes chipEnter {
@@ -286,6 +295,9 @@
 .active-filter-chip[data-section='streaming'] {
   background: #0ea5e9;
 }
+.active-filter-chip[data-section='region'] {
+  background: #f43f5e;
+}
 .active-filter-chip[data-section='people'] {
   background: #ec4899;
 }
@@ -298,6 +310,7 @@
 }
 
 .active-filter-chip .chip-remove {
+  margin-right: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
