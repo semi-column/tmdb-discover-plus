@@ -740,6 +740,11 @@ async function handleMetaRequest(
       }
     }
 
+    // Normalize userRegion: .lean() bypasses Mongoose coercion so the value may be an array
+    if (userRegion && typeof userRegion !== 'string') {
+      userRegion = Array.isArray(userRegion) ? String(userRegion[0]) : String(userRegion);
+    }
+
     const meta = await tmdb.toStremioFullMeta(
       details,
       type,

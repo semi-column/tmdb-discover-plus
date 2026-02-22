@@ -88,7 +88,7 @@ function buildCertification(
   targetLanguage: string | null,
   userRegion: string | null
 ): string | null {
-  let countryCode = userRegion ? userRegion.toUpperCase() : 'US';
+  let countryCode = userRegion && typeof userRegion === 'string' ? userRegion.toUpperCase() : 'US';
 
   if (!userRegion && targetLanguage) {
     countryCode = targetLanguage.includes('-')
