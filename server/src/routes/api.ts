@@ -26,7 +26,7 @@ import {
   sanitizePage,
   isValidContentType,
 } from '../utils/validation.ts';
-import { sendError, ErrorCodes } from '../utils/AppError.ts';
+import { sendError, ErrorCodes, safeErrorMessage } from '../utils/AppError.ts';
 import { requireAuth, optionalAuth, requireConfigOwnership } from '../utils/authMiddleware.ts';
 import { computeApiKeyId } from '../utils/security.ts';
 import { config } from '../config.ts';
@@ -822,7 +822,7 @@ router.put(
       res.json(response);
     } catch (error) {
       log.error('PUT /config/:userId error', { error: (error as Error).message });
-      sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+      sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
     }
   }
 );

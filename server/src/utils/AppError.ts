@@ -40,3 +40,21 @@ export function formatErrorResponse(
 export function sendError(res: any, statusCode: number, code: ErrorCode, message: string): void {
   res.status(statusCode).json(formatErrorResponse(code, message));
 }
+
+/**
+ * Return a safe, user-facing message for internal/storage errors.
+ * Keeps known user-facing messages (validation, auth) but strips
+ * Mongoose CastErrors and other verbose internals.
+ */
+export function safeErrorMessage(error: Error): string {
+  const msg = error.message || '';
+  if (msg.includes('CastError') || msg.includes('Cast to')) {
+    return 'Invalid catalog data. Please check your catalog configuration and try again.';
+  }
+  if (msg.includes('validation failed') || msg.includes('ValidatorError')) {
+    return 'Catalog validation failed. Please check your settings and try again.';
+  }
+  // Keep short, intentional error messages (thrown by our own code)
+  if (msg.length < 120 && !msg.includes('\n')) return msg;
+  return 'An unexpected error occurred. Please try again.';
+}

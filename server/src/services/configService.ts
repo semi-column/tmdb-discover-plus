@@ -79,6 +79,16 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
 
   const processedCatalogs = (config.catalogs || []).map((c) => {
     const { displayLanguage, ...cleanFilters } = c.filters || {};
+
+    // Sanitize fields that must be strings (not arrays) per Mongoose schema
+    if (Array.isArray(cleanFilters.countries)) {
+      cleanFilters.countries =
+        cleanFilters.countries.length > 0 ? cleanFilters.countries.join(',') : undefined;
+    }
+    if (Array.isArray(cleanFilters.watchMonetizationType)) {
+      cleanFilters.watchMonetizationType = cleanFilters.watchMonetizationType[0] || undefined;
+    }
+
     return {
       ...c,
       _id: c._id || c.id || crypto.randomUUID(),
