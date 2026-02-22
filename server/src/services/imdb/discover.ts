@@ -138,15 +138,43 @@ export async function getTopRanking(type: ContentType): Promise<ImdbRankingResul
     type === 'series'
       ? '/api/imdb/rankings/top/250?type=TV'
       : '/api/imdb/rankings/top/250?type=MOVIE';
-  const data = (await imdbFetch(endpoint, {}, ttl)) as RawRankingResponse;
+  const fallbackKey = `imdb:top250:fallback:${type}`;
+  const cache = getCache();
 
-  const list = data?.titles || data?.titleChartRankings;
+  try {
+    const data = (await imdbFetch(endpoint, {}, ttl)) as RawRankingResponse;
 
-  if (list && Array.isArray(list)) {
-    data.titles = flattenNestedTitles(list);
+    const list = data?.titles || data?.titleChartRankings;
+
+    if (list && Array.isArray(list)) {
+      data.titles = flattenNestedTitles(list);
+    }
+
+    try {
+      await cache.set(fallbackKey, data, 604800);
+    } catch {
+      // ignore
+    }
+
+    return data as unknown as ImdbRankingResult;
+  } catch (err) {
+    log.warn('getTopRanking failed, trying fallback cache', {
+      type,
+      error: (err as Error).message,
+    });
+
+    try {
+      const fallback = await cache.get(fallbackKey);
+      if (fallback) {
+        log.info('Serving top250 from fallback cache', { type });
+        return fallback as ImdbRankingResult;
+      }
+    } catch {
+      // ignore
+    }
+
+    throw err;
   }
-
-  return data as unknown as ImdbRankingResult;
 }
 
 export async function getPopular(type: ContentType): Promise<ImdbRankingResult> {
@@ -155,13 +183,42 @@ export async function getPopular(type: ContentType): Promise<ImdbRankingResult> 
     type === 'series'
       ? '/api/imdb/rankings/top/popular?type=TV'
       : '/api/imdb/rankings/top/popular?type=MOVIE';
-  const data = (await imdbFetch(endpoint, {}, ttl)) as RawRankingResponse;
+  const fallbackKey = `imdb:popular:fallback:${type}`;
+  const cache = getCache();
 
-  if (data?.titles && Array.isArray(data.titles)) {
-    data.titles = flattenNestedTitles(data.titles);
+  try {
+    const data = (await imdbFetch(endpoint, {}, ttl)) as RawRankingResponse;
+
+    if (data?.titles && Array.isArray(data.titles)) {
+      data.titles = flattenNestedTitles(data.titles);
+    }
+
+    // Store a long-lived fallback copy (7 days) for when the API is persistently down
+    try {
+      await cache.set(fallbackKey, data, 604800);
+    } catch {
+      // ignore
+    }
+
+    return data as unknown as ImdbRankingResult;
+  } catch (err) {
+    log.warn('getPopular failed, trying fallback cache', {
+      type,
+      error: (err as Error).message,
+    });
+
+    try {
+      const fallback = await cache.get(fallbackKey);
+      if (fallback) {
+        log.info('Serving popular from fallback cache', { type });
+        return fallback as ImdbRankingResult;
+      }
+    } catch {
+      // ignore
+    }
+
+    throw err;
   }
-
-  return data as unknown as ImdbRankingResult;
 }
 
 export async function getList(

@@ -56,21 +56,32 @@ export const CatalogPreview = memo(function CatalogPreview({ loading, error, dat
           {!loading && !error && data && (
             <div className="preview-grid">
               {(Array.isArray(data.metas) ? data.metas : []).map((item) => {
+                const imdbId =
+                  item.imdbId || item.imdb_id || (item.id?.startsWith('tt') ? item.id : null);
                 const tmdbId =
                   item.tmdbId ||
                   (item.id?.startsWith('tmdb:') ? item.id.replace('tmdb:', '') : null);
-                const tmdbUrl = tmdbId
-                  ? `https://www.themoviedb.org/${item.type === 'series' ? 'tv' : 'movie'}/${tmdbId}`
-                  : null;
+
+                let itemUrl, linkTitle;
+                if (imdbId) {
+                  itemUrl = `https://www.imdb.com/title/${imdbId}/`;
+                  linkTitle = `View "${item.name}" on IMDb`;
+                } else if (tmdbId) {
+                  itemUrl = `https://www.themoviedb.org/${item.type === 'series' ? 'tv' : 'movie'}/${tmdbId}`;
+                  linkTitle = `View "${item.name}" on TMDB`;
+                } else {
+                  itemUrl = null;
+                  linkTitle = item.name;
+                }
 
                 return (
                   <a
                     key={item.id}
                     className="preview-card"
-                    href={tmdbUrl}
+                    href={itemUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    title={`View "${item.name}" on TMDB`}
+                    title={linkTitle}
                   >
                     {item.poster ? (
                       <img src={item.poster} alt={item.name} loading="lazy" />

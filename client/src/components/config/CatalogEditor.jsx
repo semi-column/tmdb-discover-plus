@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { memo } from 'react';
 import { ActiveFiltersBar } from './catalog/ActiveFiltersBar';
-import { CatalogImportExport } from './catalog/CatalogImportExport';
 import { CatalogPreview } from './catalog/CatalogPreview';
 import { FilterPanel } from './catalog/FilterPanel';
 import { FilterSection } from './catalog/FilterSection';
@@ -32,7 +31,6 @@ export const CatalogEditor = memo(function CatalogEditor() {
 
   const {
     catalog,
-    addToast,
     localCatalog,
     previewData,
     previewLoading,
@@ -85,7 +83,6 @@ export const CatalogEditor = memo(function CatalogEditor() {
     handleTypeChange,
     handleTriStateGenreClick,
     loadPreview,
-    handleImport,
     handleTVNetworkSearch,
   } = handlers;
 
@@ -139,25 +136,22 @@ export const CatalogEditor = memo(function CatalogEditor() {
               {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
               Preview
             </button>
-            <CatalogImportExport
-              localCatalog={localCatalog}
-              onImport={handleImport}
-              addToast={addToast}
-            />
           </div>
         </div>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '4px',
-          padding: '6px 16px',
-          borderBottom: '1px solid var(--border-color)',
-          fontSize: '11px',
-          color: 'var(--text-muted)',
-          letterSpacing: '0.02em',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            padding: '6px 16px',
+            borderBottom: '1px solid var(--border-color)',
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            letterSpacing: '0.02em',
+          }}
+        >
           Powered by{' '}
           <a
             href={isImdbCatalog ? 'https://sleeyax.dev/' : 'https://www.themoviedb.org/'}
@@ -176,7 +170,6 @@ export const CatalogEditor = memo(function CatalogEditor() {
         </div>
 
         <div className="editor-content">
-
           <div className="content-type-toggle">
             <button
               className={`type-btn ${isMovie ? 'active' : ''}`}

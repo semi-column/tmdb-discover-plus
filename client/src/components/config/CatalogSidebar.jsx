@@ -12,7 +12,7 @@ import {
   ChevronDown,
   Shuffle,
   Download,
-  Upload as ArrowUpTrayIcon,
+  Upload,
   Trophy,
   Award,
   EyeOff,
@@ -26,6 +26,8 @@ import { useCatalog, useTMDBData, useAppActions } from '../../context/AppContext
 import { CatalogListSkeleton } from '../layout/Skeleton';
 import { GeneralSettingsSection } from './GeneralSettingsSection';
 import { PosterSettingsSection } from './PosterSettingsSection';
+import { ImportSelectModal } from '../modals/ImportSelectModal';
+import { ExportSelectModal } from '../modals/ExportSelectModal';
 
 const DraggableCatalogList = lazy(() =>
   import('./DraggableCatalogList').then((m) => ({ default: m.DraggableCatalogList }))
@@ -79,6 +81,9 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
   const [moviePresetsCollapsed, setMoviePresetsCollapsed] = useState(isMobile);
   const [tvPresetsCollapsed, setTvPresetsCollapsed] = useState(isMobile);
   const [sidebarTab, setSidebarTab] = useState('catalogs');
+  const [importData, setImportData] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     setMoviePresetsCollapsed(isMobile);
@@ -149,35 +154,18 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
             <div className="sidebar-actions-row">
               <button
                 className="btn btn-secondary btn-sm sidebar-action-btn"
-                title="Export full configuration (catalogs + preferences)"
-                onClick={() => {
-                  const exportData = {
-                    configName,
-                    catalogs,
-                    preferences,
-                    exportedAt: new Date().toISOString(),
-                  };
-                  const dataStr = JSON.stringify(exportData, null, 2);
-                  const blob = new Blob([dataStr], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const link = document.createElement('a');
-                  link.href = url;
-                  link.download = `${(configName || 'stremio_config').replace(/\s+/g, '_')}_full.json`;
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  URL.revokeObjectURL(url);
-                }}
+                title="Export configuration"
+                onClick={() => setShowExportModal(true)}
               >
-                <Download size={14} />
+                <Upload size={14} />
                 <span>Export</span>
               </button>
 
               <label
                 className="btn btn-secondary btn-sm sidebar-action-btn"
-                title="Import full configuration"
+                title="Import configuration"
               >
-                <ArrowUpTrayIcon size={14} />
+                <Download size={14} />
                 <span>Import</span>
                 <input
                   type="file"
@@ -190,7 +178,16 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
                     reader.onload = (event) => {
                       try {
                         const imported = JSON.parse(event.target.result);
-                        if (onImportConfig) onImportConfig(imported);
+                        if (
+                          imported?.catalogs?.length ||
+                          imported?.preferences ||
+                          imported?.configName
+                        ) {
+                          setImportData(imported);
+                          setShowImportModal(true);
+                        } else {
+                          if (addToast) addToast('No catalogs or settings found in file', 'error');
+                        }
                       } catch (err) {
                         console.error('Import failed', err);
                         if (addToast) addToast('Failed to parse JSON file', 'error');
@@ -397,6 +394,44 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
             </div>
           </div>
         </>
+      )}
+      {showImportModal && importData && (
+        <ImportSelectModal
+          isOpen={showImportModal}
+          data={importData}
+          onClose={() => {
+            setShowImportModal(false);
+            setImportData(null);
+          }}
+          onConfirm={(selectedData) => {
+            if (onImportConfig) onImportConfig(selectedData);
+            setShowImportModal(false);
+            setImportData(null);
+          }}
+        />
+      )}
+      {showExportModal && (
+        <ExportSelectModal
+          isOpen={showExportModal}
+          catalogs={safeCatalogs}
+          configName={configName}
+          preferences={preferences}
+          onClose={() => setShowExportModal(false)}
+          onConfirm={(exportData) => {
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${(configName || 'stremio_config').replace(/\s+/g, '_')}_export.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            setShowExportModal(false);
+            if (addToast) addToast('Configuration exported successfully');
+          }}
+        />
       )}
     </aside>
   );
