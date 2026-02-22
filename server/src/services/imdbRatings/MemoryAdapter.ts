@@ -41,11 +41,10 @@ export class MemoryAdapter extends ImdbRatingsAdapter {
   }
 
   async replaceAll(entries: [string, string][]): Promise<void> {
-    const newRatings = new Map<string, string>();
+    this.ratings.clear();
     for (const [id, val] of entries) {
-      newRatings.set(id, val);
+      this.ratings.set(id, val);
     }
-    this.ratings = newRatings;
   }
 
   async count(): Promise<number> {

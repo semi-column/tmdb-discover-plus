@@ -2,6 +2,7 @@ import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
 import * as tmdb from '../services/tmdb/index.ts';
 import * as imdb from '../services/imdb/index.ts';
+import { getTmdbThrottle } from './tmdbThrottle.ts';
 
 const log = createLogger('CacheWarmer');
 
@@ -76,6 +77,8 @@ export async function warmEssentialCaches(
 
   const elapsed = Date.now() - startTime;
   log.info('Cache warming complete', { warmed, failed, elapsedMs: elapsed });
+
+  getTmdbThrottle().endGracePeriod();
 
   return { warmed, failed, elapsedMs: elapsed };
 }

@@ -157,6 +157,7 @@ export const MultiSelect = memo(function MultiSelect({
       className={`multi-select ${isOpen ? 'open' : ''} ${disabled ? 'disabled' : ''}`}
       ref={containerRef}
       onKeyDown={handleDropdownKeyDown}
+      role="group"
     >
       <div
         className={`multi-select-trigger ${isOpen ? 'open' : ''} ${disabled ? 'disabled' : ''}`}
@@ -233,7 +234,9 @@ export const MultiSelect = memo(function MultiSelect({
                     id={`${listboxId}-option-${index}`}
                     className={`multi-select-option ${isSelected ? 'selected' : ''} ${isFocused ? 'focused' : ''}`}
                     onClick={() => handleToggle(option[valueKey])}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleToggle(option[valueKey]); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') handleToggle(option[valueKey]);
+                    }}
                     role="option"
                     aria-selected={isSelected}
                     tabIndex={0}

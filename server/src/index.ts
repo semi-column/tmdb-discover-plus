@@ -314,11 +314,22 @@ app.get('/health', monitoringRateLimit, (req, res) => {
     cacheWarming: serverStatus.cacheWarming,
     metrics: metricsData,
     memory: {
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
       unit: 'MB',
     },
   };
+
+  const heapUsedMB = health.memory.used;
+  const HEAP_WARN_THRESHOLD = 384;
+  if (heapUsedMB > HEAP_WARN_THRESHOLD) {
+    log.warn('High heap usage', {
+      heapUsedMB,
+      rss: health.memory.rss,
+      threshold: HEAP_WARN_THRESHOLD,
+    });
+  }
 
   const httpStatus = status === 'ok' || status === 'degraded' ? 200 : 503;
   res.status(httpStatus).json(health);

@@ -10,6 +10,7 @@ describe('TokenBucket', () => {
 
   it('grants tokens within rate limit', async () => {
     bucket = new TokenBucket({ maxTokens: 5, refillRate: 5 });
+    bucket.endGracePeriod();
     for (let i = 0; i < 5; i++) {
       await bucket.acquire();
     }
@@ -66,6 +67,7 @@ describe('TokenBucket', () => {
 
   it('reports accurate stats', async () => {
     bucket = new TokenBucket({ maxTokens: 3, refillRate: 100 });
+    bucket.endGracePeriod();
     await bucket.acquire();
     await bucket.acquire();
     await bucket.acquire();
@@ -77,5 +79,6 @@ describe('TokenBucket', () => {
     expect(stats.rejectedRequests).toBe(0);
     expect(stats.currentTokens).toBe(0);
     expect(stats.queueDepth).toBe(0);
+    expect(stats.globalPauses).toBe(0);
   });
 });

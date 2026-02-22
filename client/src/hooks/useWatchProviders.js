@@ -35,7 +35,7 @@ export function useWatchProviders({ type, region, getWatchProviders }) {
     return () => {
       cancelled = true;
     };
-  }, [shouldFetch, type, region, getWatchProviders]);
+  }, [shouldFetch, type, region, getWatchProviders, fetchKey]);
 
   const watchProviders = shouldFetch ? fetchedProviders : [];
   const loading = shouldFetch && fetchKey !== fetchedKey;

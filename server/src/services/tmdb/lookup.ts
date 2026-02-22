@@ -6,6 +6,7 @@ import type { TmdbExternalIds, TmdbFindResponse, TmdbResult } from '../../types/
 const log = createLogger('tmdb:lookup');
 
 const EXTERNAL_ID_TTL = 86400 * 30;
+const NEGATIVE_LOOKUP_TTL = 3600;
 
 export async function getExternalIds(
   apiKey: string,
@@ -71,6 +72,7 @@ export async function findByImdbId(
   options: { language?: string } = {}
 ): Promise<{ tmdbId: number } | null> {
   const cacheKey = `find_${imdbId}`;
+  const negativeCacheKey = `find_neg_${imdbId}_${type}`;
   const cache = getCache();
 
   try {
@@ -79,6 +81,11 @@ export async function findByImdbId(
   } catch (e) {
     log.debug('Cache get failed', { key: cacheKey, error: (e as Error).message });
   }
+
+  try {
+    const negCached = await cache.get(negativeCacheKey);
+    if (negCached) return null;
+  } catch {}
 
   const params: Record<string, string> = { external_source: 'imdb_id' };
   if (options.language) params.language = options.language;
@@ -102,6 +109,11 @@ export async function findByImdbId(
       }
       return found;
     }
+
+    try {
+      await cache.set(negativeCacheKey, { notFound: true }, NEGATIVE_LOOKUP_TTL);
+    } catch {}
+
     return null;
   } catch {
     return null;

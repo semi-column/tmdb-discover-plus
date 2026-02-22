@@ -35,8 +35,7 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl }) {
     <div
       className="modal-overlay"
       onClick={onClose}
-      role="button"
-      tabIndex={0}
+      role="presentation"
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
     >
       <div
@@ -46,6 +45,7 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl }) {
         aria-modal="true"
         aria-label="Install Your Addon"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
           <h3 className="modal-title">Install Your Addon</h3>

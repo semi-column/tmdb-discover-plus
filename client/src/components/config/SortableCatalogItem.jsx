@@ -2,7 +2,6 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Film, Tv, GripVertical, Trash2, Copy } from 'lucide-react';
 
-
 export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onDuplicate }) {
   const getCatalogKey = (cat) => String(cat?._id || cat?.id || cat?.name);
   const id = getCatalogKey(catalog);
@@ -10,8 +9,6 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
   });
-
-
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -29,16 +26,14 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
           onSelect(catalog);
         }
       }}
-      role="listitem"
+      role="button"
       tabIndex={0}
     >
       <div className="catalog-item-icon">
         {catalog.type === 'series' ? <Tv size={20} /> : <Film size={20} />}
       </div>
       <div className="catalog-item-info">
-        <div className="catalog-item-name">
-          {catalog.name}
-        </div>
+        <div className="catalog-item-name">{catalog.name}</div>
         <div className="catalog-item-type">
           {catalog.type === 'series' ? 'TV Shows' : 'Movies'}
           {catalog.source === 'imdb' && (

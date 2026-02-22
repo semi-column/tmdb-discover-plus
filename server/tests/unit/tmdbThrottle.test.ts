@@ -79,4 +79,39 @@ describe('TokenBucket', () => {
     await bucket.acquire();
     expect(bucket.getStats().totalRequests).toBe(3);
   });
+
+  it('starts in grace mode with half rate', () => {
+    bucket = new TokenBucket({ maxTokens: 10, refillRate: 10 });
+    const stats = bucket.getStats();
+    expect(stats.graceMode).toBe(true);
+  });
+
+  it('endGracePeriod restores full rate', () => {
+    bucket = new TokenBucket({ maxTokens: 10, refillRate: 10 });
+    bucket.endGracePeriod();
+    const stats = bucket.getStats();
+    expect(stats.graceMode).toBe(false);
+  });
+
+  it('notifyRateLimited pauses token grants', async () => {
+    bucket = new TokenBucket({ maxTokens: 10, refillRate: 100 });
+    bucket.endGracePeriod();
+    await bucket.acquire();
+
+    bucket.notifyRateLimited(500);
+    expect(bucket.getStats().globalPauses).toBe(1);
+    expect(bucket.getStats().pausedUntil as number).toBeGreaterThan(0);
+  });
+
+  it('resumes after pause expires', async () => {
+    bucket = new TokenBucket({ maxTokens: 5, refillRate: 100 });
+    bucket.endGracePeriod();
+    await bucket.acquire();
+
+    bucket.notifyRateLimited(100);
+    await new Promise((r) => setTimeout(r, 200));
+
+    await bucket.acquire(2000);
+    expect(bucket.getStats().totalRequests).toBe(2);
+  });
 });

@@ -218,11 +218,10 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
         if (response.status >= 500 || response.status === 429) {
           if (response.status === 429) {
             const retryAfter = response.headers.get('Retry-After');
-            if (retryAfter) {
-              const waitMs = Math.min(parseInt(retryAfter) * 1000, 10000) || 1000;
-              log.warn('TMDB 429 — respecting Retry-After', { retryAfter, waitMs });
-              await new Promise((resolve) => setTimeout(resolve, waitMs));
-            }
+            const waitMs = retryAfter ? Math.min(parseInt(retryAfter) * 1000, 10000) || 1000 : 1000;
+            log.warn('TMDB 429 — respecting Retry-After', { retryAfter, waitMs });
+            throttle.notifyRateLimited(waitMs);
+            await new Promise((resolve) => setTimeout(resolve, waitMs));
           }
           throw new Error(`TMDB API retryable error: ${response.status}`);
         }

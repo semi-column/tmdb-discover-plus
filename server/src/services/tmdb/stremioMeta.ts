@@ -291,7 +291,7 @@ async function buildLinks({
     }
   }
 
-  const slugTitle = title
+  const slugTitle = (title || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
@@ -326,7 +326,7 @@ export async function toStremioFullMeta(
   if (!rawDetails) return {};
   const details = rawDetails as AnyTmdbDetails;
   const isMovie = type === 'movie';
-  const title = isMovie ? details.title : details.name;
+  const title = (isMovie ? details.title : details.name) || '';
   const releaseDate = isMovie ? details.release_date : details.first_air_date;
   const year = releaseDate ? String(releaseDate).split('-')[0] : '';
 
@@ -533,7 +533,7 @@ export function toStremioMeta(
 ): StremioMetaPreview {
   const item = rawItem as AnyTmdbResult;
   const isMovie = type === 'movie';
-  const title = isMovie ? item.title : item.name;
+  const title = (isMovie ? item.title : item.name) || '';
   const releaseDate = isMovie ? item.release_date : item.first_air_date;
   const year = releaseDate ? releaseDate.split('-')[0] : '';
 

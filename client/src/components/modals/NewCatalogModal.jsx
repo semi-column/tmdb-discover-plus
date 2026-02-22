@@ -59,7 +59,12 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
     source !== 'imdb' || imdbListType !== 'imdb_list' || /^ls\d{1,15}$/.test(imdbListId.trim());
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      role="presentation"
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+    >
       <div
         className="modal"
         ref={modalRef}
@@ -67,6 +72,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
         aria-modal="true"
         aria-label="Create New Catalog"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       >
         <div className="modal-header" style={{ paddingBottom: '8px' }}>
           <div>
@@ -174,7 +180,6 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
                 }
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                autoFocus
                 required
               />
             </div>

@@ -57,7 +57,7 @@ export const config = Object.freeze({
   cache: Object.freeze({
     driver: env('CACHE_DRIVER'),
     redisUrl: env('REDIS_URL'),
-    maxKeys: envInt('CACHE_MAX_KEYS', 50000),
+    maxKeys: envInt('CACHE_MAX_KEYS', 20000),
     versionOverride: env('CACHE_VERSION_OVERRIDE'),
     warmRegions: env('CACHE_WARM_REGIONS', 'US,GB,DE,FR,ES')
       .split(',')

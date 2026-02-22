@@ -34,6 +34,23 @@ import { sendError, ErrorCodes } from '../utils/AppError.ts';
 
 const log = createLogger('addon');
 
+const recentErrors = new Map<string, number>();
+const ERROR_DEDUP_TTL = 300_000;
+
+function shouldLogError(userId: string, errorMsg: string): boolean {
+  const key = `${userId.slice(0, 8)}:${errorMsg.slice(0, 50)}`;
+  const now = Date.now();
+  const last = recentErrors.get(key);
+  if (last && now - last < ERROR_DEDUP_TTL) return false;
+  recentErrors.set(key, now);
+  if (recentErrors.size > 500) {
+    for (const [k, ts] of recentErrors) {
+      if (now - ts > ERROR_DEDUP_TTL) recentErrors.delete(k);
+    }
+  }
+  return true;
+}
+
 const __filename_addon = fileURLToPath(import.meta.url);
 const __dirname_addon = path.dirname(__filename_addon);
 const STATIC_GENRE_MAP = (() => {
@@ -628,14 +645,18 @@ async function handleCatalogRequest(
     );
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    log.error('Catalog error', {
-      catalogId,
-      type,
-      error: (error as Error).message,
-      durationMs,
-      isTimeout: (error as Error).name === 'AbortError',
-      code: (error as Error & { code?: string }).code || 'CATALOG_FETCH_ERROR',
-    });
+    const errMsg = (error as Error).message;
+    if (shouldLogError(userId, errMsg)) {
+      log.error('Catalog error', {
+        catalogId,
+        type,
+        userIdPrefix: userId.slice(0, 8),
+        error: errMsg,
+        durationMs,
+        isTimeout: (error as Error).name === 'AbortError',
+        code: (error as Error & { code?: string }).code || 'CATALOG_FETCH_ERROR',
+      });
+    }
     res.json({ metas: [] });
   }
 }
@@ -648,6 +669,7 @@ async function handleMetaRequest(
   res: Response,
   req: Request
 ) {
+  if ((type as string) === 'tv') type = 'series';
   const startTime = Date.now();
   try {
     const config = await getUserConfig(userId);
@@ -722,7 +744,9 @@ async function handleMetaRequest(
     const genreCatalogId =
       (config.catalogs || [])
         .filter((c) => c.enabled !== false && (c.type === type || (!c.type && type === 'movie')))
-        .map((c) => `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`)[0] || null;
+        .map(
+          (c) => `tmdb-${c._id || (c.name || 'catalog').toLowerCase().replace(/\s+/g, '-')}`
+        )[0] || null;
 
     let userRegion = config.preferences?.region || config.preferences?.countries || null;
 
@@ -777,14 +801,18 @@ async function handleMetaRequest(
     );
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    log.error('Meta error', {
-      id,
-      type,
-      error: (error as Error).message,
-      durationMs,
-      isTimeout: (error as Error).name === 'AbortError',
-      code: (error as Error & { code?: string }).code || 'META_FETCH_ERROR',
-    });
+    const errMsg = (error as Error).message;
+    if (shouldLogError(userId, errMsg)) {
+      log.error('Meta error', {
+        id,
+        type,
+        userIdPrefix: userId.slice(0, 8),
+        error: errMsg,
+        durationMs,
+        isTimeout: (error as Error).name === 'AbortError',
+        code: (error as Error & { code?: string }).code || 'META_FETCH_ERROR',
+      });
+    }
     res.json({ meta: {} });
   }
 }
