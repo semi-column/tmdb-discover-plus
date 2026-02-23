@@ -29,11 +29,13 @@ export const ReleaseFilters = memo(function ReleaseFilters({
   tvStatuses,
   tvTypes,
   certOptions,
+  certCountries,
 }) {
   const safeCountries = Array.isArray(countries) ? countries : [];
   const safeReleaseTypes = Array.isArray(releaseTypes) ? releaseTypes : [];
   const safeTvStatuses = Array.isArray(tvStatuses) ? tvStatuses : [];
   const safeTvTypes = Array.isArray(tvTypes) ? tvTypes : [];
+  const safeCertCountries = Array.isArray(certCountries) ? certCountries : [];
 
   const yearOptions = useMemo(() => {
     const years = [];
@@ -384,6 +386,21 @@ export const ReleaseFilters = memo(function ReleaseFilters({
                   Select a region above to filter by release type
                 </span>
               )}
+            </div>
+            <div className="filter-group">
+              <LabelWithTooltip
+                label="Age Rating Country"
+                tooltip="Select which country's certification system to use for age ratings. Changing this updates the available options in the Age Rating filter. Independent of the Release Region filter."
+              />
+              <SearchableSelect
+                options={safeCertCountries}
+                value={localCatalog?.filters?.certificationCountry || ''}
+                onChange={(value) => onFiltersChange('certificationCountry', value || undefined)}
+                placeholder="US (default)"
+                searchPlaceholder="Search countries..."
+                labelKey="english_name"
+                valueKey="iso_3166_1"
+              />
             </div>
             <div className="filter-group">
               <LabelWithTooltip

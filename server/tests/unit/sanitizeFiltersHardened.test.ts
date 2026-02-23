@@ -86,9 +86,9 @@ describe('sanitizeFilters — hardened allowlist', () => {
       expect(result.certificationCountry).toBe('US');
     });
 
-    it('removes orphaned certificationCountry (no cert values)', () => {
+    it('preserves certificationCountry even without cert values (standalone rating country)', () => {
       const result = sanitizeFilters({ certificationCountry: 'US' });
-      expect(result).not.toHaveProperty('certificationCountry');
+      expect(result.certificationCountry).toBe('US');
     });
 
     it('keeps certificationCountry when certifications array is present', () => {

@@ -126,15 +126,6 @@ export function sanitizeFilters(filters: unknown): Record<string, unknown> {
   if (sanitized.certification && !sanitized.certificationCountry) {
     delete sanitized.certification;
   }
-  if (
-    sanitized.certificationCountry &&
-    !sanitized.certification &&
-    !sanitized.certifications &&
-    !sanitized.certificationMin &&
-    !sanitized.certificationMax
-  ) {
-    delete sanitized.certificationCountry;
-  }
   if (sanitized.watchProviders && !sanitized.watchRegion) {
     delete sanitized.watchProviders;
     delete sanitized.watchMonetizationTypes;

@@ -107,6 +107,8 @@ export const CatalogEditor = memo(function CatalogEditor() {
   const excludedGenres = localCatalog?.filters?.excludeGenres || [];
   const certCountry = localCatalog?.filters?.certificationCountry || 'US';
   const certOptions = (safeCertifications[catalogType] || {})[certCountry] || [];
+  const certCountryCodes = Object.keys(safeCertifications[catalogType] || {});
+  const certCountries = safeCountries.filter((c) => certCountryCodes.includes(c.iso_3166_1));
   const currentListType = localCatalog?.filters?.listType || 'discover';
   const isPresetCatalog = currentListType && currentListType !== 'discover';
   const supportsFullFilters = !isPresetCatalog;
@@ -251,6 +253,7 @@ export const CatalogEditor = memo(function CatalogEditor() {
                     tvStatuses={tvStatuses}
                     tvTypes={tvTypes}
                     certOptions={certOptions}
+                    certCountries={certCountries}
                   />
                 </FilterSection>
               )}
