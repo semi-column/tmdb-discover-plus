@@ -1,5 +1,8 @@
 import { useState, useCallback, useMemo, memo } from 'react';
 import { FilterSection } from './FilterSection';
+
+// TODO: Awards section hidden until upstream API compatibility is resolved. Set to false to re-enable.
+const AWARDS_HIDDEN = true;
 import { Settings, Sparkles, Calendar, Award, Tag, Globe } from 'lucide-react';
 import { SearchableSelect } from '../../forms/SearchableSelect';
 import { RangeSlider, SingleSlider } from '../../forms/RangeSlider';
@@ -494,7 +497,8 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         </FilterSection>
       )}
 
-      {imdbAwards.length > 0 && (
+      {/* Awards section hidden temporarily — re-enable by removing AWARDS_HIDDEN */}
+      {!AWARDS_HIDDEN && imdbAwards.length > 0 && (
         <FilterSection
           id="awards"
           title="Awards"
