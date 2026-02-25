@@ -1,5 +1,64 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { DEFAULT_CATALOG } from './useCatalogEditor';
+
+// Filters that only make sense for movie-type catalogs.
+const MOVIE_ONLY_FILTER_KEYS = [
+  'certifications',
+  'certification',
+  'certificationCountry',
+  'certificationMin',
+  'certificationMax',
+  'includeVideo',
+  'primaryReleaseYear',
+  'releaseDateFrom',
+  'releaseDateTo',
+  'releaseTypes',
+  'releaseType',
+];
+
+// Filters that only make sense for series-type catalogs.
+const SERIES_ONLY_FILTER_KEYS = [
+  'airDateFrom',
+  'airDateTo',
+  'firstAirDateFrom',
+  'firstAirDateTo',
+  'firstAirDateYear',
+  'includeNullFirstAirDates',
+  'screenedTheatrically',
+  'timezone',
+  'withNetworks',
+  'networks',
+  'tvStatus',
+  'tvType',
+];
+
+/**
+ * Returns a copy of `filters` with all keys for the OPPOSITE type removed.
+ * Used to produce the "active" filter set after a type switch.
+ */
+function stripOppositeTypeFilters(filters, targetType) {
+  const keysToRemove = targetType === 'movie' ? SERIES_ONLY_FILTER_KEYS : MOVIE_ONLY_FILTER_KEYS;
+  const result = { ...filters };
+  for (const key of keysToRemove) {
+    delete result[key];
+  }
+  return result;
+}
+
+/**
+ * Picks only the type-specific filter keys out of a filter object.
+ * Used to stash the filters before switching away from a type.
+ */
+function pickTypeSpecificFilters(filters, type) {
+  const keys = type === 'movie' ? MOVIE_ONLY_FILTER_KEYS : SERIES_ONLY_FILTER_KEYS;
+  const stash = {};
+  for (const key of keys) {
+    if (filters[key] !== undefined) stash[key] = filters[key];
+  }
+  return stash;
+}
+
+export { MOVIE_ONLY_FILTER_KEYS, SERIES_ONLY_FILTER_KEYS };
 
 export function useCatalogEditorHandlers({
   catalog,
@@ -21,6 +80,7 @@ export function useCatalogEditorHandlers({
   excludeCompanies,
   searchTVNetworks,
 }) {
+  const typeFilterStashRef = useRef({});
   const toggleSection = useCallback(
     (section) => {
       setExpandedSections((prev) => {
@@ -57,47 +117,44 @@ export function useCatalogEditorHandlers({
     (type) => {
       let result;
       setLocalCatalog((prev) => {
-        const isNextMovie = type === 'movie';
+        const currentType = prev.type || 'movie';
+        if (currentType === type) return prev; // no-op
+
+        const catalogId = prev._id;
         const isImdb = prev.source === 'imdb';
+
+        if (catalogId) {
+          const stash = typeFilterStashRef.current;
+          if (!stash[catalogId]) stash[catalogId] = {};
+          stash[catalogId][currentType] = pickTypeSpecificFilters(prev.filters || {}, currentType);
+        }
+
+        const strippedFilters = stripOppositeTypeFilters(prev.filters || {}, type);
+
+        const previousStash = typeFilterStashRef.current[catalogId]?.[type] || {};
+
+        const awardsWon = (strippedFilters.awardsWon || []).filter((a) =>
+          type === 'series'
+            ? a !== 'best_picture_oscar' && a !== 'best_director_oscar'
+            : a !== 'emmy'
+        );
+        const awardsNominated = (strippedFilters.awardsNominated || []).filter((a) =>
+          type === 'series'
+            ? a !== 'best_picture_oscar' && a !== 'best_director_oscar'
+            : a !== 'emmy'
+        );
+
         const updated = {
           ...prev,
           type,
           filters: {
-            ...prev.filters,
+            ...strippedFilters,
+            ...previousStash,
             genres: [],
             excludeGenres: [],
             sortBy: isImdb ? 'POPULARITY' : 'popularity.desc',
-            ...(isNextMovie
-              ? {
-                  // clear TV-only awards (emmy) when switching to movies
-                  awardsWon: (prev.filters?.awardsWon || []).filter((a) => a !== 'emmy'),
-                  awardsNominated: (prev.filters?.awardsNominated || []).filter(
-                    (a) => a !== 'emmy'
-                  ),
-                  airDateFrom: undefined,
-                  airDateTo: undefined,
-                  firstAirDateFrom: undefined,
-                  firstAirDateTo: undefined,
-                  firstAirDateYear: undefined,
-                  includeNullFirstAirDates: undefined,
-                  screenedTheatrically: undefined,
-                  timezone: undefined,
-                }
-              : {
-                  // clear movie-only Oscar categories when switching to series
-                  awardsWon: (prev.filters?.awardsWon || []).filter(
-                    (a) => a !== 'best_picture_oscar' && a !== 'best_director_oscar'
-                  ),
-                  awardsNominated: (prev.filters?.awardsNominated || []).filter(
-                    (a) => a !== 'best_picture_oscar' && a !== 'best_director_oscar'
-                  ),
-                  includeVideo: undefined,
-                  primaryReleaseYear: undefined,
-                  certifications: undefined,
-                  certificationMin: undefined,
-                  certificationMax: undefined,
-                  certificationCountry: undefined,
-                }),
+            awardsWon,
+            awardsNominated,
           },
         };
         result = updated;

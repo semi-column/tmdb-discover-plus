@@ -1,6 +1,20 @@
 import { useState, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 import { logger } from '../utils/logger';
+import { MOVIE_ONLY_FILTER_KEYS, SERIES_ONLY_FILTER_KEYS } from './useCatalogEditorHandlers';
+
+function prepareForSave(catalog) {
+  const isMovie = catalog.type === 'movie';
+  const keysToRemove = isMovie ? SERIES_ONLY_FILTER_KEYS : MOVIE_ONLY_FILTER_KEYS;
+  const cleanFilters = { ...catalog.filters };
+  for (const key of keysToRemove) {
+    delete cleanFilters[key];
+  }
+  // These are UI-only fields that live in localCatalog but must not reach the DB.
+  delete cleanFilters.certificationMin;
+  delete cleanFilters.certificationMax;
+  return { ...catalog, filters: cleanFilters };
+}
 
 export function useConfigManager(config, addToast, deps) {
   const { setInstallData, setShowInstallModal, setActiveCatalog, urlUserId, setUrlUserId } = deps;
@@ -42,7 +56,7 @@ export function useConfigManager(config, addToast, deps) {
       const payload = {
         tmdbApiKey: config.apiKey,
         configName: config.configName,
-        catalogs: catalogsToSave,
+        catalogs: catalogsToSave.map(prepareForSave),
         preferences: config.preferences,
       };
 
