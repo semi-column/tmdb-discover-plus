@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, memo } from 'react';
 import { FilterSection } from './FilterSection';
 
 // TODO: Awards section hidden until upstream API compatibility is resolved. Set to false to re-enable.
-const AWARDS_HIDDEN = true;
+const AWARDS_HIDDEN = false;
 import { Settings, Sparkles, Calendar, Award, Tag, Globe } from 'lucide-react';
 import { SearchableSelect } from '../../forms/SearchableSelect';
 import { RangeSlider, SingleSlider } from '../../forms/RangeSlider';
