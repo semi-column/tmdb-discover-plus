@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.7.3...v2.8.0) (2026-02-27)
+
+
+### Features
+
+* add concurrency queue and delay to secrets workflow ([96a35fa](https://github.com/semi-column/tmdb-discover-plus/commit/96a35fa35a937875068e5c29faec8bf625d620da))
+* Add Exclude Keyword Filter for IMDb ([7f7ec1f](https://github.com/semi-column/tmdb-discover-plus/commit/7f7ec1f41a80c974eda2480da140903d1a8c1de4))
+* Add region filters to IMDB catalogs ([2452e2d](https://github.com/semi-column/tmdb-discover-plus/commit/2452e2d6e9bf7427b84c9b1d2f8e6a7efa68665f))
+* Added Age Rating Country Selection ([de73267](https://github.com/semi-column/tmdb-discover-plus/commit/de7326736895095ffc98214503ec966095275958))
+* Added exclude genres for IMDb Catalogs ([157e840](https://github.com/semi-column/tmdb-discover-plus/commit/157e840ac2c202bba79724e93659758b11d6565a))
+* Added IMDB catalog builder ([3ea2f04](https://github.com/semi-column/tmdb-discover-plus/commit/3ea2f04f40b0a87ea9a9800ec86a80ec40d6f4c9))
+* IMDb custom list import ([04cdd02](https://github.com/semi-column/tmdb-discover-plus/commit/04cdd02a4169f4c05b9816815d798f8021c123dd))
+* improve export/import UX, IMDb preview links, and API resilience ([895e187](https://github.com/semi-column/tmdb-discover-plus/commit/895e187b8aaec608d3f45c062a9ce564ab537be6))
+* testing imd catalogs ([5a629be](https://github.com/semi-column/tmdb-discover-plus/commit/5a629be3162ad5958718d11043eb8c18de4bc999))
+
+
+### Bug Fixes
+
+* Active Filters Colour Scheme ([77ce43c](https://github.com/semi-column/tmdb-discover-plus/commit/77ce43c0a77a0232866494e8bd153545a30443f8))
+* Changing type of duplicated catalogs won't cause errors while saving ([396f501](https://github.com/semi-column/tmdb-discover-plus/commit/396f5014ccd23401042eaa5655f8d982ffc28e5a))
+* create imdb catalogs ([35db48a](https://github.com/semi-column/tmdb-discover-plus/commit/35db48aa26371fe0ec657fb54d1900e0263e9fc7))
+* docker compose ([abf8e5a](https://github.com/semi-column/tmdb-discover-plus/commit/abf8e5a02a3369668ed5d2bee18057d1ef8ea531))
+* fix data sanitization issue ([5966956](https://github.com/semi-column/tmdb-discover-plus/commit/5966956c7d34bc6e50ff71982e6ef00c5beddb84))
+* fix region filter ([af82d93](https://github.com/semi-column/tmdb-discover-plus/commit/af82d936d4724aada76089b4a08405c091426e83))
+* Genre mapping issue for IMDB catalogs ([060bed8](https://github.com/semi-column/tmdb-discover-plus/commit/060bed84644bcda609e043ab0abdd24baee74aaa))
+* IMDb Award types fix ([6886cb4](https://github.com/semi-column/tmdb-discover-plus/commit/6886cb4ea1580ef31eb0a439fd5536fe1f0b3e87))
+* imdb catalog fixes ([e17f5cd](https://github.com/semi-column/tmdb-discover-plus/commit/e17f5cdc4f78047e4996565c94f4cc233987d354))
+* imdb catalog issues ([1a47172](https://github.com/semi-column/tmdb-discover-plus/commit/1a47172f2d18a1ff2fca15b5a95983c0563f8d50))
+* IMDB country filter fix ([15639ce](https://github.com/semi-column/tmdb-discover-plus/commit/15639ce9482a161142a0174243684d85433a1329))
+* IMDb country filter now filters correctly ([0e11f11](https://github.com/semi-column/tmdb-discover-plus/commit/0e11f1182bedaa8fb93a52824a5620d323a7855c))
+* IMDb minimum votes slider fix ([ad09139](https://github.com/semi-column/tmdb-discover-plus/commit/ad09139311a85a646efaeb9b788ce069f4593099))
+* IMDb Ratings & VoteCount filter fixes ([a90dd5b](https://github.com/semi-column/tmdb-discover-plus/commit/a90dd5b179ff926e25549221c11b4f1ea9daae0c))
+* imdb sorting issues ([e414f36](https://github.com/semi-column/tmdb-discover-plus/commit/e414f369d70ca9e54fba4c8d1fe08613507f1cc8))
+* IMDB visibility fix ([d4dfd88](https://github.com/semi-column/tmdb-discover-plus/commit/d4dfd883e90f8a37d3225346e95e79523e8540de))
+* make default sorting as descending ([a4503d8](https://github.com/semi-column/tmdb-discover-plus/commit/a4503d8c4b64e6087ebd7e510f002c188c23f718))
+* meta endpoint fix ([6d5fe83](https://github.com/semi-column/tmdb-discover-plus/commit/6d5fe83ad6bc5e6c08072642c30e844d7af56de6))
+* metadata enrichment ([b0c57e0](https://github.com/semi-column/tmdb-discover-plus/commit/b0c57e02160be5ff5403da46cc7c5ecdc28947b3))
+* Multi Keyword IMDb search ([1c2a6a3](https://github.com/semi-column/tmdb-discover-plus/commit/1c2a6a3165b1d24f3d49c965b206588c05850291))
+* nightly stability — null safety, memory pressure, rate limiting, noise reduction ([4c0fa69](https://github.com/semi-column/tmdb-discover-plus/commit/4c0fa6950ea3c8148d5ae64949d2d21be499523d))
+* preview sidebar metadata ([7505c73](https://github.com/semi-column/tmdb-discover-plus/commit/7505c73a9cf914539c7aa67d6cb31529e06120b0))
+* remove stale cloudflare cache ([3560827](https://github.com/semi-column/tmdb-discover-plus/commit/3560827e8f159536c30717bf39efc717806e3017))
+* resolve ReDoS in auth middleware and fix test mocks ([8bcdb85](https://github.com/semi-column/tmdb-discover-plus/commit/8bcdb850137201a53c1f343fde970ea0b110a235))
+* skip cache when TMDB status code is 401 or 403 ([25f0335](https://github.com/semi-column/tmdb-discover-plus/commit/25f033581feecb44e1d86639ebcd576760d7341b))
+* temporarily hide awards section from IMDb catalogs ([8ca72d9](https://github.com/semi-column/tmdb-discover-plus/commit/8ca72d9bc17328c554e075625c42e1e8e0fd8685))
+* UI consistency across sources ([812855e](https://github.com/semi-column/tmdb-discover-plus/commit/812855ee8d3bf6f69f7fcf546d8ea7733b556e46))
+* workaround for beamup cloudflare cache ([c989b35](https://github.com/semi-column/tmdb-discover-plus/commit/c989b35679e76e6746657ea2a3852ea451b71933))
+
 ## [Unreleased] — v3 Security & Quality Hardening
 
 ### BREAKING CHANGES
