@@ -303,7 +303,9 @@ export interface ImdbAdvancedSearchParams {
   sortBy?: ImdbSortBy;
   sortOrder?: ImdbSortOrder;
   imdbRatingMin?: number;
+  imdbRatingMax?: number;
   totalVotesMin?: number;
+  totalVotesMax?: number;
   releaseDateStart?: string;
   releaseDateEnd?: string;
   runtimeMin?: number;
@@ -329,7 +331,9 @@ export interface ImdbCatalogFilters {
   sortBy?: ImdbSortBy;
   sortOrder?: ImdbSortOrder;
   imdbRatingMin?: number;
+  imdbRatingMax?: number;
   totalVotesMin?: number;
+  totalVotesMax?: number;
   releaseDateStart?: string;
   releaseDateEnd?: string;
   runtimeMin?: number;

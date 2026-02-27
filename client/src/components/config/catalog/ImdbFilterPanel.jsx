@@ -148,6 +148,22 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     [filters, onFiltersChange]
   );
 
+  const handleRatingChange = useCallback(
+    (range) => {
+      onFiltersChange('imdbRatingMin', range[0] === 0 ? undefined : range[0]);
+      onFiltersChange('imdbRatingMax', range[1] === 10 ? undefined : range[1]);
+    },
+    [onFiltersChange]
+  );
+
+  const handleVotesChange = useCallback(
+    (range) => {
+      onFiltersChange('totalVotesMin', range[0] === 0 ? undefined : range[0]);
+      onFiltersChange('totalVotesMax', range[1] === 1000000 ? undefined : range[1]);
+    },
+    [onFiltersChange]
+  );
+
   const handleRuntimeChange = useCallback(
     (range) => {
       onFiltersChange('runtimeMin', range[0] === 0 ? undefined : range[0]);
@@ -326,30 +342,30 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         </div>
 
         <div className="filter-spacer-lg">
-          <SingleSlider
-            label="Min IMDb Rating"
-            tooltip="Minimum IMDb user rating (0–10). Higher values surface only highly-rated titles."
+          <RangeSlider
+            label="IMDb Rating"
+            tooltip="Filter by IMDb user rating (0–10). Select a range to surface specific scores."
             min={0}
             max={10}
             step={0.1}
-            value={filters.imdbRatingMin ?? 0}
-            onChange={(v) => onFiltersChange('imdbRatingMin', v === 0 ? undefined : v)}
-            formatValue={(v) => (v === 0 ? 'Any' : v.toFixed(1) + '+')}
-            showInput
+            value={[filters.imdbRatingMin ?? 0, filters.imdbRatingMax ?? 10]}
+            onChange={handleRatingChange}
+            formatValue={(v) => (v === 0 ? '0' : v === 10 ? '10' : v.toFixed(1))}
+            showInputs
           />
         </div>
 
         <div className="filter-spacer">
-          <SingleSlider
-            label="Min Vote Count"
-            tooltip="Minimum number of user ratings. Higher values filter out obscure titles."
+          <RangeSlider
+            label="Vote Count"
+            tooltip="Filter by number of user ratings. Use this to find popular breakout hits or obscure hidden gems."
             min={0}
             max={1000000}
             step={1000}
-            value={filters.totalVotesMin ?? 0}
-            onChange={(v) => onFiltersChange('totalVotesMin', v === 0 ? undefined : v)}
-            formatValue={(v) => (v === 0 ? 'Any' : v.toLocaleString() + '+')}
-            showInput
+            value={[filters.totalVotesMin ?? 0, filters.totalVotesMax ?? 1000000]}
+            onChange={handleVotesChange}
+            formatValue={(v) => (v === 0 ? '0' : v === 1000000 ? '1M+' : v.toLocaleString())}
+            showInputs
           />
         </div>
       </FilterSection>

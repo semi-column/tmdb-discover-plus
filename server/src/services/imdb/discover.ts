@@ -70,7 +70,9 @@ export async function advancedSearch(
   if (params.genres?.length) queryParams.genres = params.genres;
   if (params.excludeGenres?.length) queryParams.excludeGenres = params.excludeGenres;
   if (params.imdbRatingMin) queryParams.imdbRatingMin = params.imdbRatingMin;
+  if (params.imdbRatingMax) queryParams.imdbRatingMax = params.imdbRatingMax;
   if (params.totalVotesMin) queryParams.totalVotesMin = params.totalVotesMin;
+  if (params.totalVotesMax) queryParams.totalVotesMax = params.totalVotesMax;
   if (params.releaseDateStart) queryParams.releaseDateStart = params.releaseDateStart;
   if (params.releaseDateEnd) queryParams.releaseDateEnd = params.releaseDateEnd;
   if (params.runtimeMin) queryParams.runtimeMin = params.runtimeMin;
