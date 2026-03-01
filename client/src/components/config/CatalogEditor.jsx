@@ -10,7 +10,8 @@ import {
   Tv,
   Users,
 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState, useCallback } from 'react';
+import { AICatalogModal } from '../modals/AICatalogModal';
 import { ActiveFiltersBar } from './catalog/ActiveFiltersBar';
 import { CatalogPreview } from './catalog/CatalogPreview';
 import { FilterPanel } from './catalog/FilterPanel';
@@ -28,6 +29,7 @@ import { useCatalogEditorHandlers } from '../../hooks/useCatalogEditorHandlers';
 export const CatalogEditor = memo(function CatalogEditor() {
   const state = useCatalogEditor();
   const handlers = useCatalogEditorHandlers(state);
+  const [showAIModal, setShowAIModal] = useState(false);
 
   const {
     catalog,
@@ -74,7 +76,48 @@ export const CatalogEditor = memo(function CatalogEditor() {
     activeFilters,
     clearFilter,
     clearAllFilters,
+    setLocalCatalog,
+    addToast,
   } = state;
+
+  const hasGeminiKey = Boolean(localStorage.getItem('gemini-api-key'));
+
+  const handleAICatalogApply = useCallback(
+    (catalogConfig) => {
+      setLocalCatalog((prev) => ({
+        ...prev,
+        name: catalogConfig.name,
+        type: catalogConfig.type,
+        source: catalogConfig.source || 'tmdb',
+        filters: { ...catalogConfig.filters },
+      }));
+      if (catalogConfig.formState?.selectedPeople) {
+        setSelectedPeople(catalogConfig.formState.selectedPeople);
+      }
+      if (catalogConfig.formState?.selectedCompanies) {
+        setSelectedCompanies(catalogConfig.formState.selectedCompanies);
+      }
+      if (catalogConfig.formState?.selectedKeywords) {
+        setSelectedKeywords(catalogConfig.formState.selectedKeywords);
+      }
+      if (catalogConfig.formState?.excludeKeywords) {
+        setExcludeKeywords(catalogConfig.formState.excludeKeywords);
+      }
+      if (catalogConfig.formState?.excludeCompanies) {
+        setExcludeCompanies(catalogConfig.formState.excludeCompanies);
+      }
+      if (addToast) addToast('Catalog updated with AI', 'success');
+    },
+    [
+      setLocalCatalog,
+      setSelectedPeople,
+      setSelectedCompanies,
+      setSelectedKeywords,
+      setExcludeKeywords,
+      setExcludeCompanies,
+      addToast,
+    ]
+  );
 
   const {
     toggleSection,
@@ -134,6 +177,15 @@ export const CatalogEditor = memo(function CatalogEditor() {
             </div>
           </div>
           <div className="editor-actions">
+            {hasGeminiKey && (
+              <button
+                className="btn btn-ghost btn-icon"
+                onClick={() => setShowAIModal(true)}
+                title="Edit with AI"
+              >
+                <Sparkles size={16} />
+              </button>
+            )}
             <button className="btn btn-secondary" onClick={loadPreview} disabled={previewLoading}>
               {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
               Preview
@@ -391,6 +443,14 @@ export const CatalogEditor = memo(function CatalogEditor() {
         data={previewData}
         onRetry={loadPreview}
         onLoadPreview={loadPreview}
+      />
+
+      <AICatalogModal
+        isOpen={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        onApply={handleAICatalogApply}
+        existingCatalog={localCatalog}
+        addToast={addToast}
       />
     </div>
   );

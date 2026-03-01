@@ -29,18 +29,6 @@ const SORT_LABELS = {
   'first_air_date.asc': 'Oldest First Aired',
 };
 
-const LIST_TYPE_LABELS = {
-  discover: 'Discovery',
-  trending_day: 'Trending Today',
-  trending_week: 'Trending This Week',
-  now_playing: 'Now Playing',
-  upcoming: 'Upcoming',
-  airing_today: 'Airing Today',
-  on_the_air: 'On The Air',
-  top_rated: 'Top Rated',
-  popular: 'Popular',
-};
-
 const RELEASE_TYPE_LABELS = {
   1: 'Premiere',
   2: 'Limited Theatrical',
@@ -77,10 +65,6 @@ function ResultPreview({ catalog, onNameChange }) {
   items.push({ label: 'Type', value: type === 'series' ? 'TV Series' : 'Movie' });
   items.push({ label: 'Source', value: (source || 'tmdb').toUpperCase() });
 
-  if (filters.listType && filters.listType !== 'discover') {
-    items.push({ label: 'List', value: LIST_TYPE_LABELS[filters.listType] || filters.listType });
-  }
-
   if (filters.sortBy) {
     items.push({ label: 'Sort', value: SORT_LABELS[filters.sortBy] || filters.sortBy });
   }
@@ -97,6 +81,10 @@ function ResultPreview({ catalog, onNameChange }) {
       label: 'Excluded',
       value: filters.excludeGenres.map((id) => getGenreName(id, type)).join(', '),
     });
+  }
+
+  if (filters.genreMatchMode === 'all') {
+    items.push({ label: 'Genre Match', value: 'All (AND)' });
   }
 
   if (filters.datePreset) {
@@ -145,6 +133,14 @@ function ResultPreview({ catalog, onNameChange }) {
 
   if (filters.certifications?.length) {
     items.push({ label: 'Certification', value: filters.certifications.join(', ') });
+  }
+
+  if (filters.region) {
+    items.push({ label: 'Region', value: filters.region });
+  }
+
+  if (filters.releasedOnly) {
+    items.push({ label: 'Released Only', value: 'Yes' });
   }
 
   if (filters.watchMonetizationTypes?.length) {
@@ -249,7 +245,9 @@ function EntitiesPreview({ entities, resolutionResults }) {
 }
 
 export function AICatalogModal({ isOpen, onClose, onApply, existingCatalog, addToast }) {
-  const [userMessage, setUserMessage] = useState('');
+  const [userMessage, setUserMessage] = useState(
+    () => sessionStorage.getItem('ai-catalog-prompt') || ''
+  );
   const modalRef = useModalA11y(isOpen, onClose);
   const tmdbData = useTMDBData();
   const { preferences } = useCatalog();
@@ -268,6 +266,7 @@ export function AICatalogModal({ isOpen, onClose, onApply, existingCatalog, addT
 
   const handleClose = useCallback(() => {
     setUserMessage('');
+    sessionStorage.removeItem('ai-catalog-prompt');
     reset();
     onClose();
   }, [onClose, reset]);
@@ -374,7 +373,10 @@ export function AICatalogModal({ isOpen, onClose, onApply, existingCatalog, addT
                 : 'e.g., "Trending sci-fi movies with high ratings, exclude horror"'
             }
             value={userMessage}
-            onChange={(e) => setUserMessage(e.target.value)}
+            onChange={(e) => {
+              setUserMessage(e.target.value);
+              sessionStorage.setItem('ai-catalog-prompt', e.target.value);
+            }}
             onKeyDown={handleKeyDown}
             disabled={isGenerating || isResolving}
           />

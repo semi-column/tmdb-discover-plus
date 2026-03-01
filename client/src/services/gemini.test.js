@@ -197,10 +197,21 @@ describe('sanitizeAIResponse', () => {
       name: 'Test',
       type: 'movie',
       source: 'tmdb',
-      filters: { releaseTypes: [0, 3, 7, 4] },
+      filters: { releaseTypes: [0, 3, 7, 4], region: 'US' },
     };
     const result = sanitizeAIResponse(input);
     expect(result.filters.releaseTypes).toEqual([3, 4]);
+  });
+
+  it('strips releaseTypes when region is missing', () => {
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: { releaseTypes: [3, 4] },
+    };
+    const result = sanitizeAIResponse(input);
+    expect(result.filters.releaseTypes).toBeUndefined();
   });
 
   it('validates datePreset values', () => {
@@ -231,6 +242,17 @@ describe('sanitizeAIResponse', () => {
       type: 'movie',
       source: 'tmdb',
       filters: { listType: 'airing_today' },
+    };
+    const result = sanitizeAIResponse(input);
+    expect(result.filters.listType).toBe('discover');
+  });
+
+  it('forces listType to discover even for valid non-discover types', () => {
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: { listType: 'trending_week' },
     };
     const result = sanitizeAIResponse(input);
     expect(result.filters.listType).toBe('discover');

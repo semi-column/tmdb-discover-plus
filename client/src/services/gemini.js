@@ -116,6 +116,7 @@ const TMDB_FILTER_KEYS = new Set([
   'excludeKeywords',
   'excludeCompanies',
   'withNetworks',
+  'region',
   'randomize',
   'includeAdult',
   'imdbOnly',
@@ -139,7 +140,12 @@ const IMDB_FILTER_KEYS = new Set([
   'includeAdult',
 ]);
 
-const MOVIE_ONLY_KEYS = new Set(['releaseTypes', 'certifications', 'certificationCountry']);
+const MOVIE_ONLY_KEYS = new Set([
+  'releaseTypes',
+  'certifications',
+  'certificationCountry',
+  'region',
+]);
 const SERIES_ONLY_KEYS = new Set(['tvStatus', 'tvType', 'withNetworks']);
 
 function clamp(value, min, max) {
@@ -201,10 +207,15 @@ export function sanitizeAIResponse(response) {
     if (sanitizedFilters.listType && !validListTypes.includes(sanitizedFilters.listType)) {
       sanitizedFilters.listType = 'discover';
     }
+    sanitizedFilters.listType = 'discover';
 
     if (Array.isArray(sanitizedFilters.releaseTypes)) {
       sanitizedFilters.releaseTypes = sanitizedFilters.releaseTypes.filter((v) => v >= 1 && v <= 6);
       if (sanitizedFilters.releaseTypes.length === 0) delete sanitizedFilters.releaseTypes;
+    }
+
+    if (sanitizedFilters.releaseTypes?.length > 0 && !sanitizedFilters.region) {
+      delete sanitizedFilters.releaseTypes;
     }
 
     if (
