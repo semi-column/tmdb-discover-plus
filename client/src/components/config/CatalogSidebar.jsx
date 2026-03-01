@@ -19,7 +19,7 @@ import {
   Settings,
   LayoutList,
 } from 'lucide-react';
-import { useState, useEffect, lazy, Suspense, memo } from 'react';
+import { useState, useEffect, lazy, Suspense, memo, useCallback } from 'react';
 
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCatalog, useTMDBData, useAppActions } from '../../context/AppContext';
@@ -28,6 +28,7 @@ import { GeneralSettingsSection } from './GeneralSettingsSection';
 import { PosterSettingsSection } from './PosterSettingsSection';
 import { ImportSelectModal } from '../modals/ImportSelectModal';
 import { ExportSelectModal } from '../modals/ExportSelectModal';
+import { AICatalogModal } from '../modals/AICatalogModal';
 
 const DraggableCatalogList = lazy(() =>
   import('./DraggableCatalogList').then((m) => ({ default: m.DraggableCatalogList }))
@@ -59,6 +60,7 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
     handleDeleteCatalog: onDeleteCatalog,
     handleDuplicateCatalog: onDuplicateCatalog,
     handleImportConfig: onImportConfig,
+    handleAddCatalog,
     setCatalogs,
   } = useCatalog();
   const {
@@ -84,6 +86,23 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
   const [importData, setImportData] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const hasGeminiKey = Boolean(localStorage.getItem('gemini-api-key'));
+
+  const handleAICatalogApply = useCallback(
+    (catalogConfig) => {
+      handleAddCatalog({
+        name: catalogConfig.name,
+        type: catalogConfig.type,
+        source: catalogConfig.source || 'tmdb',
+        filters: catalogConfig.filters,
+        formState: catalogConfig.formState,
+        enabled: true,
+      });
+      if (addToast) addToast('Catalog created with AI', 'success');
+    },
+    [handleAddCatalog, addToast]
+  );
 
   useEffect(() => {
     setMoviePresetsCollapsed(isMobile);
@@ -127,6 +146,20 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
             title="Add custom catalog"
           >
             <Plus size={16} />
+          </button>
+          <button
+            className="btn btn-secondary btn-sm sidebar-add-btn"
+            onClick={() => {
+              if (hasGeminiKey) {
+                setShowAIModal(true);
+              } else {
+                addToast('Set your Gemini API key in Settings to use AI catalog creation', 'info');
+              }
+            }}
+            title={hasGeminiKey ? 'Create catalog with AI' : 'Set Gemini API key in Settings'}
+            style={{ opacity: hasGeminiKey ? 1 : 0.5 }}
+          >
+            <Sparkles size={16} />
           </button>
         </div>
       </div>
@@ -431,6 +464,14 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
             setShowExportModal(false);
             if (addToast) addToast('Configuration exported successfully');
           }}
+        />
+      )}
+      {showAIModal && (
+        <AICatalogModal
+          isOpen={showAIModal}
+          onClose={() => setShowAIModal(false)}
+          onApply={handleAICatalogApply}
+          addToast={addToast}
         />
       )}
     </aside>

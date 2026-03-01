@@ -25,6 +25,7 @@ import './styles/modals.css';
 import './styles/preview.css';
 import './styles/social.css';
 import './styles/responsive.css';
+import './styles/ai.css';
 
 const CatalogEditor = lazy(() =>
   import('./components/config/CatalogEditor').then((m) => ({ default: m.CatalogEditor }))
@@ -165,7 +166,7 @@ function App() {
                   </div>
                 )}
               </div>
-              
+
               <CreditsBanner />
 
               <div className="actions-toolbar">
