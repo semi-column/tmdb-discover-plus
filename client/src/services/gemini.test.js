@@ -65,13 +65,61 @@ describe('sanitizeAIResponse', () => {
       },
     };
     const result = sanitizeAIResponse(input);
-    expect(result.filters.ratingMin).toBe(0);
     expect(result.filters.ratingMax).toBe(10);
     expect(result.filters.voteCountMin).toBe(10000);
-    expect(result.filters.runtimeMin).toBe(0);
     expect(result.filters.runtimeMax).toBe(400);
-    expect(result.filters.yearFrom).toBe(1900);
+    // yearFrom 1800 clamps to 1900, then stripped as <=1900 boundary hallucination
+    expect(result.filters.yearFrom).toBeUndefined();
     expect(result.filters.yearTo).toBe(2030);
+    // ratingMin -5 clamps to 0, then stripped as zero-value
+    expect(result.filters.ratingMin).toBeUndefined();
+    // runtimeMin -10 clamps to 0, then stripped as zero-value
+    expect(result.filters.runtimeMin).toBeUndefined();
+  });
+
+  it('strips null values from nullable schema fields', () => {
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: {
+        sortBy: 'primary_release_date.desc',
+        genres: [28],
+        yearFrom: null,
+        yearTo: null,
+        ratingMin: null,
+        voteCountMin: null,
+        language: null,
+        countries: null,
+      },
+    };
+    const result = sanitizeAIResponse(input);
+    expect(result.filters.sortBy).toBe('primary_release_date.desc');
+    expect(result.filters.genres).toEqual([28]);
+    expect(result.filters.yearFrom).toBeUndefined();
+    expect(result.filters.yearTo).toBeUndefined();
+    expect(result.filters.ratingMin).toBeUndefined();
+    expect(result.filters.voteCountMin).toBeUndefined();
+    expect(result.filters.language).toBeUndefined();
+    expect(result.filters.countries).toBeUndefined();
+  });
+
+  it('strips yearFrom/yearTo at 1900 boundary (AI hallucination)', () => {
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: {
+        sortBy: 'primary_release_date.desc',
+        yearFrom: 0,
+        yearTo: 0,
+      },
+    };
+    const result = sanitizeAIResponse(input);
+    // 0 clamps to 1900, then stripped as boundary hallucination
+    expect(result.filters.yearFrom).toBeUndefined();
+    expect(result.filters.yearTo).toBeUndefined();
+    expect(result.filters.sortBy).toBe('primary_release_date.desc');
   });
 
   it('strips unknown filter keys', () => {
@@ -425,7 +473,7 @@ describe('generateCatalog', () => {
     const callBody = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
     expect(callBody.system_instruction).toBeDefined();
     expect(callBody.generationConfig.response_mime_type).toBe('application/json');
-    expect(callBody.generationConfig.response_schema).toBeDefined();
+    expect(callBody.generationConfig.response_json_schema).toBeDefined();
     expect(callBody.contents[0].parts[0].text).toBe('action movies');
   });
 

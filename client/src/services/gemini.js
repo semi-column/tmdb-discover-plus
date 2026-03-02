@@ -229,6 +229,11 @@ export function sanitizeAIResponse(response) {
       delete sanitizedFilters.datePreset;
     }
 
+    // Strip null values from filters (model outputs null for unused nullable fields)
+    for (const [key, value] of Object.entries(sanitizedFilters)) {
+      if (value === null || value === undefined) delete sanitizedFilters[key];
+    }
+
     // Convert decade year ranges to era presets (e.g., 2010-2019 → era_2010s)
     if (
       !sanitizedFilters.datePreset &&
@@ -290,12 +295,29 @@ export function sanitizeAIResponse(response) {
     sanitizedFilters.yearFrom = clamp(sanitizedFilters.yearFrom, 1900, 2030);
     sanitizedFilters.yearTo = clamp(sanitizedFilters.yearTo, 1900, 2030);
 
+    // Strip yearFrom/yearTo at boundary values (AI hallucination from schema defaults)
+    if (sanitizedFilters.yearFrom !== undefined && sanitizedFilters.yearFrom <= 1900) {
+      delete sanitizedFilters.yearFrom;
+    }
+    if (sanitizedFilters.yearTo !== undefined && sanitizedFilters.yearTo <= 1900) {
+      delete sanitizedFilters.yearTo;
+    }
+    // Strip zero-value numeric filters (model outputting 0 as "empty")
+    for (const numKey of ['ratingMin', 'ratingMax', 'voteCountMin', 'runtimeMin', 'runtimeMax']) {
+      if (sanitizedFilters[numKey] === 0) delete sanitizedFilters[numKey];
+    }
+
     for (const [key, value] of Object.entries(sanitizedFilters)) {
-      if (value === undefined) delete sanitizedFilters[key];
+      if (value === undefined || value === null) delete sanitizedFilters[key];
     }
   }
 
   if (sanitizedSource === 'imdb') {
+    // Strip nulls first (from nullable schema)
+    for (const [key, value] of Object.entries(sanitizedFilters)) {
+      if (value === null || value === undefined) delete sanitizedFilters[key];
+    }
+
     sanitizedFilters.imdbRatingMin = clamp(sanitizedFilters.imdbRatingMin, 0, 10);
     sanitizedFilters.totalVotesMin = clamp(sanitizedFilters.totalVotesMin, 0, 1000000);
     sanitizedFilters.yearFrom = clamp(sanitizedFilters.yearFrom, 1900, 2030);
@@ -369,7 +391,7 @@ export async function generateCatalog(apiKey, userMessage, existingCatalog) {
           contents: [{ parts: [{ text: buildUserPrompt(userMessage, existingCatalog) }] }],
           generationConfig: {
             response_mime_type: 'application/json',
-            response_schema: AI_CATALOG_SCHEMA,
+            response_json_schema: AI_CATALOG_SCHEMA,
           },
         }),
       }
