@@ -283,6 +283,40 @@ describe('sanitizeAIResponse', () => {
     expect(result.filters.yearFrom).toBe(2015);
     expect(result.filters.yearTo).toBe(2018);
   });
+
+  it('strips recent year range when sorting by release date', () => {
+    const currentYear = new Date().getFullYear();
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: {
+        sortBy: 'primary_release_date.desc',
+        yearFrom: currentYear - 1,
+        yearTo: currentYear,
+      },
+    };
+    const result = sanitizeAIResponse(input);
+    expect(result.filters.yearFrom).toBeUndefined();
+    expect(result.filters.yearTo).toBeUndefined();
+    expect(result.filters.sortBy).toBe('primary_release_date.desc');
+  });
+
+  it('keeps intentional year range even when sorting by release date', () => {
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: {
+        sortBy: 'primary_release_date.desc',
+        yearFrom: 2015,
+        yearTo: 2018,
+      },
+    };
+    const result = sanitizeAIResponse(input);
+    expect(result.filters.yearFrom).toBe(2015);
+    expect(result.filters.yearTo).toBe(2018);
+  });
 });
 
 describe('validateGeminiKey', () => {

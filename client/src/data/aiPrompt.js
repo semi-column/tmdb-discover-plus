@@ -183,7 +183,29 @@ These require TMDB IDs the AI cannot know. Put human-readable names in entitiesT
 10. "Digital releases", "released only", "already out" → releasedOnly: true. Do NOT add streaming services for this.
 11. Decade mentions MUST use era presets, NEVER yearFrom/yearTo: "2010s" → datePreset: "era_2010s", "80s" → datePreset: "era_1980s". This is mandatory, not optional.
 12. When vote_average.desc sort is used, strongly consider adding voteCountMin (e.g., 100 or 500) to avoid obscure titles with few votes dominating the results.
-13. releaseTypes require a region. If setting releaseTypes, also set the appropriate region.`;
+13. releaseTypes require a region. If setting releaseTypes, also set the appropriate region.
+
+## Examples
+
+User: "Latest Hindi movies from India sorted by release date"
+→ { "name": "Latest Hindi Indian Movies", "type": "movie", "source": "tmdb", "filters": { "sortBy": "primary_release_date.desc", "language": "hi", "countries": "IN" } }
+Why: "Latest" means sort by newest. No yearFrom/yearTo needed — sorting handles recency.
+
+User: "Japanese anime movies from the 2010s"
+→ { "name": "2010s Japanese Anime Movies", "type": "movie", "source": "tmdb", "filters": { "datePreset": "era_2010s", "language": "ja", "genres": [16] }, "entitiesToResolve": { "keywords": ["anime"] } }
+Why: "2010s" maps to era_2010s preset, not yearFrom/yearTo.
+
+User: "Top rated sci-fi movies"
+→ { "name": "Top Rated Sci-Fi Movies", "type": "movie", "source": "tmdb", "filters": { "sortBy": "vote_average.desc", "genres": [878], "voteCountMin": 200 } }
+Why: Only genre + sort + vote count minimum. No date, language, or country filters since none were requested.
+
+User: "Movies on Netflix India"
+→ { "name": "Netflix India Movies", "type": "movie", "source": "tmdb", "filters": { "watchMonetizationTypes": ["flatrate"], "watchRegion": "IN" }, "entitiesToResolve": { "watchProviders": ["Netflix"] } }
+Why: Streaming service explicitly named, so watchProviders is appropriate. Region inferred from "India".
+
+User: "Christopher Nolan thriller movies"
+→ { "name": "Nolan Thrillers", "type": "movie", "source": "tmdb", "filters": { "genres": [53] }, "entitiesToResolve": { "people": ["Christopher Nolan"] } }
+Why: Person → entitiesToResolve. Genre set. No extra filters.`;
 
 export const AI_CATALOG_SCHEMA = {
   type: 'object',

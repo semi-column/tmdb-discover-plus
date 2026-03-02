@@ -250,6 +250,21 @@ export function sanitizeAIResponse(response) {
       }
     }
 
+    // Strip yearFrom/yearTo when sorting by release date — sorting alone handles recency
+    const sortByDate =
+      sanitizedFilters.sortBy === 'primary_release_date.desc' ||
+      sanitizedFilters.sortBy === 'first_air_date.desc';
+    if (sortByDate && sanitizedFilters.yearFrom !== undefined && !sanitizedFilters.datePreset) {
+      const currentYear = new Date().getFullYear();
+      const span = (sanitizedFilters.yearTo || currentYear) - sanitizedFilters.yearFrom;
+      // If the range is small (≤3 years) and includes the current year, it's likely an
+      // AI-invented "recent" range — remove it since the sort already handles recency
+      if (span <= 3 && (sanitizedFilters.yearTo || currentYear) >= currentYear - 1) {
+        delete sanitizedFilters.yearFrom;
+        delete sanitizedFilters.yearTo;
+      }
+    }
+
     if (Array.isArray(sanitizedFilters.watchMonetizationTypes)) {
       sanitizedFilters.watchMonetizationTypes = sanitizedFilters.watchMonetizationTypes.filter(
         (v) => VALID_MONETIZATION.includes(v)
