@@ -69,13 +69,20 @@ TV: popularity.desc, popularity.asc, vote_average.desc, vote_average.asc, vote_c
 
 Mapping: "by rating" or "highest rated" → vote_average.desc. "newest" or "latest" → primary_release_date.desc (movie) or first_air_date.desc (TV). "most popular" → popularity.desc. "by revenue" or "box office" → revenue.desc (movie only).
 
-## Date Presets (prefer over hardcoded dates for relative time periods)
+## Date Presets (ALWAYS use instead of yearFrom/yearTo when a preset fits)
 last_30_days, last_90_days, last_180_days, last_365_days, next_30_days, next_90_days, era_2020s, era_2010s, era_2000s, era_1990s, era_1980s
 
-Use presets when the user mentions relative periods: "last 6 months" → last_180_days, "90s movies" → era_1990s, "recent" → last_90_days or last_365_days.
+⚠️ MANDATORY: If a date preset matches the user's intent, you MUST use datePreset. Do NOT use yearFrom/yearTo for decade or relative period requests.
+- "2010s" / "from the 2010s" / "2010s movies" → datePreset: "era_2010s" (NOT yearFrom: 2010, yearTo: 2019)
+- "90s movies" / "1990s" → datePreset: "era_1990s" (NOT yearFrom: 1990, yearTo: 1999)
+- "recent" / "last year" → datePreset: "last_365_days" (NOT yearFrom with current year)
+- "last 6 months" → datePreset: "last_180_days"
+- "latest" / "newest" → do NOT add any date filter, just sort by release date descending
+
+Only use yearFrom/yearTo for specific year ranges that don't match any preset, such as "movies from 2015 to 2018" or "movies from 2007".
 
 ## Numeric Filters & Ranges
-- yearFrom / yearTo: 1900–2030. Use for specific year ranges when no date preset fits. Years are overridden if explicit date filters (releaseDateFrom/To) are also set.
+- yearFrom / yearTo: 1900–2030. ONLY for specific year ranges where no datePreset fits (e.g., "2015 to 2018"). NEVER use for decades (use era presets) or relative periods (use last_X_days presets). NEVER use for "latest"/"newest" — sorting by release date is sufficient.
 - ratingMin / ratingMax: 0–10. TMDB user rating. "highly rated" → ratingMin: 7 or 7.5. "top rated" → ratingMin: 8.
 - voteCountMin: 0–10000. Minimum votes for a title. Use to exclude obscure titles: "well-known" → voteCountMin: 100 or 500.
 - runtimeMin / runtimeMax: 0–400 (minutes). "short movies" → runtimeMax: 90. "long movies" → runtimeMin: 150.
@@ -172,9 +179,9 @@ These require TMDB IDs the AI cannot know. Put human-readable names in entitiesT
 6. Use correct genre IDs for the chosen type.
 7. "Exclude" a genre → excludeGenres. "Include" a genre → genres.
 8. NEVER add watch providers unless a specific streaming service is mentioned by name.
-9. When the user says "latest" or "newest" → sort by primary_release_date.desc (movie) or first_air_date.desc (TV). Consider adding releasedOnly: true if they imply already-available content.
+9. When the user says "latest" or "newest" → sort by primary_release_date.desc (movie) or first_air_date.desc (TV). Do NOT add yearFrom/yearTo — sorting alone handles recency. Add releasedOnly: true only if they imply already-available content.
 10. "Digital releases", "released only", "already out" → releasedOnly: true. Do NOT add streaming services for this.
-11. Decade mentions → use era presets: "90s movies" → datePreset: "era_1990s".
+11. Decade mentions MUST use era presets, NEVER yearFrom/yearTo: "2010s" → datePreset: "era_2010s", "80s" → datePreset: "era_1980s". This is mandatory, not optional.
 12. When vote_average.desc sort is used, strongly consider adding voteCountMin (e.g., 100 or 500) to avoid obscure titles with few votes dominating the results.
 13. releaseTypes require a region. If setting releaseTypes, also set the appropriate region.`;
 

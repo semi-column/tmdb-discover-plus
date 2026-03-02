@@ -257,6 +257,32 @@ describe('sanitizeAIResponse', () => {
     const result = sanitizeAIResponse(input);
     expect(result.filters.listType).toBe('discover');
   });
+
+  it('converts decade year ranges to era presets', () => {
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: { yearFrom: 2010, yearTo: 2019 },
+    };
+    const result = sanitizeAIResponse(input);
+    expect(result.filters.datePreset).toBe('era_2010s');
+    expect(result.filters.yearFrom).toBeUndefined();
+    expect(result.filters.yearTo).toBeUndefined();
+  });
+
+  it('keeps yearFrom/yearTo when they do not match a decade range', () => {
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: { yearFrom: 2015, yearTo: 2018 },
+    };
+    const result = sanitizeAIResponse(input);
+    expect(result.filters.datePreset).toBeUndefined();
+    expect(result.filters.yearFrom).toBe(2015);
+    expect(result.filters.yearTo).toBe(2018);
+  });
 });
 
 describe('validateGeminiKey', () => {

@@ -86,9 +86,9 @@ describe('useAICatalog', () => {
     const { result } = renderHook(() => useAICatalog());
 
     const mockTmdbApi = {
-      searchPerson: vi.fn().mockResolvedValue({
-        results: [{ id: 525, name: 'Christopher Nolan', profile_path: '/abc.jpg' }],
-      }),
+      searchPerson: vi
+        .fn()
+        .mockResolvedValue([{ id: 525, name: 'Christopher Nolan', profile_path: '/abc.jpg' }]),
     };
 
     let resolved;
@@ -112,10 +112,8 @@ describe('useAICatalog', () => {
     const mockTmdbApi = {
       searchPerson: vi
         .fn()
-        .mockResolvedValueOnce({
-          results: [{ id: 525, name: 'Christopher Nolan', profile_path: null }],
-        })
-        .mockResolvedValueOnce({ results: [] }),
+        .mockResolvedValueOnce([{ id: 525, name: 'Christopher Nolan', profile_path: null }])
+        .mockResolvedValueOnce([]),
     };
 
     let resolved;
@@ -136,9 +134,9 @@ describe('useAICatalog', () => {
     const { result } = renderHook(() => useAICatalog());
 
     const mockTmdbApi = {
-      searchCompany: vi.fn().mockResolvedValue({
-        results: [{ id: 174, name: 'Warner Bros.', logo_path: '/wb.png' }],
-      }),
+      searchCompany: vi
+        .fn()
+        .mockResolvedValue([{ id: 174, name: 'Warner Bros.', logo_path: '/wb.png' }]),
     };
 
     let resolved;
@@ -158,9 +156,7 @@ describe('useAICatalog', () => {
     const { result } = renderHook(() => useAICatalog());
 
     const mockTmdbApi = {
-      searchKeyword: vi.fn().mockResolvedValue({
-        results: [{ id: 9715, name: 'superhero' }],
-      }),
+      searchKeyword: vi.fn().mockResolvedValue([{ id: 9715, name: 'superhero' }]),
     };
 
     let resolved;
@@ -182,8 +178,8 @@ describe('useAICatalog', () => {
     const mockTmdbApi = {
       searchTVNetworks: vi
         .fn()
-        .mockResolvedValueOnce({ results: [{ id: 213, name: 'Netflix', logo_path: null }] })
-        .mockResolvedValueOnce({ results: [{ id: 1024, name: 'Amazon', logo_path: null }] }),
+        .mockResolvedValueOnce([{ id: 213, name: 'Netflix', logo_path: null }])
+        .mockResolvedValueOnce([{ id: 1024, name: 'Amazon', logo_path: null }]),
     };
 
     let resolved;

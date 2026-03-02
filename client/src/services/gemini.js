@@ -7,7 +7,7 @@ import {
 } from '../data/aiPrompt';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-3-flash-preview';
 const GENERATION_TIMEOUT = 30000;
 
 const VALID_MOVIE_GENRE_IDS = Object.keys(MOVIE_GENRES).map(Number);
@@ -227,6 +227,27 @@ export function sanitizeAIResponse(response) {
 
     if (sanitizedFilters.datePreset && !VALID_DATE_PRESETS.includes(sanitizedFilters.datePreset)) {
       delete sanitizedFilters.datePreset;
+    }
+
+    // Convert decade year ranges to era presets (e.g., 2010-2019 → era_2010s)
+    if (
+      !sanitizedFilters.datePreset &&
+      sanitizedFilters.yearFrom !== undefined &&
+      sanitizedFilters.yearTo !== undefined
+    ) {
+      const DECADE_MAP = {
+        '1980-1989': 'era_1980s',
+        '1990-1999': 'era_1990s',
+        '2000-2009': 'era_2000s',
+        '2010-2019': 'era_2010s',
+        '2020-2029': 'era_2020s',
+      };
+      const rangeKey = `${sanitizedFilters.yearFrom}-${sanitizedFilters.yearTo}`;
+      if (DECADE_MAP[rangeKey]) {
+        sanitizedFilters.datePreset = DECADE_MAP[rangeKey];
+        delete sanitizedFilters.yearFrom;
+        delete sanitizedFilters.yearTo;
+      }
     }
 
     if (Array.isArray(sanitizedFilters.watchMonetizationTypes)) {

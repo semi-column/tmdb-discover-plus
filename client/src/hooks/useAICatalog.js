@@ -50,7 +50,7 @@ export function useAICatalog() {
         for (const name of entitiesToResolve.people) {
           try {
             const results = await tmdbApi.searchPerson(name);
-            const match = results?.results?.[0];
+            const match = Array.isArray(results) ? results[0] : results?.results?.[0];
             if (match) {
               resolved.push({ id: match.id, name: match.name, profile_path: match.profile_path });
             } else {
@@ -71,7 +71,7 @@ export function useAICatalog() {
         for (const name of entitiesToResolve.companies) {
           try {
             const results = await tmdbApi.searchCompany(name);
-            const match = results?.results?.[0];
+            const match = Array.isArray(results) ? results[0] : results?.results?.[0];
             if (match) {
               resolved.push({ id: match.id, name: match.name, logo_path: match.logo_path });
             } else {
@@ -92,7 +92,7 @@ export function useAICatalog() {
         for (const name of entitiesToResolve.excludeCompanies) {
           try {
             const results = await tmdbApi.searchCompany(name);
-            const match = results?.results?.[0];
+            const match = Array.isArray(results) ? results[0] : results?.results?.[0];
             if (match) {
               resolved.push({ id: match.id, name: match.name, logo_path: match.logo_path });
             } else {
@@ -113,7 +113,7 @@ export function useAICatalog() {
         for (const name of entitiesToResolve.keywords) {
           try {
             const results = await tmdbApi.searchKeyword(name);
-            const match = results?.results?.[0];
+            const match = Array.isArray(results) ? results[0] : results?.results?.[0];
             if (match) {
               resolved.push({ id: match.id, name: match.name });
             } else {
@@ -134,7 +134,7 @@ export function useAICatalog() {
         for (const name of entitiesToResolve.excludeKeywords) {
           try {
             const results = await tmdbApi.searchKeyword(name);
-            const match = results?.results?.[0];
+            const match = Array.isArray(results) ? results[0] : results?.results?.[0];
             if (match) {
               resolved.push({ id: match.id, name: match.name });
             } else {
