@@ -265,6 +265,15 @@ export function sanitizeAIResponse(response) {
       }
     }
 
+    // Strip voteCountMin unless sorting by vote_average (it's only useful there)
+    if (
+      sanitizedFilters.voteCountMin !== undefined &&
+      sanitizedFilters.sortBy &&
+      !sanitizedFilters.sortBy.startsWith('vote_average')
+    ) {
+      delete sanitizedFilters.voteCountMin;
+    }
+
     if (Array.isArray(sanitizedFilters.watchMonetizationTypes)) {
       sanitizedFilters.watchMonetizationTypes = sanitizedFilters.watchMonetizationTypes.filter(
         (v) => VALID_MONETIZATION.includes(v)
