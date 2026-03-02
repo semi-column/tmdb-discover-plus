@@ -286,7 +286,7 @@ export function AICatalogModal({ isOpen, onClose, onApply, existingCatalog, addT
     let warnings = [];
 
     if (generatedCatalog.entitiesToResolve) {
-      const region = preferences?.region || 'US';
+      const region = generatedCatalog.filters?.watchRegion || preferences?.region || 'US';
       const result = await resolveEntities(generatedCatalog.entitiesToResolve, tmdbData, region);
       finalFilters = { ...finalFilters, ...result.filters };
       finalFormState = result.formState;
