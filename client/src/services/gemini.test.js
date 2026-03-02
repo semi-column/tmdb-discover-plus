@@ -251,7 +251,7 @@ describe('sanitizeAIResponse', () => {
     expect(result.filters.releaseTypes).toEqual([3, 4]);
   });
 
-  it('strips releaseTypes when region is missing', () => {
+  it('infers default region when releaseTypes is present and region is missing', () => {
     const input = {
       name: 'Test',
       type: 'movie',
@@ -259,7 +259,32 @@ describe('sanitizeAIResponse', () => {
       filters: { releaseTypes: [3, 4] },
     };
     const result = sanitizeAIResponse(input);
-    expect(result.filters.releaseTypes).toBeUndefined();
+    expect(result.filters.releaseTypes).toEqual([3, 4]);
+    expect(result.filters.region).toBe('US');
+  });
+
+  it('infers region from countries when releaseTypes is present', () => {
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: { releaseTypes: [4], countries: 'KR' },
+    };
+    const result = sanitizeAIResponse(input);
+    expect(result.filters.releaseTypes).toEqual([4]);
+    expect(result.filters.region).toBe('KR');
+  });
+
+  it('infers region from language when releaseTypes is present', () => {
+    const input = {
+      name: 'Test',
+      type: 'movie',
+      source: 'tmdb',
+      filters: { releaseTypes: [4], language: 'ko' },
+    };
+    const result = sanitizeAIResponse(input);
+    expect(result.filters.releaseTypes).toEqual([4]);
+    expect(result.filters.region).toBe('KR');
   });
 
   it('validates datePreset values', () => {

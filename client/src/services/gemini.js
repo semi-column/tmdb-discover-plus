@@ -4,10 +4,10 @@ import {
   buildUserPrompt,
   MOVIE_GENRES,
   TV_GENRES,
-} from '../data/aiPrompt';
+} from '../data/aiPrompt.js';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_MODEL = 'gemini-3-flash-preview';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const GENERATION_TIMEOUT = 30000;
 
 const VALID_MOVIE_GENRE_IDS = Object.keys(MOVIE_GENRES).map(Number);
@@ -83,6 +83,28 @@ const VALID_DATE_PRESETS = [
   'era_1990s',
   'era_1980s',
 ];
+
+const LANGUAGE_TO_REGION = {
+  ko: 'KR',
+  ja: 'JP',
+  hi: 'IN',
+  ta: 'IN',
+  te: 'IN',
+  ml: 'IN',
+  kn: 'IN',
+  bn: 'IN',
+  mr: 'IN',
+  en: 'US',
+  de: 'DE',
+  fr: 'FR',
+  es: 'ES',
+  it: 'IT',
+  pt: 'BR',
+  ru: 'RU',
+  zh: 'CN',
+  tr: 'TR',
+  th: 'TH',
+};
 
 const TMDB_FILTER_KEYS = new Set([
   'listType',
@@ -215,7 +237,20 @@ export function sanitizeAIResponse(response) {
     }
 
     if (sanitizedFilters.releaseTypes?.length > 0 && !sanitizedFilters.region) {
-      delete sanitizedFilters.releaseTypes;
+      // releaseTypes require region; infer it from nearby signals before falling back.
+      if (
+        typeof sanitizedFilters.countries === 'string' &&
+        /^[A-Z]{2}$/.test(sanitizedFilters.countries)
+      ) {
+        sanitizedFilters.region = sanitizedFilters.countries;
+      } else if (
+        typeof sanitizedFilters.language === 'string' &&
+        LANGUAGE_TO_REGION[sanitizedFilters.language]
+      ) {
+        sanitizedFilters.region = LANGUAGE_TO_REGION[sanitizedFilters.language];
+      } else {
+        sanitizedFilters.region = 'US';
+      }
     }
 
     if (
@@ -398,6 +433,20 @@ export async function generateCatalog(apiKey, userMessage, existingCatalog) {
     );
 
     if (!res.ok) {
+      if (res.status === 400) {
+        let details = '';
+        try {
+          const errBody = await res.json();
+          details = errBody?.error?.message || '';
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(
+          details
+            ? `Gemini request failed (HTTP 400): ${details}`
+            : 'Gemini request failed (HTTP 400)'
+        );
+      }
       if (res.status === 429) throw new Error('Rate limited — please wait a moment and try again.');
       if (res.status === 401 || res.status === 403)
         throw new Error('Your Gemini API key is invalid or expired. Please check it in Settings.');
