@@ -39,7 +39,7 @@ This project adheres to a code of conduct. By participating, you are expected to
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - npm
 - A TMDB API key (free from [TMDB](https://www.themoviedb.org/settings/api))
 
