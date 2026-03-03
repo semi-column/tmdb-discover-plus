@@ -3,11 +3,6 @@ import { DEFAULT_CATALOG } from './useCatalogEditor';
 
 // Filters that only make sense for movie-type catalogs.
 const MOVIE_ONLY_FILTER_KEYS = [
-  'certifications',
-  'certification',
-  'certificationCountry',
-  'certificationMin',
-  'certificationMax',
   'includeVideo',
   'primaryReleaseYear',
   'releaseDateFrom',
