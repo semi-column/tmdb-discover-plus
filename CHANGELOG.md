@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.8.0...v2.8.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* resolve tv show age ratings not persisting on save ([0659937](https://github.com/semi-column/tmdb-discover-plus/commit/06599373fdf2846e90f99ffc451a3d9c6fc8db9b))
+* update prerequisite to the required node 22 + ([df28f0a](https://github.com/semi-column/tmdb-discover-plus/commit/df28f0aa9c003b94306ca1fb6ad0ad008d50d29b))
+
 ## [2.8.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.7.3...v2.8.0) (2026-02-27)
 
 
