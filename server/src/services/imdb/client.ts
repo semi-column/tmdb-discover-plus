@@ -92,18 +92,20 @@ export async function imdbFetch(
   }
 
   const ep = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = new URL(`https://${apiHost}${ep}`);
+  const isLocalhost = apiHost.startsWith('localhost') || apiHost.startsWith('127.0.0.1');
+  const protocol = isLocalhost ? 'http' : 'https';
+  const url = new URL(`${protocol}://${apiHost}${ep}`);
 
-  if (url.protocol !== 'https:') {
+  if (url.protocol !== 'https:' && !isLocalhost) {
     throw new Error('Blocked non-HTTPS outbound request');
   }
 
   Object.entries(params).forEach(([key, value]) => {
     if (value === undefined || value === null || value === '') return;
-    
+
     if (Array.isArray(value)) {
       if (value.length === 0) return;
-      
+
       if (key === 'keywords' || key === 'excludeKeywords') {
         url.searchParams.set(key, value.map(String).join(','));
       } else {

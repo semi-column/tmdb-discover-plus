@@ -23,6 +23,9 @@ const initialState = {
   imdbSortOptions: [],
   imdbTitleTypes: [],
   imdbPresetCatalogs: [],
+  imdbCertificateRatings: {},
+  imdbRankedLists: [],
+  imdbWithDataOptions: [],
   loading: false,
   error: null,
 };
@@ -56,6 +59,9 @@ function reducer(state, action) {
         imdbSortOptions: imdbData.sortOptions || [],
         imdbTitleTypes: imdbData.titleTypes || [],
         imdbPresetCatalogs: imdbData.presetCatalogs || [],
+        imdbCertificateRatings: imdbData.certificateRatings || {},
+        imdbRankedLists: imdbData.rankedLists || [],
+        imdbWithDataOptions: imdbData.withDataOptions || [],
         loading: false,
         error: null,
       };
@@ -206,11 +212,49 @@ export function useTMDB(apiKey) {
     [hasAuth]
   );
 
+  const searchImdbPeople = useCallback(
+    async (query) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      const data = await api.searchImdbPeople(query);
+      return data?.results || [];
+    },
+    [hasAuth]
+  );
+
+  const searchImdbCompanies = useCallback(
+    async (query) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      const data = await api.searchImdbCompanies(query);
+      return data?.results || [];
+    },
+    [hasAuth]
+  );
+
+  const searchCities = useCallback(
+    async (query) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      const data = await api.searchCities(query);
+      return (data?.results || []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        displayName: c.displayName,
+        lat: c.lat,
+        lon: c.lon,
+        country: c.country,
+        countryCode: c.countryCode,
+      }));
+    },
+    [hasAuth]
+  );
+
   return {
     ...state,
     preview,
     previewImdb,
     searchImdb,
+    searchImdbPeople,
+    searchImdbCompanies,
+    searchCities,
     searchPerson,
     searchCompany,
     searchKeyword,

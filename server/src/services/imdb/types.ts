@@ -122,6 +122,34 @@ export interface ImdbSuggestionsResult {
   version: number;
 }
 
+// Basic search result types (from /api/imdb/search)
+export interface ImdbBasicSearchNameResult {
+  type: 'Name';
+  id: string;
+  fullName: string;
+  primaryImage: ImdbImage | null;
+  knownFor?: {
+    titles?: Array<{ id: string; primaryTitle: string }>;
+    credits?: Array<{ id: string; category: string }>;
+  };
+}
+
+export interface ImdbBasicSearchCompanyResult {
+  type: 'Company';
+  id: string;
+  name: string;
+  country: string | null;
+}
+
+export interface ImdbBasicSearchResult {
+  results: Array<
+    | { type: 'Title'; id: string; primaryTitle: string; [key: string]: unknown }
+    | ImdbBasicSearchNameResult
+    | { type: 'Interest'; id: string; [key: string]: unknown }
+    | ImdbBasicSearchCompanyResult
+  >;
+}
+
 export type ImdbSortBy =
   | 'POPULARITY'
   | 'TITLE_REGIONAL'
@@ -295,6 +323,54 @@ export const IMDB_TITLE_TYPES = [
   { value: 'podcastEpisode', label: 'Podcast Episode' },
 ] as const;
 
+export type ImdbRankedList = 'TOP_250' | 'TOP_250_TV' | 'BOTTOM_100';
+
+export type ImdbWithData =
+  | 'PLOT'
+  | 'TRIVIA'
+  | 'GOOF'
+  | 'SOUNDTRACK'
+  | 'ALTERNATE_VERSION'
+  | 'CRAZY_CREDIT'
+  | 'QUOTE'
+  | 'BUSINESS_INFO'
+  | 'TECHNICAL'
+  | 'LOCATION'
+  | 'AWARD';
+
+export const IMDB_RANKED_LISTS: Array<{ value: ImdbRankedList; label: string }> = [
+  { value: 'TOP_250', label: 'IMDb Top 250 Movies' },
+  { value: 'TOP_250_TV', label: 'IMDb Top 250 TV Shows' },
+  { value: 'BOTTOM_100', label: 'IMDb Bottom 100' },
+];
+
+export const IMDB_WITH_DATA_OPTIONS: Array<{ value: ImdbWithData; label: string }> = [
+  { value: 'PLOT', label: 'Has Plot' },
+  { value: 'TRIVIA', label: 'Has Trivia' },
+  { value: 'GOOF', label: 'Has Goofs' },
+  { value: 'SOUNDTRACK', label: 'Has Soundtrack' },
+  { value: 'ALTERNATE_VERSION', label: 'Has Alternate Versions' },
+  { value: 'CRAZY_CREDIT', label: 'Has Crazy Credits' },
+  { value: 'QUOTE', label: 'Has Quotes' },
+  { value: 'BUSINESS_INFO', label: 'Has Box Office Info' },
+  { value: 'TECHNICAL', label: 'Has Technical Info' },
+  { value: 'LOCATION', label: 'Has Filming Locations' },
+  { value: 'AWARD', label: 'Has Awards' },
+];
+
+export const IMDB_CERTIFICATE_RATINGS: Record<string, string[]> = {
+  US: ['G', 'PG', 'PG-13', 'R', 'NC-17'],
+  GB: ['U', 'PG', '12A', '12', '15', '18', 'R18'],
+  IN: ['U', 'U/A 7+', 'U/A 13+', 'U/A 16+', 'A'],
+  DE: ['0', '6', '12', '16', '18'],
+  FR: ['-12', '-16', '-18', 'U'],
+  AU: ['G', 'PG', 'M', 'MA15+', 'R18+', 'X18+'],
+  CA: ['G', 'PG', '14A', '18A', 'R', 'A'],
+  JP: ['G', 'PG12', 'R15+', 'R18+'],
+  KR: ['All', '12', '15', '18', 'Restricted'],
+  BR: ['L', '10', '12', '14', '16', '18'],
+};
+
 export interface ImdbAdvancedSearchParams {
   query?: string;
   types?: ImdbTitleType[];
@@ -317,6 +393,23 @@ export interface ImdbAdvancedSearchParams {
   excludeKeywords?: string[];
   awardsWon?: string[];
   awardsNominated?: string[];
+  companies?: string[];
+  excludeCompanies?: string[];
+  creditedNames?: string[];
+  inTheatersLat?: number;
+  inTheatersLong?: number;
+  inTheatersRadius?: number;
+  certificateRating?: string;
+  certificateCountry?: string;
+  certificates?: string[];
+  explicitContent?: string;
+  rankedList?: ImdbRankedList;
+  rankedLists?: ImdbRankedList[];
+  excludeRankedLists?: ImdbRankedList[];
+  rankedListMaxRank?: number;
+  plot?: string[];
+  filmingLocations?: string[];
+  withData?: ImdbWithData[];
   limit?: number;
   endCursor?: string;
 }
@@ -345,6 +438,23 @@ export interface ImdbCatalogFilters {
   awardsWon?: string[];
   awardsNominated?: string[];
   types?: ImdbTitleType[];
+  companies?: string[];
+  excludeCompanies?: string[];
+  creditedNames?: string[];
+  inTheatersLat?: number;
+  inTheatersLong?: number;
+  inTheatersRadius?: number;
+  certificateRating?: string;
+  certificateCountry?: string;
+  certificates?: string[];
+  explicitContent?: string;
+  rankedList?: ImdbRankedList;
+  rankedLists?: ImdbRankedList[];
+  excludeRankedLists?: ImdbRankedList[];
+  rankedListMaxRank?: number;
+  plot?: string | string[];
+  filmingLocations?: string | string[];
+  withData?: ImdbWithData[];
 }
 
 export interface ImdbPosterOptions {

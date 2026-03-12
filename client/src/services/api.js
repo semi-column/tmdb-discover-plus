@@ -293,6 +293,26 @@ class ApiService {
     return this.request(`/imdb/search?${qs}`);
   }
 
+  async searchImdbPeople(query, limit = 10) {
+    const qs = new URLSearchParams({ query, limit: String(limit) }).toString();
+    return this.request(`/imdb/search/people?${qs}`);
+  }
+
+  async searchImdbCompanies(query, limit = 10) {
+    const qs = new URLSearchParams({ query, limit: String(limit) }).toString();
+    return this.request(`/imdb/search/companies?${qs}`);
+  }
+
+  async searchImdbSuggestions(query) {
+    const qs = new URLSearchParams({ query }).toString();
+    return this.request(`/imdb/search/suggestions?${qs}`);
+  }
+
+  async searchCities(query, limit = 10) {
+    const qs = new URLSearchParams({ query, limit: String(limit) }).toString();
+    return this.request(`/geo/cities?${qs}`);
+  }
+
   async saveConfig(config) {
     return this.request('/config', {
       method: 'POST',

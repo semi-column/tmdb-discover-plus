@@ -6,6 +6,9 @@ import {
   IMDB_SORT_OPTIONS,
   IMDB_TITLE_TYPES,
   IMDB_PRESET_CATALOGS,
+  IMDB_CERTIFICATE_RATINGS,
+  IMDB_RANKED_LISTS,
+  IMDB_WITH_DATA_OPTIONS,
 } from './types.ts';
 
 export async function getGenres(): Promise<string[]> {
@@ -44,4 +47,16 @@ export function getTitleTypeOptions(): Array<{ value: string; label: string }> {
 
 export function getPresetCatalogs(): typeof IMDB_PRESET_CATALOGS {
   return IMDB_PRESET_CATALOGS;
+}
+
+export function getCertificateRatings(): typeof IMDB_CERTIFICATE_RATINGS {
+  return IMDB_CERTIFICATE_RATINGS;
+}
+
+export function getRankedLists(): typeof IMDB_RANKED_LISTS {
+  return [...IMDB_RANKED_LISTS];
+}
+
+export function getWithDataOptions(): typeof IMDB_WITH_DATA_OPTIONS {
+  return [...IMDB_WITH_DATA_OPTIONS];
 }

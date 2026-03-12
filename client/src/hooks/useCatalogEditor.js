@@ -78,10 +78,16 @@ export function useCatalogEditor() {
     imdbSortOptions = [],
     imdbTitleTypes = [],
     imdbEnabled = false,
+    imdbCertificateRatings = {},
+    imdbRankedLists = [],
+    imdbWithDataOptions = [],
     searchPerson,
     searchCompany,
     searchKeyword,
     searchTVNetworks,
+    searchImdbPeople,
+    searchImdbCompanies,
+    searchCities,
     getPersonById,
     getCompanyById,
     getKeywordById,
@@ -116,6 +122,9 @@ export function useCatalogEditor() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
   const [searchedNetworks, setSearchedNetworks] = useState([]);
+  const [selectedImdbPeople, setSelectedImdbPeople] = useState([]);
+  const [selectedImdbCompanies, setSelectedImdbCompanies] = useState([]);
+  const [selectedCity, setSelectedCity] = useState(null);
   const [expandedSections, setExpandedSections] = useState({
     basic: false,
     genres: false,
@@ -136,6 +145,9 @@ export function useCatalogEditor() {
     prevCatalogIdRef.current = incomingCatalogId;
     setLocalCatalog(catalog ? withRestoredPreset(catalog) : DEFAULT_CATALOG);
     setPreviewData(null);
+    setSelectedImdbPeople(catalog?.formState?.selectedImdbPeople || []);
+    setSelectedImdbCompanies(catalog?.formState?.selectedImdbCompanies || []);
+    setSelectedCity(catalog?.formState?.selectedCity || null);
     if (catalog?.formState?.expandedSections) {
       setExpandedSections(catalog.formState.expandedSections);
     } else if (catalog) {
@@ -190,6 +202,12 @@ export function useCatalogEditor() {
         withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
         excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
         excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
+        ...(localCatalog?.source === 'imdb'
+          ? {
+              creditedNames: selectedImdbPeople.map((p) => p.id),
+              companies: selectedImdbCompanies.map((c) => c.id),
+            }
+          : {}),
       },
       formState: {
         selectedPeople: selectedPeople.length > 0 ? selectedPeople : undefined,
@@ -198,6 +216,9 @@ export function useCatalogEditor() {
         excludeKeywords: excludeKeywords.length > 0 ? excludeKeywords : undefined,
         excludeCompanies: excludeCompanies.length > 0 ? excludeCompanies : undefined,
         selectedNetworks: selectedNetworks.length > 0 ? selectedNetworks : undefined,
+        selectedImdbPeople: selectedImdbPeople.length > 0 ? selectedImdbPeople : undefined,
+        selectedImdbCompanies: selectedImdbCompanies.length > 0 ? selectedImdbCompanies : undefined,
+        selectedCity: selectedCity || undefined,
         expandedSections,
       },
     }),
@@ -209,6 +230,9 @@ export function useCatalogEditor() {
       excludeKeywords,
       excludeCompanies,
       selectedNetworks,
+      selectedImdbPeople,
+      selectedImdbCompanies,
+      selectedCity,
       expandedSections,
     ]
   );
@@ -307,10 +331,16 @@ export function useCatalogEditor() {
     imdbSortOptions,
     imdbTitleTypes,
     imdbEnabled,
+    imdbCertificateRatings,
+    imdbRankedLists,
+    imdbWithDataOptions,
     searchPerson,
     searchCompany,
     searchKeyword,
     searchTVNetworks,
+    searchImdbPeople,
+    searchImdbCompanies,
+    searchCities,
 
     selectedPeople,
     setSelectedPeople,
@@ -323,6 +353,12 @@ export function useCatalogEditor() {
     excludeCompanies,
     setExcludeCompanies,
     selectedNetworks,
+    selectedImdbPeople,
+    setSelectedImdbPeople,
+    selectedImdbCompanies,
+    setSelectedImdbCompanies,
+    selectedCity,
+    setSelectedCity,
 
     activeFilters,
     clearFilter,

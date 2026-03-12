@@ -101,6 +101,43 @@ export async function advancedSearch(
   if (compatibleAwardsWon?.length) queryParams.awardsWon = compatibleAwardsWon;
   if (compatibleAwardsNominated?.length) queryParams.awardsNominated = compatibleAwardsNominated;
 
+  // Phase 1: Companies, People, In Theatres, Certificates
+  if (params.companies?.length) queryParams.companies = params.companies;
+  if (params.excludeCompanies?.length) queryParams.excludeCompanies = params.excludeCompanies;
+  if (params.creditedNames?.length) queryParams.creditedNames = params.creditedNames;
+
+  // In Theatres: apply -0.10 offset per IMDB API docs
+  if (params.inTheatersLat != null && params.inTheatersLong != null) {
+    queryParams.inTheatersLat = params.inTheatersLat - 0.1;
+    queryParams.inTheatersLong = params.inTheatersLong - 0.1;
+    if (params.inTheatersRadius) queryParams.inTheatersRadius = params.inTheatersRadius;
+  }
+
+  if (params.certificateRating) queryParams.certificateRating = params.certificateRating;
+  if (params.certificateCountry) queryParams.certificateCountry = params.certificateCountry;
+  if (params.certificates?.length) queryParams.certificates = params.certificates;
+  if (params.explicitContent) {
+    queryParams.explicitContent = params.explicitContent === 'EXCLUDE' ? 'false' : 'true';
+  }
+
+  // Phase 2: Ranked Lists, Plot, Filming Locations
+  if (params.rankedList) queryParams.rankedList = params.rankedList;
+  if (params.rankedLists?.length) queryParams.rankedLists = params.rankedLists;
+  if (params.excludeRankedLists?.length) queryParams.excludeRankedLists = params.excludeRankedLists;
+  if (params.rankedListMaxRank) queryParams.rankedListMaxRank = params.rankedListMaxRank;
+  if (params.plot?.length) {
+    queryParams.plot = typeof params.plot === 'string' ? [params.plot] : params.plot;
+  }
+  if (params.filmingLocations?.length) {
+    queryParams.filmingLocations =
+      typeof params.filmingLocations === 'string'
+        ? [params.filmingLocations]
+        : params.filmingLocations;
+  }
+
+  // Phase 3: Metadata Availability
+  if (params.withData?.length) queryParams.withData = params.withData;
+
   const filterHash = hashFilters(queryParams);
 
   const cache = getCache();

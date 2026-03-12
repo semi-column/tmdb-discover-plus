@@ -6,7 +6,7 @@ export {
 } from './client.ts';
 export { advancedSearch, getTopRanking, getPopular, getList } from './discover.ts';
 export { getTitle } from './detail.ts';
-export { search, getSuggestions } from './search.ts';
+export { search, getSuggestions, basicSearch } from './search.ts';
 export {
   getGenres,
   getTitleTypes,
@@ -14,6 +14,9 @@ export {
   getSortOptions,
   getTitleTypeOptions,
   getPresetCatalogs,
+  getCertificateRatings,
+  getRankedLists,
+  getWithDataOptions,
 } from './reference.ts';
 export {
   imdbToStremioMeta,
@@ -28,6 +31,9 @@ export {
   IMDB_SORT_OPTIONS,
   IMDB_TITLE_TYPES,
   IMDB_PRESET_CATALOGS,
+  IMDB_CERTIFICATE_RATINGS,
+  IMDB_RANKED_LISTS,
+  IMDB_WITH_DATA_OPTIONS,
 } from './types.ts';
 export type {
   ImdbTitle,
@@ -42,6 +48,8 @@ export type {
   ImdbSortOrder,
   ImdbTitleType,
   ImdbPosterOptions,
+  ImdbRankedList,
+  ImdbWithData,
 } from './types.ts';
 
 import { config } from '../../config.ts';

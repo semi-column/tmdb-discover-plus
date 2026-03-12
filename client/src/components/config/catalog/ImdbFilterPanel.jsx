@@ -4,8 +4,24 @@ import { GenreSelector } from './GenreSelector';
 
 // TODO: Awards section hidden until upstream API compatibility is resolved. Set to false to re-enable.
 const AWARDS_HIDDEN = false;
-import { Settings, Sparkles, Calendar, Award, Tag, Globe } from 'lucide-react';
+import {
+  Settings,
+  Sparkles,
+  Calendar,
+  Award,
+  Tag,
+  Globe,
+  Users,
+  MapPin,
+  Shield,
+  ListOrdered,
+  Search,
+  Eye,
+  FileText,
+  Database,
+} from 'lucide-react';
 import { SearchableSelect } from '../../forms/SearchableSelect';
+import { SearchInput } from '../../forms/SearchInput';
 import { RangeSlider, SingleSlider } from '../../forms/RangeSlider';
 import { LabelWithTooltip } from '../../forms/Tooltip';
 
@@ -16,10 +32,25 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   imdbAwards = [],
   imdbSortOptions = [],
   imdbTitleTypes = [],
+  imdbCertificateRatings = {},
+  imdbRankedLists = [],
+  imdbWithDataOptions = [],
   countries = [],
   languages = [],
   expandedSections,
   onToggleSection,
+  onSearchImdbPeople,
+  onSearchImdbCompanies,
+  onSearchCities,
+  selectedImdbPeople = [],
+  selectedImdbCompanies = [],
+  selectedCity = null,
+  onSelectImdbPerson,
+  onRemoveImdbPerson,
+  onSelectImdbCompany,
+  onRemoveImdbCompany,
+  onSelectCity,
+  onClearCity,
 }) {
   const [internalSections, setInternalSections] = useState({
     basic: true,
@@ -28,6 +59,12 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     keywords: false,
     awards: false,
     region: false,
+    people: false,
+    theatres: false,
+    certificates: false,
+    rankedLists: false,
+    textSearch: false,
+    advanced: false,
   });
 
   const [keywordInput, setKeywordInput] = useState('');
@@ -65,10 +102,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     [imdbAwards, isMovieCatalog]
   );
 
-  const imdbGenreObjects = useMemo(
-    () => imdbGenres.map((g) => ({ id: g, name: g })),
-    [imdbGenres]
-  );
+  const imdbGenreObjects = useMemo(() => imdbGenres.map((g) => ({ id: g, name: g })), [imdbGenres]);
 
   const handleTriStateGenreClick = useCallback(
     (genreId) => {
@@ -232,6 +266,60 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     []
   );
 
+  const certificateCountryOptions = useMemo(
+    () =>
+      Object.entries(imdbCertificateRatings).map(([code, data]) => ({
+        value: code,
+        label: data.name,
+      })),
+    [imdbCertificateRatings]
+  );
+
+  const selectedCertCountry = filters.certificateCountry || '';
+  const availableCertificates = useMemo(
+    () =>
+      selectedCertCountry && imdbCertificateRatings[selectedCertCountry]
+        ? imdbCertificateRatings[selectedCertCountry].ratings.map((r) => ({
+            value: `${selectedCertCountry}:${r}`,
+            label: r,
+          }))
+        : [],
+    [selectedCertCountry, imdbCertificateRatings]
+  );
+
+  const handleCertificateToggle = useCallback(
+    (certValue) => {
+      const current = filters.certificates || [];
+      const next = current.includes(certValue)
+        ? current.filter((c) => c !== certValue)
+        : [...current, certValue];
+      onFiltersChange('certificates', next);
+    },
+    [filters.certificates, onFiltersChange]
+  );
+
+  const handleRankedListToggle = useCallback(
+    (listValue) => {
+      const current = filters.rankedLists || [];
+      const next = current.includes(listValue)
+        ? current.filter((l) => l !== listValue)
+        : [...current, listValue];
+      onFiltersChange('rankedLists', next);
+    },
+    [filters.rankedLists, onFiltersChange]
+  );
+
+  const handleExcludeRankedListToggle = useCallback(
+    (listValue) => {
+      const current = filters.excludeRankedLists || [];
+      const next = current.includes(listValue)
+        ? current.filter((l) => l !== listValue)
+        : [...current, listValue];
+      onFiltersChange('excludeRankedLists', next);
+    },
+    [filters.excludeRankedLists, onFiltersChange]
+  );
+
   if (isPreset) {
     return (
       <div className="flex items-center gap-3 p-4 mt-6 rounded-lg border border-white/5 bg-white/5 imdb-preset-notice">
@@ -268,13 +356,12 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       <FilterSection
         id="basic"
         title="Sort & Filter"
-            description="Sort order and basic filters"
-            icon={Settings}
-            isOpen={localExpandedSections.basic}
-            onToggle={toggleSection}
-          >
-            <div className="filter-grid">
-
+        description="Sort order and basic filters"
+        icon={Settings}
+        isOpen={localExpandedSections.basic}
+        onToggle={toggleSection}
+      >
+        <div className="filter-grid">
           <div className="filter-group">
             <LabelWithTooltip label="Sort By" tooltip="How to order your IMDb results." />
             <SearchableSelect
@@ -313,9 +400,24 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                 {imdbTitleTypes
                   .filter((tt) => {
                     if (localCatalog?.type === 'series') {
-                      return ['tvSeries', 'tvMiniSeries', 'tvSpecial', 'tvEpisode', 'tvShort', 'podcastSeries', 'podcastEpisode'].includes(tt.value);
+                      return [
+                        'tvSeries',
+                        'tvMiniSeries',
+                        'tvSpecial',
+                        'tvEpisode',
+                        'tvShort',
+                        'podcastSeries',
+                        'podcastEpisode',
+                      ].includes(tt.value);
                     }
-                    return ['movie', 'tvMovie', 'short', 'video', 'videoGame', 'musicVideo'].includes(tt.value);
+                    return [
+                      'movie',
+                      'tvMovie',
+                      'short',
+                      'video',
+                      'videoGame',
+                      'musicVideo',
+                    ].includes(tt.value);
                   })
                   .map((tt) => {
                     const selected = (filters.types || []).includes(tt.value);
@@ -576,8 +678,8 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
               value={keywordInput}
               onChange={(e) => setKeywordInput(e.target.value)}
             />
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="px-4 py-2 bg-[#6366f1] hover:bg-[#4f46e5] text-white rounded transition-colors text-sm font-medium"
               disabled={!keywordInput.trim()}
             >
@@ -602,7 +704,10 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         </div>
 
         <div className="filter-group mt-6">
-          <LabelWithTooltip label="Exclude Keywords" tooltip="Results must NOT match these keywords." />
+          <LabelWithTooltip
+            label="Exclude Keywords"
+            tooltip="Results must NOT match these keywords."
+          />
           <form className="flex gap-2" onSubmit={handleAddExcludeKeyword}>
             <input
               type="text"
@@ -611,8 +716,8 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
               value={excludeKeywordInput}
               onChange={(e) => setExcludeKeywordInput(e.target.value)}
             />
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded transition-colors text-sm font-medium"
               disabled={!excludeKeywordInput.trim()}
             >
@@ -626,7 +731,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                   key={`exclude-${kw}`}
                   type="button"
                   className="genre-chip excluded imdb-chip--clickable flex items-center gap-1"
-                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: '#ef4444',
+                    borderColor: 'rgba(239, 68, 68, 0.2)',
+                  }}
                   onClick={() => handleExcludeKeywordToggle(kw)}
                   title={`Remove ${kw}`}
                 >
@@ -685,6 +794,343 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                   );
                 })}
               </div>
+            </div>
+          </div>
+        </FilterSection>
+      )}
+
+      {/* People & Studios */}
+      <FilterSection
+        id="people"
+        title="People & Studios"
+        description="Filter by credited people and production companies"
+        icon={Users}
+        isOpen={localExpandedSections.people}
+        onToggle={toggleSection}
+        badgeCount={(filters.creditedNames || []).length + (filters.companies || []).length}
+      >
+        <div className="filter-group mb-4">
+          <LabelWithTooltip
+            label="Credited People"
+            tooltip="Search for actors, directors, writers etc. by name using IMDb data."
+          />
+          {onSearchImdbPeople && (
+            <SearchInput
+              onSearch={onSearchImdbPeople}
+              onSelect={onSelectImdbPerson}
+              selectedItems={selectedImdbPeople}
+              onRemove={onRemoveImdbPerson}
+              placeholder="Search people on IMDb..."
+              type="person"
+              multiple={true}
+            />
+          )}
+        </div>
+
+        <div className="filter-group mt-6">
+          <LabelWithTooltip
+            label="Production Companies"
+            tooltip="Search for production companies, studios, and distributors."
+          />
+          {onSearchImdbCompanies && (
+            <SearchInput
+              onSearch={onSearchImdbCompanies}
+              onSelect={onSelectImdbCompany}
+              selectedItems={selectedImdbCompanies}
+              onRemove={onRemoveImdbCompany}
+              placeholder="Search companies on IMDb..."
+              type="company"
+              multiple={true}
+            />
+          )}
+        </div>
+      </FilterSection>
+
+      {/* In Theatres */}
+      <FilterSection
+        id="theatres"
+        title="In Theatres"
+        description="Find titles currently in theatres near a city"
+        icon={MapPin}
+        isOpen={localExpandedSections.theatres}
+        onToggle={toggleSection}
+        badgeCount={filters.inTheatersLat ? 1 : 0}
+      >
+        <div className="filter-group mb-4">
+          <LabelWithTooltip
+            label="City"
+            tooltip="Search for a city to find titles currently showing in theatres nearby."
+          />
+          {onSearchCities && (
+            <>
+              <SearchInput
+                onSearch={onSearchCities}
+                onSelect={(city) => {
+                  if (onSelectCity) onSelectCity(city);
+                }}
+                selectedItems={selectedCity ? [selectedCity] : []}
+                onRemove={() => {
+                  if (onClearCity) onClearCity();
+                }}
+                placeholder="Search cities..."
+                type="company"
+                multiple={false}
+              />
+              {selectedCity && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Coordinates: {selectedCity.lat?.toFixed(4)}, {selectedCity.lon?.toFixed(4)}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="filter-group">
+          <LabelWithTooltip
+            label="Radius (km)"
+            tooltip="Search radius around the selected city in kilometers. Default is 50km."
+          />
+          <SingleSlider
+            min={1}
+            max={500}
+            step={1}
+            value={filters.inTheatersRadius ? Math.round(filters.inTheatersRadius / 1000) : 50}
+            onChange={(val) => onFiltersChange('inTheatersRadius', val * 1000)}
+            formatValue={(v) => `${v} km`}
+            disabled={!filters.inTheatersLat}
+          />
+        </div>
+      </FilterSection>
+
+      {/* Certificates */}
+      {certificateCountryOptions.length > 0 && (
+        <FilterSection
+          id="certificates"
+          title="Certificates"
+          description="Filter by content rating certificates (PG, R, etc.)"
+          icon={Shield}
+          isOpen={localExpandedSections.certificates}
+          onToggle={toggleSection}
+          badgeCount={(filters.certificates || []).length}
+        >
+          <div className="filter-group mb-4">
+            <LabelWithTooltip
+              label="Country"
+              tooltip="Select a country to see its content rating options."
+            />
+            <SearchableSelect
+              options={certificateCountryOptions}
+              value={selectedCertCountry}
+              onChange={(value) => {
+                onFiltersChange('certificateCountry', value || undefined);
+                onFiltersChange('certificates', []);
+              }}
+              placeholder="Select country..."
+              searchPlaceholder="Search countries..."
+              labelKey="label"
+              valueKey="value"
+              allowClear={true}
+            />
+          </div>
+
+          {availableCertificates.length > 0 && (
+            <div className="filter-group">
+              <span className="filter-label">Ratings</span>
+              <div className="imdb-chip-wrap">
+                {availableCertificates.map((cert) => {
+                  const selected = (filters.certificates || []).includes(cert.value);
+                  return (
+                    <button
+                      key={cert.value}
+                      type="button"
+                      className={`genre-chip ${selected ? 'selected' : ''}`}
+                      onClick={() => handleCertificateToggle(cert.value)}
+                    >
+                      {cert.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </FilterSection>
+      )}
+
+      {/* Ranked Lists (Phase 2) */}
+      {imdbRankedLists.length > 0 && (
+        <FilterSection
+          id="rankedLists"
+          title="Ranked Lists"
+          description="Filter by IMDb curated lists (Top 250, Bottom 100, etc.)"
+          icon={ListOrdered}
+          isOpen={localExpandedSections.rankedLists}
+          onToggle={toggleSection}
+          badgeCount={
+            (filters.rankedLists || []).length + (filters.excludeRankedLists || []).length
+          }
+        >
+          <div className="filter-group mb-4">
+            <span className="filter-label">Include from Lists</span>
+            <div className="imdb-chip-wrap">
+              {imdbRankedLists.map((list) => {
+                const selected = (filters.rankedLists || []).includes(list.value);
+                return (
+                  <button
+                    key={`inc-${list.value}`}
+                    type="button"
+                    className={`genre-chip ${selected ? 'selected' : ''}`}
+                    onClick={() => handleRankedListToggle(list.value)}
+                  >
+                    {list.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="filter-group mb-4">
+            <span className="filter-label">Exclude from Lists</span>
+            <div className="imdb-chip-wrap">
+              {imdbRankedLists.map((list) => {
+                const selected = (filters.excludeRankedLists || []).includes(list.value);
+                return (
+                  <button
+                    key={`exc-${list.value}`}
+                    type="button"
+                    className={`genre-chip ${selected ? 'selected' : ''}`}
+                    style={
+                      selected
+                        ? {
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            color: '#ef4444',
+                            borderColor: 'rgba(239, 68, 68, 0.2)',
+                          }
+                        : {}
+                    }
+                    onClick={() => handleExcludeRankedListToggle(list.value)}
+                  >
+                    {list.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="filter-group">
+            <LabelWithTooltip
+              label="Max Rank"
+              tooltip="Only include titles ranked within this position (e.g. top 100)."
+            />
+            <input
+              type="number"
+              className="input"
+              placeholder="e.g. 100"
+              min={1}
+              value={filters.rankedListMaxRank || ''}
+              onChange={(e) => {
+                const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                onFiltersChange('rankedListMaxRank', val && val > 0 ? val : undefined);
+              }}
+            />
+          </div>
+        </FilterSection>
+      )}
+
+      {/* Text Search (Phase 3) */}
+      <FilterSection
+        id="textSearch"
+        title="Text Search"
+        description="Search in plot summaries and filming locations"
+        icon={FileText}
+        isOpen={localExpandedSections.textSearch}
+        onToggle={toggleSection}
+        badgeCount={(filters.plot ? 1 : 0) + (filters.filmingLocations ? 1 : 0)}
+      >
+        <div className="filter-group mb-4">
+          <LabelWithTooltip
+            label="Plot Keywords"
+            tooltip="Search for titles containing these words in their plot summary."
+          />
+          <input
+            type="text"
+            className="input"
+            placeholder="e.g. time travel, revenge..."
+            value={filters.plot || ''}
+            onChange={(e) => onFiltersChange('plot', e.target.value || undefined)}
+          />
+        </div>
+
+        <div className="filter-group">
+          <LabelWithTooltip
+            label="Filming Locations"
+            tooltip="Search for titles filmed at a specific location."
+          />
+          <input
+            type="text"
+            className="input"
+            placeholder="e.g. New Zealand, Tokyo..."
+            value={filters.filmingLocations || ''}
+            onChange={(e) => onFiltersChange('filmingLocations', e.target.value || undefined)}
+          />
+        </div>
+      </FilterSection>
+
+      {/* Advanced / withData (Phase 3) */}
+      {imdbWithDataOptions.length > 0 && (
+        <FilterSection
+          id="advanced"
+          title="Advanced Filters"
+          description="Explicit content and data availability filters"
+          icon={Database}
+          isOpen={localExpandedSections.advanced}
+          onToggle={toggleSection}
+          badgeCount={(filters.explicitContent ? 1 : 0) + (filters.withData || []).length}
+        >
+          <div className="filter-group mb-4">
+            <LabelWithTooltip
+              label="Explicit Content"
+              tooltip="Control whether adult/explicit content is included in results."
+            />
+            <SearchableSelect
+              options={[
+                { value: 'INCLUDE', label: 'Include' },
+                { value: 'EXCLUDE', label: 'Exclude' },
+                { value: 'ONLY', label: 'Show only explicit' },
+              ]}
+              value={filters.explicitContent || ''}
+              onChange={(value) => onFiltersChange('explicitContent', value || undefined)}
+              placeholder="Default (exclude)"
+              labelKey="label"
+              valueKey="value"
+              allowClear={true}
+            />
+          </div>
+
+          <div className="filter-group">
+            <LabelWithTooltip
+              label="Must Have Data"
+              tooltip="Only include titles that have specific data available."
+            />
+            <div className="imdb-chip-wrap">
+              {imdbWithDataOptions.map((opt) => {
+                const selected = (filters.withData || []).includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`genre-chip ${selected ? 'selected' : ''}`}
+                    onClick={() => {
+                      const current = filters.withData || [];
+                      const next = selected
+                        ? current.filter((v) => v !== opt.value)
+                        : [...current, opt.value];
+                      onFiltersChange('withData', next);
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </FilterSection>

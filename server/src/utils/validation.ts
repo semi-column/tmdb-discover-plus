@@ -174,6 +174,26 @@ const IMDB_ALLOWED_KEYS = [
   'awardsWon',
   'awardsNominated',
   'types',
+  // Phase 1: Companies, People, In Theatres, Certificates
+  'companies',
+  'excludeCompanies',
+  'creditedNames',
+  'inTheatersLat',
+  'inTheatersLong',
+  'inTheatersRadius',
+  'certificateRating',
+  'certificateCountry',
+  'certificates',
+  'explicitContent',
+  // Phase 2: Ranked Lists, Text Search
+  'rankedList',
+  'rankedLists',
+  'excludeRankedLists',
+  'rankedListMaxRank',
+  'plot',
+  'filmingLocations',
+  // Phase 3: Metadata Availability
+  'withData',
 ];
 
 const VALID_IMDB_LIST_ID = /^ls\d{1,15}$/;
@@ -189,6 +209,24 @@ const VALID_IMDB_SORT_VALUES = [
   'RELEASE_DATE',
 ];
 const VALID_IMDB_SORT_ORDERS = ['ASC', 'DESC'];
+
+const VALID_IMDB_COMPANY_ID = /^co\d+$/;
+const VALID_IMDB_PERSON_ID = /^nm\d+$/;
+const VALID_IMDB_CERTIFICATE = /^[A-Z]{2}:.+$/;
+const VALID_IMDB_RANKED_LISTS = ['TOP_250', 'TOP_250_TV', 'BOTTOM_100'];
+const VALID_IMDB_WITH_DATA = [
+  'PLOT',
+  'TRIVIA',
+  'GOOF',
+  'SOUNDTRACK',
+  'ALTERNATE_VERSION',
+  'CRAZY_CREDIT',
+  'QUOTE',
+  'BUSINESS_INFO',
+  'TECHNICAL',
+  'LOCATION',
+  'AWARD',
+];
 
 function sanitizeFilterValue(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -224,6 +262,87 @@ export function sanitizeImdbFilters(filters: unknown): Record<string, unknown> {
 
   if (sanitized.sortOrder && !VALID_IMDB_SORT_ORDERS.includes(String(sanitized.sortOrder))) {
     delete sanitized.sortOrder;
+  }
+
+  // Validate company IDs: must be co + digits
+  if (Array.isArray(sanitized.companies)) {
+    sanitized.companies = (sanitized.companies as string[]).filter(
+      (id) => typeof id === 'string' && VALID_IMDB_COMPANY_ID.test(id)
+    );
+    if ((sanitized.companies as string[]).length === 0) delete sanitized.companies;
+  }
+  if (Array.isArray(sanitized.excludeCompanies)) {
+    sanitized.excludeCompanies = (sanitized.excludeCompanies as string[]).filter(
+      (id) => typeof id === 'string' && VALID_IMDB_COMPANY_ID.test(id)
+    );
+    if ((sanitized.excludeCompanies as string[]).length === 0) delete sanitized.excludeCompanies;
+  }
+
+  // Validate person IDs: must be nm + digits
+  if (Array.isArray(sanitized.creditedNames)) {
+    sanitized.creditedNames = (sanitized.creditedNames as string[]).filter(
+      (id) => typeof id === 'string' && VALID_IMDB_PERSON_ID.test(id)
+    );
+    if ((sanitized.creditedNames as string[]).length === 0) delete sanitized.creditedNames;
+  }
+
+  // Validate lat/long bounds
+  if (typeof sanitized.inTheatersLat === 'number') {
+    if (sanitized.inTheatersLat < -90 || sanitized.inTheatersLat > 90) {
+      delete sanitized.inTheatersLat;
+      delete sanitized.inTheatersLong;
+      delete sanitized.inTheatersRadius;
+    }
+  }
+  if (typeof sanitized.inTheatersLong === 'number') {
+    if (sanitized.inTheatersLong < -180 || sanitized.inTheatersLong > 180) {
+      delete sanitized.inTheatersLat;
+      delete sanitized.inTheatersLong;
+      delete sanitized.inTheatersRadius;
+    }
+  }
+  if (typeof sanitized.inTheatersRadius === 'number') {
+    sanitized.inTheatersRadius = Math.min(
+      Math.max(sanitized.inTheatersRadius as number, 1000),
+      500000
+    );
+  }
+
+  // Validate certificates: must be XX:RATING format
+  if (Array.isArray(sanitized.certificates)) {
+    sanitized.certificates = (sanitized.certificates as string[]).filter(
+      (c) => typeof c === 'string' && VALID_IMDB_CERTIFICATE.test(c)
+    );
+    if ((sanitized.certificates as string[]).length === 0) delete sanitized.certificates;
+  }
+
+  // Validate ranked lists
+  if (sanitized.rankedList && !VALID_IMDB_RANKED_LISTS.includes(String(sanitized.rankedList))) {
+    delete sanitized.rankedList;
+  }
+  if (Array.isArray(sanitized.rankedLists)) {
+    sanitized.rankedLists = (sanitized.rankedLists as string[]).filter((r) =>
+      VALID_IMDB_RANKED_LISTS.includes(r)
+    );
+    if ((sanitized.rankedLists as string[]).length === 0) delete sanitized.rankedLists;
+  }
+  if (Array.isArray(sanitized.excludeRankedLists)) {
+    sanitized.excludeRankedLists = (sanitized.excludeRankedLists as string[]).filter((r) =>
+      VALID_IMDB_RANKED_LISTS.includes(r)
+    );
+    if ((sanitized.excludeRankedLists as string[]).length === 0)
+      delete sanitized.excludeRankedLists;
+  }
+  if (typeof sanitized.rankedListMaxRank === 'number') {
+    sanitized.rankedListMaxRank = Math.min(Math.max(sanitized.rankedListMaxRank as number, 1), 250);
+  }
+
+  // Validate withData
+  if (Array.isArray(sanitized.withData)) {
+    sanitized.withData = (sanitized.withData as string[]).filter((d) =>
+      VALID_IMDB_WITH_DATA.includes(d)
+    );
+    if ((sanitized.withData as string[]).length === 0) delete sanitized.withData;
   }
 
   return sanitized;

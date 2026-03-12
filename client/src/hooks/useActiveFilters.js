@@ -405,6 +405,87 @@ export function useActiveFilters({
       active.push({ key: 'releasedOnly', label: 'Released only', section: 'release' });
     }
 
+    // --- IMDB-specific new filters ---
+    if (filters.creditedNames?.length > 0) {
+      active.push({
+        key: 'creditedNames',
+        label: `IMDb People: ${filters.creditedNames.length}`,
+        section: 'people',
+      });
+    }
+
+    if (filters.companies?.length > 0 && isImdb) {
+      active.push({
+        key: 'imdbCompanies',
+        label: `IMDb Studios: ${filters.companies.length}`,
+        section: 'people',
+      });
+    }
+
+    if (filters.inTheatersLat) {
+      active.push({
+        key: 'inTheaters',
+        label: 'In Theatres',
+        section: 'theatres',
+      });
+    }
+
+    if (filters.certificates?.length > 0) {
+      active.push({
+        key: 'imdbCertificates',
+        label: `Certificates: ${filters.certificates.length}`,
+        section: 'certificates',
+      });
+    }
+
+    if (filters.rankedLists?.length > 0) {
+      active.push({
+        key: 'rankedLists',
+        label: `Ranked Lists: ${filters.rankedLists.length}`,
+        section: 'rankedLists',
+      });
+    }
+
+    if (filters.excludeRankedLists?.length > 0) {
+      active.push({
+        key: 'excludeRankedLists',
+        label: `Exclude Lists: ${filters.excludeRankedLists.length}`,
+        section: 'rankedLists',
+      });
+    }
+
+    if (filters.explicitContent) {
+      active.push({
+        key: 'explicitContent',
+        label: `Explicit: ${filters.explicitContent}`,
+        section: 'advanced',
+      });
+    }
+
+    if (filters.plot) {
+      active.push({
+        key: 'plot',
+        label: `Plot: "${filters.plot}"`,
+        section: 'textSearch',
+      });
+    }
+
+    if (filters.filmingLocations) {
+      active.push({
+        key: 'filmingLocations',
+        label: `Filmed in: "${filters.filmingLocations}"`,
+        section: 'textSearch',
+      });
+    }
+
+    if (filters.withData?.length > 0) {
+      active.push({
+        key: 'withData',
+        label: `Must have: ${filters.withData.length} data type(s)`,
+        section: 'advanced',
+      });
+    }
+
     return active;
   }, [
     localCatalog,
@@ -560,6 +641,40 @@ export function useActiveFilters({
           break;
         case 'releasedOnly':
           update({ releasedOnly: undefined });
+          break;
+        case 'creditedNames':
+          update({ creditedNames: [] });
+          break;
+        case 'imdbCompanies':
+          update({ companies: [] });
+          break;
+        case 'inTheaters':
+          update({
+            inTheatersLat: undefined,
+            inTheatersLong: undefined,
+            inTheatersRadius: undefined,
+          });
+          break;
+        case 'imdbCertificates':
+          update({ certificates: [], certificateCountry: undefined });
+          break;
+        case 'rankedLists':
+          update({ rankedLists: [] });
+          break;
+        case 'excludeRankedLists':
+          update({ excludeRankedLists: [] });
+          break;
+        case 'explicitContent':
+          update({ explicitContent: undefined });
+          break;
+        case 'plot':
+          update({ plot: undefined });
+          break;
+        case 'filmingLocations':
+          update({ filmingLocations: undefined });
+          break;
+        case 'withData':
+          update({ withData: [] });
           break;
         default:
           break;

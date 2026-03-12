@@ -14,6 +14,7 @@ import {
 } from '../services/configService.ts';
 import * as tmdb from '../services/tmdb/index.ts';
 import * as imdb from '../services/imdb/index.ts';
+import { searchCities } from '../services/geo.ts';
 import { getBaseUrl, shuffleArray, setNoCacheHeaders } from '../utils/helpers.ts';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.ts';
 import { createLogger } from '../utils/logger.ts';
@@ -202,6 +203,9 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
           ...presets.movie.map((p) => ({ ...p, type: 'movie' })),
           ...presets.series.map((p) => ({ ...p, type: 'series' })),
         ],
+        certificateRatings: imdb.getCertificateRatings(),
+        rankedLists: imdb.getRankedLists(),
+        withDataOptions: imdb.getWithDataOptions(),
       };
     }
 
@@ -614,6 +618,110 @@ router.get('/imdb/list/:id/validate', requireAuth, async (req, res) => {
   } catch (error) {
     log.error('GET /imdb/list/:id/validate error', { error: (error as Error).message });
     res.json({ valid: false, listId: req.params.id as string, error: (error as Error).message });
+  }
+});
+
+router.get('/imdb/search/people', requireAuth, async (req, res) => {
+  try {
+    if (!imdb.isImdbApiEnabled()) {
+      return sendError(res, 503, ErrorCodes.INTERNAL_ERROR, 'IMDb API not enabled');
+    }
+
+    const query = String(req.query.query || '');
+    if (!query) {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
+    }
+
+    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit as string) || 10));
+    const result = await imdb.basicSearch(query, 'NAME', limit);
+    const people = (result.results || [])
+      .filter(
+        (item): item is import('../services/imdb/types.ts').ImdbBasicSearchNameResult =>
+          item.type === 'Name'
+      )
+      .map((item) => ({
+        id: item.id,
+        name: item.fullName,
+        profilePath: item.primaryImage?.url || null,
+        knownFor: item.knownFor?.titles?.map((t) => t.primaryTitle).join(', ') || '',
+      }));
+
+    res.json({ results: people });
+  } catch (error) {
+    log.error('GET /imdb/search/people error', { error: (error as Error).message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+  }
+});
+
+router.get('/imdb/search/companies', requireAuth, async (req, res) => {
+  try {
+    if (!imdb.isImdbApiEnabled()) {
+      return sendError(res, 503, ErrorCodes.INTERNAL_ERROR, 'IMDb API not enabled');
+    }
+
+    const query = String(req.query.query || '');
+    if (!query) {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
+    }
+
+    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit as string) || 10));
+    const result = await imdb.basicSearch(query, 'COMPANY', limit);
+    const companies = (result.results || [])
+      .filter(
+        (item): item is import('../services/imdb/types.ts').ImdbBasicSearchCompanyResult =>
+          item.type === 'Company'
+      )
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        logoPath: null,
+        knownFor: item.country || '',
+      }));
+
+    res.json({ results: companies });
+  } catch (error) {
+    log.error('GET /imdb/search/companies error', { error: (error as Error).message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+  }
+});
+
+router.get('/imdb/search/suggestions', requireAuth, async (req, res) => {
+  try {
+    if (!imdb.isImdbApiEnabled()) {
+      return sendError(res, 503, ErrorCodes.INTERNAL_ERROR, 'IMDb API not enabled');
+    }
+
+    const query = String(req.query.query || '');
+    if (!query) {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
+    }
+
+    const result = await imdb.getSuggestions(query);
+    res.json(result);
+  } catch (error) {
+    log.error('GET /imdb/search/suggestions error', { error: (error as Error).message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+  }
+});
+
+router.get('/geo/cities', requireAuth, async (req, res) => {
+  try {
+    const query = String(req.query.query || '');
+    if (!query || query.length < 2) {
+      return sendError(
+        res,
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        'Query must be at least 2 characters'
+      );
+    }
+
+    const limit = Math.max(1, Math.min(20, parseInt(req.query.limit as string) || 10));
+    const results = await searchCities(query, limit);
+    res.json({ results });
+  } catch (error) {
+    log.error('GET /geo/cities error', { error: (error as Error).message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
   }
 });
 

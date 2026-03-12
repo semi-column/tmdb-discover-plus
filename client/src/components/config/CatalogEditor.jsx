@@ -57,9 +57,15 @@ export const CatalogEditor = memo(function CatalogEditor() {
     imdbAwards,
     imdbSortOptions,
     imdbTitleTypes,
+    imdbCertificateRatings,
+    imdbRankedLists,
+    imdbWithDataOptions,
     searchPerson,
     searchCompany,
     searchKeyword,
+    searchImdbPeople,
+    searchImdbCompanies,
+    searchCities,
     selectedPeople,
     setSelectedPeople,
     selectedCompanies,
@@ -71,6 +77,12 @@ export const CatalogEditor = memo(function CatalogEditor() {
     excludeCompanies,
     setExcludeCompanies,
     selectedNetworks,
+    selectedImdbPeople,
+    setSelectedImdbPeople,
+    selectedImdbCompanies,
+    setSelectedImdbCompanies,
+    selectedCity,
+    setSelectedCity,
     activeFilters,
     clearFilter,
     clearAllFilters,
@@ -209,8 +221,40 @@ export const CatalogEditor = memo(function CatalogEditor() {
               imdbAwards={imdbAwards}
               imdbSortOptions={imdbSortOptions}
               imdbTitleTypes={imdbTitleTypes}
+              imdbCertificateRatings={imdbCertificateRatings}
+              imdbRankedLists={imdbRankedLists}
+              imdbWithDataOptions={imdbWithDataOptions}
               countries={safeCountries}
               languages={safeOriginalLanguages}
+              onSearchImdbPeople={searchImdbPeople}
+              onSearchImdbCompanies={searchImdbCompanies}
+              onSearchCities={searchCities}
+              selectedImdbPeople={selectedImdbPeople}
+              selectedImdbCompanies={selectedImdbCompanies}
+              selectedCity={selectedCity}
+              onSelectImdbPerson={(person) => {
+                setSelectedImdbPeople((prev) => [...prev, person]);
+              }}
+              onRemoveImdbPerson={(person) => {
+                setSelectedImdbPeople((prev) => prev.filter((p) => p.id !== person.id));
+              }}
+              onSelectImdbCompany={(company) => {
+                setSelectedImdbCompanies((prev) => [...prev, company]);
+              }}
+              onRemoveImdbCompany={(company) => {
+                setSelectedImdbCompanies((prev) => prev.filter((c) => c.id !== company.id));
+              }}
+              onSelectCity={(city) => {
+                setSelectedCity(city);
+                handleFiltersChange('inTheatersLat', city.lat);
+                handleFiltersChange('inTheatersLong', city.lon);
+              }}
+              onClearCity={() => {
+                setSelectedCity(null);
+                handleFiltersChange('inTheatersLat', undefined);
+                handleFiltersChange('inTheatersLong', undefined);
+                handleFiltersChange('inTheatersRadius', undefined);
+              }}
             />
           ) : (
             <>
