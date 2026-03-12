@@ -106,11 +106,19 @@ export async function advancedSearch(
   if (params.excludeCompanies?.length) queryParams.excludeCompanies = params.excludeCompanies;
   if (params.creditedNames?.length) queryParams.creditedNames = params.creditedNames;
 
-  // In Theatres: apply -0.10 offset per IMDB API docs
-  if (params.inTheatersLat != null && params.inTheatersLong != null) {
-    queryParams.inTheatersLat = params.inTheatersLat - 0.1;
-    queryParams.inTheatersLong = params.inTheatersLong - 0.1;
-    if (params.inTheatersRadius) queryParams.inTheatersRadius = params.inTheatersRadius;
+  // In Theatres: apply -0.10 offset per IMDB API docs.
+  // Upstream is sensitive to malformed or missing location payloads, so only forward finite
+  // coordinates and always include a sane radius default when location is present.
+  if (contentType === 'movie' && params.inTheatersLat != null && params.inTheatersLong != null) {
+    const lat = Number(params.inTheatersLat);
+    const long = Number(params.inTheatersLong);
+    if (Number.isFinite(lat) && Number.isFinite(long)) {
+      queryParams.inTheatersLat = lat - 0.1;
+      queryParams.inTheatersLong = long - 0.1;
+
+      const radius = Number(params.inTheatersRadius);
+      queryParams.inTheatersRadius = Number.isFinite(radius) && radius > 0 ? radius : 50000;
+    }
   }
 
   if (params.certificateRating) queryParams.certificateRating = params.certificateRating;
