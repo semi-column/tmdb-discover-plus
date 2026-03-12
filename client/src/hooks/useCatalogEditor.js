@@ -124,6 +124,7 @@ export function useCatalogEditor() {
   const [searchedNetworks, setSearchedNetworks] = useState([]);
   const [selectedImdbPeople, setSelectedImdbPeople] = useState([]);
   const [selectedImdbCompanies, setSelectedImdbCompanies] = useState([]);
+  const [selectedImdbExcludeCompanies, setSelectedImdbExcludeCompanies] = useState([]);
   const [selectedCity, setSelectedCity] = useState(null);
   const [expandedSections, setExpandedSections] = useState({
     basic: false,
@@ -147,6 +148,7 @@ export function useCatalogEditor() {
     setPreviewData(null);
     setSelectedImdbPeople(catalog?.formState?.selectedImdbPeople || []);
     setSelectedImdbCompanies(catalog?.formState?.selectedImdbCompanies || []);
+    setSelectedImdbExcludeCompanies(catalog?.formState?.selectedImdbExcludeCompanies || []);
     setSelectedCity(catalog?.formState?.selectedCity || null);
     if (catalog?.formState?.expandedSections) {
       setExpandedSections(catalog.formState.expandedSections);
@@ -201,7 +203,10 @@ export function useCatalogEditor() {
         withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
         withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
         excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
-        excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
+        excludeCompanies:
+          localCatalog?.source === 'imdb'
+            ? selectedImdbExcludeCompanies.map((c) => c.id)
+            : excludeCompanies.map((c) => c.id).join(',') || undefined,
         ...(localCatalog?.source === 'imdb'
           ? {
               creditedNames: selectedImdbPeople.map((p) => p.id),
@@ -218,6 +223,8 @@ export function useCatalogEditor() {
         selectedNetworks: selectedNetworks.length > 0 ? selectedNetworks : undefined,
         selectedImdbPeople: selectedImdbPeople.length > 0 ? selectedImdbPeople : undefined,
         selectedImdbCompanies: selectedImdbCompanies.length > 0 ? selectedImdbCompanies : undefined,
+        selectedImdbExcludeCompanies:
+          selectedImdbExcludeCompanies.length > 0 ? selectedImdbExcludeCompanies : undefined,
         selectedCity: selectedCity || undefined,
         expandedSections,
       },
@@ -232,6 +239,7 @@ export function useCatalogEditor() {
       selectedNetworks,
       selectedImdbPeople,
       selectedImdbCompanies,
+      selectedImdbExcludeCompanies,
       selectedCity,
       expandedSections,
     ]
@@ -260,6 +268,8 @@ export function useCatalogEditor() {
     setExcludeKeywords,
     excludeCompanies,
     setExcludeCompanies,
+    selectedImdbExcludeCompanies,
+    setSelectedImdbExcludeCompanies,
     imdbSortOptions,
   });
 
@@ -357,6 +367,8 @@ export function useCatalogEditor() {
     setSelectedImdbPeople,
     selectedImdbCompanies,
     setSelectedImdbCompanies,
+    selectedImdbExcludeCompanies,
+    setSelectedImdbExcludeCompanies,
     selectedCity,
     setSelectedCity,
 

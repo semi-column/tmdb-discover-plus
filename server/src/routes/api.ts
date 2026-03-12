@@ -524,6 +524,7 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
       totalResults = result.titles?.length || 0;
     } else {
       const searchParams = {
+        query: filters.query,
         types: filters.types,
         genres: filters.genres,
         excludeGenres: filters.excludeGenres,
@@ -538,11 +539,29 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
         runtimeMin: filters.runtimeMin,
         runtimeMax: filters.runtimeMax,
         languages: filters.languages,
+        countries: filters.countries,
         imdbCountries: filters.imdbCountries,
         keywords: filters.keywords,
         excludeKeywords: filters.excludeKeywords,
         awardsWon: filters.awardsWon,
         awardsNominated: filters.awardsNominated,
+        companies: filters.companies,
+        excludeCompanies: filters.excludeCompanies,
+        creditedNames: filters.creditedNames,
+        inTheatersLat: filters.inTheatersLat,
+        inTheatersLong: filters.inTheatersLong,
+        inTheatersRadius: filters.inTheatersRadius,
+        certificateRating: filters.certificateRating,
+        certificateCountry: filters.certificateCountry,
+        certificates: filters.certificates,
+        explicitContent: filters.explicitContent,
+        rankedList: filters.rankedList,
+        rankedLists: filters.rankedLists,
+        excludeRankedLists: filters.excludeRankedLists,
+        rankedListMaxRank: filters.rankedListMaxRank,
+        plot: filters.plot,
+        filmingLocations: filters.filmingLocations,
+        withData: filters.withData,
       };
       const result = await imdb.advancedSearch(
         searchParams as Parameters<typeof imdb.advancedSearch>[0],

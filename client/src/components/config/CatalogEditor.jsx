@@ -81,6 +81,8 @@ export const CatalogEditor = memo(function CatalogEditor() {
     setSelectedImdbPeople,
     selectedImdbCompanies,
     setSelectedImdbCompanies,
+    selectedImdbExcludeCompanies,
+    setSelectedImdbExcludeCompanies,
     selectedCity,
     setSelectedCity,
     activeFilters,
@@ -231,19 +233,14 @@ export const CatalogEditor = memo(function CatalogEditor() {
               onSearchCities={searchCities}
               selectedImdbPeople={selectedImdbPeople}
               selectedImdbCompanies={selectedImdbCompanies}
+              selectedImdbExcludeCompanies={selectedImdbExcludeCompanies}
               selectedCity={selectedCity}
-              onSelectImdbPerson={(person) => {
-                setSelectedImdbPeople((prev) => [...prev, person]);
-              }}
-              onRemoveImdbPerson={(person) => {
-                setSelectedImdbPeople((prev) => prev.filter((p) => p.id !== person.id));
-              }}
-              onSelectImdbCompany={(company) => {
-                setSelectedImdbCompanies((prev) => [...prev, company]);
-              }}
-              onRemoveImdbCompany={(company) => {
-                setSelectedImdbCompanies((prev) => prev.filter((c) => c.id !== company.id));
-              }}
+              onSelectImdbPerson={setSelectedImdbPeople}
+              onRemoveImdbPerson={setSelectedImdbPeople}
+              onSelectImdbCompany={setSelectedImdbCompanies}
+              onRemoveImdbCompany={setSelectedImdbCompanies}
+              onSelectImdbExcludeCompany={setSelectedImdbExcludeCompanies}
+              onRemoveImdbExcludeCompany={setSelectedImdbExcludeCompanies}
               onSelectCity={(city) => {
                 setSelectedCity(city);
                 handleFiltersChange('inTheatersLat', city.lat);

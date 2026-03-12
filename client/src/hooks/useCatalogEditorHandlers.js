@@ -70,6 +70,9 @@ export function useCatalogEditorHandlers({
   onPreviewImdb,
   selectedPeople,
   selectedCompanies,
+  selectedImdbPeople,
+  selectedImdbCompanies,
+  selectedImdbExcludeCompanies,
   selectedKeywords,
   excludeKeywords,
   excludeCompanies,
@@ -256,7 +259,13 @@ export function useCatalogEditorHandlers({
     try {
       let data;
       if (localCatalog.source === 'imdb' && onPreviewImdb) {
-        data = await onPreviewImdb(localCatalog.type || 'movie', localCatalog.filters || {});
+        const imdbFilters = {
+          ...(localCatalog.filters || {}),
+          creditedNames: selectedImdbPeople.map((p) => p.id),
+          companies: selectedImdbCompanies.map((c) => c.id),
+          excludeCompanies: selectedImdbExcludeCompanies.map((c) => c.id),
+        };
+        data = await onPreviewImdb(localCatalog.type || 'movie', imdbFilters);
       } else {
         const filters = {
           ...localCatalog.filters,
@@ -282,6 +291,9 @@ export function useCatalogEditorHandlers({
     preferences?.defaultLanguage,
     selectedPeople,
     selectedCompanies,
+    selectedImdbPeople,
+    selectedImdbCompanies,
+    selectedImdbExcludeCompanies,
     selectedKeywords,
     excludeKeywords,
     excludeCompanies,

@@ -43,6 +43,8 @@ export function useActiveFilters({
   setExcludeKeywords,
   excludeCompanies,
   setExcludeCompanies,
+  selectedImdbExcludeCompanies,
+  setSelectedImdbExcludeCompanies,
   imdbSortOptions = [],
 }) {
   const activeFilters = useMemo(() => {
@@ -343,7 +345,13 @@ export function useActiveFilters({
       });
     }
 
-    if (excludeCompanies.length > 0) {
+    if (isImdb && selectedImdbExcludeCompanies?.length > 0) {
+      active.push({
+        key: 'imdbExcludeCompanies',
+        label: `Exclude IMDb studios: ${selectedImdbExcludeCompanies.length}`,
+        section: 'people',
+      });
+    } else if (excludeCompanies.length > 0) {
       active.push({
         key: 'excludeCompanies',
         label: `Exclude ${excludeCompanies.length} studio(s)`,
@@ -502,6 +510,7 @@ export function useActiveFilters({
     selectedKeywords,
     excludeKeywords,
     excludeCompanies,
+    selectedImdbExcludeCompanies,
     imdbSortOptions,
   ]);
 
@@ -615,6 +624,10 @@ export function useActiveFilters({
         case 'excludeCompanies':
           setExcludeCompanies([]);
           break;
+        case 'imdbExcludeCompanies':
+          update({ excludeCompanies: [] });
+          if (setSelectedImdbExcludeCompanies) setSelectedImdbExcludeCompanies([]);
+          break;
         case 'keywords':
           setSelectedKeywords([]);
           break;
@@ -686,6 +699,7 @@ export function useActiveFilters({
       setSelectedKeywords,
       setExcludeKeywords,
       setExcludeCompanies,
+      setSelectedImdbExcludeCompanies,
       setLocalCatalog,
     ]
   );
@@ -697,9 +711,11 @@ export function useActiveFilters({
     setSelectedKeywords([]);
     setExcludeKeywords([]);
     setExcludeCompanies([]);
+    if (setSelectedImdbExcludeCompanies) setSelectedImdbExcludeCompanies([]);
   }, [
     setExcludeCompanies,
     setExcludeKeywords,
+    setSelectedImdbExcludeCompanies,
     setSelectedCompanies,
     setSelectedKeywords,
     setSelectedPeople,

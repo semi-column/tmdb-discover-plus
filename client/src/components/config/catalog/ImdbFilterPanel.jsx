@@ -44,11 +44,14 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   onSearchCities,
   selectedImdbPeople = [],
   selectedImdbCompanies = [],
+  selectedImdbExcludeCompanies = [],
   selectedCity = null,
   onSelectImdbPerson,
   onRemoveImdbPerson,
   onSelectImdbCompany,
   onRemoveImdbCompany,
+  onSelectImdbExcludeCompany,
+  onRemoveImdbExcludeCompany,
   onSelectCity,
   onClearCity,
 }) {
@@ -268,24 +271,25 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
 
   const certificateCountryOptions = useMemo(
     () =>
-      Object.entries(imdbCertificateRatings).map(([code, data]) => ({
+      Object.entries(imdbCertificateRatings).map(([code]) => ({
         value: code,
-        label: data.name,
+        label: countries.find((c) => c.iso_3166_1 === code)?.english_name || code,
       })),
-    [imdbCertificateRatings]
+    [imdbCertificateRatings, countries]
   );
 
   const selectedCertCountry = filters.certificateCountry || '';
-  const availableCertificates = useMemo(
-    () =>
-      selectedCertCountry && imdbCertificateRatings[selectedCertCountry]
-        ? imdbCertificateRatings[selectedCertCountry].ratings.map((r) => ({
-            value: `${selectedCertCountry}:${r}`,
-            label: r,
-          }))
-        : [],
-    [selectedCertCountry, imdbCertificateRatings]
-  );
+  const availableCertificates = useMemo(() => {
+    if (!selectedCertCountry || !imdbCertificateRatings[selectedCertCountry]) return [];
+
+    const raw = imdbCertificateRatings[selectedCertCountry];
+    const ratings = Array.isArray(raw) ? raw : raw?.ratings || [];
+
+    return ratings.map((r) => ({
+      value: `${selectedCertCountry}:${r}`,
+      label: r,
+    }));
+  }, [selectedCertCountry, imdbCertificateRatings]);
 
   const handleCertificateToggle = useCallback(
     (certValue) => {
@@ -807,7 +811,11 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         icon={Users}
         isOpen={localExpandedSections.people}
         onToggle={toggleSection}
-        badgeCount={(filters.creditedNames || []).length + (filters.companies || []).length}
+        badgeCount={
+          (filters.creditedNames || []).length +
+          (filters.companies || []).length +
+          selectedImdbExcludeCompanies.length
+        }
       >
         <div className="filter-group mb-4">
           <LabelWithTooltip
@@ -839,6 +847,24 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
               selectedItems={selectedImdbCompanies}
               onRemove={onRemoveImdbCompany}
               placeholder="Search companies on IMDb..."
+              type="company"
+              multiple={true}
+            />
+          )}
+        </div>
+
+        <div className="filter-group mt-6">
+          <LabelWithTooltip
+            label="Exclude Companies"
+            tooltip="Exclude titles made by specific production companies or studios."
+          />
+          {onSearchImdbCompanies && (
+            <SearchInput
+              onSearch={onSearchImdbCompanies}
+              onSelect={onSelectImdbExcludeCompany}
+              selectedItems={selectedImdbExcludeCompanies}
+              onRemove={onRemoveImdbExcludeCompany}
+              placeholder="Exclude companies on IMDb..."
               type="company"
               multiple={true}
             />
