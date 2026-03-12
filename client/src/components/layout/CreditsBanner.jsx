@@ -9,13 +9,20 @@ export function CreditsBanner() {
         alt="ElfHosted"
         className="credits-banner-logo"
       />
-      <span className="credits-banner-subtitle">
-        This public instance of TMDB Discover+ is sponsored by{' '}
-        <a href="https://elfhosted.com" target="_blank" rel="noreferrer">
-          ElfHosted
-        </a>{' '}
-        ❤️
-      </span>
+      <div className="credits-banner-content">
+        <p>
+          This is the public instance of TMDB Discover+, sponsored by{' '}
+          <a href="https://store.elfhosted.com/" target="_blank" rel="noreferrer">
+            ElfHosted
+          </a>{' '}
+          ❤️ <br />
+          See our FREE{' '}
+          <a href="https://stremio-addons-guide.elfhosted.com" target="_blank" rel="noreferrer">
+            Stremio Addons Guide
+          </a>{' '}
+          for more great addons and features!
+        </p>
+      </div>
     </div>
   );
 }

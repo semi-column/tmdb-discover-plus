@@ -691,55 +691,59 @@
 .credits-banner {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 6px 16px;
+  gap: 16px;
+  padding: 12px 20px;
   background: var(--bg-tertiary);
   border: 1px solid rgba(114, 164, 242, 0.2);
-  border-radius: var(--radius-full);
-  font-size: 0.8125rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
   color: var(--text-secondary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   animation: fadeIn var(--transition-normal) ease;
   transition: all var(--transition-short) ease;
-  white-space: nowrap;
+  max-width: 600px;
 }
 
 .credits-banner:hover {
-  background: rgba(114, 164, 242, 0.05);
+  background: rgba(114, 164, 242, 0.03);
   border-color: rgba(114, 164, 242, 0.4);
 }
 
 .credits-banner-logo {
-  height: 16px;
-  width: auto;
+  height: 64px;
+  width: 64px;
   object-fit: contain;
+  flex-shrink: 0;
 }
 
-.credits-banner-subtitle {
+.credits-banner-content {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 4px;
-  line-height: 1;
+  line-height: 1.5;
 }
 
-.credits-banner-subtitle a {
-  color: var(--accent-light);
+.credits-banner-content p {
+  margin: 0;
+}
+
+.credits-banner-content a {
+  color: #ffdd00;
   text-decoration: none;
-  font-weight: 600;
-  transition: color var(--transition-short) ease;
+  font-weight: 700;
+  transition: opacity var(--transition-short) ease;
 }
 
-.credits-banner-subtitle a:hover {
+.credits-banner-content a:hover {
   text-decoration: underline;
-  color: #fff;
+  opacity: 0.8;
 }
 
 /* Buy Me A Coffee Native Button */
 .bmc-native-button {
   display: inline-block;
   padding: 8px 16px;
-  background-color: #FFDD00;
+  background-color: #ffdd00;
   color: #000000;
   border-radius: 12px;
   text-decoration: none;
@@ -780,4 +784,3 @@
     justify-content: center;
   }
 }
-
