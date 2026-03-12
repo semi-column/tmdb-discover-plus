@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Key, Loader, ArrowRight, ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { Key, Loader, ArrowRight, ExternalLink, Eye, EyeOff, Coffee } from 'lucide-react';
+import { DiscordIcon } from '../social/DiscordButton.jsx';
 import { api } from '../../services/api';
 
 export function ApiKeySetup({ onLogin, isSessionExpired = false, returnUserId = null }) {
@@ -114,6 +115,29 @@ export function ApiKeySetup({ onLogin, isSessionExpired = false, returnUserId = 
               </>
             )}
           </button>
+
+          <div className="setup-support-row">
+            <a
+              href="https://discord.gg/X2N3btmEG2"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sidebar-support-btn sidebar-support-discord"
+              title="Join our Discord community"
+            >
+              <DiscordIcon className="sidebar-support-icon" />
+              <span>Discord</span>
+            </a>
+            <a
+              href="https://buymeacoffee.com/semi.column"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sidebar-support-btn sidebar-support-bmc"
+              title="Buy me a coffee"
+            >
+              <Coffee size={14} />
+              <span>Buy me a coffee</span>
+            </a>
+          </div>
         </form>
       </div>
     </div>

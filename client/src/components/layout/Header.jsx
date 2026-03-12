@@ -1,6 +1,4 @@
-import { BuyMeACoffeeButton } from '../social/BuyMeACoffeeButton.jsx';
-import { DiscordButton, DiscordIcon } from '../social/DiscordButton.jsx';
-import { Coffee, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export function Header({ stats }) {
   const isNightly = stats?.addonVariant === 'nightly';
@@ -44,8 +42,6 @@ export function Header({ stats }) {
                   Switch to Stable <ArrowRight size={14} />
                 </a>
               )}
-              <DiscordButton />
-              <BuyMeACoffeeButton />
             </div>
 
             <div className="mobile-actions">
@@ -57,24 +53,6 @@ export function Header({ stats }) {
                   Switch to Stable
                 </a>
               )}
-              <a
-                href="https://discord.gg/uJ8CY5Et2"
-                target="_blank"
-                rel="noreferrer"
-                className="action-icon-btn discord-btn discord-icon-circle"
-                aria-label="Join our Discord"
-              >
-                <DiscordIcon className="discord-icon-sm" />
-              </a>
-              <a
-                href="https://buymeacoffee.com/semi.column"
-                target="_blank"
-                rel="noreferrer"
-                className="action-icon-btn bmc-btn"
-                aria-label="Buy me a coffee"
-              >
-                <Coffee size={20} />
-              </a>
             </div>
           </div>
         </div>

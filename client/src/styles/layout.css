@@ -214,23 +214,6 @@
   border-radius: 20px;
 }
 
-.discord-icon-circle {
-  background-color: #5865f2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  color: white;
-}
-
-.discord-icon-sm {
-  width: 18px;
-  height: 14px;
-  fill: white;
-}
-
 .header-stats {
   position: absolute;
   left: 50%;

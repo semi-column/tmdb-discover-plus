@@ -15,24 +15,3 @@ export function DiscordIcon({ className, style }) {
     </svg>
   );
 }
-
-export function DiscordButton() {
-  const color = '#5865F2';
-  const inviteUrl = 'https://discord.gg/uJ8CY5Et2';
-
-  return (
-    <a
-      title="Join our Discord Community"
-      className="discord-button"
-      style={{ backgroundColor: color }}
-      href={inviteUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      <span className="discord-text">
-        <DiscordIcon className="discord-icon" style={{ fill: '#fff' }} />
-        Discord
-      </span>
-    </a>
-  );
-}

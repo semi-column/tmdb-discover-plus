@@ -9,10 +9,11 @@ import { ConfigDropdown } from './components/config/ConfigDropdown';
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useAppController } from './hooks/useAppController';
 import { api } from './services/api';
-import { Download, Settings, Loader } from 'lucide-react';
+import { Download, Settings, Loader, Coffee } from 'lucide-react';
 import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
 import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
 import { CreditsBanner } from './components/layout/CreditsBanner';
+import { DiscordIcon } from './components/social/DiscordButton.jsx';
 import { AppProviders } from './context/AppContext';
 
 import './styles/globals.css';
@@ -165,7 +166,7 @@ function App() {
                   </div>
                 )}
               </div>
-              
+
               <CreditsBanner />
 
               <div className="actions-toolbar">
@@ -209,6 +210,29 @@ function App() {
                   <Settings size={18} />
                   Change API Key
                 </button>
+              </div>
+
+              <div className="mobile-support-under-actions">
+                <a
+                  href="https://discord.gg/X2N3btmEG2"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sidebar-support-btn sidebar-support-discord"
+                  title="Join our Discord community"
+                >
+                  <DiscordIcon className="sidebar-support-icon" />
+                  <span>Discord</span>
+                </a>
+                <a
+                  href="https://buymeacoffee.com/semi.column"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sidebar-support-btn sidebar-support-bmc"
+                  title="Buy me a coffee"
+                >
+                  <Coffee size={14} />
+                  <span>Buy me a coffee</span>
+                </a>
               </div>
             </div>
 

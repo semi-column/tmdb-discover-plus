@@ -43,6 +43,22 @@
   .container {
     padding: 0 16px;
   }
+
+  .mobile-support-under-actions {
+    display: flex !important;
+    width: 100%;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .mobile-support-under-actions .sidebar-support-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .sidebar-support--top {
+    display: none;
+  }
 }
 
 /* Mobile "Slim App Bar" Header */
@@ -127,37 +143,6 @@
     gap: 12px;
   }
 
-  .mobile-actions .action-icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    padding: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-secondary);
-    transition:
-      background-color 0.2s ease,
-      color 0.2s ease;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-  }
-
-  .action-icon-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text-primary);
-  }
-
-  .kofi-btn {
-    background: rgba(255, 255, 255, 0.9);
-  }
-
-  .bmc-btn {
-    color: #ffdd00;
-    background: rgba(255, 221, 0, 0.1);
-  }
-
   .header-actions {
     display: block; /* Ensure container is visible */
     margin-top: 0;
@@ -232,6 +217,10 @@
   .main {
     padding: 16px 0;
   }
+}
+
+.mobile-support-under-actions {
+  display: none;
 }
 
 /* Mobile Actions Layout (Top Bar) */

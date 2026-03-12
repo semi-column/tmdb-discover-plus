@@ -1,114 +1,93 @@
 /* ========================================
-   Social Buttons (Discord, Ko-Fi)
+   Sidebar Support Footer
    ======================================== */
-.discord-button {
-  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.2);
-  line-height: 36px !important;
-  min-width: 130px;
-  display: inline-flex !important;
+.sidebar-support {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.sidebar-support--top {
+  margin-top: 0;
+  margin-bottom: 4px;
+  padding-top: 0;
+  padding-bottom: 12px;
+  border-top: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-support-links {
+  display: flex;
+  gap: 8px;
+}
+
+.sidebar-support-btn {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  background-color: #5865f2;
-  padding: 2px 12px !important;
-  text-align: center !important;
+  gap: 6px;
+  flex: 1;
+  padding: 7px 10px;
   border-radius: var(--radius-md);
-  color: #fff;
-  cursor: pointer;
-  overflow-wrap: break-word;
-  vertical-align: middle;
-  border: 0 none #fff !important;
-  font-family:
-    'Quicksand',
-    Helvetica,
-    Century Gothic,
-    sans-serif !important;
+  font-size: 0.75rem;
+  font-weight: 600;
   text-decoration: none;
-  text-shadow: none;
-  font-weight: 700 !important;
-  font-size: 0.875rem !important;
-  height: 36px;
-}
-
-.discord-button:hover {
-  opacity: 0.85;
-  color: #fff !important;
-  text-decoration: none !important;
-}
-
-.discord-icon {
-  display: initial;
-  vertical-align: middle;
-  height: 14px !important;
-  width: 18px !important;
-  padding: 0 !important;
-  margin: 0 8px 0 0 !important;
-  border: none;
-}
-
-.discord-text {
-  color: #fff !important;
-  letter-spacing: -0.15px !important;
-  text-wrap: nowrap !important;
-  vertical-align: middle !important;
-  line-height: 33px !important;
-  padding: 0 !important;
-  text-align: center;
-  text-decoration: none !important;
-  text-shadow: 0 1px 1px rgba(34, 34, 34, 0.05);
-}
-
-.kofi-button {
-  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.2);
-  line-height: 36px !important;
-  min-width: 150px;
-  display: inline-flex !important;
-  align-items: center;
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+  white-space: nowrap;
   justify-content: center;
-  background-color: #72a4f2;
-  padding: 2px 12px !important;
-  text-align: center !important;
-  border-radius: var(--radius-md);
-  color: #fff;
-  cursor: pointer;
-  overflow-wrap: break-word;
-  vertical-align: middle;
-  border: 0 none #fff !important;
-  font-family:
-    'Quicksand',
-    Helvetica,
-    Century Gothic,
-    sans-serif !important;
+}
+
+.sidebar-support-btn:hover {
+  transform: translateY(-1px);
   text-decoration: none;
-  text-shadow: none;
-  font-weight: 700 !important;
-  font-size: 0.875rem !important;
-  height: 36px;
 }
 
-.kofi-button:hover {
-  opacity: 0.85;
-  color: #fff !important;
-  text-decoration: none !important;
+.sidebar-support-discord {
+  background: rgba(88, 101, 242, 0.12);
+  color: #8b9aff;
+  border: 1px solid rgba(88, 101, 242, 0.2);
 }
 
-.kofiimg {
-  display: initial;
-  vertical-align: middle;
-  height: 13px !important;
-  width: 20px !important;
-  padding: 0 !important;
-  margin: 0 5px 0 0 !important;
-  border: none;
+.sidebar-support-discord:hover {
+  background: rgba(88, 101, 242, 0.22);
+  color: #a4b0ff;
+  box-shadow: 0 2px 8px rgba(88, 101, 242, 0.2);
 }
 
-.kofitext {
-  color: #fff !important;
-  letter-spacing: -0.15px !important;
-  text-wrap: nowrap !important;
-  vertical-align: middle !important;
-  line-height: 33px !important;
-  padding: 0 !important;
-  text-align: center;
-  text-decoration: none !important;
-  text-shadow: 0 1px 1px rgba(34, 34, 34, 0.05);
+.sidebar-support-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.sidebar-support-bmc {
+  background: rgba(255, 221, 0, 0.1);
+  color: #e6c800;
+  border: 1px solid rgba(255, 221, 0, 0.2);
+}
+
+.sidebar-support-bmc:hover {
+  background: rgba(255, 221, 0, 0.18);
+  color: #ffd700;
+  box-shadow: 0 2px 8px rgba(255, 221, 0, 0.15);
+}
+
+/* Setup / Login support row */
+.setup-support-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.setup-support-row .sidebar-support-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .setup-support-row {
+    margin-top: 6px;
+  }
 }
