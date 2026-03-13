@@ -117,6 +117,24 @@ export async function advancedSearch(
   if (compatibleAwardsWon?.length) queryParams.awardsWon = compatibleAwardsWon;
   if (compatibleAwardsNominated?.length) queryParams.awardsNominated = compatibleAwardsNominated;
 
+  const filterRankedListsByType = (lists: string[] | undefined): string[] | undefined => {
+    if (!lists?.length) return undefined;
+    const result =
+      contentType === 'series'
+        ? lists.filter((l) => l === 'TOP_250_TV')
+        : lists.filter((l) => l !== 'TOP_250_TV');
+    return result.length ? result : undefined;
+  };
+  const compatibleRankedList =
+    params.rankedList &&
+    (contentType === 'series'
+      ? params.rankedList === 'TOP_250_TV'
+      : params.rankedList !== 'TOP_250_TV')
+      ? params.rankedList
+      : undefined;
+  const compatibleRankedLists = filterRankedListsByType(params.rankedLists);
+  const compatibleExcludeRankedLists = filterRankedListsByType(params.excludeRankedLists);
+
   // Phase 1: Companies, People, In Theatres, Certificates
   if (params.companies?.length) queryParams.companies = params.companies;
   if (params.excludeCompanies?.length) queryParams.excludeCompanies = params.excludeCompanies;
@@ -140,9 +158,10 @@ export async function advancedSearch(
   }
 
   // Phase 2: Ranked Lists, Plot, Filming Locations
-  if (params.rankedList) queryParams.rankedList = params.rankedList;
-  if (params.rankedLists?.length) queryParams.rankedLists = params.rankedLists;
-  if (params.excludeRankedLists?.length) queryParams.excludeRankedLists = params.excludeRankedLists;
+  if (compatibleRankedList) queryParams.rankedList = compatibleRankedList;
+  if (compatibleRankedLists?.length) queryParams.rankedLists = compatibleRankedLists;
+  if (compatibleExcludeRankedLists?.length)
+    queryParams.excludeRankedLists = compatibleExcludeRankedLists;
   if (params.rankedListMaxRank) queryParams.rankedListMaxRank = params.rankedListMaxRank;
   if (params.plot?.length) {
     queryParams.plot = typeof params.plot === 'string' ? [params.plot] : params.plot;

@@ -105,6 +105,14 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     [imdbAwards, isMovieCatalog]
   );
 
+  const visibleRankedLists = useMemo(
+    () =>
+      imdbRankedLists.filter((list) =>
+        isMovieCatalog ? list.value !== 'TOP_250_TV' : list.value === 'TOP_250_TV'
+      ),
+    [imdbRankedLists, isMovieCatalog]
+  );
+
   const imdbGenreObjects = useMemo(() => imdbGenres.map((g) => ({ id: g, name: g })), [imdbGenres]);
 
   const handleTriStateGenreClick = useCallback(
@@ -872,61 +880,63 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         </div>
       </FilterSection>
 
-      {/* In Theatres */}
-      <FilterSection
-        id="theatres"
-        title="In Theatres"
-        description="Find titles currently in theatres near a city"
-        icon={MapPin}
-        isOpen={localExpandedSections.theatres}
-        onToggle={toggleSection}
-        badgeCount={filters.inTheatersLat ? 1 : 0}
-      >
-        <div className="filter-group mb-4">
-          <LabelWithTooltip
-            label="City"
-            tooltip="Search for a city to find titles currently showing in theatres nearby."
-          />
-          {onSearchCities && (
-            <>
-              <SearchInput
-                onSearch={onSearchCities}
-                onSelect={(city) => {
-                  if (onSelectCity) onSelectCity(city);
-                }}
-                selectedItems={selectedCity ? [selectedCity] : []}
-                onRemove={() => {
-                  if (onClearCity) onClearCity();
-                }}
-                placeholder="Search cities..."
-                type="company"
-                multiple={false}
-              />
-              {selectedCity && (
-                <p className="text-xs text-gray-400 mt-2">
-                  Coordinates: {selectedCity.lat?.toFixed(4)}, {selectedCity.lon?.toFixed(4)}
-                </p>
-              )}
-            </>
-          )}
-        </div>
+      {/* In Theatres (movie-only) */}
+      {isMovieCatalog && (
+        <FilterSection
+          id="theatres"
+          title="In Theatres"
+          description="Find titles currently in theatres near a city"
+          icon={MapPin}
+          isOpen={localExpandedSections.theatres}
+          onToggle={toggleSection}
+          badgeCount={filters.inTheatersLat ? 1 : 0}
+        >
+          <div className="filter-group mb-4">
+            <LabelWithTooltip
+              label="City"
+              tooltip="Search for a city to find titles currently showing in theatres nearby."
+            />
+            {onSearchCities && (
+              <>
+                <SearchInput
+                  onSearch={onSearchCities}
+                  onSelect={(city) => {
+                    if (onSelectCity) onSelectCity(city);
+                  }}
+                  selectedItems={selectedCity ? [selectedCity] : []}
+                  onRemove={() => {
+                    if (onClearCity) onClearCity();
+                  }}
+                  placeholder="Search cities..."
+                  type="company"
+                  multiple={false}
+                />
+                {selectedCity && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    Coordinates: {selectedCity.lat?.toFixed(4)}, {selectedCity.lon?.toFixed(4)}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
 
-        <div className="filter-group">
-          <LabelWithTooltip
-            label="Radius (km)"
-            tooltip="Search radius around the selected city in kilometers. Default is 50km."
-          />
-          <SingleSlider
-            min={1}
-            max={500}
-            step={1}
-            value={filters.inTheatersRadius ? Math.round(filters.inTheatersRadius / 1000) : 50}
-            onChange={(val) => onFiltersChange('inTheatersRadius', val * 1000)}
-            formatValue={(v) => `${v} km`}
-            disabled={!filters.inTheatersLat}
-          />
-        </div>
-      </FilterSection>
+          <div className="filter-group">
+            <LabelWithTooltip
+              label="Radius (km)"
+              tooltip="Search radius around the selected city in kilometers. Default is 50km."
+            />
+            <SingleSlider
+              min={1}
+              max={500}
+              step={1}
+              value={filters.inTheatersRadius ? Math.round(filters.inTheatersRadius / 1000) : 50}
+              onChange={(val) => onFiltersChange('inTheatersRadius', val * 1000)}
+              formatValue={(v) => `${v} km`}
+              disabled={!filters.inTheatersLat}
+            />
+          </div>
+        </FilterSection>
+      )}
 
       {/* Certificates */}
       {certificateCountryOptions.length > 0 && (
@@ -983,7 +993,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       )}
 
       {/* Ranked Lists (Phase 2) */}
-      {imdbRankedLists.length > 0 && (
+      {visibleRankedLists.length > 0 && (
         <FilterSection
           id="rankedLists"
           title="Ranked Lists"
@@ -998,7 +1008,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           <div className="filter-group mb-4">
             <span className="filter-label">Include from Lists</span>
             <div className="imdb-chip-wrap">
-              {imdbRankedLists.map((list) => {
+              {visibleRankedLists.map((list) => {
                 const selected = (filters.rankedLists || []).includes(list.value);
                 return (
                   <button
@@ -1017,7 +1027,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           <div className="filter-group mb-4">
             <span className="filter-label">Exclude from Lists</span>
             <div className="imdb-chip-wrap">
-              {imdbRankedLists.map((list) => {
+              {visibleRankedLists.map((list) => {
                 const selected = (filters.excludeRankedLists || []).includes(list.value);
                 return (
                   <button

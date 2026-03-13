@@ -47,6 +47,8 @@ export function useActiveFilters({
   setSelectedImdbExcludeCompanies,
   imdbSortOptions = [],
 }) {
+  const isImdbSource = localCatalog?.source === 'imdb';
+
   const activeFilters = useMemo(() => {
     const filters = localCatalog?.filters || {};
     const active = [];
@@ -521,7 +523,11 @@ export function useActiveFilters({
 
       switch (filterKey) {
         case 'sortBy':
-          update({ sortBy: 'popularity.desc' });
+          update(
+            isImdbSource
+              ? { sortBy: 'POPULARITY', sortOrder: 'DESC' }
+              : { sortBy: 'popularity.desc' }
+          );
           break;
         case 'genres':
           update({ genres: [] });
@@ -694,6 +700,7 @@ export function useActiveFilters({
       }
     },
     [
+      isImdbSource,
       setSelectedPeople,
       setSelectedCompanies,
       setSelectedKeywords,
@@ -705,7 +712,19 @@ export function useActiveFilters({
   );
 
   const clearAllFilters = useCallback(() => {
-    setLocalCatalog((prev) => ({ ...prev, filters: { ...DEFAULT_FILTERS } }));
+    setLocalCatalog((prev) => ({
+      ...prev,
+      filters:
+        prev?.source === 'imdb'
+          ? {
+              genres: [],
+              excludeGenres: [],
+              sortBy: 'POPULARITY',
+              sortOrder: 'DESC',
+              listType: 'discover',
+            }
+          : { ...DEFAULT_FILTERS },
+    }));
     setSelectedPeople([]);
     setSelectedCompanies([]);
     setSelectedKeywords([]);

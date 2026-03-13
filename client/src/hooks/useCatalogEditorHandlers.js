@@ -142,17 +142,42 @@ export function useCatalogEditorHandlers({
             : a !== 'emmy'
         );
 
+        const filterRankedListsByType = (lists) => {
+          if (!Array.isArray(lists) || lists.length === 0) return lists;
+          if (type === 'series') return lists.filter((l) => l === 'TOP_250_TV');
+          return lists.filter((l) => l !== 'TOP_250_TV');
+        };
+
+        const nextTypeFilters = {
+          ...strippedFilters,
+          ...previousStash,
+        };
+
+        const rankedList =
+          type === 'series'
+            ? nextTypeFilters.rankedList === 'TOP_250_TV'
+              ? nextTypeFilters.rankedList
+              : undefined
+            : nextTypeFilters.rankedList === 'TOP_250_TV'
+              ? undefined
+              : nextTypeFilters.rankedList;
+
         const updated = {
           ...prev,
           type,
           filters: {
-            ...strippedFilters,
-            ...previousStash,
+            ...nextTypeFilters,
             genres: [],
             excludeGenres: [],
             sortBy: isImdb ? 'POPULARITY' : 'popularity.desc',
             awardsWon,
             awardsNominated,
+            rankedList,
+            rankedLists: filterRankedListsByType(nextTypeFilters.rankedLists),
+            excludeRankedLists: filterRankedListsByType(nextTypeFilters.excludeRankedLists),
+            inTheatersLat: type === 'movie' ? nextTypeFilters.inTheatersLat : undefined,
+            inTheatersLong: type === 'movie' ? nextTypeFilters.inTheatersLong : undefined,
+            inTheatersRadius: type === 'movie' ? nextTypeFilters.inTheatersRadius : undefined,
           },
         };
         result = updated;

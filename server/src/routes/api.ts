@@ -529,7 +529,7 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
         genres: filters.genres,
         excludeGenres: filters.excludeGenres,
         sortBy: filters.sortBy || 'POPULARITY',
-        sortOrder: filters.sortOrder || 'ASC',
+        sortOrder: filters.sortOrder || 'DESC',
         imdbRatingMin: filters.imdbRatingMin,
         imdbRatingMax: filters.imdbRatingMax,
         totalVotesMin: filters.totalVotesMin,
