@@ -9,13 +9,32 @@
   overflow: visible;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) and (max-width: 1023px) {
   .sidebar {
-    padding: 24px;
+    padding: 16px;
     height: fit-content;
-    max-height: calc(100vh - 180px);
+    max-height: calc(100dvh - 140px);
     overflow-y: auto;
     position: sticky;
+    top: 80px; /* Match responsive header */
+  }
+}
+
+@media (min-width: 1024px) {
+  .sidebar {
+    padding: 20px;
+    height: fit-content;
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto;
+    position: sticky;
+    top: 80px; /* Match responsive header */
+  }
+}
+
+@media (min-width: 1200px) {
+  .sidebar {
+    padding: 24px;
+    max-height: calc(100vh - 180px);
     top: 100px;
   }
 }
@@ -1082,7 +1101,7 @@
 }
 
 /* Mobile responsive for config dropdown */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .config-dropdown-trigger {
     min-width: auto;
     max-width: none;

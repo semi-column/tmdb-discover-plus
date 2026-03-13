@@ -5,7 +5,7 @@
 /* Viewport meta handled in index.html */
 
 /* Mobile Tooltip - switch to bottom on small screens */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .tooltip-content {
     left: 50%;
     top: auto;
@@ -39,7 +39,7 @@
 }
 
 /* Mobile Container */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .container {
     padding: 0 16px;
   }
@@ -62,7 +62,7 @@
 }
 
 /* Mobile "Slim App Bar" Header */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .header {
     padding: 0;
     height: 60px;
@@ -213,7 +213,7 @@
 }
 
 /* Mobile Main Content */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .main {
     padding: 16px 0;
   }
@@ -224,7 +224,7 @@
 }
 
 /* Mobile Actions Layout (Top Bar) */
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
   /* Ensure parent allows wrapping/full width if needed, though we target toolbar directly */
 
   /* Target toolbar directly */
@@ -286,7 +286,7 @@
 /* Mobile Main Content */
 
 /* Mobile Sidebar */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .sidebar-header {
     flex-direction: column;
     gap: 12px;
@@ -314,7 +314,7 @@
 }
 
 /* Mobile Editor Panel */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .editor-panel {
     max-height: none;
     border-radius: var(--radius-md);
@@ -358,7 +358,7 @@
 }
 
 /* Mobile Filter Sections */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .filter-section {
     margin-bottom: 8px;
   }
@@ -403,7 +403,7 @@
 }
 
 /* Mobile Range Input */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .range-input {
     flex-direction: column;
     gap: 8px;
@@ -424,7 +424,7 @@
 }
 
 /* Mobile Content Type Toggle */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .content-type-toggle {
     flex-direction: column;
   }
@@ -435,7 +435,7 @@
 }
 
 /* Mobile Genre Grid */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .genre-grid {
     gap: 6px;
   }
@@ -447,7 +447,7 @@
 }
 
 /* Mobile Preview Section */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .preview-section {
     margin-top: 16px;
   }
@@ -494,7 +494,7 @@
 }
 
 /* Mobile Modals */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .modal-overlay {
     padding: 16px;
     align-items: flex-end;
@@ -531,7 +531,7 @@
 }
 
 /* Mobile Setup Page */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .setup-page {
     padding: 24px 16px;
     min-height: calc(100vh - 120px);
@@ -558,7 +558,7 @@
 
 /* Mobile Searchable Select */
 /* Mobile Searchable Select - Standard positioning */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .searchable-select-options,
   .multi-select-options {
     max-height: 40vh;
@@ -566,7 +566,7 @@
 }
 
 /* Mobile Provider Grid */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .provider-grid {
     grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
     gap: 6px;
@@ -587,7 +587,7 @@
 }
 
 /* Mobile Preset List */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .preset-item {
     padding: 10px 12px;
     font-size: 0.8125rem;
@@ -595,7 +595,7 @@
 }
 
 /* Mobile Buttons */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .btn {
     padding: 12px 20px;
     font-size: 0.875rem;
@@ -608,7 +608,7 @@
 }
 
 /* Mobile Toast */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .toast-container {
     left: 16px;
     right: 16px;
@@ -621,7 +621,7 @@
 }
 
 /* Mobile Input */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .input {
     padding: 14px;
     font-size: 1rem;
@@ -635,7 +635,7 @@
 }
 
 /* Mobile Empty State */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .empty-state {
     padding: 48px 16px;
   }
@@ -646,7 +646,7 @@
 }
 
 /* Touch-friendly tap targets */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .catalog-item,
   .preset-item,
   .genre-chip,
@@ -676,7 +676,7 @@
 
 /* Safe area for notched devices */
 @supports (padding: env(safe-area-inset-bottom)) {
-  @media (max-width: 768px) {
+  @media (max-width: 767px) {
     .app {
       padding-bottom: env(safe-area-inset-bottom);
     }
@@ -692,7 +692,7 @@
 }
 
 /* Hide scrollbar on mobile for cleaner look */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   ::-webkit-scrollbar {
     width: 4px;
     height: 4px;
@@ -700,7 +700,7 @@
 }
 
 /* Improve touch scrolling */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .editor-content,
   .sidebar,
   .searchable-select-options,

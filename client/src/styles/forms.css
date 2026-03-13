@@ -834,7 +834,7 @@ input[type='date'] {
   display: none;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
   .mobile-stats-pill {
     display: inline-flex;
     align-items: center;

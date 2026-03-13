@@ -247,7 +247,7 @@
   opacity: 0.5;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
   .header-stats {
     display: none;
   }
@@ -490,14 +490,38 @@
 }
 
 /* Tablet: Side by side layout */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .builder-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 16px;
+    height: auto;
+    min-height: calc(100dvh - 120px);
+    max-height: none;
+    align-items: start;
+  }
+}
+
+/* Base Desktop Layout */
 @media (min-width: 1024px) {
   .builder-layout {
     display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 20px;
+    height: calc(100dvh - 140px);
+    max-height: none; /* Let the dVH control it */
+    align-items: stretch;
+    min-height: 500px;
+  }
+}
+
+/* Medium Desktop */
+@media (min-width: 1200px) {
+  .builder-layout {
     grid-template-columns: 280px 1fr;
     gap: 24px;
     height: calc(100vh - 160px);
-    max-height: 850px; /* Limit height on very tall laptop screens but keep it functional */
-    align-items: stretch;
+    max-height: 850px;
     min-height: 600px;
   }
 }
@@ -760,7 +784,7 @@
   margin-top: -2px;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
   .credits-banner {
     margin-top: 12px;
     width: 100%;

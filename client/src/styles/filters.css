@@ -132,7 +132,7 @@
   grid-column: 1 / -1;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .filter-grid .span-2 {
     grid-column: span 1;
   }
@@ -1209,7 +1209,7 @@
   color: var(--text-secondary);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .imdb-source-toggle button {
     padding: 6px 12px;
     font-size: 0.75rem;
