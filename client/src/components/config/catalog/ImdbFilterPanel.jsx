@@ -4,6 +4,7 @@ import { GenreSelector } from './GenreSelector';
 
 // TODO: Awards section hidden until upstream API compatibility is resolved. Set to false to re-enable.
 const AWARDS_HIDDEN = false;
+const MAX_RANK_HIDDEN = true;
 import {
   Settings,
   Sparkles,
@@ -1104,31 +1105,33 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             </div>
           </div>
 
-          <div className="filter-group">
-            <LabelWithTooltip
-              label="Max Rank"
-              tooltip="Only include titles ranked within this position (e.g. top 100)."
-            />
-            <input
-              type="text"
-              inputMode="numeric"
-              className="input"
-              placeholder="e.g. 100"
-              value={rankInputValue}
-              onChange={(e) => {
-                const next = e.target.value;
-                if (/^\d*$/.test(next)) setRankInputDraft(next);
-              }}
-              onBlur={(e) => commitRankedListMaxRank(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  commitRankedListMaxRank(e.currentTarget.value);
-                }
-              }}
-            />
-            <p className="text-xs text-gray-400 mt-2">Allowed range: 1 to 250</p>
-          </div>
+          {!MAX_RANK_HIDDEN && (
+            <div className="filter-group">
+              <LabelWithTooltip
+                label="Max Rank"
+                tooltip="Only include titles ranked within this position (e.g. top 100)."
+              />
+              <input
+                type="text"
+                inputMode="numeric"
+                className="input"
+                placeholder="e.g. 100"
+                value={rankInputValue}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  if (/^\d*$/.test(next)) setRankInputDraft(next);
+                }}
+                onBlur={(e) => commitRankedListMaxRank(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitRankedListMaxRank(e.currentTarget.value);
+                  }
+                }}
+              />
+              <p className="text-xs text-gray-400 mt-2">Allowed range: 1 to 250</p>
+            </div>
+          )}
         </FilterSection>
       )}
 
