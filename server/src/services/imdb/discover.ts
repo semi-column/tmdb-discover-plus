@@ -59,13 +59,24 @@ export async function advancedSearch(
 
   const queryParams: Record<string, string | number | boolean | string[] | undefined> = {};
 
+  const hasInTheatersLocation =
+    contentType === 'movie' &&
+    params.inTheatersLat != null &&
+    params.inTheatersLong != null &&
+    Number.isFinite(Number(params.inTheatersLat)) &&
+    Number.isFinite(Number(params.inTheatersLong));
+
   if (params.query) queryParams.query = params.query;
   queryParams.sortBy = params.sortBy || 'POPULARITY';
   queryParams.sortOrder = params.sortOrder || 'DESC';
   queryParams.limit = params.limit || 100;
 
   const types = params.types?.length ? params.types : mapContentTypeToImdbTypes(contentType);
-  queryParams.types = types;
+  queryParams.types = hasInTheatersLocation
+    ? types.filter((t) => t === 'movie').length > 0
+      ? types.filter((t) => t === 'movie')
+      : ['movie']
+    : types;
 
   if (params.genres?.length) queryParams.genres = params.genres;
   if (params.excludeGenres?.length) queryParams.excludeGenres = params.excludeGenres;
@@ -106,19 +117,14 @@ export async function advancedSearch(
   if (params.excludeCompanies?.length) queryParams.excludeCompanies = params.excludeCompanies;
   if (params.creditedNames?.length) queryParams.creditedNames = params.creditedNames;
 
-  // In Theatres: apply -0.10 offset per IMDB API docs.
-  // Upstream is sensitive to malformed or missing location payloads, so only forward finite
-  // coordinates and always include a sane radius default when location is present.
-  if (contentType === 'movie' && params.inTheatersLat != null && params.inTheatersLong != null) {
+  if (hasInTheatersLocation) {
     const lat = Number(params.inTheatersLat);
     const long = Number(params.inTheatersLong);
-    if (Number.isFinite(lat) && Number.isFinite(long)) {
-      queryParams.inTheatersLat = lat - 0.1;
-      queryParams.inTheatersLong = long - 0.1;
+    queryParams.inTheatersLat = lat - 0.1;
+    queryParams.inTheatersLong = long - 0.1;
 
-      const radius = Number(params.inTheatersRadius);
-      queryParams.inTheatersRadius = Number.isFinite(radius) && radius > 0 ? radius : 50000;
-    }
+    const radius = Number(params.inTheatersRadius);
+    queryParams.inTheatersRadius = Number.isFinite(radius) && radius > 0 ? radius : 50000;
   }
 
   if (params.certificateRating) queryParams.certificateRating = params.certificateRating;
