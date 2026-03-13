@@ -157,6 +157,10 @@ a:hover {
   max-width: 1800px;
   margin: 0 auto;
   padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Fluid container for large screens */

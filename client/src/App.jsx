@@ -202,14 +202,6 @@ function App() {
                     </button>
                   </div>
                 )}
-
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => actions.handleLogout({ changeKey: true })}
-                >
-                  <Settings size={18} />
-                  Change API Key
-                </button>
               </div>
 
               <div className="mobile-support-under-actions">

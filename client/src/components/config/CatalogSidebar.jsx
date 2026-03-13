@@ -128,7 +128,7 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
             onClick={onAddCatalog}
             title="Add custom catalog"
           >
-            <Plus size={16} />
+            <Plus size={16} /> <span>New Catalog</span>
           </button>
         </div>
       </div>

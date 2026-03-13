@@ -34,8 +34,13 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 12px;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+  padding: 32px 12px 12px;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.6) 40%,
+    rgba(0, 0, 0, 0) 100%
+  );
 }
 
 .preview-card-title {
@@ -82,10 +87,16 @@
 }
 
 .preview-inner {
-  padding: 20px;
+  padding: 16px;
   height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .preview-inner {
+    padding: 24px;
+  }
 }
 
 .preview-header {
@@ -224,8 +235,13 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 32px 8px 8px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+  padding: 40px 8px 8px;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.6) 50%,
+    transparent 100%
+  );
 }
 
 .preview-card-title {

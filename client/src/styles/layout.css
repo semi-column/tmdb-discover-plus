@@ -1,7 +1,15 @@
 .app {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .app {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
 }
 
 .skip-to-content {
@@ -215,9 +223,6 @@
 }
 
 .header-stats {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -229,6 +234,7 @@
   color: var(--text-secondary);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  margin-left: 24px;
 }
 
 .stats-item {
@@ -351,6 +357,9 @@
 .main {
   flex: 1;
   padding: 32px 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Setup Page */
@@ -487,6 +496,7 @@
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+  flex: 1; /* allow spreading in parent flex */
 }
 
 /* Tablet: Side by side layout */
@@ -495,10 +505,10 @@
     display: grid;
     grid-template-columns: 220px 1fr;
     gap: 16px;
-    height: auto;
-    min-height: calc(100dvh - 120px);
+    min-height: 0;
     max-height: none;
-    align-items: start;
+    align-items: stretch;
+    margin-bottom: 24px; /* iPad bottom gap */
   }
 }
 
@@ -508,10 +518,10 @@
     display: grid;
     grid-template-columns: 240px 1fr;
     gap: 20px;
-    height: calc(100dvh - 140px);
     max-height: none; /* Let the dVH control it */
     align-items: stretch;
-    min-height: 500px;
+    min-height: 0;
+    margin-bottom: 0;
   }
 }
 
@@ -520,9 +530,6 @@
   .builder-layout {
     grid-template-columns: 280px 1fr;
     gap: 24px;
-    height: calc(100vh - 160px);
-    max-height: 850px;
-    min-height: 600px;
   }
 }
 
@@ -530,7 +537,6 @@
 @media (min-width: 1400px) {
   .builder-layout {
     grid-template-columns: 320px 1fr;
-    height: calc(100vh - 180px); /* Slightly more padding for ultra large */
   }
 }
 

@@ -215,7 +215,13 @@
 /* Mobile Main Content */
 @media (max-width: 767px) {
   .main {
-    padding: 16px 0;
+    padding-top: 16px;
+    padding-bottom: 32px; /* Restore bottom padding on mobile since there is no height constraint */
+  }
+
+  .builder-title-area h2,
+  .builder-title-area p.text-secondary {
+    display: none;
   }
 }
 
@@ -247,34 +253,30 @@
   .actions-toolbar > .config-dropdown {
     width: 100%;
     margin: 0;
-    grid-column: 1 / 2;
+    grid-column: 1 / -1;
   }
 
-  /* Save Wrapper -> Row 1, Col 2 */
+  /* Save Wrapper -> Full Width Menu */
   .actions-toolbar > .save-button-wrapper {
     width: 100%;
     margin: 0;
-    grid-column: 2 / 3;
+    grid-column: 1 / -1;
   }
 
   .actions-toolbar > .save-button-wrapper .btn {
     width: 100%;
     justify-content: center;
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: 600;
   }
 
-  /* Change API Key -> Row 2, Full width */
-  .actions-toolbar > button:last-child {
-    grid-column: 1 / -1;
-    width: 100%;
-    justify-content: center;
-    margin-top: 0;
-  }
-
-  /* TMDB/IMDb toggle -> Full width */
-  .actions-toolbar > .source-tabs-compact {
-    grid-column: 1 / -1;
-    width: 100%;
-    margin-bottom: 0;
+  .actions-toolbar > .save-button-wrapper .unsaved-indicator {
+    top: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    border-width: 2px;
   }
 
   .actions-toolbar > .source-tabs-compact .source-tab {
@@ -294,9 +296,20 @@
     text-align: center;
   }
 
+  .sidebar-header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sidebar-header-actions .config-name-input {
+    text-align: center;
+    padding: 8px 0;
+  }
+
   .sidebar-header .btn {
     width: 100%;
     justify-content: center;
+    padding: 10px;
   }
 
   .catalog-item {
@@ -310,6 +323,19 @@
 
   .catalog-item-name {
     font-size: 0.875rem;
+  }
+
+  .catalog-item-actions {
+    gap: 8px; /* Easier to tap on mobile */
+  }
+
+  .catalog-item-actions .btn-icon {
+    padding: 10px;
+    min-width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
@@ -328,8 +354,14 @@
   }
 
   .editor-title {
+    flex-direction: column;
     justify-content: center;
     text-align: center;
+    gap: 8px !important;
+  }
+
+  .editor-title > div {
+    align-items: center;
   }
 
   .editor-title h2 {
@@ -459,8 +491,13 @@
   .preview-header {
     flex-direction: column;
     gap: 12px;
-    align-items: stretch;
+    align-items: center;
     text-align: center;
+  }
+
+  .preview-title {
+    justify-content: center;
+    width: 100%;
   }
 
   .preview-grid {
@@ -477,9 +514,13 @@
 @media (max-width: 1199px) {
   .mobile-preview-btn-container {
     display: block;
-    padding: 24px 0 8px;
+    padding: 24px 0 0;
     border-top: 1px solid var(--border-color);
-    margin-top: 24px;
+    margin-top: auto;
+  }
+
+  .editor-content > *:nth-last-child(2) {
+    margin-bottom: 24px;
   }
 
   .mobile-preview-btn {
@@ -588,9 +629,17 @@
 
 /* Mobile Preset List */
 @media (max-width: 767px) {
+  .preset-group-header {
+    padding: 12px 0;
+    font-size: 0.875rem;
+  }
+
   .preset-item {
-    padding: 10px 12px;
-    font-size: 0.8125rem;
+    padding: 14px 16px;
+    font-size: 0.9375rem;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
   }
 }
 

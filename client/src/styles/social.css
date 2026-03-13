@@ -18,14 +18,17 @@
 
 .sidebar-support-links {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .sidebar-support-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 120px;
   padding: 7px 10px;
   border-radius: var(--radius-md);
   font-size: 0.75rem;
@@ -36,7 +39,6 @@
     transform 0.15s ease,
     box-shadow 0.15s ease;
   white-space: nowrap;
-  justify-content: center;
 }
 
 .sidebar-support-btn:hover {
@@ -45,15 +47,16 @@
 }
 
 .sidebar-support-discord {
-  background: rgba(88, 101, 242, 0.12);
-  color: #8b9aff;
-  border: 1px solid rgba(88, 101, 242, 0.2);
+  background: linear-gradient(135deg, rgba(88, 101, 242, 0.15), rgba(88, 101, 242, 0.25));
+  color: #a4b0ff;
+  border: 1px solid rgba(88, 101, 242, 0.4);
 }
 
 .sidebar-support-discord:hover {
-  background: rgba(88, 101, 242, 0.22);
-  color: #a4b0ff;
-  box-shadow: 0 2px 8px rgba(88, 101, 242, 0.2);
+  background: linear-gradient(135deg, rgba(88, 101, 242, 0.25), rgba(88, 101, 242, 0.35));
+  color: #fff;
+  border: 1px solid rgba(88, 101, 242, 0.6);
+  box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
 }
 
 .sidebar-support-icon {
@@ -63,15 +66,16 @@
 }
 
 .sidebar-support-bmc {
-  background: rgba(255, 221, 0, 0.1);
-  color: #e6c800;
-  border: 1px solid rgba(255, 221, 0, 0.2);
+  background: linear-gradient(135deg, rgba(255, 221, 0, 0.15), rgba(255, 129, 63, 0.2));
+  color: #ffd700;
+  border: 1px solid rgba(255, 221, 0, 0.4);
 }
 
 .sidebar-support-bmc:hover {
-  background: rgba(255, 221, 0, 0.18);
-  color: #ffd700;
-  box-shadow: 0 2px 8px rgba(255, 221, 0, 0.15);
+  background: linear-gradient(135deg, rgba(255, 221, 0, 0.25), rgba(255, 129, 63, 0.3));
+  color: #fff;
+  border: 1px solid rgba(255, 221, 0, 0.6);
+  box-shadow: 0 4px 12px rgba(255, 129, 63, 0.3);
 }
 
 /* Setup / Login support row */

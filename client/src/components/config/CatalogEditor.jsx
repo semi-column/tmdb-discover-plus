@@ -133,18 +133,54 @@ export const CatalogEditor = memo(function CatalogEditor() {
     <div className="editor-container">
       <div className="editor-panel">
         <div className="editor-header">
-          <div className="editor-title">
-            {isMovie ? <Film size={22} /> : <Tv size={22} />}
-            <div style={{ flex: 1 }}>
-              <input
-                type="text"
-                className={`editor-name-input${!localCatalog?.name?.trim() ? ' field-invalid' : ''}`}
-                placeholder="Catalog Name..."
-                value={localCatalog?.name || ''}
-                onChange={(e) => handleNameChange(e.target.value)}
-                maxLength={50}
-              />
+          <div
+            className="editor-title"
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}
+          >
+            <div
+              className="editor-icon-wrapper"
+              style={{
+                padding: '8px',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius-md)',
+              }}
+            >
+              {isMovie ? (
+                <Film size={20} className="text-secondary" />
+              ) : (
+                <Tv size={20} className="text-secondary" />
+              )}
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  className={`editor-name-input${!localCatalog?.name?.trim() ? ' field-invalid' : ''}`}
+                  placeholder="Catalog Name..."
+                  value={localCatalog?.name || ''}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  maxLength={50}
+                  style={{ margin: 0, padding: 0 }}
+                />
+              </div>
               {!localCatalog?.name?.trim() && <span className="field-error">Name is required</span>}
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Powered by{' '}
+                <a
+                  href={isImdbCatalog ? 'https://sleeyax.dev/' : 'https://www.themoviedb.org/'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: 'var(--accent-primary)',
+                    textDecoration: 'none',
+                    fontWeight: 600,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+                >
+                  {isImdbCatalog ? 'Sleeyax' : 'TMDB'}
+                </a>
+              </div>
             </div>
           </div>
           <div className="editor-actions">
@@ -153,36 +189,6 @@ export const CatalogEditor = memo(function CatalogEditor() {
               Preview
             </button>
           </div>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            padding: '6px 16px',
-            borderBottom: '1px solid var(--border-color)',
-            fontSize: '11px',
-            color: 'var(--text-muted)',
-            letterSpacing: '0.02em',
-          }}
-        >
-          Powered by{' '}
-          <a
-            href={isImdbCatalog ? 'https://sleeyax.dev/' : 'https://www.themoviedb.org/'}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              color: 'var(--accent-primary)',
-              textDecoration: 'none',
-              fontWeight: 600,
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-            onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
-          >
-            {isImdbCatalog ? 'Sleeyax' : 'TMDB'}
-          </a>
         </div>
 
         <div className="editor-content">
@@ -400,12 +406,9 @@ export const CatalogEditor = memo(function CatalogEditor() {
                   />
                 </FilterSection>
               ) : (
-                <div
-                  className="flex items-center gap-3 p-4 mt-6 rounded-lg border border-white/5 bg-white/5"
-                  style={{ justifyContent: 'center' }}
-                >
-                  <Sparkles size={16} className="text-indigo-400" />
-                  <span className="text-gray-300 text-sm font-medium">
+                <div className="preset-empty-state">
+                  <Sparkles size={32} className="preset-empty-icon" />
+                  <span className="preset-empty-text">
                     This is a curated preset from TMDB and cannot be modified.
                   </span>
                 </div>

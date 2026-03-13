@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-import { useCatalog, useTMDBData } from '../../context/AppContext';
+import { ChevronDown, KeyRound } from 'lucide-react';
+import { useCatalog, useTMDBData, useAppActions } from '../../context/AppContext';
 import { SearchableSelect } from '../forms/SearchableSelect';
 
 export function GeneralSettingsSection() {
   const { preferences, setPreferences: onPreferencesChange } = useCatalog();
   const { languages = [] } = useTMDBData();
+  const actions = useAppActions();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const defaultLanguage = preferences?.defaultLanguage || '';
@@ -76,6 +77,34 @@ export function GeneralSettingsSection() {
             />
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
               Overrides language for all catalogs.
+            </p>
+          </div>
+
+          <div
+            className="input-group"
+            style={{
+              marginTop: '24px',
+              paddingTop: '16px',
+              borderTop: '1px solid var(--border-color)',
+            }}
+          >
+            <button
+              className="btn btn-secondary"
+              onClick={() => actions.handleLogout({ changeKey: true })}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              <KeyRound size={16} />
+              Change API Key
+            </button>
+            <p
+              style={{
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+                marginTop: '8px',
+                textAlign: 'center',
+              }}
+            >
+              Requires reconnecting to Stremio.
             </p>
           </div>
         </div>

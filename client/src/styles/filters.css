@@ -6,8 +6,7 @@
 .filter-section-title {
   font-size: 0.8125rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.25px;
   color: var(--text-muted);
   margin-bottom: 12px;
 }
@@ -85,6 +84,7 @@
   font-size: 0.9375rem;
   font-weight: 600;
   margin: 0;
+  text-transform: capitalize;
 }
 
 .filter-section-desc {

@@ -12,30 +12,30 @@
 @media (min-width: 768px) and (max-width: 1023px) {
   .sidebar {
     padding: 16px;
-    height: fit-content;
-    max-height: calc(100dvh - 140px);
+    min-height: 0;
     overflow-y: auto;
-    position: sticky;
-    top: 80px; /* Match responsive header */
+    -webkit-overflow-scrolling: touch;
+    position: relative; /* Removes the sticky offset trap */
+    top: 0;
   }
 }
 
 @media (min-width: 1024px) {
   .sidebar {
     padding: 20px;
-    height: fit-content;
-    max-height: calc(100dvh - 160px);
+    min-height: 0;
     overflow-y: auto;
-    position: sticky;
-    top: 80px; /* Match responsive header */
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+    top: 0;
   }
 }
 
 @media (min-width: 1200px) {
   .sidebar {
     padding: 24px;
-    max-height: calc(100vh - 180px);
-    top: 100px;
+    max-height: 100%;
+    top: 0;
   }
 }
 
@@ -101,6 +101,7 @@
   align-items: center;
   gap: 8px;
   flex: 1;
+  min-width: 0;
 }
 
 .config-name-edit-icon {
@@ -251,8 +252,8 @@
 .catalog-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 10px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -304,7 +305,16 @@
 
 .catalog-item-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+}
+
+.catalog-item-actions .btn-icon {
+  padding: 4px;
+  min-width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Drag & drop reorder handle */
@@ -522,9 +532,9 @@
   flex-direction: column;
   gap: 4px;
   overflow: hidden;
-  max-height: 500px;
+  max-height: 2000px;
   transition:
-    max-height 0.3s ease,
+    max-height 0.4s ease,
     opacity 0.2s ease,
     margin 0.2s ease;
 }
@@ -1177,4 +1187,10 @@
   flex: none;
   padding: 12px 18px;
   font-size: 0.875rem;
+}
+.sidebar::after {
+  content: '';
+  display: block;
+  height: 24px;
+  flex-shrink: 0;
 }
