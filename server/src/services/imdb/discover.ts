@@ -21,6 +21,11 @@ interface RawRankingResponse {
 
 const log = createLogger('imdb:discover');
 
+function roundTo(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
 function buildCursorCacheKey(filterHash: string, skip: number): string {
   return `imdb:cursor:${filterHash}:skip${skip}`;
 }
@@ -118,10 +123,10 @@ export async function advancedSearch(
   if (params.creditedNames?.length) queryParams.creditedNames = params.creditedNames;
 
   if (hasInTheatersLocation) {
-    const lat = Number(params.inTheatersLat);
-    const long = Number(params.inTheatersLong);
-    queryParams.inTheatersLat = lat - 0.1;
-    queryParams.inTheatersLong = long - 0.1;
+    const lat = roundTo(Number(params.inTheatersLat), 2);
+    const long = roundTo(Number(params.inTheatersLong), 2);
+    queryParams.inTheatersLat = roundTo(lat - 0.1, 2);
+    queryParams.inTheatersLong = roundTo(long - 0.1, 2);
 
     const radius = Number(params.inTheatersRadius);
     queryParams.inTheatersRadius = Number.isFinite(radius) && radius > 0 ? radius : 50000;
