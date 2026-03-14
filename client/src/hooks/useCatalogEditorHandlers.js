@@ -120,8 +120,8 @@ export function useCatalogEditorHandlers({
 
         const filterRankedListsByType = (lists) => {
           if (!Array.isArray(lists) || lists.length === 0) return lists;
-          if (type === 'series') return lists.filter((l) => l === 'TOP_250_TV');
-          return lists.filter((l) => l !== 'TOP_250_TV');
+          if (type === 'series') return [];
+          return lists;
         };
 
         const nextTypeFilters = {
@@ -129,14 +129,7 @@ export function useCatalogEditorHandlers({
           ...previousStash,
         };
 
-        const rankedList =
-          type === 'series'
-            ? nextTypeFilters.rankedList === 'TOP_250_TV'
-              ? nextTypeFilters.rankedList
-              : undefined
-            : nextTypeFilters.rankedList === 'TOP_250_TV'
-              ? undefined
-              : nextTypeFilters.rankedList;
+        const rankedList = type === 'series' ? undefined : nextTypeFilters.rankedList;
 
         const updated = {
           ...prev,

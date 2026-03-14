@@ -25,7 +25,7 @@ import { LabelWithTooltip } from '../../forms/Tooltip';
 
 // TODO: Awards section hidden until upstream API compatibility is resolved. Set to false to re-enable.
 const AWARDS_HIDDEN = false;
-const MAX_RANK_HIDDEN = true;
+const MAX_RANK_HIDDEN = false;
 
 export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   localCatalog,
@@ -111,10 +111,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   );
 
   const visibleRankedLists = useMemo(
-    () =>
-      imdbRankedLists.filter((list) =>
-        isMovieCatalog ? list.value !== 'TOP_250_TV' : list.value === 'TOP_250_TV'
-      ),
+    () => (isMovieCatalog ? imdbRankedLists : []),
     [imdbRankedLists, isMovieCatalog]
   );
 
@@ -171,8 +168,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     [filters.keywords, onFiltersChange]
   );
 
-  const handleAddKeyword = (e) => {
-    e.preventDefault();
+  const handleAddKeyword = () => {
     const kw = keywordInput.trim();
     if (!kw) return;
     const current = filters.keywords || [];
@@ -193,8 +189,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     [filters.excludeKeywords, onFiltersChange]
   );
 
-  const handleAddExcludeKeyword = (e) => {
-    e.preventDefault();
+  const handleAddExcludeKeyword = () => {
     const kw = excludeKeywordInput.trim();
     if (!kw) return;
     const current = filters.excludeKeywords || [];
@@ -203,6 +198,12 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     }
     setExcludeKeywordInput('');
   };
+
+  const handleEnterToAdd = useCallback((event, addFn) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    addFn();
+  }, []);
 
   const handleAwardToggle = useCallback(
     (field, award) => {
@@ -358,8 +359,8 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       setRankInputDraft(null);
       return;
     }
-    const clamped = Math.min(Math.max(parsed, 1), 250);
-    onFiltersChange('rankedListMaxRank', clamped);
+    const normalized = Math.max(parsed, 1);
+    onFiltersChange('rankedListMaxRank', normalized);
     setRankInputDraft(null);
   };
 
@@ -731,22 +732,17 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       >
         <div className="filter-group mb-4">
           <LabelWithTooltip label="Include Keywords" tooltip="Results must match these keywords." />
-          <form className="flex gap-2" onSubmit={handleAddKeyword}>
+          <div>
             <input
               type="text"
-              className="input flex-1"
+              className="input"
               placeholder="e.g. superhero, survival..."
               value={keywordInput}
               onChange={(e) => setKeywordInput(e.target.value)}
+              onKeyDown={(e) => handleEnterToAdd(e, handleAddKeyword)}
             />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-[#6366f1] hover:bg-[#4f46e5] text-white rounded transition-colors text-sm font-medium"
-              disabled={!keywordInput.trim()}
-            >
-              Add
-            </button>
-          </form>
+            <span className="filter-label-hint">Press Enter to add</span>
+          </div>
           {(filters.keywords || []).length > 0 && (
             <div className="imdb-selected-chips mt-3" style={{ marginTop: '12px' }}>
               {filters.keywords.map((kw) => (
@@ -769,22 +765,17 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             label="Exclude Keywords"
             tooltip="Results must NOT match these keywords."
           />
-          <form className="flex gap-2" onSubmit={handleAddExcludeKeyword}>
+          <div>
             <input
               type="text"
-              className="input flex-1"
+              className="input"
               placeholder="e.g. anime, musical..."
               value={excludeKeywordInput}
               onChange={(e) => setExcludeKeywordInput(e.target.value)}
+              onKeyDown={(e) => handleEnterToAdd(e, handleAddExcludeKeyword)}
             />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded transition-colors text-sm font-medium"
-              disabled={!excludeKeywordInput.trim()}
-            >
-              Exclude
-            </button>
-          </form>
+            <span className="filter-label-hint">Press Enter to add</span>
+          </div>
           {(filters.excludeKeywords || []).length > 0 && (
             <div className="imdb-selected-chips mt-3" style={{ marginTop: '12px' }}>
               {filters.excludeKeywords.map((kw) => (
@@ -1101,7 +1092,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                   }
                 }}
               />
-              <p className="text-xs text-gray-400 mt-2">Allowed range: 1 to 250</p>
+              <p className="text-xs text-gray-400 mt-2">Allowed range: 1 and above</p>
             </div>
           )}
         </FilterSection>
@@ -1122,29 +1113,22 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             label="Plot Keywords"
             tooltip="Search for titles containing these words in their plot summary."
           />
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              addArrayFilterValue('plot', plotInput, plotValues);
-              setPlotInput('');
-            }}
-          >
+          <div>
             <input
               type="text"
-              className="input flex-1"
+              className="input"
               placeholder="Type and press Enter..."
               value={plotInput}
               onChange={(e) => setPlotInput(e.target.value)}
+              onKeyDown={(e) =>
+                handleEnterToAdd(e, () => {
+                  addArrayFilterValue('plot', plotInput, plotValues);
+                  setPlotInput('');
+                })
+              }
             />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-[#6366f1] hover:bg-[#4f46e5] text-white rounded transition-colors text-sm font-medium"
-              disabled={!plotInput.trim()}
-            >
-              Add
-            </button>
-          </form>
+            <span className="filter-label-hint">Press Enter to add</span>
+          </div>
           {plotValues.length > 0 && (
             <div className="imdb-selected-chips mt-3" style={{ marginTop: '12px' }}>
               {plotValues.map((value) => (
@@ -1167,29 +1151,22 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             label="Filming Locations"
             tooltip="Search for titles filmed at a specific location."
           />
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              addArrayFilterValue('filmingLocations', filmingInput, filmingLocationValues);
-              setFilmingInput('');
-            }}
-          >
+          <div>
             <input
               type="text"
-              className="input flex-1"
+              className="input"
               placeholder="Type and press Enter..."
               value={filmingInput}
               onChange={(e) => setFilmingInput(e.target.value)}
+              onKeyDown={(e) =>
+                handleEnterToAdd(e, () => {
+                  addArrayFilterValue('filmingLocations', filmingInput, filmingLocationValues);
+                  setFilmingInput('');
+                })
+              }
             />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-[#6366f1] hover:bg-[#4f46e5] text-white rounded transition-colors text-sm font-medium"
-              disabled={!filmingInput.trim()}
-            >
-              Add
-            </button>
-          </form>
+            <span className="filter-label-hint">Press Enter to add</span>
+          </div>
           {filmingLocationValues.length > 0 && (
             <div className="imdb-selected-chips mt-3" style={{ marginTop: '12px' }}>
               {filmingLocationValues.map((value) => (

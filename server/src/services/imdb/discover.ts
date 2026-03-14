@@ -124,19 +124,11 @@ export async function advancedSearch(
 
   const filterRankedListsByType = (lists: string[] | undefined): string[] | undefined => {
     if (!lists?.length) return undefined;
-    const result =
-      contentType === 'series'
-        ? lists.filter((l) => l === 'TOP_250_TV')
-        : lists.filter((l) => l !== 'TOP_250_TV');
+    const result = contentType === 'series' ? [] : lists;
     return result.length ? result : undefined;
   };
   const compatibleRankedList =
-    params.rankedList &&
-    (contentType === 'series'
-      ? params.rankedList === 'TOP_250_TV'
-      : params.rankedList !== 'TOP_250_TV')
-      ? params.rankedList
-      : undefined;
+    params.rankedList && contentType !== 'series' ? params.rankedList : undefined;
   const compatibleRankedLists = filterRankedListsByType(params.rankedLists);
   const compatibleExcludeRankedLists = filterRankedListsByType(params.excludeRankedLists);
 

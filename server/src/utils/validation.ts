@@ -213,7 +213,7 @@ const VALID_IMDB_SORT_ORDERS = ['ASC', 'DESC'];
 const VALID_IMDB_COMPANY_ID = /^co\d+$/;
 const VALID_IMDB_PERSON_ID = /^nm\d+$/;
 const VALID_IMDB_CERTIFICATE = /^[A-Z]{2}:.+$/;
-const VALID_IMDB_RANKED_LISTS = ['TOP_250', 'TOP_250_TV', 'BOTTOM_100'];
+const VALID_IMDB_RANKED_LISTS = ['TOP_250', 'BOTTOM_100'];
 const VALID_IMDB_WITH_DATA = [
   'PLOT',
   'TRIVIA',
@@ -333,8 +333,13 @@ export function sanitizeImdbFilters(filters: unknown): Record<string, unknown> {
     if ((sanitized.excludeRankedLists as string[]).length === 0)
       delete sanitized.excludeRankedLists;
   }
-  if (typeof sanitized.rankedListMaxRank === 'number') {
-    sanitized.rankedListMaxRank = Math.min(Math.max(sanitized.rankedListMaxRank as number, 1), 250);
+  if (sanitized.rankedListMaxRank !== undefined) {
+    const parsed = Number(sanitized.rankedListMaxRank);
+    if (Number.isFinite(parsed)) {
+      sanitized.rankedListMaxRank = Math.max(Math.trunc(parsed), 1);
+    } else {
+      delete sanitized.rankedListMaxRank;
+    }
   }
 
   // Validate withData
