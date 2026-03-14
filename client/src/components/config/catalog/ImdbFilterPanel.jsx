@@ -17,6 +17,7 @@ import {
   FileText,
   Database,
 } from 'lucide-react';
+import { CertificationCountryFilter } from '../../forms/CertificationCountryFilter';
 import { SearchableSelect } from '../../forms/SearchableSelect';
 import { SearchInput } from '../../forms/SearchInput';
 import { RangeSlider, SingleSlider } from '../../forms/RangeSlider';
@@ -300,11 +301,13 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
 
   const certificateCountryOptions = useMemo(
     () =>
-      Object.entries(imdbCertificateRatings).map(([code]) => ({
-        value: code,
-        label: countries.find((c) => c.iso_3166_1 === code)?.english_name || code,
-      })),
-    [imdbCertificateRatings, countries]
+      countries
+        .map((c) => ({
+          value: c.iso_3166_1,
+          label: c.english_name || c.iso_3166_1,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [countries]
   );
 
   const selectedCertCountry = filters.certificateCountry || '';
@@ -319,17 +322,6 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       label: r,
     }));
   }, [selectedCertCountry, imdbCertificateRatings]);
-
-  const handleCertificateToggle = useCallback(
-    (certValue) => {
-      const current = filters.certificates || [];
-      const next = current.includes(certValue)
-        ? current.filter((c) => c !== certValue)
-        : [...current, certValue];
-      onFiltersChange('certificates', next);
-    },
-    [filters.certificates, onFiltersChange]
-  );
 
   const handleRankedListToggle = useCallback(
     (listValue) => {
@@ -1002,46 +994,21 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           onToggle={toggleSection}
           badgeCount={(filters.certificates || []).length}
         >
-          <div className="filter-group mb-4">
-            <LabelWithTooltip
-              label="Country"
-              tooltip="Select a country to see its content rating options."
-            />
-            <SearchableSelect
-              options={certificateCountryOptions}
-              value={selectedCertCountry}
-              onChange={(value) => {
-                onFiltersChange('certificateCountry', value || undefined);
-                onFiltersChange('certificates', []);
-              }}
-              placeholder="Select country..."
-              searchPlaceholder="Search countries..."
-              labelKey="label"
-              valueKey="value"
-              allowClear={true}
-            />
-          </div>
-
-          {availableCertificates.length > 0 && (
-            <div className="filter-group">
-              <span className="filter-label">Ratings</span>
-              <div className="imdb-chip-wrap">
-                {availableCertificates.map((cert) => {
-                  const selected = (filters.certificates || []).includes(cert.value);
-                  return (
-                    <button
-                      key={cert.value}
-                      type="button"
-                      className={`genre-chip ${selected ? 'selected' : ''}`}
-                      onClick={() => handleCertificateToggle(cert.value)}
-                    >
-                      {cert.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <CertificationCountryFilter
+            countryOptions={certificateCountryOptions}
+            countryValue={selectedCertCountry}
+            onCountryChange={(value) => onFiltersChange('certificateCountry', value || undefined)}
+            ratingOptions={availableCertificates}
+            ratingsValue={filters.certificates || []}
+            onRatingsChange={(value) => onFiltersChange('certificates', value)}
+            countryLabel="Country"
+            countryTooltip="Select a country to see its content rating options."
+            ratingsLabel="Ratings"
+            ratingsTooltip="Content rating certificates available for the selected country."
+            countryPlaceholder="Select country..."
+            ratingsPlaceholder="Select ratings..."
+            clearRatingsOnCountryChange={true}
+          />
         </FilterSection>
       )}
 

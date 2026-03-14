@@ -1,5 +1,6 @@
 import { useCallback, useMemo, memo } from 'react';
 import { Check } from 'lucide-react';
+import { CertificationCountryFilter } from '../../forms/CertificationCountryFilter';
 import { MultiSelect } from '../../forms/MultiSelect';
 import { SearchableSelect } from '../../forms/SearchableSelect';
 import { LabelWithTooltip } from '../../forms/Tooltip';
@@ -36,6 +37,24 @@ export const ReleaseFilters = memo(function ReleaseFilters({
   const safeTvStatuses = Array.isArray(tvStatuses) ? tvStatuses : [];
   const safeTvTypes = Array.isArray(tvTypes) ? tvTypes : [];
   const safeCertCountries = Array.isArray(certCountries) ? certCountries : [];
+
+  const certificationCountryOptions = useMemo(
+    () =>
+      safeCertCountries.map((c) => ({
+        value: c.iso_3166_1,
+        label: c.english_name || c.iso_3166_1,
+      })),
+    [safeCertCountries]
+  );
+
+  const certificationRatingOptions = useMemo(
+    () =>
+      (Array.isArray(certOptions) ? certOptions : []).map((c) => ({
+        value: c.certification,
+        label: c.certification,
+      })),
+    [certOptions]
+  );
 
   const yearOptions = useMemo(() => {
     const years = [];
@@ -427,41 +446,21 @@ export const ReleaseFilters = memo(function ReleaseFilters({
         </div>
       )}
 
-      <div className="filter-two-col" style={{ marginTop: '16px' }}>
-        <div className="filter-group">
-          <LabelWithTooltip
-            label="Age Rating Country"
-            tooltip="Select which country's certification system to use for age ratings. Changing this updates the available options in the Age Rating filter. Independent of the Release Region filter."
-          />
-          <SearchableSelect
-            options={safeCertCountries}
-            value={localCatalog?.filters?.certificationCountry || ''}
-            onChange={(value) => onFiltersChange('certificationCountry', value || undefined)}
-            placeholder="US (default)"
-            searchPlaceholder="Search countries..."
-            labelKey="english_name"
-            valueKey="iso_3166_1"
-          />
-        </div>
-        <div className="filter-group">
-          <LabelWithTooltip
-            label="Age Rating"
-            tooltip="Content certification/age rating (e.g., PG-13, R, TV-MA). Varies by country - US ratings shown by default."
-          />
-          <MultiSelect
-            options={(certOptions || []).map((c) => ({
-              value: c.certification,
-              label: c.certification,
-            }))}
-            value={localCatalog?.filters?.certifications || []}
-            onChange={(value) => onFiltersChange('certifications', value)}
-            placeholder="Any"
-            labelKey="label"
-            valueKey="value"
-          />
-          <span className="filter-label-hint">Use this for exact certifications.</span>
-        </div>
-      </div>
+      <CertificationCountryFilter
+        countryOptions={certificationCountryOptions}
+        countryValue={localCatalog?.filters?.certificationCountry || ''}
+        onCountryChange={(value) => onFiltersChange('certificationCountry', value || undefined)}
+        ratingOptions={certificationRatingOptions}
+        ratingsValue={localCatalog?.filters?.certifications || []}
+        onRatingsChange={(value) => onFiltersChange('certifications', value)}
+        countryLabel="Age Rating Country"
+        countryTooltip="Select which country's certification system to use for age ratings. Changing this updates the available options in the Age Rating filter. Independent of the Release Region filter."
+        ratingsLabel="Age Rating"
+        ratingsTooltip="Content certification/age rating (e.g., PG-13, R, TV-MA). Varies by country - US ratings shown by default."
+        countryPlaceholder="US (default)"
+        ratingsPlaceholder="Any"
+        hint="Use this for exact certifications."
+      />
     </>
   );
 });
