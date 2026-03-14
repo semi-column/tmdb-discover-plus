@@ -11,8 +11,10 @@ export interface GeoCity {
   displayName: string;
   lat: number;
   lon: number;
+  state: string;
   country: string;
   countryCode: string;
+  locationLabel: string;
 }
 
 let lastRequestTime = 0;
@@ -68,26 +70,39 @@ export async function searchCities(query: string, limit: number = 10): Promise<G
         town?: string;
         village?: string;
         state?: string;
+        region?: string;
+        county?: string;
         country?: string;
         country_code?: string;
       };
       name?: string;
     }>;
 
-    const cities: GeoCity[] = data.map((item) => ({
-      id: String(item.place_id),
-      name:
+    const cities: GeoCity[] = data.map((item) => {
+      const name =
         item.address?.city ||
         item.address?.town ||
         item.address?.village ||
         item.name ||
-        item.display_name.split(',')[0],
-      displayName: item.display_name,
-      lat: parseFloat(item.lat),
-      lon: parseFloat(item.lon),
-      country: item.address?.country || '',
-      countryCode: (item.address?.country_code || '').toUpperCase(),
-    }));
+        item.display_name.split(',')[0];
+
+      const state = item.address?.state || item.address?.region || item.address?.county || '';
+      const country = item.address?.country || '';
+
+      const locationParts = [state, country].filter(Boolean);
+
+      return {
+        id: String(item.place_id),
+        name,
+        displayName: item.display_name,
+        lat: parseFloat(item.lat),
+        lon: parseFloat(item.lon),
+        state,
+        country,
+        countryCode: (item.address?.country_code || '').toUpperCase(),
+        locationLabel: locationParts.join(', '),
+      };
+    });
 
     await cache.set(cacheKey, cities, 86400); // cache 24h
     return cities;

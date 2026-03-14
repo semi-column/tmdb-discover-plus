@@ -960,7 +960,12 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                   type="company"
                   multiple={false}
                 />
-                {selectedCity && <p className="text-xs text-gray-400 mt-2">City selected</p>}
+                {selectedCity && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    Selected: {selectedCity.name}
+                    {selectedCity.knownFor ? ` (${selectedCity.knownFor})` : ''}
+                  </p>
+                )}
               </>
             )}
           </div>

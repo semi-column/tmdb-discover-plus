@@ -240,8 +240,11 @@ export function useTMDB(apiKey) {
         displayName: c.displayName,
         lat: c.lat,
         lon: c.lon,
+        state: c.state,
         country: c.country,
         countryCode: c.countryCode,
+        locationLabel: c.locationLabel,
+        knownFor: c.locationLabel || [c.state, c.country].filter(Boolean).join(', '),
       }));
     },
     [hasAuth]
