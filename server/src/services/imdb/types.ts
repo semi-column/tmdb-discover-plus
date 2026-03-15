@@ -339,8 +339,8 @@ export type ImdbWithData =
   | 'AWARD';
 
 export const IMDB_RANKED_LISTS: Array<{ value: ImdbRankedList; label: string }> = [
-  { value: 'TOP_250', label: 'IMDb Top 250 Movies' },
-  { value: 'BOTTOM_100', label: 'IMDb Bottom 100' },
+  { value: 'TOP_250', label: 'Top Rated' },
+  { value: 'BOTTOM_100', label: 'Bottom Rated' },
 ];
 
 export const IMDB_WITH_DATA_OPTIONS: Array<{ value: ImdbWithData; label: string }> = [

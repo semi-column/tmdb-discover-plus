@@ -359,6 +359,26 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       setRankInputDraft(null);
       return;
     }
+
+    const ensureRankedListContext = () => {
+      if (!isMovieCatalog) return;
+      if (
+        filters.rankedList ||
+        (filters.rankedLists || []).length ||
+        (filters.excludeRankedLists || []).length
+      )
+        return;
+
+      const defaultList =
+        visibleRankedLists.find((list) => list.value === 'TOP_250')?.value ||
+        visibleRankedLists[0]?.value;
+      if (defaultList) {
+        onFiltersChange('rankedList', defaultList);
+      }
+    };
+
+    ensureRankedListContext();
+
     const normalized = Math.max(parsed, 1);
     onFiltersChange('rankedListMaxRank', normalized);
     setRankInputDraft(null);
@@ -380,6 +400,20 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     if (Number.isNaN(parsed)) {
       onFiltersChange('rankedListMaxRank', undefined);
       return;
+    }
+
+    if (
+      isMovieCatalog &&
+      !filters.rankedList &&
+      !(filters.rankedLists || []).length &&
+      !(filters.excludeRankedLists || []).length
+    ) {
+      const defaultList =
+        visibleRankedLists.find((list) => list.value === 'TOP_250')?.value ||
+        visibleRankedLists[0]?.value;
+      if (defaultList) {
+        onFiltersChange('rankedList', defaultList);
+      }
     }
 
     onFiltersChange('rankedListMaxRank', Math.max(parsed, 1));
@@ -1034,7 +1068,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         <FilterSection
           id="rankedLists"
           title="Ranked Lists"
-          description="Filter by IMDb curated lists (Top 250, Bottom 100, etc.)"
+          description="Filter by IMDb curated ranking lists (Top Rated / Bottom Rated)."
           icon={ListOrdered}
           isOpen={localExpandedSections.rankedLists}
           onToggle={toggleSection}
@@ -1092,6 +1126,21 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           {!MAX_RANK_HIDDEN && (
             <div className="filter-group">
               <LabelWithTooltip
+                label="Max Rank List Type"
+                tooltip="Choose which ranked list the max-rank threshold should apply to."
+              />
+              <SearchableSelect
+                options={visibleRankedLists}
+                value={filters.rankedList || ''}
+                onChange={(value) => onFiltersChange('rankedList', value || undefined)}
+                placeholder="Select list type..."
+                searchPlaceholder="Search list type..."
+                labelKey="label"
+                valueKey="value"
+                allowClear={true}
+              />
+
+              <LabelWithTooltip
                 label="Max Rank"
                 tooltip="Only include titles ranked within this position (e.g. top 100)."
               />
@@ -1110,7 +1159,9 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                   }
                 }}
               />
-              <p className="text-xs text-gray-400 mt-2">Allowed range: 1 and above</p>
+              <p className="text-xs text-gray-400 mt-2">
+                Allowed range: 1 and above (applies to selected list type)
+              </p>
             </div>
           )}
         </FilterSection>

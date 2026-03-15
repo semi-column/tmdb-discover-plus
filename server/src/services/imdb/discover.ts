@@ -129,8 +129,18 @@ export async function advancedSearch(
   };
   const compatibleRankedList =
     params.rankedList && contentType !== 'series' ? params.rankedList : undefined;
-  const compatibleRankedLists = filterRankedListsByType(params.rankedLists);
+  let compatibleRankedLists = filterRankedListsByType(params.rankedLists);
   const compatibleExcludeRankedLists = filterRankedListsByType(params.excludeRankedLists);
+
+  if (
+    contentType === 'movie' &&
+    params.rankedListMaxRank &&
+    !compatibleRankedList &&
+    !(compatibleRankedLists?.length || 0) &&
+    !(compatibleExcludeRankedLists?.length || 0)
+  ) {
+    compatibleRankedLists = ['TOP_250'];
+  }
 
   // Phase 1: Companies, People, In Theatres, Certificates
   if (params.companies?.length) queryParams.companies = params.companies;
