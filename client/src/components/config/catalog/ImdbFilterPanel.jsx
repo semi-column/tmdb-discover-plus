@@ -364,6 +364,27 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     setRankInputDraft(null);
   };
 
+  const handleRankedListMaxRankChange = (rawValue) => {
+    const next = String(rawValue ?? '');
+    if (!/^\d*$/.test(next)) return;
+
+    setRankInputDraft(next);
+
+    const trimmed = next.trim();
+    if (!trimmed) {
+      onFiltersChange('rankedListMaxRank', undefined);
+      return;
+    }
+
+    const parsed = parseInt(trimmed, 10);
+    if (Number.isNaN(parsed)) {
+      onFiltersChange('rankedListMaxRank', undefined);
+      return;
+    }
+
+    onFiltersChange('rankedListMaxRank', Math.max(parsed, 1));
+  };
+
   const addArrayFilterValue = useCallback(
     (key, value, currentValues) => {
       const normalized = value.trim();
@@ -1080,10 +1101,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                 className="input"
                 placeholder="e.g. 100"
                 value={rankInputValue}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  if (/^\d*$/.test(next)) setRankInputDraft(next);
-                }}
+                onChange={(e) => handleRankedListMaxRankChange(e.target.value)}
                 onBlur={(e) => commitRankedListMaxRank(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
