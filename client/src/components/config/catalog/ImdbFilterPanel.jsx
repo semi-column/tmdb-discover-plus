@@ -134,6 +134,55 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   const rankInputValue =
     rankInputDraft ?? (filters.rankedListMaxRank ? String(filters.rankedListMaxRank) : '');
 
+  const activeIncludeRankType = filters.rankedList || (filters.rankedLists || [])[0] || '';
+  const activeExcludeRankType = (filters.excludeRankedLists || [])[0] || '';
+  const activeRankMode = activeExcludeRankType ? 'EXCLUDE' : 'INCLUDE';
+  const activeRankType =
+    activeExcludeRankType ||
+    activeIncludeRankType ||
+    visibleRankedLists.find((list) => list.value === 'TOP_250')?.value ||
+    visibleRankedLists[0]?.value ||
+    '';
+
+  const rankModeOptions = useMemo(
+    () => [
+      { value: 'INCLUDE', label: 'Include' },
+      { value: 'EXCLUDE', label: 'Exclude' },
+    ],
+    []
+  );
+
+  const rankedRangePresets = useMemo(
+    () => [
+      { value: 100, label: '100' },
+      { value: 250, label: '250' },
+      { value: 1000, label: '1000' },
+      { value: 5000, label: '5000' },
+    ],
+    []
+  );
+
+  const applyRankConstraint = useCallback(
+    ({ mode, type, maxRank }) => {
+      if (!isMovieCatalog || !type) return;
+
+      if (mode === 'EXCLUDE') {
+        onFiltersChange('rankedList', undefined);
+        onFiltersChange('rankedLists', []);
+        onFiltersChange('excludeRankedLists', [type]);
+      } else {
+        onFiltersChange('rankedList', type);
+        onFiltersChange('rankedLists', [type]);
+        onFiltersChange('excludeRankedLists', []);
+      }
+
+      if (typeof maxRank === 'number' && Number.isFinite(maxRank)) {
+        onFiltersChange('rankedListMaxRank', Math.max(Math.trunc(maxRank), 1));
+      }
+    },
+    [isMovieCatalog, onFiltersChange]
+  );
+
   const handleTriStateGenreClick = useCallback(
     (genreId) => {
       const included = filters.genres || [];
@@ -324,28 +373,6 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     }));
   }, [selectedCertCountry, imdbCertificateRatings]);
 
-  const handleRankedListToggle = useCallback(
-    (listValue) => {
-      const current = filters.rankedLists || [];
-      const next = current.includes(listValue)
-        ? current.filter((l) => l !== listValue)
-        : [...current, listValue];
-      onFiltersChange('rankedLists', next);
-    },
-    [filters.rankedLists, onFiltersChange]
-  );
-
-  const handleExcludeRankedListToggle = useCallback(
-    (listValue) => {
-      const current = filters.excludeRankedLists || [];
-      const next = current.includes(listValue)
-        ? current.filter((l) => l !== listValue)
-        : [...current, listValue];
-      onFiltersChange('excludeRankedLists', next);
-    },
-    [filters.excludeRankedLists, onFiltersChange]
-  );
-
   const commitRankedListMaxRank = (rawValue) => {
     const trimmed = String(rawValue ?? '').trim();
     if (!trimmed) {
@@ -360,24 +387,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       return;
     }
 
-    const ensureRankedListContext = () => {
-      if (!isMovieCatalog) return;
-      if (
-        filters.rankedList ||
-        (filters.rankedLists || []).length ||
-        (filters.excludeRankedLists || []).length
-      )
-        return;
-
-      const defaultList =
-        visibleRankedLists.find((list) => list.value === 'TOP_250')?.value ||
-        visibleRankedLists[0]?.value;
-      if (defaultList) {
-        onFiltersChange('rankedList', defaultList);
-      }
-    };
-
-    ensureRankedListContext();
+    applyRankConstraint({ mode: activeRankMode, type: activeRankType });
 
     const normalized = Math.max(parsed, 1);
     onFiltersChange('rankedListMaxRank', normalized);
@@ -402,19 +412,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
       return;
     }
 
-    if (
-      isMovieCatalog &&
-      !filters.rankedList &&
-      !(filters.rankedLists || []).length &&
-      !(filters.excludeRankedLists || []).length
-    ) {
-      const defaultList =
-        visibleRankedLists.find((list) => list.value === 'TOP_250')?.value ||
-        visibleRankedLists[0]?.value;
-      if (defaultList) {
-        onFiltersChange('rankedList', defaultList);
-      }
-    }
+    applyRankConstraint({ mode: activeRankMode, type: activeRankType });
 
     onFiltersChange('rankedListMaxRank', Math.max(parsed, 1));
   };
@@ -1073,76 +1071,88 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           isOpen={localExpandedSections.rankedLists}
           onToggle={toggleSection}
           badgeCount={
-            (filters.rankedLists || []).length + (filters.excludeRankedLists || []).length
+            (filters.rankedList ? 1 : 0) +
+            (filters.rankedLists || []).length +
+            (filters.excludeRankedLists || []).length +
+            (filters.rankedListMaxRank ? 1 : 0)
           }
         >
-          <div className="filter-group mb-4">
-            <span className="filter-label">Include from Lists</span>
-            <div className="imdb-chip-wrap">
-              {visibleRankedLists.map((list) => {
-                const selected = (filters.rankedLists || []).includes(list.value);
-                return (
-                  <button
-                    key={`inc-${list.value}`}
-                    type="button"
-                    className={`genre-chip ${selected ? 'selected' : ''}`}
-                    onClick={() => handleRankedListToggle(list.value)}
-                  >
-                    {list.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="filter-group mb-4">
-            <span className="filter-label">Exclude from Lists</span>
-            <div className="imdb-chip-wrap">
-              {visibleRankedLists.map((list) => {
-                const selected = (filters.excludeRankedLists || []).includes(list.value);
-                return (
-                  <button
-                    key={`exc-${list.value}`}
-                    type="button"
-                    className={`genre-chip ${selected ? 'selected' : ''}`}
-                    style={
-                      selected
-                        ? {
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            color: '#ef4444',
-                            borderColor: 'rgba(239, 68, 68, 0.2)',
-                          }
-                        : {}
-                    }
-                    onClick={() => handleExcludeRankedListToggle(list.value)}
-                  >
-                    {list.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {!MAX_RANK_HIDDEN && (
             <div className="filter-group">
               <LabelWithTooltip
-                label="Max Rank List Type"
-                tooltip="Choose which ranked list the max-rank threshold should apply to."
+                label="Preset Ranges"
+                tooltip="Quickly autofill the number of ranked titles to include or exclude."
+              />
+              <div className="runtime-presets filter-spacer-sm">
+                {rankedRangePresets.map((preset) => (
+                  <button
+                    key={`rank-preset-${preset.value}`}
+                    type="button"
+                    className={`date-preset ${Number(filters.rankedListMaxRank) === preset.value ? 'active' : ''}`}
+                    onClick={() => {
+                      applyRankConstraint({
+                        mode: activeRankMode,
+                        type: activeRankType,
+                        maxRank: preset.value,
+                      });
+                      setRankInputDraft(null);
+                    }}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="date-preset"
+                  onClick={() => {
+                    onFiltersChange('rankedListMaxRank', undefined);
+                    setRankInputDraft(null);
+                  }}
+                >
+                  Any
+                </button>
+              </div>
+
+              <LabelWithTooltip
+                label="Mode"
+                tooltip="Choose whether titles in the selected ranked list should be included or excluded."
+              />
+              <SearchableSelect
+                options={rankModeOptions}
+                value={activeRankMode}
+                onChange={(value) => {
+                  const mode = value === 'EXCLUDE' ? 'EXCLUDE' : 'INCLUDE';
+                  applyRankConstraint({ mode, type: activeRankType });
+                }}
+                placeholder="Select mode..."
+                searchPlaceholder="Search mode..."
+                labelKey="label"
+                valueKey="value"
+                allowClear={false}
+              />
+
+              <LabelWithTooltip
+                label="Rank Type"
+                tooltip="Choose which ranked list type this filter should use."
               />
               <SearchableSelect
                 options={visibleRankedLists}
-                value={filters.rankedList || ''}
-                onChange={(value) => onFiltersChange('rankedList', value || undefined)}
+                value={activeRankType}
+                onChange={(value) => {
+                  const type = value || visibleRankedLists[0]?.value;
+                  if (!type) return;
+                  applyRankConstraint({ mode: activeRankMode, type });
+                }}
                 placeholder="Select list type..."
                 searchPlaceholder="Search list type..."
                 labelKey="label"
                 valueKey="value"
-                allowClear={true}
+                allowClear={false}
               />
 
               <LabelWithTooltip
-                label="Max Rank"
-                tooltip="Only include titles ranked within this position (e.g. top 100)."
+                label="Number of Movies"
+                tooltip="Limit the ranked list by position count (e.g. 100 means top/bottom 100)."
               />
               <input
                 type="text"
@@ -1159,9 +1169,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
                   }
                 }}
               />
-              <p className="text-xs text-gray-400 mt-2">
-                Allowed range: 1 and above (applies to selected list type)
-              </p>
+              <p className="text-xs text-gray-400 mt-2">Allowed range: 1 and above</p>
             </div>
           )}
         </FilterSection>
