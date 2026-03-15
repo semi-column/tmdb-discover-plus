@@ -32,6 +32,7 @@ import { requireAuth, optionalAuth, requireConfigOwnership } from '../utils/auth
 import { computeApiKeyId } from '../utils/security.ts';
 import { config } from '../config.ts';
 import { getConfigCache } from '../infrastructure/configCache.ts';
+import { buildCommonCertificateRatingsByCountry } from '../services/common/certificateRatings.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -189,9 +190,15 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
     ]);
 
     const imdbEnabled = imdb.isImdbApiEnabled();
+    const commonCertificateRatingsByCountry = buildCommonCertificateRatingsByCountry(
+      movieCertifications,
+      seriesCertifications
+    );
+
     let imdbData = null;
     if (imdbEnabled) {
       const presets = imdb.getPresetCatalogs();
+
       imdbData = {
         enabled: true,
         genres: await imdb.getGenres(),
@@ -203,7 +210,7 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
           ...presets.movie.map((p) => ({ ...p, type: 'movie' })),
           ...presets.series.map((p) => ({ ...p, type: 'series' })),
         ],
-        certificateRatings: imdb.getCertificateRatings(),
+        certificateRatings: commonCertificateRatingsByCountry,
         rankedLists: imdb.getRankedLists(),
         withDataOptions: imdb.getWithDataOptions(),
       };
@@ -221,6 +228,7 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
       tvStatuses: tmdb.TV_STATUSES,
       tvTypes: tmdb.TV_TYPES,
       monetizationTypes: tmdb.MONETIZATION_TYPES,
+      certificateRatingsByCountry: commonCertificateRatingsByCountry,
       certifications: { movie: movieCertifications, series: seriesCertifications },
       watchRegions,
       tvNetworks: (tmdb.TV_NETWORKS || []).map(

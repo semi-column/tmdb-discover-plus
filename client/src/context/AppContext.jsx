@@ -78,6 +78,7 @@ export function AppProviders({ state, actions, config, tmdb, children }) {
       tvTypes: tmdb.tvTypes,
       monetizationTypes: tmdb.monetizationTypes,
       certifications: tmdb.certifications,
+      certificateRatingsByCountry: tmdb.certificateRatingsByCountry,
       watchRegions: tmdb.watchRegions,
       tvNetworks: tmdb.tvNetworks,
       presetCatalogs: tmdb.presetCatalogs,
