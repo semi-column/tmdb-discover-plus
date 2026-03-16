@@ -15,7 +15,12 @@ import {
 import * as tmdb from '../services/tmdb/index.ts';
 import * as imdb from '../services/imdb/index.ts';
 import { searchCities } from '../services/geo.ts';
-import { getBaseUrl, shuffleArray, setNoCacheHeaders } from '../utils/helpers.ts';
+import {
+  getBaseUrl,
+  shuffleArray,
+  setNoCacheHeaders,
+  logSwallowedError,
+} from '../utils/helpers.ts';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.ts';
 import { createLogger } from '../utils/logger.ts';
 import { apiRateLimit, strictRateLimit } from '../utils/rateLimit.ts';
@@ -27,18 +32,30 @@ import {
   sanitizePage,
   isValidContentType,
 } from '../utils/validation.ts';
-import { sendError, ErrorCodes, safeErrorMessage } from '../utils/AppError.ts';
+import { sendError, ErrorCodes, safeErrorMessage, AppError } from '../utils/AppError.ts';
 import { requireAuth, optionalAuth, requireConfigOwnership } from '../utils/authMiddleware.ts';
-import { computeApiKeyId } from '../utils/security.ts';
+import { computeApiKeyId, getSecurityMetrics } from '../utils/security.ts';
 import { config } from '../config.ts';
 import { getConfigCache } from '../infrastructure/configCache.ts';
 import { buildCommonCertificateRatingsByCountry } from '../services/common/certificateRatings.ts';
+import { ADDON_VERSION } from '../version.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const router = Router();
 const log = createLogger('api');
+
+function getApiKey(req: Request): string {
+  if (!req.apiKey) {
+    throw new AppError(401, ErrorCodes.UNAUTHORIZED, 'Authentication required');
+  }
+  return req.apiKey;
+}
+
+function validateLimit(value: string | undefined, max: number, defaultValue: number): number {
+  return Math.max(1, Math.min(max, parseInt(value as string) || defaultValue));
+}
 
 router.use((req, res, next) => {
   res.set('CDN-Cache-Control', 'no-store');
@@ -54,7 +71,7 @@ function getBuildMetadata(): Record<string, unknown> {
   if (_buildMetadata) return _buildMetadata;
 
   const defaultMetadata = {
-    version: process.env.npm_package_version || '2.6.7',
+    version: ADDON_VERSION,
     tag: 'unknown',
     channel: 'unknown',
     commitHash: 'unknown',
@@ -101,10 +118,11 @@ router.get('/status', async (req, res) => {
         users: stats.totalUsers || 0,
         catalogs: stats.totalCatalogs || 0,
       },
+      security: getSecurityMetrics(),
     });
   } catch (error) {
     log.error('GET /status error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -139,7 +157,7 @@ router.post('/validate-key', strictRateLimit, async (req, res) => {
     const result = await tmdb.validateApiKey(apiKey);
     res.json(result);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -147,7 +165,7 @@ router.get('/configs', requireAuth, resolveApiKey, async (req, res) => {
   try {
     setNoCacheHeaders(res);
 
-    const configs = await getConfigsByApiKey(req.apiKey!);
+    const configs = await getConfigsByApiKey(getApiKey(req));
     const safeConfigs = configs.map((c) => ({
       userId: c.userId,
       configName: c.configName || '',
@@ -159,13 +177,13 @@ router.get('/configs', requireAuth, resolveApiKey, async (req, res) => {
     res.json(safeConfigs);
   } catch (error) {
     log.error('GET /configs error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
 router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
   try {
-    const apiKey = req.apiKey!;
+    const apiKey = getApiKey(req);
 
     const [
       movieGenres,
@@ -186,7 +204,10 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
       tmdb.getCertifications(apiKey, 'movie'),
       tmdb.getCertifications(apiKey, 'series'),
       tmdb.getWatchRegions(apiKey),
-      tmdb.getNetworks('').catch(() => []),
+      tmdb.getNetworks('').catch((err) => {
+        logSwallowedError('api:reference-data-networks', err);
+        return [];
+      }),
     ]);
 
     const imdbEnabled = imdb.isImdbApiEnabled();
@@ -245,54 +266,54 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
     res.json(data);
   } catch (error) {
     log.error('GET /reference-data error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
 router.get('/genres/:type', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const type = req.params.type as string;
-    const genres = await tmdb.getGenres(req.apiKey!, type);
+    const genres = await tmdb.getGenres(getApiKey(req), type);
     res.json(genres);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
 router.get('/languages', requireAuth, resolveApiKey, async (req, res) => {
   try {
-    const languages = await tmdb.getLanguages(req.apiKey!);
+    const languages = await tmdb.getLanguages(getApiKey(req));
     res.json(languages);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
 router.get('/original-languages', requireAuth, resolveApiKey, async (req, res) => {
   try {
-    const languages = await tmdb.getOriginalLanguages(req.apiKey!);
+    const languages = await tmdb.getOriginalLanguages(getApiKey(req));
     res.json(languages);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
 router.get('/countries', requireAuth, resolveApiKey, async (req, res) => {
   try {
-    const countries = await tmdb.getCountries(req.apiKey!);
+    const countries = await tmdb.getCountries(getApiKey(req));
     res.json(countries);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
 router.get('/certifications/:type', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const type = req.params.type as string;
-    const certifications = await tmdb.getCertifications(req.apiKey!, type);
+    const certifications = await tmdb.getCertifications(getApiKey(req), type);
     res.json(certifications);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -301,22 +322,22 @@ router.get('/watch-providers/:type', requireAuth, resolveApiKey, async (req, res
     const type = req.params.type as string;
     const { region } = req.query;
     const providers = await tmdb.getWatchProviders(
-      req.apiKey!,
+      getApiKey(req),
       type as string,
       String(region || 'US')
     );
     res.json(providers);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
 router.get('/watch-regions', requireAuth, resolveApiKey, async (req, res) => {
   try {
-    const regions = await tmdb.getWatchRegions(req.apiKey!);
+    const regions = await tmdb.getWatchRegions(getApiKey(req));
     res.json(regions);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -326,10 +347,10 @@ router.get('/search/person', requireAuth, resolveApiKey, async (req, res) => {
     if (!query) {
       return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
     }
-    const results = await tmdb.searchPerson(req.apiKey!, query);
+    const results = await tmdb.searchPerson(getApiKey(req), query);
     res.json(results);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -339,10 +360,10 @@ router.get('/search/company', requireAuth, resolveApiKey, async (req, res) => {
     if (!query) {
       return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
     }
-    const results = await tmdb.searchCompany(req.apiKey!, query);
+    const results = await tmdb.searchCompany(getApiKey(req), query);
     res.json(results);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -352,10 +373,10 @@ router.get('/search/keyword', requireAuth, resolveApiKey, async (req, res) => {
     if (!query) {
       return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
     }
-    const results = await tmdb.searchKeyword(req.apiKey!, query);
+    const results = await tmdb.searchKeyword(getApiKey(req), query);
     res.json(results);
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -363,7 +384,7 @@ router.get('/person/:id', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const id = req.params.id as string;
     if (!id) return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'ID required');
-    const person = await tmdb.getPersonById(req.apiKey!, id);
+    const person = await tmdb.getPersonById(getApiKey(req), id);
     if (!person) return sendError(res, 404, ErrorCodes.NOT_FOUND, 'Not found');
     res.json({ id: String(person.id), name: person.name });
   } catch (err) {
@@ -375,7 +396,7 @@ router.get('/company/:id', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const id = req.params.id as string;
     if (!id) return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'ID required');
-    const company = await tmdb.getCompanyById(req.apiKey!, id);
+    const company = await tmdb.getCompanyById(getApiKey(req), id);
     if (!company) return sendError(res, 404, ErrorCodes.NOT_FOUND, 'Not found');
     res.json({ id: String(company.id), name: company.name });
   } catch (err) {
@@ -387,7 +408,7 @@ router.get('/keyword/:id', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const id = req.params.id as string;
     if (!id) return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'ID required');
-    const keyword = await tmdb.getKeywordById(req.apiKey!, id);
+    const keyword = await tmdb.getKeywordById(getApiKey(req), id);
     if (!keyword) return sendError(res, 404, ErrorCodes.NOT_FOUND, 'Not found');
     res.json({ id: String(keyword.id), name: keyword.name });
   } catch (err) {
@@ -399,7 +420,7 @@ router.get('/network/:id', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const id = req.params.id as string;
     if (!id) return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'ID required');
-    const network = await tmdb.getNetworkById(req.apiKey!, id);
+    const network = await tmdb.getNetworkById(getApiKey(req), id);
     if (!network) return sendError(res, 404, ErrorCodes.NOT_FOUND, 'Not found');
     res.json({ id: String(network.id), name: network.name, logo: network.logoPath });
   } catch (err) {
@@ -480,7 +501,7 @@ router.get('/tv-networks', optionalAuth, async (req, res) => {
         apiKey = getApiKeyFromConfig(configs[0]);
       }
     } catch (e) {
-      void e;
+      logSwallowedError('api:resolve-apikey', e);
     }
   }
 
@@ -494,7 +515,8 @@ router.get('/tv-networks', optionalAuth, async (req, res) => {
         if (!byId.has(n.id)) byId.set(n.id, n);
       });
       return res.json(Array.from(byId.values()));
-    } catch {
+    } catch (err) {
+      logSwallowedError('api:network-merge', err);
       return res.json(curatedMatches);
     }
   }
@@ -589,7 +611,7 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
     });
   } catch (error) {
     log.error('POST /imdb/preview error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -604,7 +626,7 @@ router.get('/imdb/search', requireAuth, async (req, res) => {
       return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
     }
 
-    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 20));
+    const limit = validateLimit(req.query.limit as string, 100, 20);
     const imdbTypes =
       type === 'series'
         ? ['tvSeries', 'tvMiniSeries']
@@ -619,7 +641,7 @@ router.get('/imdb/search', requireAuth, async (req, res) => {
     res.json({ metas });
   } catch (error) {
     log.error('GET /imdb/search error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -659,7 +681,7 @@ router.get('/imdb/search/people', requireAuth, async (req, res) => {
       return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
     }
 
-    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit as string) || 10));
+    const limit = validateLimit(req.query.limit as string, 50, 10);
     const result = await imdb.basicSearch(query, 'NAME', limit);
     const people = (result.results || [])
       .filter(
@@ -676,7 +698,7 @@ router.get('/imdb/search/people', requireAuth, async (req, res) => {
     res.json({ results: people });
   } catch (error) {
     log.error('GET /imdb/search/people error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -691,7 +713,7 @@ router.get('/imdb/search/companies', requireAuth, async (req, res) => {
       return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Query required');
     }
 
-    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit as string) || 10));
+    const limit = validateLimit(req.query.limit as string, 50, 10);
     const result = await imdb.basicSearch(query, 'COMPANY', limit);
     const companies = (result.results || [])
       .filter(
@@ -708,7 +730,7 @@ router.get('/imdb/search/companies', requireAuth, async (req, res) => {
     res.json({ results: companies });
   } catch (error) {
     log.error('GET /imdb/search/companies error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -727,7 +749,7 @@ router.get('/imdb/search/suggestions', requireAuth, async (req, res) => {
     res.json(result);
   } catch (error) {
     log.error('GET /imdb/search/suggestions error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -743,19 +765,19 @@ router.get('/geo/cities', requireAuth, async (req, res) => {
       );
     }
 
-    const limit = Math.max(1, Math.min(20, parseInt(req.query.limit as string) || 10));
+    const limit = validateLimit(req.query.limit as string, 20, 10);
     const results = await searchCities(query, limit);
     res.json({ results });
   } catch (error) {
     log.error('GET /geo/cities error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
 router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const { type, filters: rawFilters, page: rawPage = 1 } = req.body;
-    const apiKey = req.apiKey!;
+    const apiKey = getApiKey(req);
 
     if (!type || !isValidContentType(type)) {
       return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid content type');
@@ -835,7 +857,7 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
       previewEmpty: filteredMetas.length === 0,
     });
   } catch (error) {
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -848,14 +870,36 @@ router.get('/stats', async (req, res) => {
     });
   } catch (error) {
     log.error('GET /stats error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
 router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, res) => {
   try {
     const { catalogs, preferences, configName } = req.body;
-    const apiKey = req.apiKey!;
+
+    if (catalogs !== undefined && !Array.isArray(catalogs)) {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'catalogs must be an array');
+    }
+    if (
+      preferences !== undefined &&
+      (typeof preferences !== 'object' || preferences === null || Array.isArray(preferences))
+    ) {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'preferences must be an object');
+    }
+    if (configName !== undefined && typeof configName !== 'string') {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'configName must be a string');
+    }
+    if (typeof configName === 'string' && configName.length > 200) {
+      return sendError(
+        res,
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        'configName must be 200 characters or less'
+      );
+    }
+
+    const apiKey = getApiKey(req);
 
     log.info('Create config request', { catalogCount: catalogs?.length || 0 });
 
@@ -887,7 +931,7 @@ router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, 
     res.json(response);
   } catch (error) {
     log.error('POST /config error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -912,7 +956,7 @@ router.get('/config/:userId', requireAuth, requireConfigOwnership, async (req, r
     res.json(response);
   } catch (error) {
     log.error('GET /config/:userId error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
 
@@ -925,7 +969,29 @@ router.put(
     try {
       const userId = req.params.userId as string;
       const { catalogs, preferences, configName } = req.body;
-      const apiKey = req.apiKey!;
+
+      if (catalogs !== undefined && !Array.isArray(catalogs)) {
+        return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'catalogs must be an array');
+      }
+      if (
+        preferences !== undefined &&
+        (typeof preferences !== 'object' || preferences === null || Array.isArray(preferences))
+      ) {
+        return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'preferences must be an object');
+      }
+      if (configName !== undefined && typeof configName !== 'string') {
+        return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'configName must be a string');
+      }
+      if (typeof configName === 'string' && configName.length > 200) {
+        return sendError(
+          res,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'configName must be 200 characters or less'
+        );
+      }
+
+      const apiKey = getApiKey(req);
 
       log.info('Update config request', { userId, catalogCount: catalogs?.length || 0 });
 
@@ -939,8 +1005,8 @@ router.put(
 
       try {
         getConfigCache().invalidate(userId);
-      } catch {
-        /* non-critical */
+      } catch (err) {
+        logSwallowedError('api:config-cache-invalidate', err);
       }
 
       const baseUrl = getBaseUrl(req);
@@ -974,7 +1040,7 @@ router.delete(
   async (req, res) => {
     try {
       const userId = req.params.userId as string;
-      const apiKey = req.apiKey!;
+      const apiKey = getApiKey(req);
 
       log.info('Delete config request', { userId });
 
@@ -989,9 +1055,9 @@ router.delete(
         (error as Error).message.includes('not found') ||
         (error as Error).message.includes('Access denied')
       ) {
-        return sendError(res, 404, ErrorCodes.NOT_FOUND, (error as Error).message);
+        return sendError(res, 404, ErrorCodes.NOT_FOUND, safeErrorMessage(error as Error));
       }
-      sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+      sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
     }
   }
 );

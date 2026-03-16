@@ -5,7 +5,7 @@ import type { Request, Response } from 'express';
 
 const log = createLogger('rateLimit');
 
-let store: unknown = undefined;
+let store: Options['store'] | undefined = undefined;
 
 if (config.cache.redisUrl) {
   try {
@@ -28,7 +28,7 @@ const baseOptions: Partial<Options> = {
   standardHeaders: true,
   legacyHeaders: true,
   validate: { trustProxy: true },
-  ...(store ? { store: store as Options['store'] } : {}),
+  ...(store ? { store } : {}),
   skip: (req: Request) => {
     if (config.features.disableRateLimit) return true;
 

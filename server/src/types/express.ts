@@ -6,7 +6,7 @@ declare global {
       config?: import('./config.ts').UserConfig;
     }
     interface Response {
-      etagJson?(data: unknown, options?: { extra?: string }): void;
+      etagJson(data: unknown, options?: { extra?: string }): void;
     }
   }
 }

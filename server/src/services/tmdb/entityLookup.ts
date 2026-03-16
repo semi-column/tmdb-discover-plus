@@ -1,5 +1,6 @@
 import { tmdbFetch, tmdbWebsiteFetchJson, matchesLoose } from './client.ts';
 import { TMDB_IMAGE_BASE } from './constants.ts';
+import { logSwallowedError } from '../../utils/helpers.ts';
 import type {
   PersonSearchResult,
   CompanySearchResult,
@@ -30,7 +31,8 @@ export async function getPersonById(
       name: data.name,
       profilePath: data.profile_path ? `${TMDB_IMAGE_BASE}/w185${data.profile_path}` : null,
     };
-  } catch {
+  } catch (err) {
+    logSwallowedError('tmdb:person-by-id', err);
     return null;
   }
 }
@@ -47,7 +49,8 @@ export async function getCompanyById(
       name: data.name,
       logoPath: data.logo_path ? `${TMDB_IMAGE_BASE}/w185${data.logo_path}` : null,
     };
-  } catch {
+  } catch (err) {
+    logSwallowedError('tmdb:company-by-id', err);
     return null;
   }
 }
@@ -63,7 +66,8 @@ export async function getKeywordById(
       id: data.id,
       name: data.name,
     };
-  } catch {
+  } catch (err) {
+    logSwallowedError('tmdb:keyword-by-id', err);
     return null;
   }
 }
@@ -80,7 +84,8 @@ export async function getNetworkById(
       name: data.name,
       logoPath: data.logo_path ? `${TMDB_IMAGE_BASE}/w185${data.logo_path}` : null,
     };
-  } catch {
+  } catch (err) {
+    logSwallowedError('tmdb:network-by-id', err);
     return null;
   }
 }

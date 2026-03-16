@@ -78,7 +78,7 @@ export async function warmEssentialCaches(
   const elapsed = Date.now() - startTime;
   log.info('Cache warming complete', { warmed, failed, elapsedMs: elapsed });
 
-  getTmdbThrottle().endGracePeriod();
+  getTmdbThrottle().endWarmup();
 
   return { warmed, failed, elapsedMs: elapsed };
 }

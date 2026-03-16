@@ -1,5 +1,5 @@
 import { tmdbFetch } from './client.ts';
-import { shuffleArray } from '../../utils/helpers.ts';
+import { shuffleArray, logSwallowedError } from '../../utils/helpers.ts';
 import { getCache } from '../cache/index.ts';
 import { stableStringify } from '../../utils/stableStringify.ts';
 import { createLogger } from '../../utils/logger.ts';
@@ -226,8 +226,8 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
       } else if (typeof cached === 'number') {
         maxPage = cached;
       }
-    } catch {
-      /* best effort */
+    } catch (err) {
+      logSwallowedError('tmdb-discover:cache-get-total-pages', err);
     }
 
     if (!maxPage) {
@@ -319,8 +319,8 @@ export async function fetchSpecialList(
       } else if (typeof cached === 'number') {
         maxPage = cached;
       }
-    } catch {
-      /* best effort */
+    } catch (err) {
+      logSwallowedError('tmdb-discover:cache-get-special-list-pages', err);
     }
 
     if (!maxPage) {

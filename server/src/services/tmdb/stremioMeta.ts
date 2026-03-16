@@ -1,10 +1,18 @@
 import { createLogger } from '../../utils/logger.ts';
 import { generatePosterUrl, isValidPosterConfig } from '../posterService.ts';
 import { getRpdbRating } from '../rpdb.ts';
-import { TMDB_IMAGE_BASE } from './constants.ts';
+import {
+  TMDB_IMAGE_BASE,
+  POSTER_SIZE,
+  BACKDROP_SIZE,
+  PROFILE_SIZE,
+  STILL_SIZE,
+} from './constants.ts';
 import { getImdbRatingString } from '../imdbRatings/index.ts';
 import { genreCache, staticGenreMap } from './genres.ts';
 import { usToLocalRatings } from './certificationMappings.ts';
+import { logSwallowedError } from '../../utils/helpers.ts';
+import { DISPLAY, EXTERNAL_URLS, metahubUrl, buildStremioSearchUrl } from '../../constants.ts';
 import { config } from '../../config.ts';
 import type {
   ContentType,
@@ -47,7 +55,7 @@ function buildCredits(details: AnyTmdbDetails, isMovie: boolean) {
   const credits: TmdbCredits = details.credits || { cast: [], crew: [] };
   const cast = Array.isArray(credits.cast)
     ? credits.cast
-        .slice(0, 20)
+        .slice(0, DISPLAY.CAST_FULL)
         .map((p) => p?.name)
         .filter(Boolean)
     : [];
@@ -200,7 +208,9 @@ async function buildLinks({
     try {
       const datasetRating = await getImdbRatingString(effectiveImdbId);
       if (datasetRating) actualImdbRating = datasetRating;
-    } catch (e) {}
+    } catch (e) {
+      logSwallowedError('stremioMeta:imdb-dataset-rating', e);
+    }
   }
 
   if (!actualImdbRating && effectiveImdbId) {
@@ -212,7 +222,9 @@ async function buildLinks({
       try {
         const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
         if (realRating && realRating !== 'N/A') actualImdbRating = realRating;
-      } catch (e) {}
+      } catch (e) {
+        logSwallowedError('stremioMeta:rpdb-rating', e);
+      }
     }
   }
 
@@ -228,15 +240,15 @@ async function buildLinks({
     const genreUrl =
       manifestUrl && genreCatalogId
         ? `stremio:///discover/${encodeURIComponent(manifestUrl)}/${type}/${genreCatalogId}?genre=${encodeURIComponent(genre)}`
-        : `stremio:///search?search=${encodeURIComponent(genre)}`;
+        : buildStremioSearchUrl(genre);
     links.push({ name: genre, category: 'Genres', url: genreUrl });
   });
 
-  cast.slice(0, 5).forEach((name) => {
+  cast.slice(0, DISPLAY.CAST_LINKS).forEach((name) => {
     links.push({
       name,
       category: 'Cast',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      url: buildStremioSearchUrl(name),
     });
   });
 
@@ -244,7 +256,7 @@ async function buildLinks({
     links.push({
       name,
       category: 'Directors',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      url: buildStremioSearchUrl(name),
     });
   });
 
@@ -252,7 +264,7 @@ async function buildLinks({
     links.push({
       name,
       category: 'Writers',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      url: buildStremioSearchUrl(name),
     });
   });
 
@@ -261,7 +273,7 @@ async function buildLinks({
       links.push({
         name,
         category: 'Writers',
-        url: `stremio:///search?search=${encodeURIComponent(name)}`,
+        url: buildStremioSearchUrl(name),
       });
     }
   });
@@ -272,7 +284,7 @@ async function buildLinks({
       links.push({
         name: network.name,
         category: 'Networks',
-        url: `stremio:///search?search=${encodeURIComponent(network.name)}`,
+        url: buildStremioSearchUrl(network.name),
       });
     }
   }
@@ -286,7 +298,7 @@ async function buildLinks({
       links.push({
         name: studio.name,
         category: 'Studios',
-        url: `stremio:///search?search=${encodeURIComponent(studio.name)}`,
+        url: buildStremioSearchUrl(studio.name),
       });
     }
   }
@@ -402,7 +414,7 @@ export async function toStremioFullMeta(
 
   const credits: TmdbCredits = details.credits || { cast: [], crew: [] };
   const app_extras = {
-    cast: credits.cast.slice(0, 15).map((p) => ({
+    cast: credits.cast.slice(0, DISPLAY.CAST_EXTRAS).map((p) => ({
       name: p.name,
       character: p.character,
       photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w276_and_h350_face${p.profile_path}` : null,
@@ -411,11 +423,11 @@ export async function toStremioFullMeta(
       .filter((p) => p.job === 'Director')
       .map((p) => ({
         name: p.name,
-        photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w300${p.profile_path}` : null,
+        photo: p.profile_path ? `${TMDB_IMAGE_BASE}/${PROFILE_SIZE}${p.profile_path}` : null,
       })),
     writers: writers.map((p) => ({
       name: p.name,
-      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/w300${p.profile_path}` : null,
+      photo: p.profile_path ? `${TMDB_IMAGE_BASE}/${PROFILE_SIZE}${p.profile_path}` : null,
     })),
     seasonPosters: Array.isArray(details.seasons)
       ? details.seasons
@@ -558,8 +570,10 @@ export function toStremioMeta(
 
     if (name) mappedGenres.push(name);
   });
-  let poster = item.poster_path ? `${TMDB_IMAGE_BASE}/w500${item.poster_path}` : null;
-  let background = item.backdrop_path ? `${TMDB_IMAGE_BASE}/w1280${item.backdrop_path}` : null;
+  let poster = item.poster_path ? `${TMDB_IMAGE_BASE}/${POSTER_SIZE}${item.poster_path}` : null;
+  let background = item.backdrop_path
+    ? `${TMDB_IMAGE_BASE}/${BACKDROP_SIZE}${item.backdrop_path}`
+    : null;
 
   const effectiveImdbId = imdbId || item.imdb_id || null;
 
@@ -591,7 +605,7 @@ export function toStremioMeta(
     links.push({
       name: genre,
       category: 'Genres',
-      url: `stremio:///search?search=${encodeURIComponent(genre)}`,
+      url: buildStremioSearchUrl(genre),
     });
   });
 
@@ -608,9 +622,7 @@ export function toStremioMeta(
     background,
     fanart: background,
     landscapePoster: background,
-    logo: effectiveImdbId
-      ? `https://images.metahub.space/logo/medium/${effectiveImdbId}/img`
-      : undefined,
+    logo: effectiveImdbId ? metahubUrl('logo', effectiveImdbId) : undefined,
     description: item.overview || '',
     releaseInfo: year,
     imdbRating,
@@ -676,12 +688,14 @@ export async function toStremioMetaPreview(
     if (best) logo = `${TMDB_IMAGE_BASE}/original${best.file_path}`;
   }
   if (!logo && effectiveImdbId) {
-    logo = `https://images.metahub.space/logo/medium/${effectiveImdbId}/img`;
+    logo = metahubUrl('logo', effectiveImdbId);
   }
 
-  let poster = details.poster_path ? `${TMDB_IMAGE_BASE}/w500${details.poster_path}` : null;
+  let poster = details.poster_path
+    ? `${TMDB_IMAGE_BASE}/${POSTER_SIZE}${details.poster_path}`
+    : null;
   let background = details.backdrop_path
-    ? `${TMDB_IMAGE_BASE}/w1280${details.backdrop_path}`
+    ? `${TMDB_IMAGE_BASE}/${BACKDROP_SIZE}${details.backdrop_path}`
     : null;
 
   if (posterOptions && isValidPosterConfig(posterOptions)) {
@@ -713,28 +727,28 @@ export async function toStremioMetaPreview(
     links.push({
       name: genre,
       category: 'Genres',
-      url: `stremio:///search?search=${encodeURIComponent(genre)}`,
+      url: buildStremioSearchUrl(genre),
     });
   });
-  cast.slice(0, 5).forEach((name) => {
+  cast.slice(0, DISPLAY.CAST_LINKS).forEach((name) => {
     links.push({
       name,
       category: 'Cast',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      url: buildStremioSearchUrl(name),
     });
   });
   directors.forEach((name) => {
     links.push({
       name,
       category: 'Directors',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      url: buildStremioSearchUrl(name),
     });
   });
   writerNames.forEach((name) => {
     links.push({
       name,
       category: 'Writers',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      url: buildStremioSearchUrl(name),
     });
   });
   if (!isMovie) {
@@ -743,7 +757,7 @@ export async function toStremioMetaPreview(
         links.push({
           name,
           category: 'Writers',
-          url: `stremio:///search?search=${encodeURIComponent(name)}`,
+          url: buildStremioSearchUrl(name),
         });
       }
     });

@@ -31,7 +31,7 @@ class TokenBucket {
   };
   private _refillInterval: ReturnType<typeof setInterval>;
   private _pausedUntil: number;
-  private _graceMode: boolean;
+  private _warmupActive: boolean;
 
   constructor(options: { maxTokens?: number; refillRate?: number; maxQueueSize?: number } = {}) {
     this.maxTokens = options.maxTokens || 35;
@@ -41,7 +41,7 @@ class TokenBucket {
     this.tokens = this.maxTokens;
     this.lastRefill = Date.now();
     this._pausedUntil = 0;
-    this._graceMode = true;
+    this._warmupActive = true;
 
     this.queue = [];
 
@@ -65,8 +65,8 @@ class TokenBucket {
 
     if (now < this._pausedUntil) return;
 
-    const rate = this._graceMode ? Math.ceil(this.refillRate / 2) : this.refillRate;
-    const max = this._graceMode ? Math.ceil(this.maxTokens / 2) : this.maxTokens;
+    const rate = this._warmupActive ? Math.ceil(this.refillRate / 2) : this.refillRate;
+    const max = this._warmupActive ? Math.ceil(this.maxTokens / 2) : this.maxTokens;
     this.tokens = Math.min(max, this.tokens + elapsed * rate);
 
     while (this.queue.length > 0 && this.tokens >= 1) {
@@ -87,10 +87,23 @@ class TokenBucket {
     log.warn('Global TMDB pause activated', { pauseMs, queueDepth: this.queue.length });
   }
 
-  endGracePeriod(): void {
-    if (!this._graceMode) return;
-    this._graceMode = false;
-    log.info('TMDB throttle grace period ended, full rate restored');
+  endWarmup(): void {
+    if (!this._warmupActive) return;
+    this._warmupActive = false;
+    log.info('TMDB throttle warmup phase ended, full rate restored');
+  }
+
+  private _createQueueTimeout(
+    resolve: () => void,
+    reject: (reason?: unknown) => void,
+    timeoutMs: number,
+    queuedAt: number
+  ): ReturnType<typeof setTimeout> {
+    return setTimeout(() => {
+      const idx = this.queue.findIndex((item) => item.resolve === resolve);
+      if (idx !== -1) this.queue.splice(idx, 1);
+      reject(new Error('TMDB rate limiter timeout — waited too long for token'));
+    }, timeoutMs);
   }
 
   async acquire(timeoutMs: number = 10000): Promise<void> {
@@ -101,11 +114,7 @@ class TokenBucket {
       const remaining = this._pausedUntil - now;
       this.stats.queuedRequests++;
       return new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          const idx = this.queue.findIndex((item) => item.resolve === resolve);
-          if (idx !== -1) this.queue.splice(idx, 1);
-          reject(new Error('TMDB rate limiter timeout — waited too long for token'));
-        }, timeoutMs);
+        const timer = this._createQueueTimeout(resolve, reject, timeoutMs, now);
 
         setTimeout(() => {
           this._refill();
@@ -130,11 +139,7 @@ class TokenBucket {
 
     this.stats.queuedRequests++;
     return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const idx = this.queue.findIndex((item) => item.resolve === resolve);
-        if (idx !== -1) this.queue.splice(idx, 1);
-        reject(new Error('TMDB rate limiter timeout — waited too long for token'));
-      }, timeoutMs);
+      const timer = this._createQueueTimeout(resolve, reject, timeoutMs, Date.now());
 
       this.queue.push({ resolve, reject, timer, queuedAt: Date.now() });
     });
@@ -150,7 +155,7 @@ class TokenBucket {
       currentTokens: Math.floor(this.tokens),
       queueDepth: this.queue.length,
       avgWaitMs: avgWait,
-      graceMode: this._graceMode,
+      warmupActive: this._warmupActive,
       pausedUntil: this._pausedUntil > Date.now() ? this._pausedUntil - Date.now() : 0,
     };
   }

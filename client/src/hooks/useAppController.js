@@ -37,7 +37,7 @@ export function useAppController() {
     try {
       const configs = await configMgr.loadUserConfigs();
       if (configs && configs.length > 0) {
-        window.history.replaceState({}, '', `/?userId=${configs[0].userId}`);
+        window.history.replaceState({}, '', `/?userId=${encodeURIComponent(configs[0].userId)}`);
         setUrlUserId(configs[0].userId);
       } else {
         window.history.replaceState({}, '', '/');

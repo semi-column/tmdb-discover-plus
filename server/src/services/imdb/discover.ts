@@ -4,6 +4,7 @@ import { getCache } from '../cache/index.ts';
 import { config } from '../../config.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { stableStringify } from '../../utils/stableStringify.ts';
+import { logSwallowedError } from '../../utils/helpers.ts';
 
 import type {
   ImdbAdvancedSearchParams,
@@ -14,12 +15,20 @@ import type {
 import type { ContentType } from '../../types/index.ts';
 
 interface RawRankingResponse {
-  titles?: Array<Record<string, unknown>>;
-  titleChartRankings?: Array<Record<string, unknown>>;
+  titles?: unknown[];
+  titleChartRankings?: unknown[];
   pageInfo?: { hasNextPage: boolean; endCursor: string | null };
+  [key: string]: unknown;
 }
 
 const log = createLogger('imdb:discover');
+
+const AWARD_TYPE_RESTRICTIONS = {
+  tvOnly: new Set(['emmy']),
+  movieOnly: new Set(['best_picture_oscar', 'best_director_oscar']),
+} as const;
+
+const IN_THEATERS_BOUNDING_BOX_OFFSET = 0.1;
 
 function roundTo(value: number, decimals: number): number {
   const factor = 10 ** decimals;
@@ -43,13 +52,14 @@ function mapContentTypeToImdbTypes(type: ContentType): string[] {
   return ['movie', 'tvMovie'];
 }
 
-function flattenNestedTitles(
-  entries: Array<Record<string, unknown>>
-): Array<Record<string, unknown>> {
+function flattenNestedTitles(entries: unknown[]): unknown[] {
   return entries.map((entry) => {
-    if (entry.title && typeof entry.title === 'object') {
-      const { title, ...rest } = entry;
-      return { ...(title as Record<string, unknown>), ...rest };
+    if (entry && typeof entry === 'object') {
+      const obj = entry as Record<string, unknown>;
+      if (obj.title && typeof obj.title === 'object') {
+        const { title, ...rest } = obj;
+        return { ...(title as Record<string, unknown>), ...rest };
+      }
     }
     return entry;
   });
@@ -106,31 +116,29 @@ export async function advancedSearch(
   if (params.excludeKeywords?.length)
     queryParams.excludeKeywords = params.excludeKeywords.map((k) => k.replace(/\s+/g, '-'));
 
-  // Emmy is TV-only; best_picture_oscar / best_director_oscar are movie-only.
-  // Passing incompatible combinations causes a 500 from the upstream API.
-  const TV_ONLY_AWARDS = new Set(['emmy']);
-  const MOVIE_ONLY_AWARDS = new Set(['best_picture_oscar', 'best_director_oscar']);
-  const filterAwardsByType = (awards: string[] | undefined): string[] | undefined => {
+  const filterAwardsByContentType = (awards: string[] | undefined): string[] | undefined => {
     if (!awards?.length) return undefined;
     const result = awards.filter((a) =>
-      contentType === 'series' ? !MOVIE_ONLY_AWARDS.has(a) : !TV_ONLY_AWARDS.has(a)
+      contentType === 'series'
+        ? !AWARD_TYPE_RESTRICTIONS.movieOnly.has(a)
+        : !AWARD_TYPE_RESTRICTIONS.tvOnly.has(a)
     );
     return result.length ? result : undefined;
   };
-  const compatibleAwardsWon = filterAwardsByType(params.awardsWon);
-  const compatibleAwardsNominated = filterAwardsByType(params.awardsNominated);
+  const compatibleAwardsWon = filterAwardsByContentType(params.awardsWon);
+  const compatibleAwardsNominated = filterAwardsByContentType(params.awardsNominated);
   if (compatibleAwardsWon?.length) queryParams.awardsWon = compatibleAwardsWon;
   if (compatibleAwardsNominated?.length) queryParams.awardsNominated = compatibleAwardsNominated;
 
-  const filterRankedListsByType = (lists: string[] | undefined): string[] | undefined => {
+  const filterRankedListsByContentType = (lists: string[] | undefined): string[] | undefined => {
     if (!lists?.length) return undefined;
     const result = contentType === 'series' ? [] : lists;
     return result.length ? result : undefined;
   };
   const compatibleRankedList =
     params.rankedList && contentType !== 'series' ? params.rankedList : undefined;
-  let compatibleRankedLists = filterRankedListsByType(params.rankedLists);
-  const compatibleExcludeRankedLists = filterRankedListsByType(params.excludeRankedLists);
+  let compatibleRankedLists = filterRankedListsByContentType(params.rankedLists);
+  const compatibleExcludeRankedLists = filterRankedListsByContentType(params.excludeRankedLists);
 
   if (
     contentType === 'movie' &&
@@ -140,6 +148,7 @@ export async function advancedSearch(
     !(compatibleExcludeRankedLists?.length || 0)
   ) {
     compatibleRankedLists = ['TOP_250'];
+    log.debug('Auto-applying TOP_250 ranked list for rankedListMaxRank filter');
   }
 
   // Phase 1: Companies, People, In Theatres, Certificates
@@ -150,8 +159,8 @@ export async function advancedSearch(
   if (hasInTheatersLocation) {
     const lat = roundTo(Number(params.inTheatersLat), 2);
     const long = roundTo(Number(params.inTheatersLong), 2);
-    queryParams.inTheatersLat = roundTo(lat - 0.1, 2);
-    queryParams.inTheatersLong = roundTo(long - 0.1, 2);
+    queryParams.inTheatersLat = roundTo(lat - IN_THEATERS_BOUNDING_BOX_OFFSET, 2);
+    queryParams.inTheatersLong = roundTo(long - IN_THEATERS_BOUNDING_BOX_OFFSET, 2);
 
     const radius = Number(params.inTheatersRadius);
     queryParams.inTheatersRadius = Number.isFinite(radius) && radius > 0 ? radius : 50000;
@@ -190,8 +199,8 @@ export async function advancedSearch(
   try {
     const cached = await cache.get(catalogKey);
     if (cached) return cached as ImdbSearchResult;
-  } catch {
-    // ignore
+  } catch (err) {
+    logSwallowedError('imdb:discover:cache-get-catalog', err);
   }
 
   if (skip > 0) {
@@ -204,7 +213,8 @@ export async function advancedSearch(
         log.debug('No cursor cache for skip, returning empty', { skip, filterHash });
         return { titles: [], pageInfo: { hasNextPage: false, endCursor: null } };
       }
-    } catch {
+    } catch (err) {
+      logSwallowedError('imdb:discover:cache-get-cursor', err);
       return { titles: [], pageInfo: { hasNextPage: false, endCursor: null } };
     }
   }
@@ -217,8 +227,8 @@ export async function advancedSearch(
 
   try {
     await cache.set(catalogKey, data, ttl);
-  } catch {
-    // ignore
+  } catch (err) {
+    logSwallowedError('imdb:discover:cache-set-catalog', err);
   }
 
   if (data.pageInfo?.endCursor) {
@@ -226,8 +236,8 @@ export async function advancedSearch(
     const cursorKey = buildCursorCacheKey(filterHash, nextSkip);
     try {
       await cache.set(cursorKey, data.pageInfo.endCursor, ttl);
-    } catch {
-      // ignore
+    } catch (err) {
+      logSwallowedError('imdb:discover:cache-set-cursor', err);
     }
   }
 
@@ -254,11 +264,11 @@ export async function getTopRanking(type: ContentType): Promise<ImdbRankingResul
 
     try {
       await cache.set(fallbackKey, data, 604800);
-    } catch {
-      // ignore
+    } catch (err) {
+      logSwallowedError('imdb:discover:cache-set-top250-fallback', err);
     }
 
-    return data as unknown as ImdbRankingResult;
+    return data as ImdbRankingResult;
   } catch (err) {
     log.warn('getTopRanking failed, trying fallback cache', {
       type,
@@ -271,8 +281,8 @@ export async function getTopRanking(type: ContentType): Promise<ImdbRankingResul
         log.info('Serving top250 from fallback cache', { type });
         return fallback as ImdbRankingResult;
       }
-    } catch {
-      // ignore
+    } catch (fallbackErr) {
+      logSwallowedError('imdb:discover:cache-get-top250-fallback', fallbackErr);
     }
 
     throw err;
@@ -295,14 +305,13 @@ export async function getPopular(type: ContentType): Promise<ImdbRankingResult> 
       data.titles = flattenNestedTitles(data.titles);
     }
 
-    // Store a long-lived fallback copy (7 days) for when the API is persistently down
     try {
       await cache.set(fallbackKey, data, 604800);
-    } catch {
-      // ignore
+    } catch (err) {
+      logSwallowedError('imdb:discover:cache-set-popular-fallback', err);
     }
 
-    return data as unknown as ImdbRankingResult;
+    return data as ImdbRankingResult;
   } catch (err) {
     log.warn('getPopular failed, trying fallback cache', {
       type,
@@ -315,8 +324,8 @@ export async function getPopular(type: ContentType): Promise<ImdbRankingResult> 
         log.info('Serving popular from fallback cache', { type });
         return fallback as ImdbRankingResult;
       }
-    } catch {
-      // ignore
+    } catch (fallbackErr) {
+      logSwallowedError('imdb:discover:cache-get-popular-fallback', fallbackErr);
     }
 
     throw err;
@@ -342,7 +351,8 @@ export async function getList(
       const cursor = (await cache.get(cursorKey)) as string | null;
       if (cursor) params.endCursor = cursor;
       else return { titles: [], pageInfo: { hasNextPage: false, endCursor: null } };
-    } catch {
+    } catch (err) {
+      logSwallowedError('imdb:discover:cache-get-list-cursor', err);
       return { titles: [], pageInfo: { hasNextPage: false, endCursor: null } };
     }
   }
@@ -363,10 +373,10 @@ export async function getList(
     const cache = getCache();
     try {
       await cache.set(cursorKey, data.pageInfo.endCursor, ttl);
-    } catch {
-      // ignore
+    } catch (err) {
+      logSwallowedError('imdb:discover:cache-set-list-cursor', err);
     }
   }
 
-  return data as unknown as ImdbListResult;
+  return data as ImdbListResult;
 }

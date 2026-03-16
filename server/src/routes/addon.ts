@@ -32,11 +32,27 @@ import { etagMiddleware } from '../utils/etag.ts';
 import { config } from '../config.ts';
 import { isValidUserId, isValidContentType, sanitizeImdbFilters } from '../utils/validation.ts';
 import { sendError, ErrorCodes } from '../utils/AppError.ts';
+import {
+  CACHE_TTLS,
+  DISPLAY,
+  ERROR_DEDUP,
+  normalizeBaseUrl,
+  buildCatalogId,
+} from '../constants.ts';
+import { logSwallowedError } from '../utils/helpers.ts';
 
 const log = createLogger('addon');
 
 const recentErrors = new Map<string, number>();
-const ERROR_DEDUP_TTL = 300_000;
+const ERROR_DEDUP_TTL = ERROR_DEDUP.TTL_MS;
+
+const recentErrorsCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [k, ts] of recentErrors) {
+    if (now - ts > ERROR_DEDUP_TTL) recentErrors.delete(k);
+  }
+}, 60_000);
+recentErrorsCleanupTimer.unref();
 
 function shouldLogError(userId: string, errorMsg: string): boolean {
   const key = `${userId.slice(0, 8)}:${errorMsg.slice(0, 50)}`;
@@ -44,7 +60,7 @@ function shouldLogError(userId: string, errorMsg: string): boolean {
   const last = recentErrors.get(key);
   if (last && now - last < ERROR_DEDUP_TTL) return false;
   recentErrors.set(key, now);
-  if (recentErrors.size > 500) {
+  if (recentErrors.size > ERROR_DEDUP.MAX_SIZE) {
     for (const [k, ts] of recentErrors) {
       if (now - ts > ERROR_DEDUP_TTL) recentErrors.delete(k);
     }
@@ -58,7 +74,8 @@ const STATIC_GENRE_MAP = (() => {
   try {
     const genresPath = path.resolve(__dirname_addon, '..', 'data', 'tmdb_genres.json');
     return JSON.parse(fs.readFileSync(genresPath, 'utf8'));
-  } catch {
+  } catch (err) {
+    logSwallowedError('addon:static-genre-map-load', err);
     return {};
   }
 })();
@@ -88,7 +105,7 @@ router.param('type', (req, res, next, value) => {
 
 import { buildManifest, enrichManifestWithGenres } from '../services/manifestService.ts';
 
-const TMDB_PAGE_SIZE = 20;
+const TMDB_PAGE_SIZE = DISPLAY.TMDB_PAGE_SIZE;
 
 function pickPreferredMetaLanguage(config: UserConfig | null): string {
   return config?.preferences?.defaultLanguage || 'en';
@@ -110,7 +127,7 @@ function getPlaceholderUrls(baseUrl: string): {
   posterPlaceholder: string;
   backdropPlaceholder: string;
 } {
-  const base = baseUrl.replace(/\/$/, '');
+  const base = normalizeBaseUrl(baseUrl);
   return {
     posterPlaceholder: `${base}/placeholder-poster.svg`,
     backdropPlaceholder: `${base}/placeholder-thumbnail.svg`,
@@ -141,7 +158,7 @@ router.get('/:userId/manifest.json', async (req, res) => {
       setNoCacheHeaders(res);
     }
 
-    res.etagJson!(manifest, { extra: userId });
+    res.etagJson(manifest, { extra: userId });
   } catch (error) {
     log.error('Manifest error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
@@ -149,20 +166,13 @@ router.get('/:userId/manifest.json', async (req, res) => {
 });
 
 function parseExtra(extraString: string | undefined): Record<string, string> {
-  const params: Record<string, string> = {};
-  if (!extraString) return params;
-
-  const parts = extraString.split('&');
-  for (const part of parts) {
-    const eqIdx = part.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = part.substring(0, eqIdx);
-    const value = part.substring(eqIdx + 1);
-    if (key && value !== undefined) {
-      params[key] = decodeURIComponent(value);
-    }
+  if (!extraString) return {};
+  const params = new URLSearchParams(extraString);
+  const result: Record<string, string> = {};
+  for (const [key, value] of params) {
+    result[key] = value;
   }
-  return params;
+  return result;
 }
 
 async function resolveGenreFilter(
@@ -272,7 +282,7 @@ async function handleImdbCatalogRequest(
       return res.json({ metas: [] });
     }
 
-    const skip = parseInt(extra.skip) || 0;
+    const skip = parseInt(extra.skip, 10) || 0;
     const searchQuery = extra.search || null;
 
     const userConfig = await getUserConfig(userId);
@@ -293,7 +303,7 @@ async function handleImdbCatalogRequest(
       titles = (result.titles || []) as { id: string }[];
     } else {
       const catalogConfig = userConfig.catalogs.find((c) => {
-        const id = `imdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
+        const id = buildCatalogId('imdb', c);
         return id === catalogId;
       });
 
@@ -396,7 +406,9 @@ async function handleImdbCatalogRequest(
     let ratingsMap: Map<string, string> | null = null;
     try {
       ratingsMap = await tmdb.batchGetCinemetaRatings(detailsForRatings, type);
-    } catch {}
+    } catch (err) {
+      logSwallowedError('addon:imdb-rating', err);
+    }
 
     const metas = (
       await Promise.all(
@@ -416,13 +428,16 @@ async function handleImdbCatalogRequest(
       )
     ).filter((m): m is StremioMetaPreview => m !== null);
 
-    const baseUrl = (userConfig.baseUrl || getBaseUrl(req)).replace(/\/$/, '');
+    const baseUrl = normalizeBaseUrl(userConfig.baseUrl || getBaseUrl(req));
     const { posterPlaceholder } = getPlaceholderUrls(baseUrl);
     for (const m of metas) {
       if (!m.poster) m.poster = posterPlaceholder;
     }
 
-    res.set('Cache-Control', 'max-age=300, stale-while-revalidate=600');
+    res.set(
+      'Cache-Control',
+      `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}`
+    );
     log.debug('Returning IMDb catalog results', {
       count: metas.length,
       catalogId,
@@ -435,7 +450,14 @@ async function handleImdbCatalogRequest(
         ? `${userId}:${catalogId}:${searchQuery}`
         : `${userId}:${catalogId}:${skip}`;
 
-    res.etagJson!({ metas, cacheMaxAge: 300, staleRevalidate: 600 }, { extra: extraKey });
+    res.etagJson(
+      {
+        metas,
+        cacheMaxAge: CACHE_TTLS.CATALOG_HEADER,
+        staleRevalidate: CACHE_TTLS.CATALOG_STALE_REVALIDATE,
+      },
+      { extra: extraKey }
+    );
   } catch (error) {
     log.error('IMDb catalog error', {
       catalogId,
@@ -461,7 +483,7 @@ async function handleCatalogRequest(
 
   const startTime = Date.now();
   try {
-    const skip = parseInt(extra.skip) || 0;
+    const skip = parseInt(extra.skip, 10) || 0;
     const search = extra.search || null;
 
     const page = Math.floor(skip / TMDB_PAGE_SIZE) + 1;
@@ -483,7 +505,7 @@ async function handleCatalogRequest(
     const posterOptions = buildPosterOptions(config);
 
     let catalogConfig = config.catalogs.find((c) => {
-      const id = `tmdb-${c._id || c.name.toLowerCase().replace(/\s+/g, '-')}`;
+      const id = buildCatalogId('tmdb', c);
       return id === catalogId;
     });
 
@@ -599,7 +621,9 @@ async function handleCatalogRequest(
     if (!search) {
       try {
         ratingsMap = await tmdb.batchGetCinemetaRatings(detailsForRatings, type);
-      } catch {}
+      } catch (err) {
+        logSwallowedError('addon:rating-fetch', err);
+      }
     }
 
     const metas = (
@@ -618,7 +642,7 @@ async function handleCatalogRequest(
       )
     ).filter((m): m is StremioMetaPreview => m !== null);
 
-    const baseUrl = (config.baseUrl || getBaseUrl(req)).replace(/\/$/, '');
+    const baseUrl = normalizeBaseUrl(config.baseUrl || getBaseUrl(req));
     const { posterPlaceholder } = getPlaceholderUrls(baseUrl);
     for (const m of metas) {
       if (!m.poster) m.poster = posterPlaceholder;
@@ -630,7 +654,10 @@ async function handleCatalogRequest(
       res.set('Expires', '0');
       res.set('Surrogate-Control', 'no-store');
     } else {
-      res.set('Cache-Control', 'max-age=300, stale-while-revalidate=600');
+      res.set(
+        'Cache-Control',
+        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}`
+      );
     }
 
     log.debug('Returning catalog results', {
@@ -642,11 +669,11 @@ async function handleCatalogRequest(
       durationMs: Date.now() - startTime,
     });
 
-    res.etagJson!(
+    res.etagJson(
       {
         metas,
-        cacheMaxAge: randomize ? 0 : 300,
-        staleRevalidate: randomize ? 0 : 600,
+        cacheMaxAge: randomize ? 0 : CACHE_TTLS.CATALOG_HEADER,
+        staleRevalidate: randomize ? 0 : CACHE_TTLS.CATALOG_STALE_REVALIDATE,
       },
       { extra: `${userId}:${catalogId}:${skip}` }
     );
@@ -738,9 +765,7 @@ async function handleMetaRequest(
     const genreCatalogId =
       (config.catalogs || [])
         .filter((c) => c.enabled !== false && (c.type === type || (!c.type && type === 'movie')))
-        .map(
-          (c) => `tmdb-${c._id || (c.name || 'catalog').toLowerCase().replace(/\s+/g, '-')}`
-        )[0] || null;
+        .map((c) => buildCatalogId('tmdb', c))[0] || null;
 
     let userRegion = config.preferences?.region || config.preferences?.countries || null;
 
@@ -773,7 +798,7 @@ async function handleMetaRequest(
       { manifestUrl, genreCatalogId, allLogos, userRegion }
     );
 
-    const resolvedBaseUrl = (config.baseUrl || baseUrl).replace(/\/$/, '');
+    const resolvedBaseUrl = normalizeBaseUrl(config.baseUrl || baseUrl);
     const { posterPlaceholder, backdropPlaceholder } = getPlaceholderUrls(resolvedBaseUrl);
     if (meta && !meta.poster) meta.poster = posterPlaceholder;
     if (meta?.videos) {
@@ -782,10 +807,10 @@ async function handleMetaRequest(
       }
     }
 
-    res.etagJson!(
+    res.etagJson(
       {
         meta,
-        cacheMaxAge: 3600,
+        cacheMaxAge: CACHE_TTLS.META_HEADER,
         staleRevalidate: 86400,
         staleError: 86400,
       },
@@ -809,24 +834,28 @@ async function handleMetaRequest(
   }
 }
 
-router.get('/:userId/meta/:type/:id/:extra.json', async (req, res) => {
-  const { userId, type, id } = req.params;
-  const original = req.originalUrl || req.url || '';
-  let rawExtra = req.params.extra || '';
+function parseAddonUrlExtra(originalUrl: string, splitId: string, fallback: string): string {
   try {
-    const splitMarker = `/${id}/`;
-    const parts = original.split(splitMarker);
+    const splitMarker = `/${splitId}/`;
+    const parts = originalUrl.split(splitMarker);
     if (parts.length > 1) {
       let after = parts[1];
       const qIdx = after.indexOf('?');
       if (qIdx !== -1) after = after.substring(0, qIdx);
       const jsonIdx = after.indexOf('.json');
       if (jsonIdx !== -1) after = after.substring(0, jsonIdx);
-      rawExtra = after;
+      return after;
     }
-  } catch {
-    rawExtra = req.params.extra || '';
+  } catch (err) {
+    logSwallowedError('addon:url-parse', err);
   }
+  return fallback;
+}
+
+router.get('/:userId/meta/:type/:id/:extra.json', async (req, res) => {
+  const { userId, type, id } = req.params;
+  const original = req.originalUrl || req.url || '';
+  const rawExtra = parseAddonUrlExtra(original, id, req.params.extra || '');
 
   const extraParams = parseExtra(rawExtra);
   await handleMetaRequest(userId, type as ContentType, id, extraParams, res, req);
@@ -844,21 +873,7 @@ router.get('/:userId/meta/:type/:id.json', async (req, res) => {
 router.get('/:userId/catalog/:type/:catalogId/:extra.json', async (req, res) => {
   const { userId, type, catalogId } = req.params;
   const original = req.originalUrl || req.url || '';
-  let rawExtra = req.params.extra || '';
-  try {
-    const splitMarker = `/${catalogId}/`;
-    const parts = original.split(splitMarker);
-    if (parts.length > 1) {
-      let after = parts[1];
-      const qIdx = after.indexOf('?');
-      if (qIdx !== -1) after = after.substring(0, qIdx);
-      const jsonIdx = after.indexOf('.json');
-      if (jsonIdx !== -1) after = after.substring(0, jsonIdx);
-      rawExtra = after;
-    }
-  } catch (err) {
-    rawExtra = req.params.extra || '';
-  }
+  const rawExtra = parseAddonUrlExtra(original, catalogId, req.params.extra || '');
 
   const extraParams = parseExtra(rawExtra);
   await handleCatalogRequest(userId, type as ContentType, catalogId, extraParams, res, req);

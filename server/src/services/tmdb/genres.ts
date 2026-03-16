@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createLogger } from '../../utils/logger.ts';
 import { tmdbFetch } from './client.ts';
 import type { TmdbGenre, GenreCache, StaticGenreMap } from '../../types/index.ts';
@@ -11,7 +12,7 @@ export let genreCache: GenreCache = { movie: {}, tv: {} };
 export let staticGenreMap: StaticGenreMap = { movie: {}, tv: {} };
 try {
   const genresPath = path.join(
-    path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1')),
+    path.dirname(fileURLToPath(import.meta.url)),
     '..',
     '..',
     'data',

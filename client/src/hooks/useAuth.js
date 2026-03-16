@@ -32,7 +32,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
       setIsSessionExpired(false);
 
       if (!currentUrlUserId && config.userId) {
-        window.history.replaceState({}, '', `/?userId=${config.userId}`);
+        window.history.replaceState({}, '', `/?userId=${encodeURIComponent(config.userId)}`);
         setUrlUserId(config.userId);
       }
 
@@ -116,7 +116,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
 
             logger.info('[App] Falling back to latest config:', latest.userId);
             setPageLoading(true);
-            window.history.replaceState({}, '', `/?userId=${latest.userId}`);
+            window.history.replaceState({}, '', `/?userId=${encodeURIComponent(latest.userId)}`);
             setUrlUserId(latest.userId);
           } else {
             window.history.replaceState({}, '', '/');
@@ -186,7 +186,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
         loadUserConfigs();
       }
 
-      window.history.replaceState({}, '', `/?userId=${userId}`);
+      window.history.replaceState({}, '', `/?userId=${encodeURIComponent(userId)}`);
       setUrlUserId(userId);
       addToast('Logged in successfully');
     } catch (err) {

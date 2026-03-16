@@ -330,7 +330,7 @@ export function useCatalogEditorHandlers({
           return Array.from(byId.values());
         });
       } catch (e) {
-        void e;
+        console.warn('Network search failed:', e);
       }
     },
     [searchTVNetworks, setSearchedNetworks]

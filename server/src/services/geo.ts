@@ -1,6 +1,8 @@
 import fetch from 'node-fetch';
 import { getCache } from './cache/index.ts';
 import { createLogger } from '../utils/logger.ts';
+import { TIMEOUTS, CACHE_TTLS } from '../constants.ts';
+import { logSwallowedError } from '../utils/helpers.ts';
 
 const log = createLogger('geo');
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
@@ -150,8 +152,8 @@ export async function searchCities(query: string, limit: number = 10): Promise<G
   try {
     const cached = await cache.get(cacheKey);
     if (cached) return cached as GeoCity[];
-  } catch (_e) {
-    /* ignore cache miss */
+  } catch (err) {
+    logSwallowedError('geo:cache-get', err);
   }
 
   // Nominatim requires max 1 request per second
@@ -175,7 +177,7 @@ export async function searchCities(query: string, limit: number = 10): Promise<G
         'User-Agent': 'TMDB-Discover-Plus/1.0',
         Accept: 'application/json',
       },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(TIMEOUTS.NOMINATIM_FETCH_MS),
     });
 
     if (!response.ok) {
@@ -186,7 +188,7 @@ export async function searchCities(query: string, limit: number = 10): Promise<G
     const candidates = data.map(buildCityCandidate);
     const cities = dedupeCityCandidates(candidates, limit);
 
-    await cache.set(cacheKey, cities, 86400); // cache 24h
+    await cache.set(cacheKey, cities, CACHE_TTLS.DETAIL);
     return cities;
   } catch (err) {
     log.warn('Failed to search cities', { query, error: (err as Error).message });

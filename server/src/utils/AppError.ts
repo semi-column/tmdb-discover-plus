@@ -1,4 +1,5 @@
 import { getRequestId } from './requestContext.ts';
+import type { Response } from 'express';
 
 export const ErrorCodes = {
   INVALID_API_KEY: 'INVALID_API_KEY',
@@ -37,7 +38,12 @@ export function formatErrorResponse(
   };
 }
 
-export function sendError(res: any, statusCode: number, code: ErrorCode, message: string): void {
+export function sendError(
+  res: Response,
+  statusCode: number,
+  code: ErrorCode,
+  message: string
+): void {
   res.status(statusCode).json(formatErrorResponse(code, message));
 }
 
@@ -47,14 +53,16 @@ export function sendError(res: any, statusCode: number, code: ErrorCode, message
  * Mongoose CastErrors and other verbose internals.
  */
 export function safeErrorMessage(error: Error): string {
+  if (error instanceof AppError) return error.message;
+
+  const name = error.name || '';
+  if (name === 'CastError' || name === 'ValidationError') {
+    return name === 'CastError'
+      ? 'Invalid catalog data. Please check your catalog configuration and try again.'
+      : 'Catalog validation failed. Please check your settings and try again.';
+  }
+
   const msg = error.message || '';
-  if (msg.includes('CastError') || msg.includes('Cast to')) {
-    return 'Invalid catalog data. Please check your catalog configuration and try again.';
-  }
-  if (msg.includes('validation failed') || msg.includes('ValidatorError')) {
-    return 'Catalog validation failed. Please check your settings and try again.';
-  }
-  // Keep short, intentional error messages (thrown by our own code)
   if (msg.length < 120 && !msg.includes('\n')) return msg;
   return 'An unexpected error occurred. Please try again.';
 }

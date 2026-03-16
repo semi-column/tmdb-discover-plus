@@ -1,4 +1,5 @@
 import { createLogger } from '../utils/logger.ts';
+import { logSwallowedError } from '../utils/helpers.ts';
 import { config } from '../config.ts';
 import { getImdbQuotaStats } from './imdbQuota.ts';
 import { getImdbCircuitBreakerState } from '../services/imdb/client.ts';
@@ -30,7 +31,7 @@ class MetricsTracker {
   disabled: boolean;
   endpoints: Map<string, EndpointStats>;
   providers: Map<string, EndpointStats>;
-  errorCounts: Map<string, number>;
+  errorCounts: Map<string, { count: number; lastSeenAt: number }>;
   activeUsers: Map<string, number>;
   startTime: number;
   totalRequests: number;
@@ -46,7 +47,7 @@ class MetricsTracker {
     /** @type {Map<string, {count: number, totalMs: number, errors: number, lastMs: number}>} */
     this.providers = new Map();
 
-    /** @type {Map<string, number>} errorType → count */
+    /** @type {Map<string, {count: number, lastSeenAt: number}>} errorType → count + lastSeenAt */
     this.errorCounts = new Map();
 
     /** @type {Map<string, number>} userId → last seen timestamp */
@@ -87,8 +88,8 @@ class MetricsTracker {
           const duration = Date.now() - start;
           const route = this._normalizeRoute(req);
           this._recordEndpoint(route, duration, res.statusCode >= 400);
-        } catch {
-          /* metrics are non-critical — never crash the process */
+        } catch (err) {
+          logSwallowedError('metrics:record-endpoint', err);
         }
       };
 
@@ -123,8 +124,11 @@ class MetricsTracker {
     if (this.errorCounts.size >= 500 && !this.errorCounts.has(errorType)) {
       return;
     }
-    const count = this.errorCounts.get(errorType) || 0;
-    this.errorCounts.set(errorType, count + 1);
+    const existing = this.errorCounts.get(errorType);
+    this.errorCounts.set(errorType, {
+      count: (existing?.count ?? 0) + 1,
+      lastSeenAt: Date.now(),
+    });
   }
 
   /**
@@ -167,7 +171,7 @@ class MetricsTracker {
       activeUsersLastHour: activeUserCount,
       endpoints: endpointSummary,
       providers: providerSummary,
-      errors: Object.fromEntries(this.errorCounts),
+      errors: Object.fromEntries(Array.from(this.errorCounts, ([k, v]) => [k, v.count])),
     };
   }
 
@@ -201,6 +205,9 @@ class MetricsTracker {
     const hourAgo = Date.now() - 60 * 60 * 1000;
     for (const [userId, ts] of this.activeUsers) {
       if (ts < hourAgo) this.activeUsers.delete(userId);
+    }
+    for (const [errorType, entry] of this.errorCounts) {
+      if (entry.lastSeenAt < hourAgo) this.errorCounts.delete(errorType);
     }
   }
 
@@ -270,8 +277,8 @@ class MetricsTracker {
 
     lines.push('# HELP tmdb_errors_total Errors by type');
     lines.push('# TYPE tmdb_errors_total counter');
-    for (const [errorType, count] of this.errorCounts) {
-      lines.push(`tmdb_errors_total{type="${esc(errorType)}"} ${count}`);
+    for (const [errorType, entry] of this.errorCounts) {
+      lines.push(`tmdb_errors_total{type="${esc(errorType)}"} ${entry.count}`);
     }
 
     if (this._cacheStatsProvider) {

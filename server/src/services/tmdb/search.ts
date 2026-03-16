@@ -1,6 +1,7 @@
 import { tmdbFetch } from './client.ts';
 import { TMDB_IMAGE_BASE } from './constants.ts';
 import { createLogger } from '../../utils/logger.ts';
+import { logSwallowedError } from '../../utils/helpers.ts';
 
 import type {
   ContentType,
@@ -12,6 +13,7 @@ import type {
   ComprehensiveSearchResponse,
   TmdbPersonResult,
   TmdbPersonCredit,
+  TmdbResult,
 } from '../../types/index.ts';
 
 const log = createLogger('tmdb:search') as Logger;
@@ -133,7 +135,7 @@ export async function comprehensiveSearch(
       removeDiacritics(query.toLowerCase())
   ) {
     return {
-      results: titleItems as unknown as ComprehensiveSearchResponse['results'],
+      results: titleItems as unknown as TmdbResult[],
       total_results: titleItems.length,
       page: 1,
     };
@@ -147,8 +149,8 @@ export async function comprehensiveSearch(
         page: 2,
       })) as { results?: Array<{ id: number; [key: string]: unknown }> };
       titlePage2Items = page2?.results || [];
-    } catch {
-      /* not critical */
+    } catch (err) {
+      logSwallowedError('tmdb-search:page2-fetch', err);
     }
   }
 
@@ -212,7 +214,7 @@ export async function comprehensiveSearch(
   }
 
   return {
-    results: merged as unknown as ComprehensiveSearchResponse['results'],
+    results: merged as unknown as TmdbResult[],
     total_results: merged.length,
     page: page,
   };

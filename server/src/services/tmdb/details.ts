@@ -1,9 +1,11 @@
 import { createLogger } from '../../utils/logger.ts';
+import { logSwallowedError } from '../../utils/helpers.ts';
 import { getCache } from '../cache/index.ts';
 import { tmdbFetch } from './client.ts';
 import { TMDB_IMAGE_BASE } from './constants.ts';
 import { formatRuntime } from './stremioMeta.ts';
 import * as imdb from '../imdb/index.ts';
+import { CONCURRENCY, CACHE_TTLS, DISPLAY } from '../../constants.ts';
 
 import type {
   ContentType,
@@ -16,7 +18,7 @@ import type {
 
 const log = createLogger('tmdb:details') as Logger;
 
-const DETAIL_CONCURRENCY = 5;
+const DETAIL_CONCURRENCY = CONCURRENCY.TMDB_DETAIL;
 
 interface DetailsOptions {
   displayLanguage?: string;
@@ -70,7 +72,7 @@ export async function getLogos(
     };
     const logos = data?.logos || [];
     try {
-      await cache.set(cacheKey, logos, 86400 * 7);
+      await cache.set(cacheKey, logos, CACHE_TTLS.LOGO);
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }
@@ -104,7 +106,7 @@ export async function getSeasonDetails(
   try {
     const data = await tmdbFetch(`/tv/${tmdbId}/season/${seasonNumber}`, apiKey, params);
     try {
-      await cache.set(cacheKey, data, 86400);
+      await cache.set(cacheKey, data, CACHE_TTLS.DETAIL);
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }
@@ -149,8 +151,8 @@ interface ImdbEpisodeEdge {
   };
 }
 
-const IMDB_EPISODE_PAGE_LIMIT = 250;
-const IMDB_EPISODE_PAGE_MAX = 4;
+const IMDB_EPISODE_PAGE_LIMIT = DISPLAY.IMDB_EPISODE_PAGE_LIMIT;
+const IMDB_EPISODE_PAGE_MAX = DISPLAY.IMDB_EPISODE_PAGE_MAX;
 
 async function getImdbEpisodesForSeason(
   imdbId: string,
@@ -295,12 +297,11 @@ export async function getSeriesEpisodes(
     }
   }
 
-  const CONCURRENCY = 5;
   const seasonQueue = regularSeasons.slice(0, 50);
   const seasonResults: StremioVideo[][] = [];
 
-  for (let i = 0; i < seasonQueue.length; i += CONCURRENCY) {
-    const batch = seasonQueue.slice(i, i + CONCURRENCY);
+  for (let i = 0; i < seasonQueue.length; i += DETAIL_CONCURRENCY) {
+    const batch = seasonQueue.slice(i, i + DETAIL_CONCURRENCY);
     const batchResults = await Promise.all(
       batch.map(async (season) => {
         const seasonData = (await getSeasonDetails(
@@ -348,7 +349,7 @@ export async function getSeriesEpisodes(
 
   if (imdbId) {
     const fallbackVideos: StremioVideo[] = [];
-    const IMDB_SEASON_CONCURRENCY = 3;
+    const IMDB_SEASON_CONCURRENCY = CONCURRENCY.IMDB_SEASON;
     const tmdbSeasonNumbers = seasonQueue.map((s) => s.season_number).filter((n) => n > 0);
     const maxTmdbSeason = tmdbSeasonNumbers.length > 0 ? Math.max(...tmdbSeasonNumbers) : 0;
     const seasonNumbersToProbe = Array.from(
@@ -422,8 +423,8 @@ export async function batchGetDetails(
             displayLanguage: options?.displayLanguage,
           });
           if (details) results.set(tmdbId, details);
-        } catch {
-          log.debug('Detail fetch failed for catalog item', { tmdbId });
+        } catch (err) {
+          logSwallowedError('tmdb-details:catalog-batch-fetch', err);
         }
       })
     );

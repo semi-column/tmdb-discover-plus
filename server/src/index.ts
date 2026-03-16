@@ -1,20 +1,18 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
-// @ts-expect-error — no declarations for cors
 import cors from 'cors';
-// @ts-expect-error — no declarations for compression
 import compression from 'compression';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { config } from './config.ts';
+import { config, validateRequiredConfig } from './config.ts';
 import { initStorage, getStorage } from './services/storage/index.ts';
 import { initCache, getCacheStatus } from './services/cache/index.ts';
 import { addonRouter } from './routes/addon.ts';
 import { apiRouter } from './routes/api.ts';
 import { authRouter } from './routes/auth.ts';
 import { createLogger } from './utils/logger.ts';
-import { getBaseUrl } from './utils/helpers.ts';
+import { getBaseUrl, logSwallowedError } from './utils/helpers.ts';
 import { apiRateLimit } from './utils/rateLimit.ts';
 import { monitoringRateLimit } from './utils/rateLimit.ts';
 import { setRevocationStore } from './utils/security.ts';
@@ -36,6 +34,7 @@ import { isImdbApiEnabled } from './services/imdb/index.ts';
 import { initImdbApi } from './services/imdb/index.ts';
 import { requestIdMiddleware } from './utils/requestContext.ts';
 import { sendError, ErrorCodes, AppError } from './utils/AppError.ts';
+import { TIMEOUTS, HEAP_WARN_THRESHOLD_MB } from './constants.ts';
 import type { Server } from 'http';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -151,9 +150,8 @@ app.use((req, res, next) => {
 app.use(requestIdMiddleware());
 
 app.use((req, res, next) => {
-  const timeout = 30000;
-  req.setTimeout(timeout);
-  res.setTimeout(timeout, () => {
+  req.setTimeout(TIMEOUTS.REQUEST_MS);
+  res.setTimeout(TIMEOUTS.REQUEST_MS, () => {
     if (!res.headersSent) {
       log.warn('Request timeout', { url: req.originalUrl, method: req.method });
       res.status(504).json({ error: 'Gateway Timeout' });
@@ -289,7 +287,8 @@ app.get('/health', monitoringRateLimit, (req, res) => {
       dbStatus = 'connected';
     }
   } catch (e) {
-    void e;
+    dbStatus = 'error';
+    logSwallowedError('health:db-status', e);
   }
 
   // Determine overall status
@@ -333,12 +332,11 @@ app.get('/health', monitoringRateLimit, (req, res) => {
   };
 
   const heapUsedMB = health.memory.used;
-  const HEAP_WARN_THRESHOLD = 384;
-  if (heapUsedMB > HEAP_WARN_THRESHOLD) {
+  if (heapUsedMB > HEAP_WARN_THRESHOLD_MB) {
     log.warn('High heap usage', {
       heapUsedMB,
       rss: health.memory.rss,
-      threshold: HEAP_WARN_THRESHOLD,
+      threshold: HEAP_WARN_THRESHOLD_MB,
     });
   }
 
@@ -385,14 +383,14 @@ function gracefulShutdown(signal: string) {
   const shutdownTimeout = setTimeout(() => {
     log.warn('Shutdown timeout reached, forcing exit');
     process.exit(1);
-  }, 30000);
+  }, TIMEOUTS.SHUTDOWN_MS);
 
   // Cleanup singletons
   destroyTmdbThrottle();
   destroyImdbThrottle();
   destroyMetrics();
   destroySecurity();
-  destroyImdbRatings().catch(() => {});
+  destroyImdbRatings().catch((err) => logSwallowedError('shutdown:imdb-ratings', err));
 
   if (server) {
     server.close(async (err) => {
@@ -421,7 +419,9 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 process.on('uncaughtException', (err) => {
-  log.error('Uncaught exception', { error: err.message, stack: err.stack });
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
+  log.error('Uncaught exception', { error: message, stack });
   gracefulShutdown('uncaughtException');
 });
 
@@ -431,6 +431,8 @@ process.on('unhandledRejection', (reason, promise) => {
 
 async function start() {
   try {
+    validateRequiredConfig();
+
     try {
       await initCache();
     } catch (cacheErr) {

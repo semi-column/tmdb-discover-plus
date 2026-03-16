@@ -23,8 +23,6 @@ import { SearchInput } from '../../forms/SearchInput';
 import { RangeSlider, SingleSlider } from '../../forms/RangeSlider';
 import { LabelWithTooltip } from '../../forms/Tooltip';
 
-// TODO: Awards section hidden until upstream API compatibility is resolved. Set to false to re-enable.
-const AWARDS_HIDDEN = false;
 const MAX_RANK_HIDDEN = false;
 
 export const ImdbFilterPanel = memo(function ImdbFilterPanel({
@@ -448,26 +446,6 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
 
   return (
     <>
-      {/* <div className="filter-section p-4 mb-4 rounded-lg border border-white/5 bg-white/5">
-        <div className="filter-group mb-0">
-          <LabelWithTooltip
-            label="Custom IMDb List ID"
-            tooltip="Optional: Enter an IMDb list ID (e.g., ls597789139) to fetch items exclusively from that list. Other filters will be disabled."
-          />
-          <input
-            type="text"
-            className="input"
-            placeholder="e.g. ls597789139"
-            value={filters.imdbListId || ''}
-            onChange={(e) => {
-              const val = e.target.value;
-              onFiltersChange('imdbListId', val || undefined);
-              onFiltersChange('listType', val ? 'imdb_list' : 'discover');
-            }}
-          />
-        </div>
-      </div> */}
-
       <FilterSection
         id="basic"
         title="Sort & Filter"
@@ -852,8 +830,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
         </div>
       </FilterSection>
 
-      {/* Awards section hidden temporarily — re-enable by removing AWARDS_HIDDEN */}
-      {!AWARDS_HIDDEN && imdbAwards.length > 0 && (
+      {imdbAwards.length > 0 && (
         <FilterSection
           id="awards"
           title="Awards"

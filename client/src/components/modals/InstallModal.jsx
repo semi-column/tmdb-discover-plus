@@ -24,9 +24,9 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl }) {
       window.location.href = stremioUrl;
       return;
     }
-    const manifestUrl = installUrl;
-    const stremioProtocolUrl = manifestUrl.replace(/^https?:\/\//, 'stremio://');
-    window.location.href = stremioProtocolUrl;
+    const url = new URL(installUrl);
+    url.protocol = 'stremio:';
+    window.location.href = url.toString();
   };
 
   const manifestUrl = installUrl;

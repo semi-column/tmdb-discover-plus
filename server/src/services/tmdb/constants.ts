@@ -25,3 +25,8 @@ export const TMDB_SITE_ORIGIN: string = TMDB_SITE_URL.origin;
 
 export const CINEMETA_API_ORIGIN = 'https://v3-cinemeta.strem.io';
 export const CINEMETA_API_BASE_PATH = '/meta';
+
+export const POSTER_SIZE = 'w500';
+export const BACKDROP_SIZE = 'w1280';
+export const PROFILE_SIZE = 'w185';
+export const STILL_SIZE = 'w300';

@@ -2,11 +2,13 @@ import { getCache } from '../cache/index.ts';
 import { tmdbFetch } from './client.ts';
 import { createLogger } from '../../utils/logger.ts';
 import type { TmdbExternalIds, TmdbFindResponse, TmdbResult } from '../../types/index.ts';
+import { CACHE_TTLS, CONCURRENCY } from '../../constants.ts';
+import { logSwallowedError } from '../../utils/helpers.ts';
 
 const log = createLogger('tmdb:lookup');
 
-const EXTERNAL_ID_TTL = 86400 * 30;
-const NEGATIVE_LOOKUP_TTL = 3600;
+const EXTERNAL_ID_TTL = CACHE_TTLS.EXTERNAL_ID;
+const NEGATIVE_LOOKUP_TTL = CACHE_TTLS.NEGATIVE_LOOKUP;
 
 export async function getExternalIds(
   apiKey: string,
@@ -35,12 +37,13 @@ export async function getExternalIds(
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }
     return data;
-  } catch {
+  } catch (err) {
+    logSwallowedError('tmdb:lookup:fetch-external-ids', err);
     return null;
   }
 }
 
-const ENRICHMENT_CONCURRENCY = 5;
+const ENRICHMENT_CONCURRENCY = CONCURRENCY.ENRICHMENT;
 
 export async function enrichItemsWithImdbIds(
   apiKey: string,
@@ -85,7 +88,9 @@ export async function findByImdbId(
   try {
     const negCached = await cache.get(negativeCacheKey);
     if (negCached) return null;
-  } catch {}
+  } catch (err) {
+    logSwallowedError('tmdb:lookup:cache-get-negative', err);
+  }
 
   const params: Record<string, string> = { external_source: 'imdb_id' };
   if (options.language) params.language = options.language;
@@ -112,15 +117,18 @@ export async function findByImdbId(
 
     try {
       await cache.set(negativeCacheKey, { notFound: true }, NEGATIVE_LOOKUP_TTL);
-    } catch {}
+    } catch (err) {
+      logSwallowedError('tmdb:lookup:cache-set-negative', err);
+    }
 
     return null;
-  } catch {
+  } catch (err) {
+    logSwallowedError('tmdb:lookup:find-by-imdb', err);
     return null;
   }
 }
 
-const RESOLVE_CONCURRENCY = 5;
+const RESOLVE_CONCURRENCY = CONCURRENCY.RESOLVE;
 
 export async function batchResolveImdbIds(
   apiKey: string,
@@ -137,7 +145,9 @@ export async function batchResolveImdbIds(
         try {
           const found = await findByImdbId(apiKey, imdbId, type, options);
           if (found?.tmdbId) results.set(imdbId, found.tmdbId);
-        } catch {}
+        } catch (err) {
+          logSwallowedError('tmdb:lookup:batch-resolve', err);
+        }
       })
     );
   }

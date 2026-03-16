@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { createLogger } from './logger.ts';
+import { logSwallowedError } from './helpers.ts';
 import { config } from '../config.ts';
 
 import type { Logger } from '../types/index.ts';
@@ -69,8 +70,21 @@ export async function computeApiKeyId(apiKey: string): Promise<string> {
   const result = hash.toString('hex');
 
   if (pbkdf2Cache.size >= PBKDF2_CACHE_MAX) {
-    const firstKey = pbkdf2Cache.keys().next().value;
-    if (firstKey) pbkdf2Cache.delete(firstKey);
+    const now = Date.now();
+    for (const [k, entry] of pbkdf2Cache) {
+      if (entry.expiresAt <= now) pbkdf2Cache.delete(k);
+    }
+    if (pbkdf2Cache.size >= PBKDF2_CACHE_MAX) {
+      let oldestKey: string | null = null;
+      let oldestExpiry = Infinity;
+      for (const [k, entry] of pbkdf2Cache) {
+        if (entry.expiresAt < oldestExpiry) {
+          oldestExpiry = entry.expiresAt;
+          oldestKey = k;
+        }
+      }
+      if (oldestKey) pbkdf2Cache.delete(oldestKey);
+    }
   }
   pbkdf2Cache.set(cacheKey, { value: result, expiresAt: Date.now() + PBKDF2_CACHE_TTL_MS });
 
@@ -104,9 +118,10 @@ export async function verifyToken(token: string): Promise<jwt.JwtPayload | strin
             return null;
           }
         } catch (err) {
-          log.warn('External revocation check failed, using in-memory only', {
+          log.warn('External revocation check failed, rejecting token', {
             error: (err as Error).message,
           });
+          return null;
         }
       }
     }
@@ -145,7 +160,8 @@ export function revokeToken(token: string): boolean {
 
     log.debug('Token revoked', { jti: decoded.jti });
     return true;
-  } catch {
+  } catch (err) {
+    logSwallowedError('security:revoke-token', err);
     return false;
   }
 }
@@ -154,4 +170,11 @@ export function destroySecurity(): void {
   clearInterval(revokeCleanupTimer);
   revokedTokens.clear();
   pbkdf2Cache.clear();
+}
+
+export function getSecurityMetrics(): { pbkdf2CacheSize: number; revokedTokensSize: number } {
+  return {
+    pbkdf2CacheSize: pbkdf2Cache.size,
+    revokedTokensSize: revokedTokens.size,
+  };
 }

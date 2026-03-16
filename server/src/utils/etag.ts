@@ -1,21 +1,12 @@
 import crypto from 'crypto';
 import { createLogger } from './logger.ts';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { ADDON_VERSION } from '../version.ts';
 
 import type { Request, Response, NextFunction } from 'express';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const log = createLogger('etag');
 
-let addonVersion = 'unknown';
-try {
-  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../package.json'), 'utf8'));
-  addonVersion = pkg.version || 'unknown';
-} catch {
-  /* ignore */
-}
+const addonVersion = ADDON_VERSION;
 
 /**
  * Generates an ETag from response data.

@@ -8,6 +8,7 @@ export function shuffleArray<T>(array: T[]): T[] {
 }
 
 import { config } from '../config.ts';
+import { createLogger } from './logger.ts';
 
 export function getBaseUrl(req: {
   get: (name: string) => string | undefined;
@@ -27,7 +28,9 @@ export function getBaseUrl(req: {
     try {
       const refererUrl = new URL(referer);
       return `${refererUrl.protocol}//${refererUrl.host}`;
-    } catch {}
+    } catch (err) {
+      logSwallowedError('helpers:referer-parse', err);
+    }
   }
 
   const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';
@@ -60,4 +63,11 @@ export function setNoCacheHeaders(res: { set: (name: string, value: string) => v
   res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
+}
+
+const swallowLog = createLogger('swallowed');
+
+export function logSwallowedError(context: string, error: unknown): void {
+  const msg = error instanceof Error ? error.message : String(error);
+  swallowLog.debug(context, { error: msg });
 }

@@ -125,3 +125,8 @@ export const config = Object.freeze({
 });
 
 export type Config = typeof config;
+
+export function validateRequiredConfig(): void {
+  config.jwt.secret;
+  config.encryption.key;
+}

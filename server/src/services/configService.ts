@@ -13,8 +13,12 @@ export function getApiKeyFromConfig(config: UserConfig | null): string | null {
   if (!config) return null;
 
   if (config.tmdbApiKeyEncrypted) {
-    const decrypted = decrypt(config.tmdbApiKeyEncrypted);
-    if (decrypted) return decrypted;
+    try {
+      const decrypted = decrypt(config.tmdbApiKeyEncrypted);
+      if (decrypted) return decrypted;
+    } catch (err) {
+      log.error('Failed to decrypt TMDB API key', { error: (err as Error).message });
+    }
   }
 
   return null;
@@ -22,7 +26,12 @@ export function getApiKeyFromConfig(config: UserConfig | null): string | null {
 
 export function getPosterKeyFromConfig(config: UserConfig | null): string | null {
   if (!config?.preferences?.posterApiKeyEncrypted) return null;
-  return decrypt(config.preferences.posterApiKeyEncrypted);
+  try {
+    return decrypt(config.preferences.posterApiKeyEncrypted);
+  } catch (err) {
+    log.error('Failed to decrypt poster API key', { error: (err as Error).message });
+    return null;
+  }
 }
 
 export async function getUserConfig(
@@ -124,7 +133,12 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
       updatedAt: new Date(),
     };
 
-    const apiKeyForHash = rawApiKey || (encryptedApiKey ? decrypt(encryptedApiKey) : null);
+    let apiKeyForHash: string | null = null;
+    try {
+      apiKeyForHash = rawApiKey || (encryptedApiKey ? decrypt(encryptedApiKey) : null);
+    } catch (err) {
+      log.error('Failed to decrypt API key during save', { error: (err as Error).message });
+    }
     if (apiKeyForHash) {
       updateData.apiKeyId = await computeApiKeyId(apiKeyForHash);
     }

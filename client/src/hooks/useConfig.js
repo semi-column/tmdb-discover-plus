@@ -34,8 +34,6 @@ export function useConfig(initialUserId = null) {
     const handleBeforeUnload = (e) => {
       if (isDirty) {
         e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-        return e.returnValue;
       }
     };
 
@@ -65,7 +63,7 @@ export function useConfig(initialUserId = null) {
           }
           api.clearLegacyApiKey();
         } catch (e) {
-          void e;
+          console.warn('Legacy key migration failed:', e);
           api.clearLegacyApiKey();
         }
       }

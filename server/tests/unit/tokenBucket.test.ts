@@ -10,7 +10,7 @@ describe('TokenBucket', () => {
 
   it('grants tokens within rate limit', async () => {
     bucket = new TokenBucket({ maxTokens: 5, refillRate: 5 });
-    bucket.endGracePeriod();
+    bucket.endWarmup();
     for (let i = 0; i < 5; i++) {
       await bucket.acquire();
     }
@@ -67,7 +67,7 @@ describe('TokenBucket', () => {
 
   it('reports accurate stats', async () => {
     bucket = new TokenBucket({ maxTokens: 3, refillRate: 100 });
-    bucket.endGracePeriod();
+    bucket.endWarmup();
     await bucket.acquire();
     await bucket.acquire();
     await bucket.acquire();

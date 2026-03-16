@@ -1,13 +1,16 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 export function useToast() {
   const [toasts, setToasts] = useState([]);
+  const counterRef = useRef(0);
 
   const addToast = useCallback((message, type = 'success') => {
     setToasts((prev) => {
-      const recentDupe = prev.find((t) => t.message === message && Date.now() - t.id < 2000);
+      const now = Date.now();
+      const recentDupe = prev.find((t) => t.message === message && now - t.createdAt < 2000);
       if (recentDupe) return prev;
-      return [...prev, { id: Date.now(), message, type }];
+      counterRef.current += 1;
+      return [...prev, { id: counterRef.current, message, type, createdAt: now }];
     });
   }, []);
 

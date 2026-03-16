@@ -1,4 +1,5 @@
 import { generatePosterUrl, isValidPosterConfig } from '../posterService.ts';
+import { metahubUrl, buildStremioSearchUrl, DISPLAY } from '../../constants.ts';
 
 import type { ContentType } from '../../types/index.ts';
 import type { ImdbTitle, ImdbRankingEntry, ImdbListItem, ImdbPosterOptions } from './types.ts';
@@ -47,10 +48,8 @@ export function imdbToStremioMeta(
   const stremioType = type || mapImdbTypeToContentType(item.type);
   const year = buildYear(item);
 
-  let poster =
-    item.primaryImage?.url || `https://images.metahub.space/poster/medium/${item.id}/img`;
-  const background =
-    item.posterImages?.[0]?.url || `https://images.metahub.space/background/medium/${item.id}/img`;
+  let poster = item.primaryImage?.url || metahubUrl('poster', item.id);
+  const background = item.posterImages?.[0]?.url || metahubUrl('background', item.id);
 
   if (posterOptions && isValidPosterConfig(posterOptions)) {
     const enhancedPoster = generatePosterUrl({
@@ -66,7 +65,7 @@ export function imdbToStremioMeta(
   const genres = item.genres || [];
   const castNames =
     item.cast
-      ?.slice(0, 20)
+      ?.slice(0, DISPLAY.CAST_FULL)
       .map((c) => c.fullName)
       .filter(Boolean) || [];
   const directorNames = item.directors?.map((d) => d.fullName).filter(Boolean) || [];
@@ -82,21 +81,21 @@ export function imdbToStremioMeta(
     links.push({
       name: genre,
       category: 'Genres',
-      url: `stremio:///search?search=${encodeURIComponent(genre)}`,
+      url: buildStremioSearchUrl(genre),
     });
   });
-  castNames.slice(0, 5).forEach((name) => {
+  castNames.slice(0, DISPLAY.CAST_LINKS).forEach((name) => {
     links.push({
       name,
       category: 'Cast',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      url: buildStremioSearchUrl(name),
     });
   });
   directorNames.forEach((name) => {
     links.push({
       name,
       category: 'Directors',
-      url: `stremio:///search?search=${encodeURIComponent(name)}`,
+      url: buildStremioSearchUrl(name),
     });
   });
 
@@ -113,7 +112,7 @@ export function imdbToStremioMeta(
     background,
     fanart: background,
     landscapePoster: background,
-    logo: `https://images.metahub.space/logo/medium/${item.id}/img`,
+    logo: metahubUrl('logo', item.id),
     description: item.description || '',
     year,
     releaseInfo: buildReleaseInfo(item),
@@ -156,7 +155,7 @@ export function imdbToStremioFullMeta(
   }
 
   if (item.cast) {
-    item.cast.slice(0, 10).forEach((c) => {
+    item.cast.slice(0, DISPLAY.CAST_DETAILED).forEach((c) => {
       const name = c.characters?.length ? `${c.fullName} as ${c.characters[0]}` : c.fullName;
       links.push({ name, category: 'Cast', url: `https://www.imdb.com/name/${c.id}/` });
     });
@@ -189,7 +188,7 @@ export function imdbToStremioFullMeta(
 
   const appExtras = {
     cast:
-      item.cast?.slice(0, 20).map((c) => ({
+      item.cast?.slice(0, DISPLAY.CAST_FULL).map((c) => ({
         name: c.fullName,
         character: c.characters?.[0] || '',
         photo: c.primaryImage?.url || null,

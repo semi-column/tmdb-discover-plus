@@ -83,19 +83,19 @@ describe('TokenBucket', () => {
   it('starts in grace mode with half rate', () => {
     bucket = new TokenBucket({ maxTokens: 10, refillRate: 10 });
     const stats = bucket.getStats();
-    expect(stats.graceMode).toBe(true);
+    expect(stats.warmupActive).toBe(true);
   });
 
-  it('endGracePeriod restores full rate', () => {
+  it('endWarmup restores full rate', () => {
     bucket = new TokenBucket({ maxTokens: 10, refillRate: 10 });
-    bucket.endGracePeriod();
+    bucket.endWarmup();
     const stats = bucket.getStats();
-    expect(stats.graceMode).toBe(false);
+    expect(stats.warmupActive).toBe(false);
   });
 
   it('notifyRateLimited pauses token grants', async () => {
     bucket = new TokenBucket({ maxTokens: 10, refillRate: 100 });
-    bucket.endGracePeriod();
+    bucket.endWarmup();
     await bucket.acquire();
 
     bucket.notifyRateLimited(500);
@@ -105,7 +105,7 @@ describe('TokenBucket', () => {
 
   it('resumes after pause expires', async () => {
     bucket = new TokenBucket({ maxTokens: 5, refillRate: 100 });
-    bucket.endGracePeriod();
+    bucket.endWarmup();
     await bucket.acquire();
 
     bucket.notifyRateLimited(100);

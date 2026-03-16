@@ -1,5 +1,6 @@
 import { imdbFetch } from './client.ts';
 import { config } from '../../config.ts';
+import { logSwallowedError } from '../../utils/helpers.ts';
 import {
   IMDB_GENRES,
   IMDB_KEYWORDS,
@@ -17,7 +18,8 @@ export async function getGenres(): Promise<string[]> {
   try {
     const data = (await imdbFetch('/api/imdb/genres', {}, ttl)) as string[];
     return Array.isArray(data) ? data : [...IMDB_GENRES];
-  } catch {
+  } catch (err) {
+    logSwallowedError('imdb:reference:genres', err);
     return [...IMDB_GENRES];
   }
 }
@@ -28,7 +30,8 @@ export async function getTitleTypes(): Promise<string[]> {
   try {
     const data = (await imdbFetch('/api/imdb/title-types', {}, ttl)) as string[];
     return Array.isArray(data) ? data : IMDB_TITLE_TYPES.map((t) => t.value);
-  } catch {
+  } catch (err) {
+    logSwallowedError('imdb:reference:title-types', err);
     return IMDB_TITLE_TYPES.map((t) => t.value);
   }
 }

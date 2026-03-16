@@ -39,30 +39,24 @@ export function encrypt(plaintext: string | null | undefined): string | null {
 export function decrypt(encryptedData: string | null | undefined): string | null {
   if (!encryptedData) return null;
 
-  try {
-    const key = getEncryptionKey();
-    const parts = encryptedData.split(':');
+  const parts = encryptedData.split(':');
 
-    if (parts.length !== 3) {
-      log.error('Invalid encrypted data format');
-      return null;
-    }
-
-    const [ivHex, authTagHex, ciphertext] = parts;
-    const iv = Buffer.from(ivHex, 'hex');
-    const authTag = Buffer.from(authTagHex, 'hex');
-
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-    decipher.setAuthTag(authTag);
-
-    let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-
-    return decrypted;
-  } catch (error) {
-    log.error('Decryption failed', { error: (error as Error).message });
-    return null;
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted data format: expected iv:authTag:ciphertext');
   }
+
+  const key = getEncryptionKey();
+  const [ivHex, authTagHex, ciphertext] = parts;
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAuthTag(authTag);
+
+  let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+
+  return decrypted;
 }
 
 export function isEncrypted(value: unknown): boolean {

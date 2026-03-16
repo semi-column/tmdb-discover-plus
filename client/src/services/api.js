@@ -1,3 +1,5 @@
+import { jwtDecode } from 'jwt-decode';
+
 const API_BASE = '/api';
 
 const TOKEN_KEY = 'tmdb-session-token';
@@ -10,8 +12,7 @@ class ApiService {
 
   _isTokenExpired(token) {
     try {
-      const [, payload] = token.split('.');
-      const decoded = JSON.parse(atob(payload));
+      const decoded = jwtDecode(token);
       return decoded.exp ? decoded.exp * 1000 < Date.now() : false;
     } catch {
       return true;
@@ -35,7 +36,7 @@ class ApiService {
       const storage = rememberMe ? localStorage : sessionStorage;
       storage.setItem(TOKEN_KEY, token);
     } catch (e) {
-      void e;
+      console.warn('Failed to persist session token:', e);
     }
   }
 
@@ -45,7 +46,7 @@ class ApiService {
       localStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(TOKEN_KEY);
     } catch (e) {
-      void e;
+      console.warn('Failed to clear session:', e);
     }
   }
 
@@ -61,7 +62,7 @@ class ApiService {
     try {
       localStorage.removeItem(LEGACY_KEY);
     } catch (e) {
-      void e;
+      console.warn('Failed to clear legacy API key:', e);
     }
   }
 
@@ -81,7 +82,7 @@ class ApiService {
     return qs ? `${endpoint}?${qs}` : endpoint;
   }
 
-  async request(endpoint, options = {}, _retry = false) {
+  async request(endpoint, options = {}, _retry = 0) {
     const url = `${API_BASE}${endpoint}`;
     const { headers: optionHeaders, ...restOptions } = options;
 
@@ -96,11 +97,16 @@ class ApiService {
         },
       });
     } catch (err) {
-      if (!_retry && err instanceof TypeError) {
-        await new Promise((r) => setTimeout(r, 2000));
-        return this.request(endpoint, options, true);
+      if (_retry < 2 && err instanceof TypeError) {
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, _retry)));
+        return this.request(endpoint, options, _retry + 1);
       }
       throw err;
+    }
+
+    if (response.status >= 500 && _retry < 2) {
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, _retry)));
+      return this.request(endpoint, options, _retry + 1);
     }
 
     if (response.status === 401) {
@@ -148,7 +154,7 @@ class ApiService {
     try {
       return await this.request('/auth/verify');
     } catch (e) {
-      void e;
+      console.warn('Session verification failed:', e);
       return { valid: false };
     }
   }
@@ -157,7 +163,7 @@ class ApiService {
     try {
       await this.request('/auth/logout', { method: 'POST' });
     } catch (e) {
-      void e;
+      console.warn('Logout request failed:', e);
     }
     this.clearSession();
   }

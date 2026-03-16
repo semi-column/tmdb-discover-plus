@@ -24,15 +24,15 @@ describe('encrypt / decrypt', () => {
     expect(decrypt(b!)).toBe('test');
   });
 
-  it('returns null for tampered ciphertext', () => {
+  it('throws for tampered ciphertext', () => {
     const encrypted = encrypt('secret')!;
     const tampered = encrypted.slice(0, -2) + 'zz';
-    expect(decrypt(tampered)).toBeNull();
+    expect(() => decrypt(tampered)).toThrow();
   });
 
-  it('returns null for wrong format', () => {
-    expect(decrypt('not:valid')).toBeNull();
-    expect(decrypt('only-one-part')).toBeNull();
+  it('throws for wrong format', () => {
+    expect(() => decrypt('not:valid')).toThrow();
+    expect(() => decrypt('only-one-part')).toThrow();
   });
 });
 

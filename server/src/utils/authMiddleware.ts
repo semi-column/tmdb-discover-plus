@@ -6,16 +6,14 @@ import type { Request, Response, NextFunction } from 'express';
 
 const log = createLogger('auth');
 
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  let bearerToken = null;
+function extractBearerToken(authHeader: string | undefined): string | null {
+  if (!authHeader || !authHeader.toLowerCase().startsWith('bearer ')) return null;
+  const token = authHeader.slice(7).trim();
+  return token.length > 0 ? token : null;
+}
 
-  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token.length > 0) {
-      bearerToken = token;
-    }
-  }
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const bearerToken = extractBearerToken(req.headers.authorization);
 
   if (!bearerToken) {
     return sendError(res, 401, ErrorCodes.UNAUTHORIZED, 'Authentication required');
@@ -71,15 +69,7 @@ export async function requireConfigOwnership(req: Request, res: Response, next: 
 }
 
 export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  let bearerToken = null;
-
-  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token.length > 0) {
-      bearerToken = token;
-    }
-  }
+  const bearerToken = extractBearerToken(req.headers.authorization);
 
   if (bearerToken) {
     const decoded = (await verifyToken(bearerToken)) as { apiKeyId?: string } | null;

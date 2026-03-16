@@ -47,8 +47,8 @@ function sanitizeValue(value: unknown, key: string = '', depth: number = 0): unk
   if (typeof value === 'string') {
     return value
       .replace(/([?&](?:api_key|apikey|token|key|password|id)=)[^&\s/]+/gi, '$1[REDACTED]')
-      .replace(/(Bearer\s+)[a-zA-Z0-9._-]+/gi, '$1[REDACTED]')
-      .replace(/(Basic\s+)[a-zA-Z0-9._-]+/gi, '$1[REDACTED]');
+      .replace(/(Bearer\s+)[a-zA-Z0-9._+/=-]+/gi, '$1[REDACTED]')
+      .replace(/(Basic\s+)[a-zA-Z0-9._+/=-]+/gi, '$1[REDACTED]');
   }
 
   if (value instanceof Error) {

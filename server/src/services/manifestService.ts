@@ -106,9 +106,9 @@ export async function enrichManifestWithGenres(
             return idFromStored === catalog.id;
           });
           if (savedCatalog?.filters?.genres?.length) {
-            const sortedGenres = [...(savedCatalog.filters.genres as unknown as string[])].sort(
-              (a, b) => a.localeCompare(b)
-            );
+            const sortedGenres = [...savedCatalog.filters.genres]
+              .map(String)
+              .sort((a, b) => a.localeCompare(b));
             sortedGenres.unshift('All');
             catalog.extra = catalog.extra || [];
             catalog.extra = catalog.extra.filter((e) => e.name !== 'genre');
@@ -199,7 +199,7 @@ export async function enrichManifestWithGenres(
                         options = healedOptions;
                         healedFixes = healedFixes || {};
                         healedFixes[savedCatalog.id!] = {
-                          genres: selected as unknown as number[],
+                          genres: selected.map(Number),
                           genreNames: healedOptions,
                         };
                         log.info('Self-healing successful', {

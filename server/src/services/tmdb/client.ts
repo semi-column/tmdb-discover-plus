@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import fetch, { type RequestInit } from 'node-fetch';
 import { getCache } from '../cache/index.ts';
 import { CachedError, classifyError } from '../cache/CacheWrapper.ts';
 import { createLogger } from '../../utils/logger.ts';
@@ -6,6 +6,8 @@ import { getTmdbThrottle } from '../../infrastructure/tmdbThrottle.ts';
 import { getMetrics } from '../../infrastructure/metrics.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
+import { TIMEOUTS, CONCURRENCY, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
+import { logSwallowedError } from '../../utils/helpers.ts';
 import { httpsAgent, TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
 
 import type { ApiKeyValidationResult, CacheErrorType, Logger } from '../../types/index.ts';
@@ -16,15 +18,15 @@ type TmdbApiParams = Record<string, string | number | boolean | undefined | null
 
 const log = createLogger('tmdb:client') as Logger;
 
-const FETCH_TIMEOUT_MS = 10_000;
-const MAX_IN_FLIGHT = 5000;
+const FETCH_TIMEOUT_MS = TIMEOUTS.TMDB_FETCH_MS;
+const MAX_IN_FLIGHT = CONCURRENCY.MAX_IN_FLIGHT;
 
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
 const CIRCUIT_BREAKER = {
-  threshold: 10,
-  windowMs: 60_000,
-  cooldownMs: 30_000,
+  threshold: CIRCUIT_BREAKER_DEFAULTS.THRESHOLD,
+  windowMs: CIRCUIT_BREAKER_DEFAULTS.WINDOW_MS,
+  cooldownMs: CIRCUIT_BREAKER_DEFAULTS.COOLDOWN_MS,
   failures: [] as number[],
   openedAt: 0,
 };
@@ -205,7 +207,7 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       try {
         response = await fetch(url.toString(), {
           agent: httpsAgent,
-          signal: abortController.signal as any,
+          signal: abortController.signal as RequestInit['signal'],
         });
       } finally {
         clearTimeout(timeoutId);
@@ -333,8 +335,8 @@ export async function tmdbWebsiteFetchJson(
   try {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
-  } catch {
-    /* ignore get error */
+  } catch (err) {
+    logSwallowedError('tmdb-client:cache-get', err);
   }
 
   const throttle = getTmdbThrottle();

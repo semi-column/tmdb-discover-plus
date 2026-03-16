@@ -37,8 +37,8 @@ export async function resolveItems(items, fetchById, search) {
             };
           }
         }
-      } catch {
-        void 0;
+      } catch (err) {
+        console.warn('Filter resolution failed', err);
       }
       return item;
     })

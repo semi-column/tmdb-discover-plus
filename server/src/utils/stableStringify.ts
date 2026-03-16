@@ -2,7 +2,7 @@ export function stableStringify(value: unknown, seen: WeakSet<object> = new Weak
   if (value === null || value === undefined) return String(value);
   if (typeof value !== 'object') return JSON.stringify(value);
 
-  if (seen.has(value as object)) return '"[Circular]"';
+  if (seen.has(value as object)) return 'null';
   seen.add(value as object);
 
   if (Array.isArray(value)) return '[' + value.map((v) => stableStringify(v, seen)).join(',') + ']';

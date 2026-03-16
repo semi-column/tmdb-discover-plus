@@ -59,7 +59,7 @@ function App() {
       .then((data) => {
         if (!stale) setStats(data);
       })
-      .catch(() => {});
+      .catch((err) => console.warn('Stats fetch failed', err));
     return () => {
       stale = true;
     };

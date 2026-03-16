@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import fetch, { type RequestInit } from 'node-fetch';
 import { getCache } from '../cache/index.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { getImdbThrottle } from '../../infrastructure/imdbThrottle.ts';
@@ -6,6 +6,7 @@ import { recordImdbApiCall, isQuotaExceeded } from '../../infrastructure/imdbQuo
 import { getMetrics } from '../../infrastructure/metrics.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
+import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
 
 import type { Logger } from '../../types/index.ts';
 
@@ -13,14 +14,14 @@ type ImdbFetchError = Error & { code?: string; statusCode?: number };
 
 const log = createLogger('imdb:client') as Logger;
 
-const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_TIMEOUT_MS = TIMEOUTS.IMDB_FETCH_MS;
 
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
 const CIRCUIT_BREAKER = {
-  threshold: 10,
-  windowMs: 60_000,
-  cooldownMs: 30_000,
+  threshold: CIRCUIT_BREAKER_DEFAULTS.THRESHOLD,
+  windowMs: CIRCUIT_BREAKER_DEFAULTS.WINDOW_MS,
+  cooldownMs: CIRCUIT_BREAKER_DEFAULTS.COOLDOWN_MS,
   failures: [] as number[],
   openedAt: 0,
 };
@@ -201,7 +202,7 @@ async function executeImdbFetch(
       let response;
       try {
         response = await fetch(url.toString(), {
-          signal: abortController.signal as any,
+          signal: abortController.signal as RequestInit['signal'],
           headers: {
             [keyHeader]: apiKey,
             [hostHeader]: apiHost,
@@ -284,18 +285,22 @@ async function executeImdbFetch(
     }
   }
 
+  if (!lastError) {
+    throw new Error('All retries exhausted without error');
+  }
+
   log.error('IMDb fetch error after retries', {
-    error: lastError!.message,
+    error: lastError.message,
     endpoint: ep.slice(0, 80),
-    statusCode: lastError!.statusCode,
+    statusCode: lastError.statusCode,
     requestId: getRequestId(),
   });
 
   const shouldTrip =
-    !lastError!.statusCode ||
-    lastError!.statusCode >= 500 ||
-    lastError!.statusCode === 429 ||
-    ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(lastError!.code || '');
+    !lastError.statusCode ||
+    lastError.statusCode >= 500 ||
+    lastError.statusCode === 429 ||
+    ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(lastError.code || '');
 
   if (shouldTrip) {
     recordCircuitFailure();

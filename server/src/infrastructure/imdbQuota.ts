@@ -1,6 +1,7 @@
 import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
 import { getCache } from '../services/cache/index.ts';
+import { CACHE_TTLS } from '../constants.ts';
 
 const log = createLogger('ImdbQuota');
 
@@ -34,9 +35,13 @@ function getQuotaCacheKey(): string {
 function persistQuota(): void {
   try {
     const cache = getCache();
-    cache.set(getQuotaCacheKey(), state.requestsThisMonth, 86400 * 35).catch(() => {});
-  } catch {
-    // cache not ready yet
+    cache
+      .set(getQuotaCacheKey(), state.requestsThisMonth, CACHE_TTLS.QUOTA_PERSISTENCE)
+      .catch((err) => {
+        log.debug('Quota persist failed', { error: (err as Error).message });
+      });
+  } catch (err) {
+    log.debug('Quota persist skipped', { error: (err as Error).message });
   }
 }
 
@@ -48,8 +53,8 @@ export async function initImdbQuota(): Promise<void> {
       state.requestsThisMonth = persisted;
       log.info('Restored IMDb quota from cache', { requestsThisMonth: persisted });
     }
-  } catch {
-    // cache not available at startup
+  } catch (err) {
+    log.debug('Quota restore skipped', { error: (err as Error).message });
   }
 }
 

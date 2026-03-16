@@ -1,6 +1,8 @@
 import fetch from 'node-fetch';
 import { getCache } from './cache/index.ts';
 import { createLogger } from '../utils/logger.ts';
+import { TIMEOUTS, CACHE_TTLS } from '../constants.ts';
+import { logSwallowedError } from '../utils/helpers.ts';
 
 const log = createLogger('rpdb');
 const RPDB_BASE_URL = 'https://api.ratingposterdb.com';
@@ -24,16 +26,18 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
   try {
     const cached = await cache.get(cacheKey);
     if (cached) return cached as string;
-  } catch (_e) {}
+  } catch (err) {
+    logSwallowedError('rpdb:cache-get', err);
+  }
 
   const url = `${RPDB_BASE_URL}/${apiKey}/imdb/rating/${imdbId}`;
 
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUTS.RPDB_FETCH_MS) });
 
     if (!response.ok) {
       if (response.status === 404) {
-        await cache.set(cacheKey, 'N/A', 86400);
+        await cache.set(cacheKey, 'N/A', CACHE_TTLS.RPDB_NOT_FOUND);
         return null;
       }
       if (response.status === 403) {
@@ -47,7 +51,7 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
     const rating = text.trim();
 
     if (rating && !isNaN(parseFloat(rating))) {
-      await cache.set(cacheKey, rating, 86400);
+      await cache.set(cacheKey, rating, CACHE_TTLS.RPDB_RATING);
       return rating;
     }
 
