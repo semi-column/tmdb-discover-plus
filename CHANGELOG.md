@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.8.0...v2.9.0) (2026-03-18)
+
+
+### Features
+
+* Added Advanced IMDb Filters ([#67](https://github.com/semi-column/tmdb-discover-plus/issues/67)) ([6ec3dc4](https://github.com/semi-column/tmdb-discover-plus/commit/6ec3dc4a7cdcdc650e9a8fe6d32ee2f8dcc40dd5))
+* Added smart meta caching/dedup ([0781f88](https://github.com/semi-column/tmdb-discover-plus/commit/0781f88b7e546d38b0d19a266f6c7b22a9989ef3))
+* Enhance TV Shows Metadata with IMDB Meta ([cbc0839](https://github.com/semi-column/tmdb-discover-plus/commit/cbc0839a10b1347660e071bbb1268710f4f2dde1))
+* harden metadata performance with longer TTLs, catalog caching, and trending warmup ([3097829](https://github.com/semi-column/tmdb-discover-plus/commit/30978292aa7833bf0abd7bf5d6ba582aeb7f5ac2))
+
+
+### Bug Fixes
+
+* resolve tv show age ratings not persisting on save ([0659937](https://github.com/semi-column/tmdb-discover-plus/commit/06599373fdf2846e90f99ffc451a3d9c6fc8db9b))
+* update prerequisite to the required node 22 + ([df28f0a](https://github.com/semi-column/tmdb-discover-plus/commit/df28f0aa9c003b94306ca1fb6ad0ad008d50d29b))
+* userId stale-state issue fix ([3ded0d9](https://github.com/semi-column/tmdb-discover-plus/commit/3ded0d9855583c7a3b4fa5c683bbe63a276e6748))
+* various bug fixes ([#69](https://github.com/semi-column/tmdb-discover-plus/issues/69)) ([525d5c0](https://github.com/semi-column/tmdb-discover-plus/commit/525d5c012e3af597656d358c490b704c68fc48e0))
+
+
+### Performance Improvements
+
+* improve IMDb/TMDB catalog performance, shared caching, and page-size consistency ([f525cb5](https://github.com/semi-column/tmdb-discover-plus/commit/f525cb57187216e4e85695f7605890b4ae3f5435))
+
 ## [2.8.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.7.3...v2.8.0) (2026-02-27)
 
 
