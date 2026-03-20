@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.9.0...v2.9.1) (2026-03-20)
+
+
+### Features
+
+* **client:** source descriptors + panel dispatcher ([7da539d](https://github.com/semi-column/tmdb-discover-plus/commit/7da539d93249bf3eb9e2f329682e35a4c8f6d385))
+
+
+### Bug Fixes
+
+* IMDb pagination fix ([46ab83e](https://github.com/semi-column/tmdb-discover-plus/commit/46ab83e44d1154e2b5518204e52bef4414ccbdac))
+* IMDb pagination fix ([aab5c87](https://github.com/semi-column/tmdb-discover-plus/commit/aab5c8704289a7488c0fa585986a4e9b29a15a76))
+* IMDb pagination fix ([d367852](https://github.com/semi-column/tmdb-discover-plus/commit/d36785216ed23e116b3b3f0e1a2d58b4b1d2239a))
+* IMDb pagination fix ([2d7c2b3](https://github.com/semi-column/tmdb-discover-plus/commit/2d7c2b3719e4234c188cd16af072cdbea6fb9c29))
+* IMDb pagination fix ([7da539d](https://github.com/semi-column/tmdb-discover-plus/commit/7da539d93249bf3eb9e2f329682e35a4c8f6d385))
+
 ## [2.9.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.8.0...v2.9.0) (2026-03-18)
 
 
