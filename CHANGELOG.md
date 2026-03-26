@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.2](https://github.com/semi-column/tmdb-discover-plus/compare/v2.9.1...v2.9.2) (2026-03-26)
+
+
+### Features
+
+* Country filter on TMDB is now Multi Select ([131faae](https://github.com/semi-column/tmdb-discover-plus/commit/131faaeae7a51bd7660eda83d4302061af264b4c))
+* last-x-years catalog filters ([13741a6](https://github.com/semi-column/tmdb-discover-plus/commit/13741a685fce8d03cc503d267079e50a79892122))
+
+
+### Bug Fixes
+
+* correct IMDb preset filtering and restore IMDb top 250 catalogs ([bbe9afe](https://github.com/semi-column/tmdb-discover-plus/commit/bbe9afe2911abd148061f76bf99d02503adde35e))
+* digital release filter fix ([bbe9afe](https://github.com/semi-column/tmdb-discover-plus/commit/bbe9afe2911abd148061f76bf99d02503adde35e))
+* fallback to IMDb Metdata when TMDB id is not availaible. ([15edc13](https://github.com/semi-column/tmdb-discover-plus/commit/15edc135d414fbdd3607c92a9a17da8508ab4253))
+* Improve poster fallback ([dd9a000](https://github.com/semi-column/tmdb-discover-plus/commit/dd9a0002b86311e67c9c2db122b0b59187d8a1a5))
+* improve poster fallbacks and prefer IMDb episode thumbnails ([bbe9afe](https://github.com/semi-column/tmdb-discover-plus/commit/bbe9afe2911abd148061f76bf99d02503adde35e))
+* missing posters fix ([e91b845](https://github.com/semi-column/tmdb-discover-plus/commit/e91b845134f05c8ebfe3f2b1e4a74688f995a9d7))
+* Released Only filter ignores future year filters ([131faae](https://github.com/semi-column/tmdb-discover-plus/commit/131faaeae7a51bd7660eda83d4302061af264b4c))
+* remove duplicate Any option from tmdb tv dropdowns ([ac2fd8a](https://github.com/semi-column/tmdb-discover-plus/commit/ac2fd8a1645d01524551387135e5a09d43ad5c8b))
+
+
+### Reverts
+
+* default tmdb episode thumbnails ([4d53f84](https://github.com/semi-column/tmdb-discover-plus/commit/4d53f84e24941dc832460c5d695de298fbc21d1e))
+
 ## [2.9.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.9.0...v2.9.1) (2026-03-20)
 
 
