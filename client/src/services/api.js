@@ -291,6 +291,52 @@ class ApiService {
     });
   }
 
+  async previewAnilistCatalog(type, filters) {
+    return this.request('/anilist/preview', {
+      method: 'POST',
+      body: JSON.stringify({ type, filters }),
+    });
+  }
+
+  async previewMalCatalog(type, filters) {
+    return this.request('/mal/preview', {
+      method: 'POST',
+      body: JSON.stringify({ type, filters }),
+    });
+  }
+
+  async previewSimklCatalog(type, filters) {
+    return this.request('/simkl/preview', {
+      method: 'POST',
+      body: JSON.stringify({ type, filters }),
+    });
+  }
+
+  async validateMalKey(clientId) {
+    return this.request('/validate-mal-key', {
+      method: 'POST',
+      body: JSON.stringify({ clientId }),
+    });
+  }
+
+  async validateSimklKey(apiKey) {
+    return this.request('/validate-simkl-key', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey }),
+    });
+  }
+
+  async saveSourceKey(source, key) {
+    return this.request('/source-key', {
+      method: 'POST',
+      body: JSON.stringify({ source, key }),
+    });
+  }
+
+  async getSourceKeys() {
+    return this.request('/source-keys');
+  }
+
   async searchImdb(query, type, limit = 20) {
     const params = { query };
     if (type) params.type = type;

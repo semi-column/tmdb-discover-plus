@@ -105,6 +105,22 @@ export const config = Object.freeze({
     apiKey: env('RPDB_API_KEY'),
   }),
 
+  malApi: Object.freeze({
+    clientId: env('MAL_CLIENT_ID'),
+    rateLimit: envInt('MAL_RATE_LIMIT', 3),
+    get enabled(): boolean {
+      return !!process.env['MAL_CLIENT_ID'];
+    },
+  }),
+
+  simklApi: Object.freeze({
+    clientId: env('SIMKL_CLIENT_ID'),
+    rateLimit: envInt('SIMKL_RATE_LIMIT', 5),
+    get enabled(): boolean {
+      return !!process.env['SIMKL_CLIENT_ID'];
+    },
+  }),
+
   logging: Object.freeze({
     level: env('LOG_LEVEL', 'info').toLowerCase(),
     format: env('LOG_FORMAT', 'text'),

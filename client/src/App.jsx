@@ -132,7 +132,7 @@ function App() {
 
       <AppProviders state={state} actions={actions} config={config} tmdb={tmdb}>
         <main
-          className={`main ${state.activeCatalog?.source === 'imdb' ? 'theme-imdb' : ''}`}
+          className={`main ${state.activeCatalog?.source && state.activeCatalog.source !== 'tmdb' ? `theme-${state.activeCatalog.source}` : ''}`}
           id="main-content"
         >
           <div className="container">

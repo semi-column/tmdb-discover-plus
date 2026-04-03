@@ -7,6 +7,14 @@ import { useCatalogEditor } from '../../hooks/useCatalogEditor';
 import { useCatalogEditorHandlers } from '../../hooks/useCatalogEditorHandlers';
 import { getSource } from '../../sources/index';
 
+const SOURCE_ATTRIBUTION = {
+  tmdb: { label: 'TMDB', url: 'https://www.themoviedb.org/' },
+  imdb: { label: 'Sleeyax', url: 'https://sleeyax.dev/' },
+  anilist: { label: 'AniList', url: 'https://anilist.co/' },
+  mal: { label: 'MyAnimeList', url: 'https://myanimelist.net/' },
+  simkl: { label: 'Simkl', url: 'https://simkl.com/' },
+};
+
 export const CatalogEditor = memo(function CatalogEditor() {
   const state = useCatalogEditor();
   const handlers = useCatalogEditorHandlers(state);
@@ -48,6 +56,24 @@ export const CatalogEditor = memo(function CatalogEditor() {
     searchImdbPeople,
     searchImdbCompanies,
     searchCities,
+    // Anime reference data
+    anilistGenres,
+    anilistTags,
+    anilistSortOptions,
+    anilistFormatOptions,
+    anilistStatusOptions,
+    anilistSeasonOptions,
+    anilistSourceOptions,
+    anilistCountryOptions,
+    malGenres,
+    malRankingTypes,
+    malSortOptions,
+    simklGenres,
+    simklSortOptions,
+    simklListTypes,
+    simklTrendingPeriods,
+    simklBestFilters,
+    simklAnimeTypes,
     selectedPeople,
     setSelectedPeople,
     selectedCompanies,
@@ -156,6 +182,24 @@ export const CatalogEditor = memo(function CatalogEditor() {
     imdbCertificateRatings,
     imdbRankedLists,
     imdbWithDataOptions,
+    // Anime reference data
+    anilistGenres,
+    anilistTags,
+    anilistSortOptions,
+    anilistFormatOptions,
+    anilistStatusOptions,
+    anilistSeasonOptions,
+    anilistSourceOptions,
+    anilistCountryOptions,
+    malGenres,
+    malRankingTypes,
+    malSortOptions,
+    simklGenres,
+    simklSortOptions,
+    simklListTypes,
+    simklTrendingPeriods,
+    simklBestFilters,
+    simklAnimeTypes,
     handleTVNetworkSearch,
     handleTriStateGenreClick,
     genresLoading,
@@ -222,7 +266,9 @@ export const CatalogEditor = memo(function CatalogEditor() {
               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                 Powered by{' '}
                 <a
-                  href={isImdbCatalog ? 'https://sleeyax.dev/' : 'https://www.themoviedb.org/'}
+                  href={
+                    SOURCE_ATTRIBUTION[localCatalog?.source]?.url || SOURCE_ATTRIBUTION.tmdb.url
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -233,7 +279,7 @@ export const CatalogEditor = memo(function CatalogEditor() {
                   onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
                   onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
                 >
-                  {isImdbCatalog ? 'Sleeyax' : 'TMDB'}
+                  {SOURCE_ATTRIBUTION[localCatalog?.source]?.label || SOURCE_ATTRIBUTION.tmdb.label}
                 </a>
               </div>
             </div>

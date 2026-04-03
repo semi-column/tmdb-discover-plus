@@ -1178,6 +1178,16 @@
   color: #f5c518;
 }
 
+.source-tab.active.anilist {
+  color: #02a9ff;
+}
+.source-tab.active.mal {
+  color: #2e51a2;
+}
+.source-tab.active.simkl {
+  color: #0ac775;
+}
+
 .source-tabs-compact {
   margin-bottom: 0;
   flex-shrink: 0;

@@ -11,7 +11,7 @@ const catalogSchema = new mongoose.Schema(
     },
     name: { type: String, required: true },
     type: { type: String, enum: ['movie', 'series'], required: true },
-    source: { type: String, enum: ['tmdb', 'imdb'], default: 'tmdb' },
+    source: { type: String, enum: ['tmdb', 'imdb', 'anilist', 'mal', 'simkl'], default: 'tmdb' },
     filters: {
       listType: { type: String, default: 'discover' },
       genres: { type: [mongoose.Schema.Types.Mixed], default: undefined },
@@ -130,6 +130,16 @@ const userConfigSchema = new mongoose.Schema({
 
   // User's TMDB API key (encrypted with AES-256-GCM)
   tmdbApiKeyEncrypted: {
+    type: String,
+    required: false,
+  },
+  // User's MAL Client ID (encrypted, for per-user key when server key not configured)
+  malClientIdEncrypted: {
+    type: String,
+    required: false,
+  },
+  // User's Simkl API key (encrypted, for per-user key when server key not configured)
+  simklApiKeyEncrypted: {
     type: String,
     required: false,
   },

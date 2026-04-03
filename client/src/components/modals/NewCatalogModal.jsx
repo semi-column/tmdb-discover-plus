@@ -1,46 +1,42 @@
 import { useState } from 'react';
-import { X, Film, Tv, Award } from 'lucide-react';
+import { X, Film, Tv } from 'lucide-react';
 import { useModalA11y } from '../../hooks/useModalA11y';
+import { getSource } from '../../sources';
+
+const SOURCES = [
+  { id: 'tmdb', label: 'TMDB', desc: 'Standard TMDB discovery', alwaysVisible: true },
+  { id: 'imdb', label: 'IMDb', desc: 'IMDb metadata & lists', enabledKey: 'imdbEnabled' },
+  { id: 'anilist', label: 'AniList', desc: 'AniList anime database', alwaysVisible: true },
+  { id: 'mal', label: 'MAL', desc: 'MyAnimeList rankings', alwaysVisible: true },
+  { id: 'simkl', label: 'Simkl', desc: 'Simkl anime discovery', alwaysVisible: true },
+];
 
 export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false }) {
   const [name, setName] = useState('');
   const [source, setSource] = useState('tmdb');
-  const [type, setType] = useState('movie'); // 'movie' or 'series'
+  const [type, setType] = useState('movie');
   const modalRef = useModalA11y(isOpen, onClose);
 
   if (!isOpen) return null;
+
+  const enabledFlags = { imdbEnabled };
+
+  const visibleSources = SOURCES.filter((s) => s.alwaysVisible || enabledFlags[s.enabledKey]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    if (source === 'imdb') {
-      const filters = {
-        listType: 'discover',
-        genres: [],
-        sortBy: 'POPULARITY',
-        sortOrder: 'DESC',
-      };
-      onAdd({
-        name: name.trim(),
-        type,
-        source: 'imdb',
-        filters,
-        enabled: true,
-      });
-    } else {
-      onAdd({
-        name: name.trim(),
-        type,
-        filters: {
-          listType: 'discover',
-          genres: [],
-          sortBy: 'popularity.desc',
-          voteCountMin: 0,
-        },
-        enabled: true,
-      });
-    }
+    const sourceDescriptor = getSource(source);
+    const filters = { ...sourceDescriptor.defaultFilters };
+
+    onAdd({
+      name: name.trim(),
+      type,
+      source,
+      filters,
+      enabled: true,
+    });
 
     setName('');
     setSource('tmdb');
@@ -48,7 +44,13 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
     onClose();
   };
 
-  const isImdbListValid = true;
+  const placeholders = {
+    tmdb: 'e.g., My Sci-Fi Collection, Netflix Picks',
+    imdb: 'e.g., Oscar Winners, IMDb Top Rated',
+    anilist: 'e.g., Top Anime, Trending This Season',
+    mal: 'e.g., MAL Top Ranked, Seasonal Anime',
+    simkl: 'e.g., Trending Anime, Best of 2024',
+  };
 
   return (
     <div
@@ -71,7 +73,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
           <div>
             <h3 className="modal-title">Create New Catalog</h3>
             <p className="text-secondary" style={{ fontSize: '13px', marginTop: '4px' }}>
-              Choose a data source and content type to get started
+              Choose a content type and source to get started
             </p>
           </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>
@@ -81,83 +83,50 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            {/* Content Type Toggle */}
             <div className="filter-group">
-              <div className="catalog-type-grid">
+              <span className="filter-label">Content Type</span>
+              <div className="content-type-toggle" style={{ marginBottom: 0 }}>
                 <button
                   type="button"
-                  className={`type-card ${source === 'tmdb' && type === 'movie' ? 'active' : ''}`}
-                  onClick={() => {
-                    setSource('tmdb');
-                    setType('movie');
-                  }}
+                  className={`type-btn ${type === 'movie' ? 'active' : ''}`}
+                  onClick={() => setType('movie')}
                 >
-                  <div className="type-card-icon tmdb">
-                    <Film size={20} />
-                  </div>
-                  <div className="type-card-content">
-                    <span className="type-title">TMDB Movie</span>
-                    <span className="type-desc">Standard TMDB discovery</span>
-                  </div>
+                  <Film size={16} />
+                  Movies
                 </button>
-
                 <button
                   type="button"
-                  className={`type-card ${source === 'tmdb' && type === 'series' ? 'active' : ''}`}
-                  onClick={() => {
-                    setSource('tmdb');
-                    setType('series');
-                  }}
+                  className={`type-btn ${type === 'series' ? 'active' : ''}`}
+                  onClick={() => setType('series')}
                 >
-                  <div className="type-card-icon tmdb">
-                    <Tv size={20} />
-                  </div>
-                  <div className="type-card-content">
-                    <span className="type-title">TMDB Series</span>
-                    <span className="type-desc">Standard TMDB discovery</span>
-                  </div>
+                  <Tv size={16} />
+                  Series
                 </button>
-
-                {imdbEnabled && (
-                  <>
-                    <button
-                      type="button"
-                      className={`type-card ${source === 'imdb' && type === 'movie' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSource('imdb');
-                        setType('movie');
-                      }}
-                    >
-                      <div className="type-card-icon imdb">
-                        <Award size={20} />
-                      </div>
-                      <div className="type-card-content">
-                        <span className="type-title">IMDb Movie</span>
-                        <span className="type-desc">IMDb metadata & lists</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`type-card ${source === 'imdb' && type === 'series' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSource('imdb');
-                        setType('series');
-                      }}
-                    >
-                      <div className="type-card-icon imdb">
-                        <Tv size={20} />
-                      </div>
-                      <div className="type-card-content">
-                        <span className="type-title">IMDb Series</span>
-                        <span className="type-desc">IMDb metadata & lists</span>
-                      </div>
-                    </button>
-                  </>
-                )}
               </div>
             </div>
 
-            <div className="filter-group" style={{ marginTop: '20px' }}>
+            {/* Source Selector */}
+            <div className="filter-group" style={{ marginTop: '16px' }}>
+              <span className="filter-label">Source</span>
+              <div className="source-selector">
+                {visibleSources.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`source-pill ${source === s.id ? 'active' : ''}`}
+                    onClick={() => setSource(s.id)}
+                    title={s.desc}
+                  >
+                    <span className={`source-dot ${s.id}`} />
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Catalog Name */}
+            <div className="filter-group" style={{ marginTop: '16px' }}>
               <label className="filter-label" htmlFor="new-catalog-name">
                 Catalog Name
               </label>
@@ -166,29 +135,19 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
                 type="text"
                 className="input"
                 style={{ height: '42px', fontSize: '15px' }}
-                placeholder={
-                  source === 'imdb'
-                    ? 'e.g., Oscar Winners, IMDb Top Rated'
-                    : 'e.g., My Sci-Fi Collection, Netflix Picks'
-                }
+                placeholder={placeholders[source] || placeholders.tmdb}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
               />
             </div>
-
-
           </div>
 
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onClose}>
               Cancel
             </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={!name.trim() || !isImdbListValid}
-            >
+            <button type="submit" className="btn btn-primary" disabled={!name.trim()}>
               Create Catalog
             </button>
           </div>

@@ -86,6 +86,32 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
     }
   }
 
+  // Encrypt MAL client ID if provided as raw value
+  if (config.malClientId) {
+    const safeKey = sanitizeString(config.malClientId, 128);
+    if (safeKey) {
+      try {
+        config.malClientIdEncrypted = encrypt(safeKey) ?? undefined;
+      } catch (err) {
+        log.error('Failed to encrypt MAL client ID', { error: (err as Error).message });
+      }
+    }
+    delete (config as Record<string, unknown>).malClientId;
+  }
+
+  // Encrypt Simkl API key if provided as raw value
+  if (config.simklApiKey) {
+    const safeKey = sanitizeString(config.simklApiKey, 128);
+    if (safeKey) {
+      try {
+        config.simklApiKeyEncrypted = encrypt(safeKey) ?? undefined;
+      } catch (err) {
+        log.error('Failed to encrypt Simkl API key', { error: (err as Error).message });
+      }
+    }
+    delete (config as Record<string, unknown>).simklApiKey;
+  }
+
   const processedCatalogs = (config.catalogs || []).map((c) => {
     const { displayLanguage, ...cleanFilters } = c.filters || {};
 
@@ -286,5 +312,25 @@ export async function getPublicStats(): Promise<PublicStats> {
   } catch (error) {
     log.error('Failed to get public stats', { error: (error as Error).message });
     return { totalUsers: 0, totalCatalogs: 0 };
+  }
+}
+
+export function getMalKeyFromConfig(config: UserConfig | null): string | null {
+  if (!config?.malClientIdEncrypted) return null;
+  try {
+    return decrypt(config.malClientIdEncrypted);
+  } catch (err) {
+    log.error('Failed to decrypt MAL client ID', { error: (err as Error).message });
+    return null;
+  }
+}
+
+export function getSimklKeyFromConfig(config: UserConfig | null): string | null {
+  if (!config?.simklApiKeyEncrypted) return null;
+  try {
+    return decrypt(config.simklApiKeyEncrypted);
+  } catch (err) {
+    log.error('Failed to decrypt Simkl API key', { error: (err as Error).message });
+    return null;
   }
 }

@@ -32,6 +32,7 @@ import { getImdbCircuitBreakerState } from './services/imdb/client.ts';
 import { getImdbQuotaStats } from './infrastructure/imdbQuota.ts';
 import { isImdbApiEnabled } from './services/imdb/index.ts';
 import { initImdbApi } from './services/imdb/index.ts';
+import { initAnimeIdMap } from './services/animeIdMap/index.ts';
 import { requestIdMiddleware } from './utils/requestContext.ts';
 import { sendError, ErrorCodes, AppError } from './utils/AppError.ts';
 import { TIMEOUTS, HEAP_WARN_THRESHOLD_MB } from './constants.ts';
@@ -485,6 +486,14 @@ async function start() {
       });
 
     initImdbApi();
+
+    initAnimeIdMap()
+      .then(() => {
+        log.info('Anime ID map initialized');
+      })
+      .catch((err) => {
+        log.warn('Anime ID map initialization failed (non-critical)', { error: err.message });
+      });
   } catch (error) {
     log.error('Failed to start server', { error: (error as Error).message });
     process.exit(1);

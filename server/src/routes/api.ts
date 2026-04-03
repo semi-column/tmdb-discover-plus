@@ -14,6 +14,9 @@ import {
 } from '../services/configService.ts';
 import * as tmdb from '../services/tmdb/index.ts';
 import * as imdb from '../services/imdb/index.ts';
+import * as anilist from '../services/anilist/index.ts';
+import * as mal from '../services/mal/index.ts';
+import * as simkl from '../services/simkl/index.ts';
 import { searchCities } from '../services/geo.ts';
 import {
   getBaseUrl,
@@ -31,8 +34,10 @@ import {
   sanitizeImdbFilters,
   sanitizePage,
   isValidContentType,
+  sanitizeString,
 } from '../utils/validation.ts';
 import { sendError, ErrorCodes, safeErrorMessage, AppError } from '../utils/AppError.ts';
+import { encrypt } from '../utils/encryption.ts';
 import { requireAuth, optionalAuth, requireConfigOwnership } from '../utils/authMiddleware.ts';
 import { computeApiKeyId, getSecurityMetrics } from '../utils/security.ts';
 import { config } from '../config.ts';
@@ -161,6 +166,119 @@ router.post('/validate-key', strictRateLimit, async (req, res) => {
   }
 });
 
+router.post('/validate-mal-key', requireAuth, strictRateLimit, async (req, res) => {
+  try {
+    const { clientId } = req.body;
+    if (!clientId || typeof clientId !== 'string') {
+      return res.json({ valid: false, error: 'MAL Client ID is required' });
+    }
+    if (!/^[a-f0-9]{32}$/i.test(clientId)) {
+      return res.json({
+        valid: false,
+        error: 'Invalid MAL Client ID format (expected 32 hex characters)',
+      });
+    }
+    // Test the key by making a simple API call
+    const testUrl = 'https://api.myanimelist.net/v2/anime/ranking?ranking_type=all&limit=1';
+    const response = await fetch(testUrl, {
+      headers: { 'X-MAL-CLIENT-ID': clientId },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.ok) {
+      res.json({ valid: true });
+    } else if (response.status === 401 || response.status === 403) {
+      res.json({ valid: false, error: 'Invalid MAL Client ID' });
+    } else {
+      res.json({ valid: false, error: `MAL API returned status ${response.status}` });
+    }
+  } catch (error) {
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
+  }
+});
+
+router.post('/validate-simkl-key', requireAuth, strictRateLimit, async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey || typeof apiKey !== 'string') {
+      return res.json({ valid: false, error: 'Simkl API key is required' });
+    }
+    if (!/^[a-f0-9]{32,64}$/i.test(apiKey)) {
+      return res.json({ valid: false, error: 'Invalid Simkl API key format' });
+    }
+    // Test the key by making a simple API call
+    const testUrl = 'https://api.simkl.com/anime/genres';
+    const response = await fetch(testUrl, {
+      headers: { 'simkl-api-key': apiKey, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.ok) {
+      res.json({ valid: true });
+    } else if (response.status === 401 || response.status === 403) {
+      res.json({ valid: false, error: 'Invalid Simkl API key' });
+    } else {
+      res.json({ valid: false, error: `Simkl API returned status ${response.status}` });
+    }
+  } catch (error) {
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
+  }
+});
+
+router.post('/source-key', requireAuth, resolveApiKey, strictRateLimit, async (req, res) => {
+  try {
+    const { source, key } = req.body;
+    if (!source || !key || typeof key !== 'string') {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'source and key are required');
+    }
+    if (source !== 'mal' && source !== 'simkl') {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid source');
+    }
+
+    const apiKey = getApiKey(req);
+    const configs = await getConfigsByApiKey(apiKey);
+    if (configs.length === 0) {
+      return sendError(res, 404, ErrorCodes.NOT_FOUND, 'No configuration found');
+    }
+
+    const userConfig = configs[0];
+    const encryptedKey = encrypt(sanitizeString(key, 128));
+    if (!encryptedKey) {
+      return sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Encryption failed');
+    }
+
+    const fieldName = source === 'mal' ? 'malClientIdEncrypted' : 'simklApiKeyEncrypted';
+    const savedConfig = await saveUserConfig({
+      ...userConfig,
+      [fieldName]: encryptedKey,
+      tmdbApiKey: apiKey,
+    });
+
+    log.info('Source key saved', { userId: userConfig.userId, source });
+    res.json({ success: true });
+  } catch (error) {
+    log.error('POST /source-key error', { error: (error as Error).message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
+  }
+});
+
+router.get('/source-keys', requireAuth, resolveApiKey, async (req, res) => {
+  try {
+    const apiKey = getApiKey(req);
+    const configs = await getConfigsByApiKey(apiKey);
+    if (configs.length === 0) {
+      return res.json({ mal: false, simkl: false });
+    }
+
+    const userConfig = configs[0];
+    res.json({
+      mal: true, // Jikan API - no key needed
+      simkl: !!userConfig.simklApiKeyEncrypted || !!config.simklApi.clientId,
+    });
+  } catch (error) {
+    log.error('GET /source-keys error', { error: (error as Error).message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
+  }
+});
+
 router.get('/configs', requireAuth, resolveApiKey, async (req, res) => {
   try {
     setNoCacheHeaders(res);
@@ -260,6 +378,34 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
         })
       ),
       imdb: imdbData,
+      anilist: {
+        enabled: true,
+        genres: anilist.getGenres(),
+        sortOptions: anilist.getSortOptions(),
+        formatOptions: anilist.getFormatOptions(),
+        statusOptions: anilist.getStatusOptions(),
+        seasonOptions: anilist.getSeasonOptions(),
+        sourceOptions: anilist.getSourceOptions(),
+        countryOptions: anilist.getCountryOptions(),
+      },
+      mal: {
+        enabled: true, // Jikan API - no key needed
+        genres: mal.getGenres(),
+        rankingTypes: mal.getRankingTypes(),
+        sortOptions: mal.getSortOptions(),
+        mediaTypes: mal.getMediaTypes(),
+        statuses: mal.getStatuses(),
+        ratings: mal.getRatings(),
+      },
+      simkl: {
+        enabled: simkl.isSimklEnabled(),
+        genres: simkl.getGenres(),
+        sortOptions: simkl.getSortOptions(),
+        listTypes: simkl.getListTypes(),
+        trendingPeriods: simkl.getTrendingPeriods(),
+        bestFilters: simkl.getBestFilters(),
+        animeTypes: simkl.getAnimeTypes(),
+      },
     };
 
     res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
@@ -749,6 +895,91 @@ router.get('/imdb/search/suggestions', requireAuth, async (req, res) => {
     res.json(result);
   } catch (error) {
     log.error('GET /imdb/search/suggestions error', { error: (error as Error).message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
+  }
+});
+
+// ─── Anime Preview Endpoints ───
+
+const PREVIEW_PAGE_SIZE = 20;
+const PREVIEW_MAX_BACKFILL = 5;
+
+router.post('/anilist/preview', requireAuth, async (req, res) => {
+  try {
+    const { filters, type } = req.body;
+    const contentType = (type === 'series' ? 'series' : 'movie') as ContentType;
+    const metas: import('../types/stremio.ts').StremioMetaPreview[] = [];
+    let page = 1;
+    let pages = 0;
+    while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
+      const result = await anilist.browse(filters || {}, contentType, page);
+      metas.push(...anilist.batchConvertToStremioMeta(result.media, contentType));
+      pages++;
+      if (!result.hasNextPage || result.media.length === 0) break;
+      page++;
+    }
+    res.json({ metas: metas.slice(0, PREVIEW_PAGE_SIZE), totalResults: null });
+  } catch (error) {
+    log.error('POST /anilist/preview error', { error: (error as Error).message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
+  }
+});
+
+router.post('/mal/preview', requireAuth, async (req, res) => {
+  try {
+    const { filters, type } = req.body;
+    const contentType = (type === 'series' ? 'series' : 'movie') as ContentType;
+    const metas: import('../types/stremio.ts').StremioMetaPreview[] = [];
+    let page = 1;
+    let pages = 0;
+    while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
+      const result = await mal.discover(filters || {}, contentType, page);
+      metas.push(...mal.batchConvertToStremioMeta(result.anime, contentType));
+      pages++;
+      if (!result.hasMore || result.anime.length === 0) break;
+      page++;
+    }
+    res.json({ metas: metas.slice(0, PREVIEW_PAGE_SIZE), totalResults: null });
+  } catch (error) {
+    log.error('POST /mal/preview error', { error: (error as Error).message });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
+  }
+});
+
+router.post('/simkl/preview', requireAuth, async (req, res) => {
+  try {
+    const { filters, type } = req.body;
+    const listType = (filters || {}).simklListType || 'trending';
+
+    // Trending uses CDN (no API key needed), other list types need server-side key
+    const simklApiKey: string | null = config.simklApi.clientId || null;
+    if (!simklApiKey && listType !== 'trending') {
+      return sendError(
+        res,
+        503,
+        ErrorCodes.INTERNAL_ERROR,
+        'Simkl API key not configured on server.'
+      );
+    }
+    const contentType = (type === 'series' ? 'series' : 'movie') as ContentType;
+    const metas: import('../types/stremio.ts').StremioMetaPreview[] = [];
+    let page = 1;
+    let pages = 0;
+    while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
+      const result = await simkl.discover(
+        filters || {},
+        contentType,
+        page,
+        simklApiKey || undefined
+      );
+      metas.push(...simkl.batchConvertToStremioMeta(result.items, contentType));
+      pages++;
+      if (!result.hasMore || result.items.length === 0) break;
+      page++;
+    }
+    res.json({ metas: metas.slice(0, PREVIEW_PAGE_SIZE), totalResults: null });
+  } catch (error) {
+    log.error('POST /simkl/preview error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Film, Tv, Award, Square, CheckSquare } from 'lucide-react';
+import { X, Film, Tv, Square, CheckSquare } from 'lucide-react';
 import { useModalA11y } from '../../hooks/useModalA11y';
 
 export function ExportSelectModal({
@@ -48,9 +48,28 @@ export function ExportSelectModal({
     onConfirm(exportData);
   };
 
+  const SOURCE_COLORS = {
+    tmdb: '#01b4e4',
+    imdb: '#f5c518',
+    anilist: '#02a9ff',
+    mal: '#2e51a2',
+    simkl: '#0ac775',
+  };
   const getSourceIcon = (catalog) => {
-    if (catalog.source === 'imdb') return <Award size={14} className="text-imdb" />;
-    return null;
+    const color = SOURCE_COLORS[catalog.source];
+    if (!color) return null;
+    return (
+      <span
+        style={{
+          display: 'inline-block',
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: color,
+          flexShrink: 0,
+        }}
+      />
+    );
   };
 
   const getTypeIcon = (catalog) => {

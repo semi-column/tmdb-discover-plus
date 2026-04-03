@@ -52,6 +52,9 @@ import {
   catalogServerTtl,
 } from '../constants.ts';
 import { logSwallowedError } from '../utils/helpers.ts';
+import { handleAnilistCatalogRequest } from './handlers/anilistHandler.ts';
+import { handleMalCatalogRequest } from './handlers/malHandler.ts';
+import { handleSimklCatalogRequest } from './handlers/simklHandler.ts';
 
 const log = createLogger('addon');
 
@@ -612,6 +615,18 @@ async function handleCatalogRequest(
 ) {
   if (catalogId.startsWith('imdb-')) {
     return handleImdbCatalogRequest(userId, type, catalogId, extra, res, req);
+  }
+
+  if (catalogId.startsWith('anilist-')) {
+    return handleAnilistCatalogRequest(userId, type, catalogId, extra, res, req);
+  }
+
+  if (catalogId.startsWith('mal-')) {
+    return handleMalCatalogRequest(userId, type, catalogId, extra, res, req);
+  }
+
+  if (catalogId.startsWith('simkl-')) {
+    return handleSimklCatalogRequest(userId, type, catalogId, extra, res, req);
   }
 
   const startTime = Date.now();

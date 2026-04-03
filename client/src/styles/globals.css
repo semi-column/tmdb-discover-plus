@@ -74,6 +74,48 @@
   --text-on-accent: #000000;
 }
 
+/* AniList Theme Overrides */
+.theme-anilist {
+  --accent-primary: #02a9ff;
+  --accent-secondary: #0192db;
+  --accent-tertiary: #3db4f0;
+  --accent-light: #5fc3f5;
+  --bg-secondary: #0b1622;
+  --bg-tertiary: #152232;
+  --bg-hover: #1a2d42;
+  --gradient-primary: linear-gradient(135deg, #02a9ff 0%, #0192db 100%);
+  --gradient-tmdb: linear-gradient(135deg, #02a9ff 0%, #0b1622 100%);
+  --text-on-accent: #ffffff;
+}
+
+/* MAL Theme Overrides */
+.theme-mal {
+  --accent-primary: #2e51a2;
+  --accent-secondary: #2546a0;
+  --accent-tertiary: #4065c0;
+  --accent-light: #5a7fd6;
+  --bg-secondary: #121218;
+  --bg-tertiary: #1a1a24;
+  --bg-hover: #242434;
+  --gradient-primary: linear-gradient(135deg, #2e51a2 0%, #2546a0 100%);
+  --gradient-tmdb: linear-gradient(135deg, #2e51a2 0%, #121218 100%);
+  --text-on-accent: #ffffff;
+}
+
+/* Simkl Theme Overrides */
+.theme-simkl {
+  --accent-primary: #0ac775;
+  --accent-secondary: #08b068;
+  --accent-tertiary: #2dd48a;
+  --accent-light: #50e0a0;
+  --bg-secondary: #0d1117;
+  --bg-tertiary: #161b22;
+  --bg-hover: #21262d;
+  --gradient-primary: linear-gradient(135deg, #0ac775 0%, #08b068 100%);
+  --gradient-tmdb: linear-gradient(135deg, #0ac775 0%, #0d1117 100%);
+  --text-on-accent: #ffffff;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

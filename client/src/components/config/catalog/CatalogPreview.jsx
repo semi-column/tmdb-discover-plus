@@ -31,8 +31,8 @@ export const CatalogPreview = memo(function CatalogPreview({ loading, error, dat
                 </span>
               )}
             </h4>
-            {data && (
-              <span className="preview-count">{data.totalResults?.toLocaleString()} results</span>
+            {data && data.totalResults != null && (
+              <span className="preview-count">{data.totalResults.toLocaleString()} results</span>
             )}
           </div>
 

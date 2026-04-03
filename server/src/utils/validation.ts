@@ -433,12 +433,87 @@ const IMDB_ONLY_FILTER_KEYS: ReadonlyArray<string> = [
   'inTheatersRadius',
 ];
 
+const ANILIST_ONLY_FILTER_KEYS = [
+  'anilistSort',
+  'format',
+  'status',
+  'season',
+  'seasonYear',
+  'tags',
+  'tagCategories',
+  'countryOfOrigin',
+  'sourceMaterial',
+  'averageScoreMin',
+  'averageScoreMax',
+  'popularityMin',
+  'episodesMin',
+  'episodesMax',
+  'durationMin',
+  'durationMax',
+];
+
+const MAL_ONLY_FILTER_KEYS = [
+  'malRankingType',
+  'malSeason',
+  'malSeasonYear',
+  'malMediaType',
+  'malStatus',
+  'malSort',
+  'malRating',
+];
+
+const SIMKL_ONLY_FILTER_KEYS = [
+  'simklListType',
+  'simklTrendingPeriod',
+  'simklGenre',
+  'simklType',
+  'simklSort',
+  'simklBestFilter',
+  'simklYear',
+  'simklNetwork',
+];
+
+const ALL_SOURCE_SPECIFIC_KEYS: Record<string, string[]> = {
+  tmdb: [
+    ...IMDB_ONLY_FILTER_KEYS,
+    ...ANILIST_ONLY_FILTER_KEYS,
+    ...MAL_ONLY_FILTER_KEYS,
+    ...SIMKL_ONLY_FILTER_KEYS,
+  ],
+  imdb: [
+    ...TMDB_ONLY_FILTER_KEYS,
+    ...ANILIST_ONLY_FILTER_KEYS,
+    ...MAL_ONLY_FILTER_KEYS,
+    ...SIMKL_ONLY_FILTER_KEYS,
+  ],
+  anilist: [
+    ...TMDB_ONLY_FILTER_KEYS,
+    ...IMDB_ONLY_FILTER_KEYS,
+    ...MAL_ONLY_FILTER_KEYS,
+    ...SIMKL_ONLY_FILTER_KEYS,
+  ],
+  mal: [
+    ...TMDB_ONLY_FILTER_KEYS,
+    ...IMDB_ONLY_FILTER_KEYS,
+    ...ANILIST_ONLY_FILTER_KEYS,
+    ...SIMKL_ONLY_FILTER_KEYS,
+  ],
+  simkl: [
+    ...TMDB_ONLY_FILTER_KEYS,
+    ...IMDB_ONLY_FILTER_KEYS,
+    ...ANILIST_ONLY_FILTER_KEYS,
+    ...MAL_ONLY_FILTER_KEYS,
+  ],
+};
+
 export function sanitizeFiltersForSource(
-  source: 'tmdb' | 'imdb',
+  source: string,
   filters: Record<string, unknown> | CatalogFilters
 ): Record<string, unknown> {
   if (!filters || typeof filters !== 'object') return {};
-  const keysToStrip = source === 'tmdb' ? IMDB_ONLY_FILTER_KEYS : TMDB_ONLY_FILTER_KEYS;
+  const keysToStrip =
+    ALL_SOURCE_SPECIFIC_KEYS[source] ||
+    (source === 'tmdb' ? IMDB_ONLY_FILTER_KEYS : TMDB_ONLY_FILTER_KEYS);
   const result: Record<string, unknown> = { ...filters };
   for (const key of keysToStrip) {
     delete result[key];

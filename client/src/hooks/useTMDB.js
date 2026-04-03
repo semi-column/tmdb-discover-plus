@@ -27,6 +27,26 @@ const initialState = {
   imdbCertificateRatings: {},
   imdbRankedLists: [],
   imdbWithDataOptions: [],
+  anilistEnabled: true,
+  anilistGenres: [],
+  anilistTags: [],
+  anilistSortOptions: [],
+  anilistFormatOptions: [],
+  anilistStatusOptions: [],
+  anilistSeasonOptions: [],
+  anilistSourceOptions: [],
+  anilistCountryOptions: [],
+  malEnabled: false,
+  malGenres: [],
+  malRankingTypes: [],
+  malSortOptions: [],
+  simklEnabled: false,
+  simklGenres: [],
+  simklSortOptions: [],
+  simklListTypes: [],
+  simklTrendingPeriods: [],
+  simklBestFilters: [],
+  simklAnimeTypes: [],
   loading: false,
   error: null,
 };
@@ -37,6 +57,9 @@ function reducer(state, action) {
       return { ...state, loading: true, error: null };
     case 'FETCH_SUCCESS': {
       const imdbData = action.payload.imdb || {};
+      const anilistData = action.payload.anilist || {};
+      const malData = action.payload.mal || {};
+      const simklData = action.payload.simkl || {};
       return {
         ...state,
         genres: action.payload.genres || initialState.genres,
@@ -65,6 +88,29 @@ function reducer(state, action) {
           action.payload.certificateRatingsByCountry || imdbData.certificateRatings || {},
         imdbRankedLists: imdbData.rankedLists || [],
         imdbWithDataOptions: imdbData.withDataOptions || [],
+        // AniList data
+        anilistEnabled: true,
+        anilistGenres: anilistData.genres || [],
+        anilistTags: anilistData.tags || [],
+        anilistSortOptions: anilistData.sortOptions || [],
+        anilistFormatOptions: anilistData.formatOptions || [],
+        anilistStatusOptions: anilistData.statusOptions || [],
+        anilistSeasonOptions: anilistData.seasonOptions || [],
+        anilistSourceOptions: anilistData.sourceOptions || [],
+        anilistCountryOptions: anilistData.countryOptions || [],
+        // MAL data
+        malEnabled: malData.enabled || false,
+        malGenres: malData.genres || [],
+        malRankingTypes: malData.rankingTypes || [],
+        malSortOptions: malData.sortOptions || [],
+        // Simkl data
+        simklEnabled: simklData.enabled || false,
+        simklGenres: simklData.genres || [],
+        simklSortOptions: simklData.sortOptions || [],
+        simklListTypes: simklData.listTypes || [],
+        simklTrendingPeriods: simklData.trendingPeriods || [],
+        simklBestFilters: simklData.bestFilters || [],
+        simklAnimeTypes: simklData.animeTypes || [],
         loading: false,
         error: null,
       };
@@ -207,6 +253,30 @@ export function useTMDB(apiKey) {
     [hasAuth]
   );
 
+  const previewAnilist = useCallback(
+    async (type, filters) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.previewAnilistCatalog(type, filters);
+    },
+    [hasAuth]
+  );
+
+  const previewMal = useCallback(
+    async (type, filters) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.previewMalCatalog(type, filters);
+    },
+    [hasAuth]
+  );
+
+  const previewSimkl = useCallback(
+    async (type, filters) => {
+      if (!hasAuth) throw new Error('Authentication required');
+      return api.previewSimklCatalog(type, filters);
+    },
+    [hasAuth]
+  );
+
   const searchImdb = useCallback(
     async (query, type, limit) => {
       if (!hasAuth) throw new Error('Authentication required');
@@ -257,6 +327,9 @@ export function useTMDB(apiKey) {
     ...state,
     preview,
     previewImdb,
+    previewAnilist,
+    previewMal,
+    previewSimkl,
     searchImdb,
     searchImdbPeople,
     searchImdbCompanies,

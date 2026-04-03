@@ -114,7 +114,54 @@ export interface ImdbCatalogFilters extends BaseCatalogFilters {
   inTheatersRadius?: number;
 }
 
-export type CatalogFilters = TmdbCatalogFilters & ImdbCatalogFilters;
+export interface AnilistCatalogFilters extends BaseCatalogFilters {
+  anilistSort?: string;
+  format?: string[];
+  status?: string[];
+  season?: string;
+  seasonYear?: number;
+  tags?: string[];
+  tagCategories?: string[];
+  countryOfOrigin?: string;
+  sourceMaterial?: string[];
+  averageScoreMin?: number;
+  averageScoreMax?: number;
+  popularityMin?: number;
+  episodesMin?: number;
+  episodesMax?: number;
+  durationMin?: number;
+  durationMax?: number;
+  isAdult?: boolean;
+}
+
+export interface MalCatalogFilters extends BaseCatalogFilters {
+  malRankingType?: string;
+  malSeason?: string;
+  malSeasonYear?: number;
+  malMediaType?: string[];
+  malStatus?: string[];
+  malSort?: string;
+  malRating?: string;
+}
+
+export interface SimklCatalogFilters extends BaseCatalogFilters {
+  simklListType?: string;
+  simklTrendingPeriod?: string;
+  simklGenre?: string;
+  simklType?: string;
+  simklSort?: string;
+  simklBestFilter?: string;
+  simklYear?: string;
+  simklNetwork?: string;
+}
+
+export type SourceType = 'tmdb' | 'imdb' | 'anilist' | 'mal' | 'simkl';
+
+export type CatalogFilters = TmdbCatalogFilters &
+  ImdbCatalogFilters &
+  AnilistCatalogFilters &
+  MalCatalogFilters &
+  SimklCatalogFilters;
 
 export interface CatalogFormState {
   selectedPeople?: Array<{ id: number | string; name: string; profile_path?: string }>;
@@ -131,7 +178,7 @@ export interface CatalogConfig {
   id?: string;
   name: string;
   type: ContentType;
-  source?: 'tmdb' | 'imdb';
+  source?: SourceType;
   filters: CatalogFilters;
   formState?: CatalogFormState;
   enabled?: boolean;
@@ -143,6 +190,10 @@ export interface UserConfig {
   apiKeyId?: string;
   tmdbApiKeyEncrypted?: string;
   tmdbApiKey?: string;
+  malClientIdEncrypted?: string;
+  malClientId?: string;
+  simklApiKeyEncrypted?: string;
+  simklApiKey?: string;
   catalogs: CatalogConfig[];
   preferences: UserPreferences;
   createdAt?: Date;
