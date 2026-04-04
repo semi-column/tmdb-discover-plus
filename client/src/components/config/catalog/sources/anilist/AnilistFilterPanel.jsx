@@ -1,12 +1,15 @@
 import { useMemo, useCallback } from 'react';
-import { Settings, Sparkles, Calendar, Star, Globe, Eye, Check } from 'lucide-react';
+import { Settings, Sparkles, Calendar, Star, Globe, Eye, Tag, Clock } from 'lucide-react';
 import { FilterSection } from '../../FilterSection';
 import { GenreSelector } from '../../GenreSelector';
 import { AnimeSeasonSelector } from '../../shared/AnimeSeasonSelector';
 import { AnimeFormatSelector } from '../../shared/AnimeFormatSelector';
 import { SearchableSelect } from '../../../../forms/SearchableSelect';
+import { MultiSelect } from '../../../../forms/MultiSelect';
 import { RangeSlider, SingleSlider } from '../../../../forms/RangeSlider';
 import { LabelWithTooltip } from '../../../../forms/Tooltip';
+
+import { Checkbox } from '../../../../forms/Checkbox';
 
 export function AnilistFilterPanel({
   localCatalog,
@@ -15,6 +18,7 @@ export function AnilistFilterPanel({
   onToggleSection,
   handleTriStateGenreClick,
   anilistGenres = [],
+  anilistTags = [],
   anilistSortOptions = [],
   anilistFormatOptions = [],
   anilistStatusOptions = [],
@@ -30,6 +34,21 @@ export function AnilistFilterPanel({
     [anilistGenres]
   );
 
+  const availableFormatOptions = useMemo(() => {
+    if (type === 'movie') {
+      return anilistFormatOptions.filter((f) => f.value === 'MOVIE' || f.value === 'SPECIAL');
+    }
+    return anilistFormatOptions.filter((f) => f.value !== 'MOVIE');
+  }, [anilistFormatOptions, type]);
+
+  const anilistTagObjects = useMemo(
+    () =>
+      anilistTags.map((t) =>
+        typeof t === 'string' ? { value: t, label: t } : { value: t.value, label: t.label }
+      ),
+    [anilistTags]
+  );
+
   const countrySelectOptions = useMemo(
     () => anilistCountryOptions.map((c) => ({ value: c.value, label: c.label })),
     [anilistCountryOptions]
@@ -39,6 +58,22 @@ export function AnilistFilterPanel({
     ([min, max]) => {
       onFiltersChange('averageScoreMin', min > 0 ? min : undefined);
       onFiltersChange('averageScoreMax', max < 100 ? max : undefined);
+    },
+    [onFiltersChange]
+  );
+
+  const handleEpisodeChange = useCallback(
+    ([min, max]) => {
+      onFiltersChange('episodesMin', min > 0 ? min : undefined);
+      onFiltersChange('episodesMax', max < 150 ? max : undefined);
+    },
+    [onFiltersChange]
+  );
+
+  const handleDurationChange = useCallback(
+    ([min, max]) => {
+      onFiltersChange('durationMin', min > 0 ? min : undefined);
+      onFiltersChange('durationMax', max < 180 ? max : undefined);
     },
     [onFiltersChange]
   );
@@ -53,6 +88,8 @@ export function AnilistFilterPanel({
 
   const getGenreBadge = () => (filters.genres || []).length + (filters.excludeGenres || []).length;
 
+  const getTagBadge = () => (filters.tags || []).length + (filters.excludeTags || []).length;
+
   const getSeasonBadge = () => (filters.season ? 1 : 0) + (filters.seasonYear ? 1 : 0);
 
   const getScoreBadge = () => {
@@ -60,6 +97,8 @@ export function AnilistFilterPanel({
     if (filters.averageScoreMin) count++;
     if (filters.averageScoreMax) count++;
     if (filters.popularityMin) count++;
+    if (filters.episodesMin || filters.episodesMax) count++;
+    if (filters.durationMin || filters.durationMax) count++;
     return count;
   };
 
@@ -107,7 +146,7 @@ export function AnilistFilterPanel({
           />
           <AnimeFormatSelector
             selected={filters.format || []}
-            options={anilistFormatOptions}
+            options={availableFormatOptions}
             onChange={(formats) => onFiltersChange('format', formats)}
           />
         </div>
@@ -149,6 +188,53 @@ export function AnilistFilterPanel({
         />
       </FilterSection>
 
+      {anilistTagObjects.length > 0 && (
+        <FilterSection
+          id="tags"
+          title="Tags"
+          description="Filter by AniList content tags"
+          icon={Tag}
+          isOpen={expandedSections?.tags}
+          onToggle={onToggleSection}
+          badgeCount={getTagBadge()}
+        >
+          <div className="filter-group">
+            <LabelWithTooltip
+              label="Include Tags"
+              tooltip="Filter anime that include these tags (e.g. Isekai, Reincarnation, Gore). Search to find from 350+ available tags."
+            />
+            <MultiSelect
+              options={anilistTagObjects}
+              value={filters.tags || []}
+              onChange={(tags) => onFiltersChange('tags', tags.length > 0 ? tags : undefined)}
+              placeholder="Search and select tags..."
+              searchPlaceholder="Type to search tags..."
+              labelKey="label"
+              valueKey="value"
+              maxDisplay={5}
+            />
+          </div>
+          <div className="filter-group">
+            <LabelWithTooltip
+              label="Exclude Tags"
+              tooltip="Exclude anime that have these tags. Results will not contain any of the selected tags."
+            />
+            <MultiSelect
+              options={anilistTagObjects}
+              value={filters.excludeTags || []}
+              onChange={(tags) =>
+                onFiltersChange('excludeTags', tags.length > 0 ? tags : undefined)
+              }
+              placeholder="Search tags to exclude..."
+              searchPlaceholder="Type to search tags..."
+              labelKey="label"
+              valueKey="value"
+              maxDisplay={5}
+            />
+          </div>
+        </FilterSection>
+      )}
+
       {type === 'series' && (
         <FilterSection
           id="season"
@@ -177,8 +263,8 @@ export function AnilistFilterPanel({
 
       <FilterSection
         id="score"
-        title="Score & Popularity"
-        description="Filter by average score and popularity"
+        title="Score, Popularity & Length"
+        description="Filter by score, popularity, episodes, and duration"
         icon={Star}
         isOpen={expandedSections?.score}
         onToggle={onToggleSection}
@@ -203,6 +289,30 @@ export function AnilistFilterPanel({
           step={100}
           value={filters.popularityMin || 0}
           onChange={(v) => onFiltersChange('popularityMin', v || undefined)}
+        />
+
+        <div className="filter-spacer" />
+
+        <RangeSlider
+          label="Episode Count"
+          tooltip="Filter by number of episodes."
+          min={0}
+          max={150}
+          step={1}
+          value={[filters.episodesMin || 0, filters.episodesMax || 150]}
+          onChange={handleEpisodeChange}
+        />
+
+        <div className="filter-spacer" />
+
+        <RangeSlider
+          label="Duration (minutes per episode)"
+          tooltip="Filter by episode duration in minutes."
+          min={0}
+          max={180}
+          step={1}
+          value={[filters.durationMin || 0, filters.durationMax || 180]}
+          onChange={handleDurationChange}
         />
       </FilterSection>
 
@@ -254,49 +364,19 @@ export function AnilistFilterPanel({
         badgeCount={getOptionsBadge()}
       >
         <div className="checkbox-grid">
-          <label className="checkbox-label-row" style={{ cursor: 'pointer' }}>
-            <div
-              className={`checkbox ${filters.isAdult ? 'checked' : ''}`}
-              role="checkbox"
-              aria-checked={!!filters.isAdult}
-              tabIndex={0}
-              onClick={() => onFiltersChange('isAdult', !filters.isAdult || undefined)}
-              onKeyDown={(e) => {
-                if (e.key === ' ' || e.key === 'Enter') {
-                  e.preventDefault();
-                  onFiltersChange('isAdult', !filters.isAdult || undefined);
-                }
-              }}
-            >
-              {filters.isAdult && <Check size={14} />}
-            </div>
-            <LabelWithTooltip
-              label="Include adult content"
-              tooltip="Include adult/18+ rated anime in results."
-            />
-          </label>
+          <Checkbox
+            checked={!!filters.isAdult}
+            onChange={(checked) => onFiltersChange('isAdult', checked || undefined)}
+            label="Include adult content"
+            tooltip="Include adult/18+ rated anime in results."
+          />
 
-          <label className="checkbox-label-row" style={{ cursor: 'pointer' }}>
-            <div
-              className={`checkbox ${filters.randomize ? 'checked' : ''}`}
-              role="checkbox"
-              aria-checked={!!filters.randomize}
-              tabIndex={0}
-              onClick={() => onFiltersChange('randomize', !filters.randomize || undefined)}
-              onKeyDown={(e) => {
-                if (e.key === ' ' || e.key === 'Enter') {
-                  e.preventDefault();
-                  onFiltersChange('randomize', !filters.randomize || undefined);
-                }
-              }}
-            >
-              {filters.randomize && <Check size={14} />}
-            </div>
-            <LabelWithTooltip
-              label="Randomize Results"
-              tooltip="Fetch a random page from matching results and shuffle them."
-            />
-          </label>
+          <Checkbox
+            checked={!!filters.randomize}
+            onChange={(checked) => onFiltersChange('randomize', checked || undefined)}
+            label="Randomize Results"
+            tooltip="Fetch a random page from matching results and shuffle them."
+          />
         </div>
       </FilterSection>
     </>

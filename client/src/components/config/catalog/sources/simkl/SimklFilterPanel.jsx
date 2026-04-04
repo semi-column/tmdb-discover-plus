@@ -21,6 +21,20 @@ export function SimklFilterPanel({
   const filters = localCatalog?.filters || {};
   const listType = filters.simklListType || 'trending';
 
+  const simklListTypesFiltered = useMemo(() => {
+    if (localCatalog?.type === 'movie') {
+      return simklListTypes.filter((t) => t.value !== 'airing');
+    }
+    return simklListTypes;
+  }, [simklListTypes, localCatalog?.type]);
+
+  const simklAnimeTypesFiltered = useMemo(() => {
+    if (localCatalog?.type === 'movie') {
+      return simklAnimeTypes.filter((t) => t.value === 'movies');
+    }
+    return simklAnimeTypes.filter((t) => t.value !== 'movies');
+  }, [simklAnimeTypes, localCatalog?.type]);
+
   const simklGenreObjects = useMemo(
     () => simklGenres.map((g) => ({ id: g, name: g })),
     [simklGenres]
@@ -41,7 +55,10 @@ export function SimklFilterPanel({
     return count;
   };
 
-  const getTypeBadge = () => (filters.simklType && filters.simklType !== 'all' ? 1 : 0);
+  const getTypeBadge = () => {
+    if (localCatalog?.type === 'movie') return 0;
+    return filters.simklType && filters.simklType !== 'all' ? 1 : 0;
+  };
 
   const getOptionsBadge = () => (filters.randomize ? 1 : 0);
 
@@ -63,7 +80,7 @@ export function SimklFilterPanel({
           />
           <AnimeFormatSelector
             selected={[listType]}
-            options={simklListTypes}
+            options={simklListTypesFiltered}
             onChange={(vals) => {
               const newType = vals[vals.length - 1] || 'trending';
               onFiltersChange('simklListType', newType);
@@ -138,11 +155,15 @@ export function SimklFilterPanel({
         )}
       </FilterSection>
 
-      {simklAnimeTypes.length > 0 && (
+      {simklAnimeTypesFiltered.length > 1 && (
         <FilterSection
           id="animeType"
           title="Anime Type"
-          description="Filter by anime format: TV, Movie, OVA, ONA"
+          description={
+            localCatalog?.type === 'series'
+              ? 'Filter by anime format: TV, OVA, ONA'
+              : 'Filter by anime format: TV, Movie, OVA, ONA'
+          }
           icon={Layers}
           isOpen={expandedSections?.animeType}
           onToggle={onToggleSection}
@@ -152,7 +173,7 @@ export function SimklFilterPanel({
             <LabelWithTooltip label="Type" tooltip="Filter results by anime type." />
             <AnimeFormatSelector
               selected={[filters.simklType || 'all']}
-              options={simklAnimeTypes}
+              options={simklAnimeTypesFiltered}
               onChange={(vals) => {
                 const newType = vals[vals.length - 1] || 'all';
                 onFiltersChange('simklType', newType);

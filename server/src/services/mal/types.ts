@@ -116,6 +116,17 @@ export const MAL_SORT_OPTIONS = [
   { value: 'anime_num_list_users', label: 'Members' },
 ] as const;
 
+export const MAL_ORDER_BY_OPTIONS = [
+  { value: 'score', label: 'Score' },
+  { value: 'popularity', label: 'Popularity' },
+  { value: 'rank', label: 'Rank' },
+  { value: 'members', label: 'Members' },
+  { value: 'favorites', label: 'Favorites' },
+  { value: 'start_date', label: 'Start Date' },
+  { value: 'episodes', label: 'Episodes' },
+  { value: 'title', label: 'Title' },
+] as const;
+
 export const MAL_MEDIA_TYPES = [
   { value: 'tv', label: 'TV' },
   { value: 'movie', label: 'Movie' },

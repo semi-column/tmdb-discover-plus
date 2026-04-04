@@ -11,6 +11,7 @@ export {
   ANILIST_SORT_OPTIONS,
   ANILIST_SOURCE_MATERIALS,
   ANILIST_COUNTRIES,
+  ANILIST_TAGS,
 } from './types.ts';
 
 export function isAnilistEnabled(): boolean {

@@ -12,7 +12,7 @@ export const FilterSection = memo(function FilterSection({
   children,
 }) {
   return (
-    <div className="filter-section">
+    <div className={`filter-section ${isOpen ? 'expanded' : ''}`}>
       <button
         className="filter-section-header"
         onClick={() => onToggle(id)}
@@ -31,7 +31,9 @@ export const FilterSection = memo(function FilterSection({
         id={`filter-section-${id}`}
         className={`filter-section-content ${isOpen ? 'expanded' : ''}`}
       >
-        <div className="filter-section-inner">{children}</div>
+        <div className="filter-section-inner">
+          <div className="filter-section-body">{children}</div>
+        </div>
       </div>
     </div>
   );

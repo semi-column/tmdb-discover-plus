@@ -121,6 +121,7 @@ export interface AnilistCatalogFilters extends BaseCatalogFilters {
   season?: string;
   seasonYear?: number;
   tags?: string[];
+  excludeTags?: string[];
   tagCategories?: string[];
   countryOfOrigin?: string;
   sourceMaterial?: string[];
@@ -142,6 +143,11 @@ export interface MalCatalogFilters extends BaseCatalogFilters {
   malStatus?: string[];
   malSort?: string;
   malRating?: string;
+  malGenres?: number[];
+  malExcludeGenres?: number[];
+  malScoreMin?: number;
+  malScoreMax?: number;
+  malOrderBy?: string;
 }
 
 export interface SimklCatalogFilters extends BaseCatalogFilters {

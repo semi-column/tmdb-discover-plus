@@ -113,6 +113,76 @@ export async function searchAnime(
 }
 
 /**
+ * /anime - General browse with advanced filters (genres, type, status, rating, score)
+ * Uses the Jikan /anime endpoint which supports all filter parameters.
+ */
+export async function browseAnime(
+  filters: MalCatalogFilters,
+  type: ContentType,
+  page: number
+): Promise<{ anime: MalAnime[]; hasMore: boolean; total: number }> {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('sfw', 'true');
+
+  // Media type: use explicit filter or infer from content type
+  if (filters.malMediaType && filters.malMediaType.length > 0) {
+    params.set('type', filters.malMediaType[0]);
+  } else {
+    params.set('type', contentTypeToJikanType(type));
+  }
+
+  // Status
+  if (filters.malStatus && filters.malStatus.length > 0) {
+    params.set('status', filters.malStatus[0]);
+  }
+
+  // Rating
+  if (filters.malRating) {
+    params.set('rating', filters.malRating);
+  }
+
+  // Genres (include)
+  if (filters.malGenres && filters.malGenres.length > 0) {
+    params.set('genres', filters.malGenres.join(','));
+  }
+
+  // Genres (exclude)
+  if (filters.malExcludeGenres && filters.malExcludeGenres.length > 0) {
+    params.set('genres_exclude', filters.malExcludeGenres.join(','));
+  }
+
+  // Score range (Jikan uses 0-10 scale)
+  if (filters.malScoreMin != null && filters.malScoreMin > 0) {
+    params.set('min_score', String(filters.malScoreMin));
+  }
+  if (filters.malScoreMax != null && filters.malScoreMax < 10) {
+    params.set('max_score', String(filters.malScoreMax));
+  }
+
+  // Order by + sort direction
+  if (filters.malOrderBy) {
+    params.set('order_by', filters.malOrderBy);
+    params.set('sort', 'desc');
+  } else {
+    params.set('order_by', 'score');
+    params.set('sort', 'desc');
+  }
+
+  const path = `/anime?${params.toString()}`;
+  log.debug('Jikan browse', { type, page, filters: Object.fromEntries(params) });
+
+  const response = await jikanFetch<JikanResponse>(path);
+  const anime = response.data.map(jikanToMalAnime);
+
+  return {
+    anime,
+    hasMore: response.pagination.has_next_page,
+    total: response.pagination.items.total,
+  };
+}
+
+/**
  * Main discover entry point — routes to the appropriate Jikan endpoint.
  */
 export async function discover(
@@ -122,6 +192,20 @@ export async function discover(
 ): Promise<{ anime: MalAnime[]; hasMore: boolean; total: number }> {
   if (filters.malSeason && filters.malSeasonYear) {
     return getSeasonal(filters.malSeasonYear, filters.malSeason, filters.malSort, type, page);
+  }
+
+  const hasAdvancedFilters =
+    (filters.malGenres && filters.malGenres.length > 0) ||
+    (filters.malExcludeGenres && filters.malExcludeGenres.length > 0) ||
+    (filters.malStatus && filters.malStatus.length > 0) ||
+    (filters.malMediaType && filters.malMediaType.length > 0) ||
+    filters.malRating ||
+    (filters.malScoreMin != null && filters.malScoreMin > 0) ||
+    (filters.malScoreMax != null && filters.malScoreMax < 10) ||
+    filters.malOrderBy;
+
+  if (hasAdvancedFilters) {
+    return browseAnime(filters, type, page);
   }
 
   const rankingType = filters.malRankingType || 'all';

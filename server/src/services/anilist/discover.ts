@@ -57,6 +57,9 @@ function buildVariables(
   if (filters.tags && filters.tags.length > 0) {
     vars.tag_in = filters.tags;
   }
+  if (filters.excludeTags && filters.excludeTags.length > 0) {
+    vars.tag_not_in = filters.excludeTags;
+  }
 
   // Score
   if (filters.averageScoreMin != null && filters.averageScoreMin > 0) {

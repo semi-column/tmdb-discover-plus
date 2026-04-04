@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 
 const NON_SIMKL_KEYS = [
+  'sortBy',
   'listType',
   'voteCountMin',
   'imdbOnly',
@@ -116,8 +117,13 @@ export const SIMKL_SOURCE = {
     return result;
   },
 
-  computeActiveChips(filters, refData) {
-    const { simklListTypes = [], simklTrendingPeriods = [], simklBestFilters = [] } = refData;
+  computeActiveChips(filters, refData, catalogType) {
+    const {
+      simklListTypes = [],
+      simklTrendingPeriods = [],
+      simklBestFilters = [],
+      simklAnimeTypes = [],
+    } = refData;
     const active = [];
 
     if (filters.simklListType && filters.simklListType !== 'trending') {
@@ -143,7 +149,14 @@ export const SIMKL_SOURCE = {
     }
 
     if (filters.simklType && filters.simklType !== 'all') {
-      active.push({ key: 'simklType', label: `Type: ${filters.simklType}`, section: 'filters' });
+      if (catalogType !== 'movie' || filters.simklType === 'movies') {
+        const match = simklAnimeTypes.find((t) => t.value === filters.simklType);
+        active.push({
+          key: 'simklType',
+          label: `Type: ${match?.label || filters.simklType}`,
+          section: 'filters',
+        });
+      }
     }
 
     if (filters.simklBestFilter) {

@@ -26,17 +26,58 @@ export function useActiveFilters({
   selectedImdbExcludeCompanies,
   setSelectedImdbExcludeCompanies,
   imdbSortOptions = [],
+  anilistSortOptions = [],
+  anilistFormatOptions = [],
+  anilistStatusOptions = [],
+  anilistSeasonOptions = [],
+  anilistSourceOptions = [],
+  anilistCountryOptions = [],
+  malRankingTypes = [],
+  malSortOptions = [],
+  simklListTypes = [],
+  simklTrendingPeriods = [],
+  simklBestFilters = [],
+  simklSortOptions = [],
+  simklAnimeTypes = [],
 }) {
   const isImdbSource = localCatalog?.source === 'imdb';
+  const isAnilistSource = localCatalog?.source === 'anilist';
 
   const activeFilters = useMemo(() => {
     const filters = localCatalog?.filters || {};
     const active = [];
     const isMovieType = localCatalog?.type === 'movie';
 
-    const isImdb = localCatalog?.source === 'imdb';
+    const source = localCatalog?.source;
+    const isImdb = source === 'imdb';
+    const isAnilist = source === 'anilist';
+    const isTmdb = !source || source === 'tmdb';
     const imdbSortDefault = 'POPULARITY';
     const tmdbSortDefault = 'popularity.desc';
+    const anilistSortDefault = 'TRENDING_DESC';
+
+    const humanize = (value) => {
+      if (typeof value !== 'string') return value;
+      return value
+        .toLowerCase()
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+    };
+
+    const getOptionLabel = (options, value, valueKey = 'value', labelKey = 'label') =>
+      options.find((item) => item?.[valueKey] === value)?.[labelKey] || humanize(value);
+
+    const getLabelSummary = (options, values, valueKey = 'value', labelKey = 'label') => {
+      const labels = values.map((value) => getOptionLabel(options, value, valueKey, labelKey));
+      const shown = labels.slice(0, 2).join(', ');
+      const extra = labels.length > 2 ? ` +${labels.length - 2}` : '';
+      return `${shown}${extra}`;
+    };
+
+    const toTitleCase = (value) => {
+      if (typeof value !== 'string' || !value.length) return value;
+      return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+    };
 
     if (isImdb) {
       // For IMDB: only show sort chip when it differs from the IMDB default
@@ -48,7 +89,17 @@ export function useActiveFilters({
           section: 'filters',
         });
       }
-    } else if (filters.sortBy && filters.sortBy !== tmdbSortDefault) {
+    } else if (isAnilist) {
+      if (filters.sortBy && filters.sortBy !== anilistSortDefault) {
+        const match = anilistSortOptions.find((s) => s.value === filters.sortBy);
+        active.push({
+          key: 'sortBy',
+          label: `Sort: ${match?.label || filters.sortBy}`,
+          section: 'filters',
+        });
+      }
+    } else if (isTmdb && filters.sortBy && String(filters.sortBy) !== tmdbSortDefault) {
+      // TMDB / fallback sorting chip
       const sortOpts = sortOptions[localCatalog?.type] || sortOptions.movie || [];
       const match = sortOpts.find((s) => s.value === filters.sortBy);
       active.push({
@@ -486,6 +537,242 @@ export function useActiveFilters({
       });
     }
 
+    if (source === 'anilist') {
+      if (filters.format?.length > 0) {
+        active.push({
+          key: 'format',
+          label: `Format: ${getLabelSummary(anilistFormatOptions, filters.format)}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.status?.length > 0) {
+        active.push({
+          key: 'status',
+          label: `Status: ${getLabelSummary(anilistStatusOptions, filters.status)}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.season) {
+        const seasonLabel = getOptionLabel(anilistSeasonOptions, filters.season);
+        active.push({
+          key: 'season',
+          label: `Season: ${seasonLabel}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.seasonYear) {
+        active.push({
+          key: 'seasonYear',
+          label: `Year: ${filters.seasonYear}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.popularityMin > 0) {
+        active.push({
+          key: 'popularityMin',
+          label: `Min popularity: ${filters.popularityMin.toLocaleString()}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.averageScoreMin > 0 || filters.averageScoreMax < 100) {
+        active.push({
+          key: 'averageScore',
+          label: `Score: ${filters.averageScoreMin || 0}-${filters.averageScoreMax || 100}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.countryOfOrigin) {
+        const countryLabel = getOptionLabel(anilistCountryOptions, filters.countryOfOrigin);
+        active.push({
+          key: 'countryOfOrigin',
+          label: `Country: ${countryLabel}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.sourceMaterial?.length > 0) {
+        active.push({
+          key: 'sourceMaterial',
+          label: `Source: ${getLabelSummary(anilistSourceOptions, filters.sourceMaterial)}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.tags?.length > 0) {
+        active.push({
+          key: 'tags',
+          label: `Tags: ${filters.tags.slice(0, 2).join(', ')}${filters.tags.length > 2 ? ` +${filters.tags.length - 2}` : ''}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.excludeTags?.length > 0) {
+        active.push({
+          key: 'excludeTags',
+          label: `Exclude tags: ${filters.excludeTags.slice(0, 2).join(', ')}${filters.excludeTags.length > 2 ? ` +${filters.excludeTags.length - 2}` : ''}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.episodesMin || filters.episodesMax) {
+        active.push({
+          key: 'episodes',
+          label: `Episodes: ${filters.episodesMin || 0}-${filters.episodesMax || '∞'}`,
+          section: 'score',
+        });
+      }
+
+      if (filters.durationMin || filters.durationMax) {
+        active.push({
+          key: 'duration',
+          label: `Duration: ${filters.durationMin || 0}-${filters.durationMax || '∞'} min`,
+          section: 'score',
+        });
+      }
+
+      if (filters.isAdult) {
+        active.push({ key: 'isAdult', label: 'Adult content', section: 'options' });
+      }
+    }
+
+    if (source === 'mal') {
+      if (filters.malRankingType && filters.malRankingType !== 'all') {
+        const rankingLabel = getOptionLabel(malRankingTypes, filters.malRankingType);
+        active.push({
+          key: 'malRankingType',
+          label: `Ranking: ${rankingLabel}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.malSeason) {
+        active.push({
+          key: 'malSeason',
+          label: `Season: ${toTitleCase(filters.malSeason)}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.malSeasonYear) {
+        active.push({
+          key: 'malSeasonYear',
+          label: `Year: ${filters.malSeasonYear}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.malSort && filters.malSort !== 'anime_num_list_users') {
+        const sortLabel = getOptionLabel(malSortOptions, filters.malSort);
+        active.push({ key: 'malSort', label: `Sort: ${sortLabel}`, section: 'filters' });
+      }
+
+      if (filters.malGenres?.length > 0) {
+        active.push({
+          key: 'malGenres',
+          label: `Genres: ${filters.malGenres.length}`,
+          section: 'genres',
+        });
+      }
+
+      if (filters.malExcludeGenres?.length > 0) {
+        active.push({
+          key: 'malExcludeGenres',
+          label: `Excluded: ${filters.malExcludeGenres.length}`,
+          section: 'genres',
+        });
+      }
+
+      if (filters.malMediaType?.length > 0) {
+        active.push({
+          key: 'malMediaType',
+          label: `Type: ${filters.malMediaType.join(', ')}`,
+          section: 'format',
+        });
+      }
+
+      if (filters.malStatus?.length > 0) {
+        active.push({
+          key: 'malStatus',
+          label: `Status: ${filters.malStatus.join(', ')}`,
+          section: 'format',
+        });
+      }
+
+      if (filters.malRating) {
+        active.push({
+          key: 'malRating',
+          label: `Rating: ${filters.malRating}`,
+          section: 'format',
+        });
+      }
+
+      if (filters.malScoreMin || filters.malScoreMax) {
+        active.push({
+          key: 'malScore',
+          label: `Score: ${filters.malScoreMin || 0}-${filters.malScoreMax || 10}`,
+          section: 'score',
+        });
+      }
+
+      if (filters.malOrderBy) {
+        active.push({
+          key: 'malOrderBy',
+          label: `Order: ${filters.malOrderBy}`,
+          section: 'score',
+        });
+      }
+    }
+
+    if (source === 'simkl') {
+      if (filters.simklListType && filters.simklListType !== 'trending') {
+        const typeLabel = getOptionLabel(simklListTypes, filters.simklListType);
+        active.push({ key: 'simklListType', label: `List: ${typeLabel}`, section: 'filters' });
+      }
+
+      if (filters.simklTrendingPeriod && filters.simklTrendingPeriod !== 'week') {
+        const periodLabel = getOptionLabel(simklTrendingPeriods, filters.simklTrendingPeriod);
+        active.push({
+          key: 'simklTrendingPeriod',
+          label: `Period: ${periodLabel}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.simklBestFilter && filters.simklBestFilter !== 'all') {
+        const bestLabel = getOptionLabel(simklBestFilters, filters.simklBestFilter);
+        active.push({ key: 'simklBestFilter', label: `Best: ${bestLabel}`, section: 'filters' });
+      }
+
+      if (filters.simklGenre) {
+        active.push({
+          key: 'simklGenre',
+          label: `Genre: ${filters.simklGenre}`,
+          section: 'filters',
+        });
+      }
+
+      if (filters.simklSort && filters.simklSort !== 'rank') {
+        const sortLabel = getOptionLabel(simklSortOptions, filters.simklSort);
+        active.push({ key: 'simklSort', label: `Sort: ${sortLabel}`, section: 'filters' });
+      }
+
+      if (filters.simklType && filters.simklType !== 'all') {
+        if (localCatalog?.type !== 'movie' || filters.simklType === 'movies') {
+          const animeTypeLabel = getOptionLabel(simklAnimeTypes, filters.simklType);
+          // Don't show the chip if the catalog type is 'movie' since it's forced by the backend anyway
+          if (localCatalog?.type !== 'movie') {
+            active.push({ key: 'simklType', label: `Type: ${animeTypeLabel}`, section: 'filters' });
+          }
+        }
+      }
+    }
+
     return active;
   }, [
     localCatalog,
@@ -504,6 +791,19 @@ export function useActiveFilters({
     excludeCompanies,
     selectedImdbExcludeCompanies,
     imdbSortOptions,
+    anilistSortOptions,
+    anilistFormatOptions,
+    anilistStatusOptions,
+    anilistSeasonOptions,
+    anilistSourceOptions,
+    anilistCountryOptions,
+    malRankingTypes,
+    malSortOptions,
+    simklListTypes,
+    simklTrendingPeriods,
+    simklBestFilters,
+    simklSortOptions,
+    simklAnimeTypes,
   ]);
 
   const clearFilter = useCallback(
@@ -516,7 +816,9 @@ export function useActiveFilters({
           update(
             isImdbSource
               ? { sortBy: 'POPULARITY', sortOrder: 'DESC' }
-              : { sortBy: 'popularity.desc' }
+              : isAnilistSource
+                ? { sortBy: 'TRENDING_DESC' }
+                : { sortBy: 'popularity.desc' }
           );
           break;
         case 'genres':
@@ -694,12 +996,106 @@ export function useActiveFilters({
         case 'withData':
           update({ withData: [] });
           break;
+        // --- AniList specific ---
+        case 'format':
+          update({ format: [] });
+          break;
+        case 'status':
+          update({ status: [] });
+          break;
+        case 'season':
+          update({ season: undefined });
+          break;
+        case 'seasonYear':
+          update({ seasonYear: undefined });
+          break;
+        case 'popularityMin':
+          update({ popularityMin: undefined });
+          break;
+        case 'averageScore':
+          update({ averageScoreMin: undefined, averageScoreMax: undefined });
+          break;
+        case 'countryOfOrigin':
+          update({ countryOfOrigin: undefined });
+          break;
+        case 'sourceMaterial':
+          update({ sourceMaterial: [] });
+          break;
+        case 'tags':
+          update({ tags: undefined });
+          break;
+        case 'excludeTags':
+          update({ excludeTags: undefined });
+          break;
+        case 'episodes':
+          update({ episodesMin: undefined, episodesMax: undefined });
+          break;
+        case 'duration':
+          update({ durationMin: undefined, durationMax: undefined });
+          break;
+        case 'isAdult':
+          update({ isAdult: undefined });
+          break;
+        // --- MAL specific ---
+        case 'malRankingType':
+          update({ malRankingType: undefined });
+          break;
+        case 'malSeason':
+          update({ malSeason: undefined });
+          break;
+        case 'malSeasonYear':
+          update({ malSeasonYear: undefined });
+          break;
+        case 'malSort':
+          update({ malSort: undefined });
+          break;
+        case 'malGenres':
+          update({ malGenres: [] });
+          break;
+        case 'malExcludeGenres':
+          update({ malExcludeGenres: [] });
+          break;
+        case 'malMediaType':
+          update({ malMediaType: [] });
+          break;
+        case 'malStatus':
+          update({ malStatus: [] });
+          break;
+        case 'malRating':
+          update({ malRating: undefined });
+          break;
+        case 'malScore':
+          update({ malScoreMin: undefined, malScoreMax: undefined });
+          break;
+        case 'malOrderBy':
+          update({ malOrderBy: undefined });
+          break;
+        // --- Simkl specific ---
+        case 'simklListType':
+          update({ simklListType: undefined });
+          break;
+        case 'simklTrendingPeriod':
+          update({ simklTrendingPeriod: undefined });
+          break;
+        case 'simklBestFilter':
+          update({ simklBestFilter: undefined });
+          break;
+        case 'simklGenre':
+          update({ simklGenre: undefined });
+          break;
+        case 'simklSort':
+          update({ simklSort: undefined });
+          break;
+        case 'simklType':
+          update({ simklType: undefined });
+          break;
         default:
           break;
       }
     },
     [
       isImdbSource,
+      isAnilistSource,
       setSelectedPeople,
       setSelectedCompanies,
       setSelectedKeywords,

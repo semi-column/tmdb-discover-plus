@@ -70,6 +70,12 @@
   text-align: left;
   color: var(--text-primary);
   transition: background 0.2s ease;
+  border-radius: var(--radius-md);
+}
+
+.filter-section.expanded .filter-section-header {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .filter-section-header:hover {
@@ -96,21 +102,21 @@
 .filter-section-content {
   display: grid;
   grid-template-rows: 0fr;
-  transition:
-    grid-template-rows 0.25s var(--ease-out-expo),
-    padding 0.25s var(--ease-out-expo);
-  padding: 0 16px;
+  transition: grid-template-rows 0.25s var(--ease-out-expo);
 }
 
 .filter-section-content.expanded {
   grid-template-rows: 1fr;
-  padding: 0 16px 16px;
 }
 
 .filter-section-inner {
   overflow: hidden;
   min-height: 0;
   transition: overflow 0.25s step-start;
+}
+
+.filter-section-body {
+  padding: 12px 16px 16px;
 }
 
 .filter-section-content.expanded .filter-section-inner {
@@ -847,6 +853,11 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-bottom: 16px;
+}
+
+.filter-group:last-child {
+  margin-bottom: 0;
 }
 
 .filter-group .filter-label {

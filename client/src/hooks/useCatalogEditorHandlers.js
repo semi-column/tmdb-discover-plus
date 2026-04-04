@@ -135,9 +135,13 @@ export function useCatalogEditorHandlers({
           type,
           filters: {
             ...nextTypeFilters,
-            genres: [],
-            excludeGenres: [],
-            sortBy: isImdb ? 'POPULARITY' : 'popularity.desc',
+            genres: prev.source === 'tmdb' || isImdb ? [] : nextTypeFilters.genres || [],
+            excludeGenres:
+              prev.source === 'tmdb' || isImdb ? [] : nextTypeFilters.excludeGenres || [],
+            sortBy:
+              nextTypeFilters.sortBy !== undefined
+                ? nextTypeFilters.sortBy
+                : getSource(prev.source || 'tmdb').defaultFilters?.sortBy,
             awardsWon,
             awardsNominated,
             rankedList,

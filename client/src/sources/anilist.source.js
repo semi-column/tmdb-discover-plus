@@ -97,12 +97,52 @@ export const ANILIST_SOURCE = {
   },
 
   movieOnlyFilterKeys: [],
-  seriesOnlyFilterKeys: ['season', 'seasonYear'],
+  seriesOnlyFilterKeys: ['season', 'seasonYear', 'episodesMin', 'episodesMax'],
 
   cleanFiltersOnSwitch(currentFilters) {
     const result = { ...currentFilters };
+    if (result.sortBy === 'popularity.desc' || result.sortBy === 'POPULARITY') {
+      result.sortBy = 'TRENDING_DESC';
+    }
+
     for (const key of NON_ANILIST_KEYS) {
       delete result[key];
+    }
+    if (result.sortBy && result.sortBy.includes('.')) {
+      delete result.sortBy;
+    }
+    if (
+      result.sortBy &&
+      ![
+        'TRENDING_DESC',
+        'POPULARITY_DESC',
+        'SCORE_DESC',
+        'FAVOURITES_DESC',
+        'START_DATE_DESC',
+        'START_DATE',
+        'TITLE_ENGLISH',
+        'TITLE_ENGLISH_DESC',
+        'EPISODES_DESC',
+        'UPDATED_AT_DESC',
+      ].includes(result.sortBy)
+    ) {
+      delete result.sortBy;
+    }
+    if (
+      result.genres &&
+      result.genres.some(
+        (g) => typeof g === 'number' || (typeof g === 'object' && typeof g.id === 'number')
+      )
+    ) {
+      result.genres = [];
+    }
+    if (
+      result.excludeGenres &&
+      result.excludeGenres.some(
+        (g) => typeof g === 'number' || (typeof g === 'object' && typeof g.id === 'number')
+      )
+    ) {
+      result.excludeGenres = [];
     }
     return result;
   },
@@ -114,11 +154,13 @@ export const ANILIST_SOURCE = {
 
     if (filters.sortBy && filters.sortBy !== 'TRENDING_DESC') {
       const match = anilistSortOptions.find((s) => s.value === filters.sortBy);
-      active.push({
-        key: 'sortBy',
-        label: `Sort: ${match?.label || filters.sortBy}`,
-        section: 'filters',
-      });
+      if (match) {
+        active.push({
+          key: 'sortBy',
+          label: `Sort: ${match.label}`,
+          section: 'filters',
+        });
+      }
     }
 
     if (filters.genres?.length > 0) {
@@ -167,6 +209,16 @@ export const ANILIST_SOURCE = {
       active.push({ key: 'tags', label: `Tags: ${names.join(', ')}${extra}`, section: 'tags' });
     }
 
+    if (filters.excludeTags?.length > 0) {
+      const names = filters.excludeTags.slice(0, 2);
+      const extra = filters.excludeTags.length > 2 ? ` +${filters.excludeTags.length - 2}` : '';
+      active.push({
+        key: 'excludeTags',
+        label: `Exclude tags: ${names.join(', ')}${extra}`,
+        section: 'tags',
+      });
+    }
+
     if (
       filters.averageScoreMin > 0 ||
       (filters.averageScoreMax != null && filters.averageScoreMax < 100)
@@ -196,6 +248,22 @@ export const ANILIST_SOURCE = {
 
     if (filters.isAdult) {
       active.push({ key: 'isAdult', label: 'Adult content', section: 'options' });
+    }
+
+    if (filters.episodesMin || filters.episodesMax) {
+      active.push({
+        key: 'episodes',
+        label: `Episodes: ${filters.episodesMin || 0}-${filters.episodesMax || '∞'}`,
+        section: 'score',
+      });
+    }
+
+    if (filters.durationMin || filters.durationMax) {
+      active.push({
+        key: 'duration',
+        label: `Duration: ${filters.durationMin || 0}-${filters.durationMax || '∞'} min`,
+        section: 'score',
+      });
     }
 
     if (filters.randomize) {

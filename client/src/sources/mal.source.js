@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 
 const NON_MAL_KEYS = [
+  'sortBy',
   'listType',
   'voteCountMin',
   'imdbOnly',
@@ -103,10 +104,14 @@ export const MAL_SOURCE = {
     genres: [],
     excludeGenres: [],
     malRankingType: 'all',
+    malGenres: [],
+    malExcludeGenres: [],
+    malMediaType: [],
+    malStatus: [],
   },
 
   movieOnlyFilterKeys: [],
-  seriesOnlyFilterKeys: [],
+  seriesOnlyFilterKeys: ['malSeason', 'malSeasonYear', 'malSort'],
 
   cleanFiltersOnSwitch(currentFilters) {
     const result = { ...currentFilters };
@@ -117,7 +122,15 @@ export const MAL_SOURCE = {
   },
 
   computeActiveChips(filters, refData) {
-    const { malRankingTypes = [], malSortOptions = [] } = refData;
+    const {
+      malRankingTypes = [],
+      malSortOptions = [],
+      malOrderByOptions = [],
+      malMediaTypes = [],
+      malStatuses = [],
+      malRatings = [],
+      malGenres: malGenreList = [],
+    } = refData;
     const active = [];
 
     if (filters.malRankingType && filters.malRankingType !== 'all') {
@@ -137,16 +150,74 @@ export const MAL_SOURCE = {
       });
     }
 
-    if (filters.genres?.length > 0) {
-      const names = filters.genres.slice(0, 2).map((g) => {
-        if (typeof g === 'object' && g.name) return g.name;
-        return String(g);
+    if (filters.malGenres?.length > 0) {
+      const names = filters.malGenres.slice(0, 2).map((id) => {
+        const match = malGenreList.find((g) => g.id === id);
+        return match?.name || String(id);
       });
-      const extra = filters.genres.length > 2 ? ` +${filters.genres.length - 2}` : '';
+      const extra = filters.malGenres.length > 2 ? ` +${filters.malGenres.length - 2}` : '';
       active.push({
-        key: 'genres',
+        key: 'malGenres',
         label: `Genres: ${names.join(', ')}${extra}`,
         section: 'genres',
+      });
+    }
+
+    if (filters.malExcludeGenres?.length > 0) {
+      active.push({
+        key: 'malExcludeGenres',
+        label: `Excluded: ${filters.malExcludeGenres.length} genre(s)`,
+        section: 'genres',
+      });
+    }
+
+    if (filters.malMediaType?.length > 0) {
+      const names = filters.malMediaType.map((v) => {
+        const match = malMediaTypes.find((t) => t.value === v);
+        return match?.label || v;
+      });
+      active.push({
+        key: 'malMediaType',
+        label: `Type: ${names.join(', ')}`,
+        section: 'format',
+      });
+    }
+
+    if (filters.malStatus?.length > 0) {
+      const names = filters.malStatus.map((v) => {
+        const match = malStatuses.find((s) => s.value === v);
+        return match?.label || v;
+      });
+      active.push({
+        key: 'malStatus',
+        label: `Status: ${names.join(', ')}`,
+        section: 'format',
+      });
+    }
+
+    if (filters.malRating) {
+      const match = malRatings.find((r) => r.value === filters.malRating);
+      active.push({
+        key: 'malRating',
+        label: `Rating: ${match?.label || filters.malRating}`,
+        section: 'format',
+      });
+    }
+
+    if (filters.malScoreMin || filters.malScoreMax) {
+      active.push({
+        key: 'malScore',
+        label: `Score: ${filters.malScoreMin || 0}-${filters.malScoreMax || 10}`,
+        section: 'score',
+      });
+    }
+
+    if (filters.malOrderBy) {
+      const match = malOrderByOptions.find((o) => o.value === filters.malOrderBy);
+      active.push({
+        key: 'malOrderBy',
+        label: `Order: ${match?.label || filters.malOrderBy}`,
+        section: 'score',
       });
     }
 

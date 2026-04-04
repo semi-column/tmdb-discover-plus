@@ -16,6 +16,28 @@ const log = createLogger('imdb:client') as Logger;
 
 const FETCH_TIMEOUT_MS = TIMEOUTS.IMDB_FETCH_MS;
 
+function resolveCallerHost(baseUrl: string | undefined): string {
+  const raw = baseUrl?.trim();
+  if (!raw) return 'unknown';
+
+  try {
+    return new URL(raw).host.toLowerCase() || 'unknown';
+  } catch {
+    return raw.toLowerCase();
+  }
+}
+
+function getCallerHeaders(): Record<string, string> {
+  const variant = config.addon.variant === 'nightly' ? 'nightly' : 'stable';
+  const callerHost = resolveCallerHost(config.baseUrl);
+
+  return {
+    'x-tmdbdp-source': 'tmdb-discover-plus',
+    'x-tmdbdp-variant': variant,
+    'x-tmdbdp-caller': `${variant}:${callerHost}`,
+  };
+}
+
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
 const CIRCUIT_BREAKER = {
@@ -207,6 +229,7 @@ async function executeImdbFetch(
             [keyHeader]: apiKey,
             [hostHeader]: apiHost,
             Accept: 'application/json',
+            ...getCallerHeaders(),
           },
         });
       } finally {

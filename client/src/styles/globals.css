@@ -63,9 +63,11 @@
   --accent-light: #fcd53f;
 
   /* Darker backgrounds for IMDb contrast */
-  --bg-secondary: #161616;
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #121212;
   --bg-tertiary: #1f1f1f;
   --bg-hover: #2a2a2a;
+  --bg-card: #161616;
 
   --gradient-primary: linear-gradient(135deg, #f5c518 0%, #e2b616 100%);
   --gradient-tmdb: linear-gradient(135deg, #f5c518 0%, #161616 100%);
@@ -80,11 +82,16 @@
   --accent-secondary: #0192db;
   --accent-tertiary: #3db4f0;
   --accent-light: #5fc3f5;
-  --bg-secondary: #0b1622;
-  --bg-tertiary: #152232;
-  --bg-hover: #1a2d42;
+
+  --bg-primary: #08121a;
+  --bg-card: #0f1c29;
+  --bg-secondary: #132435;
+  --bg-tertiary: #1a3045;
+  --bg-hover: #223c56;
+  --border-color: #1a3045;
+
   --gradient-primary: linear-gradient(135deg, #02a9ff 0%, #0192db 100%);
-  --gradient-tmdb: linear-gradient(135deg, #02a9ff 0%, #0b1622 100%);
+  --gradient-tmdb: linear-gradient(135deg, #02a9ff 0%, #08121a 100%);
   --text-on-accent: #ffffff;
 }
 
@@ -94,11 +101,16 @@
   --accent-secondary: #2546a0;
   --accent-tertiary: #4065c0;
   --accent-light: #5a7fd6;
-  --bg-secondary: #121218;
-  --bg-tertiary: #1a1a24;
-  --bg-hover: #242434;
+
+  --bg-primary: #0a0b12;
+  --bg-card: #10121c;
+  --bg-secondary: #151825;
+  --bg-tertiary: #1c2032;
+  --bg-hover: #252a42;
+  --border-color: #1c2032;
+
   --gradient-primary: linear-gradient(135deg, #2e51a2 0%, #2546a0 100%);
-  --gradient-tmdb: linear-gradient(135deg, #2e51a2 0%, #121218 100%);
+  --gradient-tmdb: linear-gradient(135deg, #2e51a2 0%, #0a0b12 100%);
   --text-on-accent: #ffffff;
 }
 
@@ -108,11 +120,16 @@
   --accent-secondary: #08b068;
   --accent-tertiary: #2dd48a;
   --accent-light: #50e0a0;
-  --bg-secondary: #0d1117;
-  --bg-tertiary: #161b22;
-  --bg-hover: #21262d;
+
+  --bg-primary: #070a0e;
+  --bg-card: #0b1118;
+  --bg-secondary: #101822;
+  --bg-tertiary: #16202c;
+  --bg-hover: #1e2b3c;
+  --border-color: #16202c;
+
   --gradient-primary: linear-gradient(135deg, #0ac775 0%, #08b068 100%);
-  --gradient-tmdb: linear-gradient(135deg, #0ac775 0%, #0d1117 100%);
+  --gradient-tmdb: linear-gradient(135deg, #0ac775 0%, #070a0e 100%);
   --text-on-accent: #ffffff;
 }
 

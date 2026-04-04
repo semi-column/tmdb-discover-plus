@@ -24,6 +24,24 @@ function createDefaultProps(overrides = {}) {
     setExcludeKeywords: vi.fn(),
     excludeCompanies: [],
     setExcludeCompanies: vi.fn(),
+    imdbSortOptions: [],
+    anilistSortOptions: [],
+    anilistFormatOptions: [],
+    anilistStatusOptions: [],
+    anilistSeasonOptions: [],
+    anilistSourceOptions: [],
+    anilistCountryOptions: [],
+    malRankingTypes: [],
+    malSortOptions: [],
+    malOrderByOptions: [],
+    malMediaTypes: [],
+    malStatuses: [],
+    malRatings: [],
+    simklListTypes: [],
+    simklTrendingPeriods: [],
+    simklBestFilters: [],
+    simklSortOptions: [],
+    simklAnimeTypes: [],
     ...overrides,
   };
 }
@@ -52,6 +70,42 @@ describe('useActiveFilters', () => {
       });
       const { result } = renderHook(() => useActiveFilters(props));
       expect(result.current.activeFilters).toEqual([]);
+    });
+
+    it('maps AniList sort value to dropdown label', () => {
+      const props = createDefaultProps({
+        localCatalog: {
+          source: 'anilist',
+          type: 'series',
+          filters: { sortBy: 'POPULARITY_DESC' },
+        },
+        anilistSortOptions: [{ value: 'POPULARITY_DESC', label: 'Popular' }],
+      });
+
+      const { result } = renderHook(() => useActiveFilters(props));
+      const sortFilter = result.current.activeFilters.find((f) => f.key === 'sortBy');
+
+      expect(sortFilter).toBeDefined();
+      expect(sortFilter.label).toBe('Sort: Popular');
+      expect(sortFilter.label).not.toContain('POPULARITY_DESC');
+    });
+
+    it('maps MAL sort value to dropdown label', () => {
+      const props = createDefaultProps({
+        localCatalog: {
+          source: 'mal',
+          type: 'series',
+          filters: { malSort: 'anime_score', malSeason: 'spring', malSeasonYear: 2024 },
+        },
+        malSortOptions: [{ value: 'anime_score', label: 'Top Score' }],
+      });
+
+      const { result } = renderHook(() => useActiveFilters(props));
+      const sortFilter = result.current.activeFilters.find((f) => f.key === 'malSort');
+
+      expect(sortFilter).toBeDefined();
+      expect(sortFilter.label).toBe('Sort: Top Score');
+      expect(sortFilter.label).not.toContain('anime_score');
     });
 
     it('detects selected genres', () => {
@@ -180,6 +234,28 @@ describe('useActiveFilters', () => {
       const updater = setLocalCatalog.mock.calls[0][0];
       const updated = updater({ filters: { sortBy: 'vote_average.desc' } });
       expect(updated.filters.sortBy).toBe('popularity.desc');
+    });
+
+    it('resets AniList sort to AniList default', () => {
+      const setLocalCatalog = vi.fn();
+      const props = createDefaultProps({
+        localCatalog: {
+          source: 'anilist',
+          type: 'series',
+          filters: { sortBy: 'POPULARITY_DESC' },
+        },
+        setLocalCatalog,
+      });
+      const { result } = renderHook(() => useActiveFilters(props));
+
+      act(() => {
+        result.current.clearFilter('sortBy');
+      });
+
+      expect(setLocalCatalog).toHaveBeenCalledWith(expect.any(Function));
+      const updater = setLocalCatalog.mock.calls[0][0];
+      const updated = updater({ filters: { sortBy: 'POPULARITY_DESC' } });
+      expect(updated.filters.sortBy).toBe('TRENDING_DESC');
     });
 
     it('clears people by calling setSelectedPeople', () => {

@@ -381,6 +381,7 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
       anilist: {
         enabled: true,
         genres: anilist.getGenres(),
+        tags: await anilist.getTagsFromApi(),
         sortOptions: anilist.getSortOptions(),
         formatOptions: anilist.getFormatOptions(),
         statusOptions: anilist.getStatusOptions(),
@@ -393,6 +394,7 @@ router.get('/reference-data', requireAuth, resolveApiKey, async (req, res) => {
         genres: mal.getGenres(),
         rankingTypes: mal.getRankingTypes(),
         sortOptions: mal.getSortOptions(),
+        orderByOptions: mal.getOrderByOptions(),
         mediaTypes: mal.getMediaTypes(),
         statuses: mal.getStatuses(),
         ratings: mal.getRatings(),
