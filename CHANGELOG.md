@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.0...v2.10.1) (2026-04-18)
+
+
+### Bug Fixes
+
+* socials not appearing on mobile screens ([684290d](https://github.com/semi-column/tmdb-discover-plus/commit/684290dd1e1f4fa499e2dab2eb495cb5a37b1c95))
+
 ## [2.10.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.9.2...v2.10.0) (2026-04-18)
 
 
