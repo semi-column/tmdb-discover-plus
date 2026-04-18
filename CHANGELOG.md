@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.9.2...v2.10.0) (2026-04-18)
+
+
+### Features
+
+* Add Trakt as a source for catalog builder ([9589f64](https://github.com/semi-column/tmdb-discover-plus/commit/9589f64405a9004e839a000ebe06641d001e1bf1))
+* Added AniList, MAL & SimKL for Anime Catalogs ([#77](https://github.com/semi-column/tmdb-discover-plus/issues/77)) ([d86ccb7](https://github.com/semi-column/tmdb-discover-plus/commit/d86ccb7bd689c0455653b384eb50a478866e2381))
+* Added disable search for every service ([b536e0c](https://github.com/semi-column/tmdb-discover-plus/commit/b536e0c8c0f4845a0a45cecc568bc38ba327d9da))
+* Added meta support for anime idPrefixes ([93f3dec](https://github.com/semi-column/tmdb-discover-plus/commit/93f3decabee2845bb213be7c1889a68662b87497))
+* Configurable stremio extras ([f0f2206](https://github.com/semi-column/tmdb-discover-plus/commit/f0f220691083ab4fe2d107151503dfb92fa83b30))
+* TMDB Presets are now editable ([c9d206a](https://github.com/semi-column/tmdb-discover-plus/commit/c9d206a8772d2db16c9ab61e3b0857c161c09f39))
+
+
+### Bug Fixes
+
+* fixed an issue where IMDb catalogs show enriched posters even without selecting one ([41a686e](https://github.com/semi-column/tmdb-discover-plus/commit/41a686e0708a6b5bb2929dc0c1874e68809ce4bb))
+* Normalize IMDb keywords and show active filters ([d4fd22f](https://github.com/semi-column/tmdb-discover-plus/commit/d4fd22f4aaf711ba8dad2c8cb75edfd6578c7488))
+* **nuvio:** discover only catalogs showing up on home screen ([8701e05](https://github.com/semi-column/tmdb-discover-plus/commit/8701e057b8754d46c43a334e90be2f1a943a1ae5))
+* TMDB year presets are now dynamic ([b536e0c](https://github.com/semi-column/tmdb-discover-plus/commit/b536e0c8c0f4845a0a45cecc568bc38ba327d9da))
+* **tmdb:** add regional appearance filters for TV shows ([81b66e9](https://github.com/semi-column/tmdb-discover-plus/commit/81b66e90327f4f318fb2b01d7929f36bb3b09a7b))
+* **ui:** replace timezone input with searchable timezone select ([81b66e9](https://github.com/semi-column/tmdb-discover-plus/commit/81b66e90327f4f318fb2b01d7929f36bb3b09a7b))
+* various anime catalog source fixes ([97ff026](https://github.com/semi-column/tmdb-discover-plus/commit/97ff02635c83d39d38b0fc4715de854d5a7b4b70))
+
 ## [2.9.2](https://github.com/semi-column/tmdb-discover-plus/compare/v2.9.1...v2.9.2) (2026-03-26)
 
 
