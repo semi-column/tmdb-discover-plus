@@ -84,11 +84,26 @@ export async function browseAnime(
   }
 
   if (filters.kitsuAgeRating && filters.kitsuAgeRating.length > 0) {
-    params.set('filter[ageRating]', filters.kitsuAgeRating.join(','));
+    const supportedAgeRatings = new Set(['G', 'PG', 'R']);
+    const ageRatings = [...new Set(filters.kitsuAgeRating)].filter((rating) =>
+      supportedAgeRatings.has(rating)
+    );
+    if (ageRatings.length > 0) {
+      params.set('filter[ageRating]', ageRatings.join(','));
+    }
   }
 
-  if (filters.kitsuCategories && filters.kitsuCategories.length > 0) {
-    params.set('filter[categories]', filters.kitsuCategories.join(','));
+  const includeCategories = [...new Set(filters.kitsuCategories || [])].filter(Boolean);
+  const excludeCategories = [...new Set(filters.kitsuExcludeCategories || [])].filter(
+    (slug) => Boolean(slug) && !includeCategories.includes(slug)
+  );
+
+  if (includeCategories.length > 0 || excludeCategories.length > 0) {
+    const categoryFilter = [
+      ...includeCategories,
+      ...excludeCategories.map((slug) => `!${slug}`),
+    ].join(',');
+    params.set('filter[categories]', categoryFilter);
   }
 
   if (filters.kitsuSeason && filters.kitsuSeasonYear) {

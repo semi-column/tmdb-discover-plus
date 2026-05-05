@@ -311,6 +311,65 @@ describe('Kitsu source', () => {
       vi.unstubAllGlobals();
     });
 
+    it('supports category exclusion via !slug syntax', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            data: [],
+            meta: { count: 0 },
+            links: {},
+          }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { discover } = await import('../../src/services/kitsu/discover');
+      await discover(
+        {
+          kitsuListType: 'browse',
+          kitsuCategories: ['romance'],
+          kitsuExcludeCategories: ['horror'],
+        },
+        'anime',
+        1
+      );
+
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain('filter%5Bcategories%5D=romance%2C%21horror');
+
+      vi.unstubAllGlobals();
+    });
+
+    it('ignores unsupported age ratings when building query params', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            data: [],
+            meta: { count: 0 },
+            links: {},
+          }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { discover } = await import('../../src/services/kitsu/discover');
+      await discover(
+        {
+          kitsuListType: 'browse',
+          kitsuAgeRating: ['R18'],
+        },
+        'anime',
+        1
+      );
+
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).not.toContain('filter%5BageRating%5D');
+
+      vi.unstubAllGlobals();
+    });
+
     it('applies TV subtype for series browse when subtype is not explicitly set', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -348,7 +407,7 @@ describe('Kitsu source', () => {
       expect(ref.getCategories().length).toBeGreaterThan(0);
       expect(ref.getSubtypes().length).toBe(6);
       expect(ref.getStatuses().length).toBe(5);
-      expect(ref.getAgeRatings().length).toBe(4);
+      expect(ref.getAgeRatings().length).toBe(3);
       expect(ref.getSortOptions().length).toBe(6);
       expect(ref.getSeasons().length).toBe(4);
     });

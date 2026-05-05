@@ -124,7 +124,6 @@ export const KITSU_AGE_RATINGS = [
   { value: 'G', label: 'G - All Ages' },
   { value: 'PG', label: 'PG - Children' },
   { value: 'R', label: 'R - 17+' },
-  { value: 'R18', label: 'R18 - Explicit' },
 ] as const;
 
 export const KITSU_SORT_OPTIONS = [

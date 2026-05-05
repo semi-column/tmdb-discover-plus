@@ -117,6 +117,8 @@ const CSP_POLICY = {
     'https://docs.elfhosted.com',
     'https://image.tmdb.org',
     'https://s4.anilist.co',
+    'https://media.kitsu.app',
+    'https://media.kitsu.io',
     'https://myanimelist.net',
     'https://cdn.myanimelist.net',
     'https://storage.ko-fi.com',

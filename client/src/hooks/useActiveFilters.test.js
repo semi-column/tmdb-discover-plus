@@ -143,6 +143,25 @@ describe('useActiveFilters', () => {
       expect(categoryFilter.label).not.toBe('Categories: 2');
     });
 
+    it('renders Kitsu excluded categories with readable names', () => {
+      const props = createDefaultProps({
+        localCatalog: {
+          source: 'kitsu',
+          type: 'anime',
+          filters: { kitsuExcludeCategories: ['romance', 'horror'] },
+        },
+      });
+
+      const { result } = renderHook(() => useActiveFilters(props));
+      const excludedFilter = result.current.activeFilters.find(
+        (f) => f.key === 'kitsuExcludeCategories'
+      );
+
+      expect(excludedFilter).toBeDefined();
+      expect(excludedFilter.label).toContain('Romance');
+      expect(excludedFilter.label).toContain('Horror');
+    });
+
     it('maps Kitsu season chip to season section', () => {
       const props = createDefaultProps({
         localCatalog: {
@@ -344,6 +363,27 @@ describe('useActiveFilters', () => {
       const updater = setLocalCatalog.mock.calls[0][0];
       const updated = updater({ filters: { kitsuSort: '-startDate' } });
       expect(updated.filters.kitsuSort).toBe('-averageRating');
+    });
+
+    it('clears Kitsu excluded categories', () => {
+      const setLocalCatalog = vi.fn();
+      const props = createDefaultProps({
+        localCatalog: {
+          source: 'kitsu',
+          type: 'anime',
+          filters: { kitsuExcludeCategories: ['romance'] },
+        },
+        setLocalCatalog,
+      });
+      const { result } = renderHook(() => useActiveFilters(props));
+
+      act(() => {
+        result.current.clearFilter('kitsuExcludeCategories');
+      });
+
+      const updater = setLocalCatalog.mock.calls[0][0];
+      const updated = updater({ filters: { kitsuExcludeCategories: ['romance'] } });
+      expect(updated.filters.kitsuExcludeCategories).toEqual([]);
     });
 
     it('clears Kitsu season and season year together', () => {

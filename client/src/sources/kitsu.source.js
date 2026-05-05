@@ -122,6 +122,7 @@ export const KITSU_SOURCE = {
     kitsuStatus: [],
     kitsuAgeRating: [],
     kitsuCategories: [],
+    kitsuExcludeCategories: [],
   },
 
   movieOnlyFilterKeys: [],
@@ -172,6 +173,22 @@ export const KITSU_SOURCE = {
       active.push({
         key: 'kitsuCategories',
         label: `Categories: ${names.join(', ')}${extra}`,
+        section: 'genres',
+      });
+    }
+
+    if (filters.kitsuExcludeCategories?.length > 0) {
+      const names = filters.kitsuExcludeCategories.slice(0, 2).map((slug) => {
+        const match = kitsuCategories.find((c) => c.slug === slug);
+        return match?.title || slug;
+      });
+      const extra =
+        filters.kitsuExcludeCategories.length > 2
+          ? ` +${filters.kitsuExcludeCategories.length - 2}`
+          : '';
+      active.push({
+        key: 'kitsuExcludeCategories',
+        label: `Exclude: ${names.join(', ')}${extra}`,
         section: 'genres',
       });
     }

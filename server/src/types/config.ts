@@ -171,6 +171,7 @@ export interface KitsuCatalogFilters extends BaseCatalogFilters {
   kitsuStatus?: string[];
   kitsuAgeRating?: string[];
   kitsuCategories?: string[];
+  kitsuExcludeCategories?: string[];
   kitsuSeason?: string;
   kitsuSeasonYear?: number;
   kitsuStreamers?: string;

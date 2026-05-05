@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { Settings, Sparkles, Layers, Calendar, Eye } from 'lucide-react';
 import { FilterSection } from '../../FilterSection';
+import { GenreSelector } from '../../GenreSelector';
 import { AnimeSeasonSelector } from '../../shared/AnimeSeasonSelector';
 import { AnimeFormatSelector } from '../../shared/AnimeFormatSelector';
 import { SearchableSelect } from '../../../../forms/SearchableSelect';
@@ -42,7 +43,6 @@ const KITSU_AGE_RATINGS = [
   { value: 'G', label: 'G - All Ages' },
   { value: 'PG', label: 'PG - Children' },
   { value: 'R', label: 'R - 17+' },
-  { value: 'R18', label: 'R18 - Explicit' },
 ];
 
 const KITSU_SEASON_OPTIONS = [
@@ -116,7 +116,8 @@ export function KitsuFilterPanel({
     return count;
   };
 
-  const getCategoryBadge = () => (filters.kitsuCategories || []).length;
+  const getCategoryBadge = () =>
+    (filters.kitsuCategories || []).length + (filters.kitsuExcludeCategories || []).length;
 
   const getFormatBadge = () => {
     let count = 0;
@@ -135,19 +136,59 @@ export function KitsuFilterPanel({
 
   const getOptionsBadge = () => (filters.randomize ? 1 : 0);
 
-  const handleCategoryToggle = useCallback(
+  const handleIncludeCategory = useCallback(
     (slug) => {
-      const current = filters.kitsuCategories || [];
-      if (current.includes(slug)) {
+      const included = filters.kitsuCategories || [];
+      const excluded = filters.kitsuExcludeCategories || [];
+      if (included.includes(slug)) {
         onFiltersChange(
           'kitsuCategories',
-          current.filter((c) => c !== slug)
+          included.filter((c) => c !== slug)
+        );
+      } else if (excluded.includes(slug)) {
+        onFiltersChange(
+          'kitsuExcludeCategories',
+          excluded.filter((c) => c !== slug)
         );
       } else {
-        onFiltersChange('kitsuCategories', [...current, slug]);
+        onFiltersChange('kitsuCategories', [...included, slug]);
       }
     },
-    [filters.kitsuCategories, onFiltersChange]
+    [filters.kitsuCategories, filters.kitsuExcludeCategories, onFiltersChange]
+  );
+
+  const handleExcludeCategory = useCallback(
+    (slug) => {
+      const included = filters.kitsuCategories || [];
+      const excluded = filters.kitsuExcludeCategories || [];
+      if (excluded.includes(slug)) {
+        onFiltersChange(
+          'kitsuExcludeCategories',
+          excluded.filter((c) => c !== slug)
+        );
+      } else {
+        onFiltersChange(
+          'kitsuCategories',
+          included.filter((c) => c !== slug)
+        );
+        onFiltersChange('kitsuExcludeCategories', [...excluded, slug]);
+      }
+    },
+    [filters.kitsuCategories, filters.kitsuExcludeCategories, onFiltersChange]
+  );
+
+  const handleClearCategory = useCallback(
+    (slug) => {
+      onFiltersChange(
+        'kitsuCategories',
+        (filters.kitsuCategories || []).filter((c) => c !== slug)
+      );
+      onFiltersChange(
+        'kitsuExcludeCategories',
+        (filters.kitsuExcludeCategories || []).filter((c) => c !== slug)
+      );
+    },
+    [filters.kitsuCategories, filters.kitsuExcludeCategories, onFiltersChange]
   );
 
   return (
@@ -208,21 +249,19 @@ export function KitsuFilterPanel({
           onToggle={onToggleSection}
           badgeCount={getCategoryBadge()}
         >
-          <div className="genre-grid">
-            {categoryObjects.map((cat) => {
-              const isSelected = (filters.kitsuCategories || []).includes(cat.id);
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  className={`genre-chip ${isSelected ? 'included' : ''}`}
-                  onClick={() => handleCategoryToggle(cat.id)}
-                >
-                  {cat.name}
-                </button>
-              );
-            })}
-          </div>
+          <GenreSelector
+            genres={categoryObjects}
+            selectedGenres={filters.kitsuCategories || []}
+            excludedGenres={filters.kitsuExcludeCategories || []}
+            genreMatchMode="any"
+            onInclude={handleIncludeCategory}
+            onExclude={handleExcludeCategory}
+            onClear={handleClearCategory}
+            onSetMatchMode={() => null}
+            showMatchMode={false}
+            loading={false}
+            onRefresh={() => null}
+          />
         </FilterSection>
       )}
 
@@ -280,7 +319,7 @@ export function KitsuFilterPanel({
         >
           <AnimeSeasonSelector
             season={filters.kitsuSeason || ''}
-            seasonYear={filters.kitsuSeasonYear || ''}
+            year={filters.kitsuSeasonYear || ''}
             seasonOptions={KITSU_SEASON_OPTIONS}
             onSeasonChange={(value) => onFiltersChange('kitsuSeason', value || undefined)}
             onYearChange={(value) =>

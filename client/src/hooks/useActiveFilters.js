@@ -38,7 +38,6 @@ const KITSU_AGE_RATING_LABELS = {
   G: 'G - All Ages',
   PG: 'PG - Children',
   R: 'R - 17+',
-  R18: 'R18 - Explicit',
 };
 
 const KITSU_CATEGORY_LABELS = {
@@ -867,6 +866,21 @@ export function useActiveFilters({
         });
       }
 
+      if (filters.kitsuExcludeCategories?.length > 0) {
+        const names = filters.kitsuExcludeCategories
+          .slice(0, 2)
+          .map((slug) => KITSU_CATEGORY_LABELS[slug] || slug);
+        const extra =
+          filters.kitsuExcludeCategories.length > 2
+            ? ` +${filters.kitsuExcludeCategories.length - 2}`
+            : '';
+        active.push({
+          key: 'kitsuExcludeCategories',
+          label: `Exclude: ${names.join(', ')}${extra}`,
+          section: 'genres',
+        });
+      }
+
       if (filters.kitsuSubtype?.length > 0) {
         const names = filters.kitsuSubtype.map((value) => KITSU_SUBTYPE_LABELS[value] || value);
         active.push({
@@ -1417,6 +1431,9 @@ export function useActiveFilters({
           break;
         case 'kitsuCategories':
           update({ kitsuCategories: [] });
+          break;
+        case 'kitsuExcludeCategories':
+          update({ kitsuExcludeCategories: [] });
           break;
         case 'kitsuSubtype':
           update({ kitsuSubtype: [] });

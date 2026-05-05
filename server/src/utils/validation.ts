@@ -487,6 +487,7 @@ const KITSU_ONLY_FILTER_KEYS = [
   'kitsuStatus',
   'kitsuAgeRating',
   'kitsuCategories',
+  'kitsuExcludeCategories',
   'kitsuSeason',
   'kitsuSeasonYear',
   'kitsuStreamers',
