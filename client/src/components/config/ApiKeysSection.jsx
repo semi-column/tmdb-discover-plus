@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Eye, EyeOff, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, ShieldAlert, ExternalLink } from 'lucide-react';
 import {
   validateArtworkProviderApiKey,
   getDefaultFreeArtworkApiKey,
@@ -8,21 +8,33 @@ import {
 import { api } from '../../services/api';
 
 const API_KEY_PROVIDERS = [
-  { id: 'tvdb', name: 'TVDB', desc: 'Allows artwork resolution by TVDB ID.' },
+  {
+    id: 'tvdb',
+    name: 'TVDB',
+    desc: 'Allows artwork resolution by TVDB ID.',
+    keyUrl: 'https://thetvdb.com',
+    keyUrlLabel: 'Get API key from TVDB',
+  },
   {
     id: 'fanart',
     name: 'Fanart.tv',
     desc: 'Required when using Fanart.tv artwork provider.',
+    keyUrl: 'https://fanart.tv',
+    keyUrlLabel: 'Get API key from Fanart.tv',
   },
   {
     id: 'rpdb',
     name: 'RPDB',
     desc: 'Optional paid key. If left empty, the built-in free key is used automatically.',
+    keyUrl: 'https://ratingposterdb.com',
+    keyUrlLabel: 'Get paid API key from RPDB',
   },
   {
     id: 'topPosters',
     name: 'Top Posters',
     desc: 'Required when using Top Posters artwork provider.',
+    keyUrl: 'https://api.top-streaming.stream',
+    keyUrlLabel: 'Get API key from Top Posters',
   },
 ];
 
@@ -142,6 +154,25 @@ function ApiKeyInput({ provider, preferences, onChange }) {
         <div className="settings-row-info">
           <span className="settings-label">{provider.name}</span>
           <span className="settings-desc">{provider.desc}</span>
+          {provider.keyUrl && (
+            <a
+              href={provider.keyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontSize: '0.8rem',
+                color: 'var(--accent-primary)',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                marginTop: '4px',
+                width: 'fit-content',
+              }}
+            >
+              {provider.keyUrlLabel || 'Get API key'} <ExternalLink size={12} />
+            </a>
+          )}
         </div>
         {hasEncryptedKey && !localKey && (
           <span

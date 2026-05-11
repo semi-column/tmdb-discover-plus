@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ExternalLink, Copy } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { SearchableSelect } from '../forms/SearchableSelect';
 import { artworkProviderRequiresApiKey } from '../../utils/artworkValidation';
 
@@ -274,18 +274,7 @@ function ArtKindSelector({ contentType, artKind, artworkSettings, preferences, o
 
       {serviceInfo && (
         <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            {serviceInfo.note}{' '}
-            <a
-              href={serviceInfo.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="artwork-link"
-              style={{ marginLeft: '4px' }}
-            >
-              Visit website <ExternalLink size={12} />
-            </a>
-          </div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{serviceInfo.note}</div>
 
           {providerRequiresApiKey && !providerKeyConfigured && (
             <div

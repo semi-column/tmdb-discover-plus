@@ -303,7 +303,13 @@ export const CatalogEditor = memo(function CatalogEditor() {
     }
 
     baseOptions.push(
-      ...PREVIEW_POSTER_PROVIDER_OVERRIDE_OPTIONS.filter((o) => o.id !== 'tmdb' && o.id !== 'imdb')
+      ...PREVIEW_POSTER_PROVIDER_OVERRIDE_OPTIONS.filter(
+        (o) =>
+          o.id !== 'tmdb' &&
+          o.id !== 'imdb' &&
+          (o.id !== 'topPosters' ||
+            hasProviderPreviewAccess(preferences, localCatalog?.type, 'topPosters'))
+      )
     );
 
     if (hasCustomUrlPreviewAccess(preferences, localCatalog?.type)) {
