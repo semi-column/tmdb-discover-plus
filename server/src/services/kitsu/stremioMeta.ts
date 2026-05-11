@@ -3,11 +3,15 @@ import type { KitsuAnime } from './types.ts';
 import type { StremioMetaPreview } from '../../types/stremio.ts';
 import type { StremioLink } from '../../types/stremio.ts';
 import type { ContentType } from '../../types/common.ts';
+import type { ArtworkOptions } from '../../types/config.ts';
 import { generateSlug } from '../common/stremioHelpers.ts';
+import { applyArtworkOverridesSync } from '../artworkService.ts';
+import type { ArtworkContext, NativeArtworkUrls } from '../artworkService.ts';
 
 export function kitsuToStremioMeta(
   anime: KitsuAnime,
-  type: ContentType
+  type: ContentType,
+  artworkOptions: ArtworkOptions | null = null
 ): StremioMetaPreview | null {
   const mappedStremioId = kitsuIdToStremioId(anime.id);
   const stremioId = mappedStremioId || `kitsu:${anime.id}`;
@@ -31,6 +35,19 @@ export function kitsuToStremioMeta(
 
   const rating = anime.averageRating ? (anime.averageRating / 10).toFixed(1) : undefined;
 
+  const artworkContext: ArtworkContext = {
+    tmdbId: tmdbId || undefined,
+    imdbId: imdbId ?? undefined,
+    type,
+  };
+  const nativeUrls: NativeArtworkUrls = {
+    poster: anime.poster || null,
+    backdrop: anime.cover || null,
+    logo: null,
+    landscape: anime.cover || null,
+  };
+  const resolved = applyArtworkOverridesSync(artworkContext, nativeUrls, artworkOptions);
+
   return {
     id: primaryId,
     tmdbId,
@@ -39,11 +56,12 @@ export function kitsuToStremioMeta(
     type,
     name: title,
     slug: generateSlug(type, title, primaryId),
-    poster: anime.poster,
+    poster: resolved.poster,
     posterShape: 'poster',
-    background: anime.cover,
-    fanart: anime.cover,
-    landscapePoster: null,
+    background: resolved.backdrop,
+    fanart: resolved.landscape || resolved.backdrop,
+    landscapePoster: resolved.landscape || resolved.backdrop,
+    logo: resolved.logo || undefined,
     description: anime.synopsis || '',
     genres: anime.categories,
     links: links.length > 0 ? links : undefined,
@@ -55,11 +73,12 @@ export function kitsuToStremioMeta(
 
 export function batchConvertToStremioMeta(
   animeList: KitsuAnime[],
-  type: ContentType
+  type: ContentType,
+  artworkOptions: ArtworkOptions | null = null
 ): StremioMetaPreview[] {
   const results: StremioMetaPreview[] = [];
   for (const anime of animeList) {
-    const meta = kitsuToStremioMeta(anime, type);
+    const meta = kitsuToStremioMeta(anime, type, artworkOptions);
     if (meta) results.push(meta);
   }
   return results;

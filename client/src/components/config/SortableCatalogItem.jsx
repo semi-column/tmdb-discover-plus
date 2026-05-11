@@ -5,6 +5,8 @@ import { Film, Tv, GripVertical, Trash2, Copy, Sparkles } from 'lucide-react';
 export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onDuplicate }) {
   const getCatalogKey = (cat) => String(cat?._id || cat?.id || cat?.name);
   const id = getCatalogKey(catalog);
+  const isCollectionCatalog =
+    catalog?.type === 'collection' || catalog?.filters?.listType === 'collection';
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -63,9 +65,9 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
                 catalog.source ||
                 'tmdb'}
             </span>
-            {catalog.filters?.listType && catalog.filters.listType !== 'discover' && (
-              <span className="catalog-item-badge">Preset</span>
-            )}
+            {catalog.filters?.listType &&
+              catalog.filters.listType !== 'discover' &&
+              !isCollectionCatalog && <span className="catalog-item-badge">Preset</span>}
           </div>
         </div>
         <div className="catalog-item-actions">

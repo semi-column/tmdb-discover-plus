@@ -27,4 +27,29 @@ describe('UserConfig preferences schema', () => {
     expect(doc.preferences.disableSimklSearch).toBe(true);
     expect(doc.preferences.disableTraktSearch).toBe(true);
   });
+
+  it('preserves nested artwork custom URL settings', () => {
+    const doc = new UserConfig({
+      userId: 'schema-artwork-test-user',
+      catalogs: [],
+      preferences: {
+        artwork: {
+          movie: {
+            poster: {
+              provider: 'customUrl',
+              customUrlPattern: 'https://img.example.com/{type}/{rating_id}.jpg',
+            },
+          },
+          englishArtOnly: true,
+        },
+      },
+    });
+
+    const raw = doc.toObject();
+    expect(raw.preferences.artwork.movie.poster.provider).toBe('customUrl');
+    expect(raw.preferences.artwork.movie.poster.customUrlPattern).toBe(
+      'https://img.example.com/{type}/{rating_id}.jpg'
+    );
+    expect(raw.preferences.artwork.englishArtOnly).toBe(true);
+  });
 });

@@ -55,6 +55,32 @@
   color: var(--text-primary);
 }
 
+.settings-section-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-section-content.expanded {
+  grid-template-rows: 1fr;
+}
+
+/* Use overflow visible when fully expanded to allow dropdowns, hidden when collapsed to clip */
+.settings-section-content {
+  overflow: hidden;
+}
+.settings-section-content.expanded {
+  overflow: visible;
+}
+
+.settings-section-inner {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+}
+
 .settings-section-header h3 {
   margin: 0;
   font-size: 1.05rem;
@@ -344,4 +370,188 @@
   .toggle-switch-wrapper {
     align-self: flex-start;
   }
+}
+
+/* Segmented Control for Modals */
+.segmented-control {
+  display: flex;
+  background: var(--bg-primary);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  margin: 16px 20px 0 20px;
+  gap: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.segmented-btn {
+  flex: 1;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  border-radius: calc(var(--radius-md) - 4px);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.segmented-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.segmented-btn.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.segmented-control-sm {
+  margin: 0;
+  padding: 3px;
+}
+
+.segmented-control-sm .segmented-btn {
+  padding: 5px 8px;
+  font-size: 0.8rem;
+}
+
+/* Artwork settings panel */
+.artwork-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.artwork-settings-panel .segmented-control {
+  margin: 0;
+}
+
+.artwork-selector-container {
+  padding: 2px 0;
+}
+
+.artwork-kind-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.artwork-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.artwork-input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.artwork-input-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.artwork-key-status {
+  font-size: 0.75rem;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: rgba(74, 222, 128, 0.14);
+  color: var(--success);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+}
+
+.artwork-key-valid {
+  font-size: 0.75rem;
+  color: var(--success);
+}
+
+.artwork-key-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.artwork-action-btn {
+  min-width: 178px;
+  box-shadow: var(--shadow-sm);
+}
+
+.artwork-action-btn:disabled {
+  opacity: 0.65;
+}
+
+.artwork-key-checking {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.artwork-copy-btn {
+  align-self: flex-start;
+  border-color: rgba(130, 87, 229, 0.45);
+  background: rgba(130, 87, 229, 0.14);
+  color: var(--text-primary);
+}
+
+.artwork-copy-btn:hover {
+  background: rgba(130, 87, 229, 0.22);
+  border-color: rgba(130, 87, 229, 0.7);
+}
+
+.artwork-section-note {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.artwork-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-light);
+  text-decoration: none;
+}
+
+.artwork-link:hover {
+  text-decoration: underline;
+}
+
+.artwork-placeholders-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.artwork-global-options {
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.artwork-global-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.artwork-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--text-secondary);
 }

@@ -1,15 +1,62 @@
 import type { ContentType } from './common.ts';
 
-export type PosterServiceType = 'none' | 'rpdb' | 'topPosters' | 'customUrl';
+export type PosterServiceType =
+  | 'none'
+  | 'rpdb'
+  | 'topPosters'
+  | 'customUrl'
+  | 'tmdb'
+  | 'imdb'
+  | 'tvdb'
+  | 'fanart';
+
+export interface ArtworkSourceConfig {
+  provider?: PosterServiceType;
+  customUrlPattern?: string;
+  apiKeyEncrypted?: string;
+  apiKey?: string;
+}
+
+// --- Per-content-type artwork settings (v2) ---
+
+export type ArtContentType = 'movie' | 'series' | 'anime';
+export type ArtKind = 'poster' | 'backdrop' | 'logo' | 'landscape' | 'episode';
+
+export interface ContentTypeArtwork {
+  poster?: ArtworkSourceConfig;
+  backdrop?: ArtworkSourceConfig;
+  logo?: ArtworkSourceConfig;
+  landscape?: ArtworkSourceConfig;
+  episode?: ArtworkSourceConfig;
+}
+
+export interface ArtworkSettings {
+  movie?: ContentTypeArtwork;
+  series?: ContentTypeArtwork;
+  anime?: ContentTypeArtwork;
+  englishArtOnly?: boolean;
+  originalLangFallback?: boolean;
+}
+
+export interface ArtworkOptionsMap {
+  movie: ArtworkOptions;
+  series: ArtworkOptions;
+  anime: ArtworkOptions;
+  englishArtOnly: boolean;
+  originalLangFallback: boolean;
+}
 
 export interface UserPreferences {
+  // Global API keys for artwork/metadata providers
+  apiKeys?: Record<string, string>;
+  apiKeysEncrypted?: Record<string, string>;
+
   showAdultContent?: boolean;
   defaultLanguage?: string;
   shuffleCatalogs?: boolean;
-  posterService?: PosterServiceType;
-  posterApiKeyEncrypted?: string;
-  posterApiKey?: string;
-  posterCustomUrlPattern?: string;
+  // Artwork settings: v2 per-content-type or legacy flat Record
+  artwork?: ArtworkSettings | Record<string, ArtworkSourceConfig>;
+  // Option to disable search catalogs
   disableSearch?: boolean;
   disableTmdbSearch?: boolean;
   disableImdbSearch?: boolean;
@@ -300,11 +347,23 @@ export interface PosterOptions {
   customUrlPattern?: string;
 }
 
+export interface ArtworkOptions {
+  poster: PosterOptions | null;
+  backdrop: PosterOptions | null;
+  logo: PosterOptions | null;
+  landscape: PosterOptions | null;
+  episode: PosterOptions | null;
+  englishArtOnly?: boolean;
+  originalLangFallback?: boolean;
+}
+
 export interface PosterUrlOptions extends PosterOptions {
   tmdbId: number | string;
   type: ContentType;
   imdbId?: string | null;
   language?: string | null;
+  season?: number;
+  episode?: number;
 }
 
 export interface ConfigCacheOptions {

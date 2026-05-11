@@ -115,7 +115,15 @@ export const config = Object.freeze({
   }),
 
   rpdb: Object.freeze({
-    apiKey: env('RPDB_API_KEY'),
+    apiKey: env('RPDB_API_KEY', 't0-free-rpdb'),
+  }),
+
+  topPosters: Object.freeze({
+    apiKey: env('TOP_POSTERS_API_KEY'),
+  }),
+
+  fanart: Object.freeze({
+    apiKey: env('FANART_API_KEY'),
   }),
 
   malApi: Object.freeze({

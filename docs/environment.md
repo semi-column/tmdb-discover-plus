@@ -64,9 +64,11 @@ Storage backend selection priority: explicit `DATABASE_DRIVER` → auto-detect f
 
 ## External APIs
 
-| Variable       | Description                                                                | Default   |
-| -------------- | -------------------------------------------------------------------------- | --------- |
-| `RPDB_API_KEY` | RatingPosterDB API key for poster overlays. Free tier key: `t0-free-rpdb`. | _(empty)_ |
+| Variable              | Description                                                                | Default        |
+| --------------------- | -------------------------------------------------------------------------- | -------------- |
+| `RPDB_API_KEY`        | RatingPosterDB API key for poster overlays. Free tier key: `t0-free-rpdb`. | `t0-free-rpdb` |
+| `TOP_POSTERS_API_KEY` | TOP Posters API key. Required when using Top Posters artwork provider.     | _(empty)_      |
+| `FANART_API_KEY`      | Fanart.tv API key. Required when using Fanart artwork provider.            | _(empty)_      |
 
 ## CORS
 

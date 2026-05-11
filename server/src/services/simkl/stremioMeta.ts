@@ -4,7 +4,10 @@ import type { SimklAnime, SimklTrendingItem, SimklSearchResult } from './types.t
 import type { StremioMetaPreview } from '../../types/stremio.ts';
 import type { StremioLink } from '../../types/stremio.ts';
 import type { ContentType } from '../../types/common.ts';
+import type { ArtworkOptions } from '../../types/config.ts';
 import { generateSlug } from '../common/stremioHelpers.ts';
+import { applyArtworkOverridesSync } from '../artworkService.ts';
+import type { ArtworkContext, NativeArtworkUrls } from '../artworkService.ts';
 
 function resolveStremioId(ids: SimklAnime['ids']): string | null {
   // Direct IMDB ID from Simkl's response
@@ -46,7 +49,8 @@ function buildFanartUrl(fanart: string | undefined): string {
 
 export function simklToStremioMeta(
   anime: SimklAnime | SimklTrendingItem,
-  type: ContentType
+  type: ContentType,
+  artworkOptions: ArtworkOptions | null = null
 ): StremioMetaPreview | null {
   const stremioId = resolveStremioId(anime.ids);
   if (!stremioId) return null;
@@ -61,8 +65,8 @@ export function simklToStremioMeta(
 
   const rating = anime.ratings?.simkl?.rating || anime.ratings?.mal?.rating;
 
-  const poster = buildPosterUrl(anime.poster) || null;
-  const background = buildFanartUrl(anime.fanart) || null;
+  const nativePoster = buildPosterUrl(anime.poster) || null;
+  const nativeBackground = buildFanartUrl(anime.fanart) || null;
   const links: StremioLink[] = [];
   if (imdbId) {
     links.push({
@@ -72,6 +76,19 @@ export function simklToStremioMeta(
     });
   }
 
+  const artworkContext: ArtworkContext = {
+    tmdbId: tmdbId || undefined,
+    imdbId: imdbId ?? undefined,
+    type,
+  };
+  const nativeUrls: NativeArtworkUrls = {
+    poster: nativePoster,
+    backdrop: nativeBackground,
+    logo: null,
+    landscape: nativeBackground,
+  };
+  const resolved = applyArtworkOverridesSync(artworkContext, nativeUrls, artworkOptions);
+
   const meta: StremioMetaPreview = {
     id: primaryId,
     tmdbId,
@@ -80,11 +97,12 @@ export function simklToStremioMeta(
     type,
     name: anime.title,
     slug: generateSlug(type, anime.title, primaryId),
-    poster,
+    poster: resolved.poster,
     posterShape: 'poster',
-    background,
-    fanart: background,
-    landscapePoster: background,
+    background: resolved.backdrop,
+    fanart: resolved.landscape || resolved.backdrop,
+    landscapePoster: resolved.landscape || resolved.backdrop,
+    logo: resolved.logo || undefined,
     genres: ('genres' in anime && anime.genres) || [],
     description: ('overview' in anime && anime.overview) || '',
     releaseInfo: anime.year ? String(anime.year) : '',
@@ -98,11 +116,12 @@ export function simklToStremioMeta(
 
 export function batchConvertToStremioMeta(
   animeList: (SimklAnime | SimklTrendingItem)[],
-  type: ContentType
+  type: ContentType,
+  artworkOptions: ArtworkOptions | null = null
 ): StremioMetaPreview[] {
   const results: StremioMetaPreview[] = [];
   for (const anime of animeList) {
-    const meta = simklToStremioMeta(anime, type);
+    const meta = simklToStremioMeta(anime, type, artworkOptions);
     if (meta) results.push(meta);
   }
   return results;

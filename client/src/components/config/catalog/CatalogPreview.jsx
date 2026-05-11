@@ -16,6 +16,7 @@ export const CatalogPreview = memo(function CatalogPreview({
   loading,
   error,
   data,
+  previewPosterProvider,
   onRetry,
   isModal,
   isOpen,
@@ -36,6 +37,21 @@ export const CatalogPreview = memo(function CatalogPreview({
 
   const hasData = data && Array.isArray(data.metas) && data.metas.length > 0;
   const isCompactState = (!hasData && loading) || error || (!loading && !hasData);
+  const shouldAlwaysHideDetails = ['rpdb', 'topPosters', 'customUrl'].includes(
+    previewPosterProvider
+  );
+
+  const shouldHideCardDetails = (posterUrl) => {
+    if (shouldAlwaysHideDetails) return true;
+    if (!posterUrl) return false;
+
+    try {
+      const hostname = new URL(posterUrl).hostname.toLowerCase();
+      return hostname === 'api.ratingposterdb.com' || hostname === 'api.top-streaming.stream';
+    } catch {
+      return false;
+    }
+  };
 
   const content = (
     <div
@@ -103,6 +119,7 @@ export const CatalogPreview = memo(function CatalogPreview({
           {!loading && !error && hasData && (
             <div className="preview-grid">
               {data.metas.map((item) => {
+                const hideCardDetails = shouldHideCardDetails(item.poster);
                 const imdbId =
                   item.imdbId || item.imdb_id || (item.id?.startsWith('tt') ? item.id : null);
                 const tmdbId =
@@ -141,18 +158,20 @@ export const CatalogPreview = memo(function CatalogPreview({
                         <ImageOff size={24} />
                       </div>
                     )}
-                    <div className="preview-card-overlay">
-                      <div className="preview-card-title">{item.name}</div>
-                      <div className="preview-card-meta">
-                        {item.releaseInfo && <span>{item.releaseInfo}</span>}
-                        {item.imdbRating && (
-                          <span className="preview-card-rating">
-                            <Star size={10} fill="currentColor" />
-                            {item.imdbRating}
-                          </span>
-                        )}
+                    {!hideCardDetails && (
+                      <div className="preview-card-overlay">
+                        <div className="preview-card-title">{item.name}</div>
+                        <div className="preview-card-meta">
+                          {item.releaseInfo && <span>{item.releaseInfo}</span>}
+                          {item.imdbRating && (
+                            <span className="preview-card-rating">
+                              <Star size={10} fill="currentColor" />
+                              {item.imdbRating}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </a>
                 );
               })}

@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { humanizeFilterValue, resolveOptionLabel } from '../utils/filterLabels';
 import {
   formatTraktCalendarWindowLabel,
   normalizeTraktListType,
@@ -141,12 +142,10 @@ export const TRAKT_SOURCE = {
     const defaultCalendarSort = 'desc';
 
     if (normalizedListType !== 'calendar') {
-      const match =
-        traktListTypes.find((t) => t.value === normalizedListType) ||
-        traktCommunityMetrics.find((m) => m.value === normalizedListType);
+      const allListTypes = [...traktListTypes, ...traktCommunityMetrics];
       active.push({
         key: 'traktListType',
-        label: `List: ${match?.label || normalizedListType}`,
+        label: `List: ${resolveOptionLabel(allListTypes, normalizedListType, { fallbackFormatter: humanizeFilterValue })}`,
         section: 'filters',
       });
     }
@@ -156,19 +155,17 @@ export const TRAKT_SOURCE = {
       filters.traktPeriod &&
       filters.traktPeriod !== 'weekly'
     ) {
-      const match = traktPeriods.find((p) => p.value === filters.traktPeriod);
       active.push({
         key: 'traktPeriod',
-        label: `Period: ${match?.label || filters.traktPeriod}`,
+        label: `Period: ${resolveOptionLabel(traktPeriods, filters.traktPeriod, { fallbackFormatter: humanizeFilterValue })}`,
         section: 'filters',
       });
     }
 
     if (filters.traktCalendarType) {
-      const match = traktCalendarTypes.find((t) => t.value === filters.traktCalendarType);
       active.push({
         key: 'traktCalendarType',
-        label: `Feed: ${match?.label || filters.traktCalendarType}`,
+        label: `Feed: ${resolveOptionLabel(traktCalendarTypes, filters.traktCalendarType, { fallbackFormatter: humanizeFilterValue })}`,
         section: 'filters',
       });
     }

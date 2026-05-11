@@ -1,5 +1,6 @@
 import { createLogger } from '../../utils/logger.ts';
-import { generatePosterUrl, isValidPosterConfig, checkPosterExists } from '../posterService.ts';
+import { applyArtworkOverrides, applyArtworkOverridesSync } from '../artworkService.ts';
+import type { ArtworkContext, NativeArtworkUrls } from '../artworkService.ts';
 import { getRpdbRating } from '../rpdb.ts';
 import {
   TMDB_IMAGE_BASE,
@@ -25,6 +26,7 @@ import type {
   StremioMeta,
   StremioMetaPreview,
   StremioVideo,
+  ArtworkOptions,
   PosterOptions,
   TmdbImage,
   GenreMap,
@@ -312,7 +314,7 @@ export async function toStremioFullMeta(
   type: ContentType,
   imdbId: string | null = null,
   requestedId: string | null = null,
-  posterOptions: PosterOptions | null = null,
+  artworkOptions: ArtworkOptions | null = null,
   videos: StremioVideo[] | null = null,
   targetLanguage: string | null = null,
   {
@@ -389,6 +391,7 @@ export async function toStremioFullMeta(
   }
 
   const { trailer, trailerStreams, trailers } = buildTrailers(details, targetLanguage);
+  const posterOptions = artworkOptions?.poster || null;
   const { links, actualImdbRating } = await buildLinks({
     effectiveImdbId,
     genres,
@@ -438,22 +441,6 @@ export async function toStremioFullMeta(
     ? `${TMDB_IMAGE_BASE}/original${details.backdrop_path}`
     : null;
 
-  if (posterOptions && isValidPosterConfig(posterOptions)) {
-    const enhancedPoster = generatePosterUrl({
-      ...posterOptions,
-      tmdbId: details.id,
-      type,
-      imdbId: effectiveImdbId,
-      language: targetLanguage,
-    });
-    if (
-      enhancedPoster &&
-      (posterOptions.service === 'customUrl' || (await checkPosterExists(enhancedPoster)))
-    ) {
-      poster = enhancedPoster;
-    }
-  }
-
   let logo: string | null = null;
   const logoSources =
     details.images && details.images.logos && details.images.logos.length > 0
@@ -477,20 +464,34 @@ export async function toStremioFullMeta(
     ];
 
     const best = candidates.find(Boolean);
-    if (best) logo = best.file_path;
+    if (best) logo = `${TMDB_IMAGE_BASE}/original${best.file_path}`;
   }
+
   if (!poster && details.images?.posters && details.images.posters.length > 0) {
     poster = `${TMDB_IMAGE_BASE}/w780${details.images.posters[0].file_path}`;
-  }
-  if (!poster && effectiveImdbId) {
-    poster = metahubUrl('poster', effectiveImdbId);
   }
   if (!background && details.images?.backdrops && details.images.backdrops.length > 0) {
     background = `${TMDB_IMAGE_BASE}/original${details.images.backdrops[0].file_path}`;
   }
-  if (!background && effectiveImdbId) {
-    background = metahubUrl('background', effectiveImdbId);
-  }
+
+  const artworkContext: ArtworkContext = {
+    tmdbId: details.id,
+    imdbId: effectiveImdbId ?? undefined,
+    type,
+    language: targetLanguage,
+  };
+  const nativeUrls: NativeArtworkUrls = {
+    poster,
+    backdrop: background,
+    logo,
+    landscape: background,
+  };
+  const resolved = await applyArtworkOverrides(artworkContext, nativeUrls, artworkOptions, {
+    checkExistence: true,
+  });
+  poster = resolved.poster;
+  background = resolved.backdrop;
+  logo = resolved.logo;
 
   const responseId = requestedId || `tmdb:${details.id}`;
 
@@ -509,9 +510,9 @@ export async function toStremioFullMeta(
     poster,
     posterShape: 'poster',
     background,
-    fanart: background,
-    landscapePoster: background,
-    logo: logo ? `${TMDB_IMAGE_BASE}/original${logo}` : undefined,
+    fanart: resolved.landscape || background,
+    landscapePoster: resolved.landscape || background,
+    logo: logo || undefined,
     description: details.overview || '',
     year: year || undefined,
     releaseInfo,
@@ -543,7 +544,7 @@ export function toStremioMeta(
   rawItem: TmdbResult,
   type: ContentType,
   imdbId: string | null = null,
-  posterOptions: PosterOptions | null = null,
+  artworkOptions: ArtworkOptions | null = null,
   genreMap: GenreMap | null = null,
   ratingsMap: Map<string, string> | null = null
 ): StremioMetaPreview {
@@ -581,21 +582,22 @@ export function toStremioMeta(
 
   const effectiveImdbId = imdbId || item.imdb_id || null;
 
-  if (posterOptions && isValidPosterConfig(posterOptions)) {
-    const enhancedPoster = generatePosterUrl({
-      ...posterOptions,
-      tmdbId: item.id,
-      type,
-      imdbId: effectiveImdbId,
-    });
-    if (enhancedPoster) poster = enhancedPoster;
-  }
-  if (!poster && effectiveImdbId) {
-    poster = metahubUrl('poster', effectiveImdbId);
-  }
-  if (!background && effectiveImdbId) {
-    background = metahubUrl('background', effectiveImdbId);
-  }
+  const artworkContext: ArtworkContext = {
+    tmdbId: item.id,
+    imdbId: effectiveImdbId ?? undefined,
+    type,
+  };
+  const nativeUrls: NativeArtworkUrls = {
+    poster,
+    backdrop: background,
+    logo: effectiveImdbId ? metahubUrl('logo', effectiveImdbId) : null,
+    landscape: background,
+  };
+  const resolved = applyArtworkOverridesSync(artworkContext, nativeUrls, artworkOptions);
+  poster = resolved.poster;
+  background = resolved.backdrop;
+  const logo = resolved.logo || undefined;
+
   const primaryId = effectiveImdbId || `tmdb:${item.id}`;
 
   const imdbRating =
@@ -630,9 +632,9 @@ export function toStremioMeta(
     poster,
     posterShape: 'poster',
     background,
-    fanart: background,
-    landscapePoster: background,
-    logo: effectiveImdbId ? metahubUrl('logo', effectiveImdbId) : undefined,
+    fanart: resolved.landscape || background,
+    landscapePoster: resolved.landscape || background,
+    logo,
     description: item.overview || '',
     releaseInfo: year,
     imdbRating,
@@ -647,7 +649,7 @@ export function toStremioMeta(
 export async function toStremioMetaPreview(
   rawDetails: TmdbDetails | null,
   type: ContentType,
-  posterOptions: PosterOptions | null = null,
+  artworkOptions: ArtworkOptions | null = null,
   targetLanguage: string | null = null,
   ratingsMap: Map<string, string> | null = null
 ): Promise<StremioMetaPreview | null> {
@@ -679,7 +681,7 @@ export async function toStremioMetaPreview(
 
   const effectiveImdbId = details?.external_ids?.imdb_id || null;
 
-  let logo: string | undefined;
+  let nativeLogo: string | null = null;
   const logoList = details.images?.logos;
   if (logoList && logoList.length > 0) {
     const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
@@ -695,42 +697,38 @@ export async function toStremioMetaPreview(
       [...logoList].sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))[0],
     ];
     const best = candidates.find(Boolean);
-    if (best) logo = `${TMDB_IMAGE_BASE}/original${best.file_path}`;
-  }
-  if (!logo && effectiveImdbId) {
-    logo = metahubUrl('logo', effectiveImdbId);
+    if (best) nativeLogo = `${TMDB_IMAGE_BASE}/original${best.file_path}`;
   }
 
-  let poster = details.poster_path
+  let nativePoster = details.poster_path
     ? `${TMDB_IMAGE_BASE}/${POSTER_SIZE}${details.poster_path}`
     : null;
-  let background = details.backdrop_path
+  let nativeBackground = details.backdrop_path
     ? `${TMDB_IMAGE_BASE}/${BACKDROP_SIZE}${details.backdrop_path}`
     : null;
 
-  if (posterOptions && isValidPosterConfig(posterOptions)) {
-    const enhancedPoster = generatePosterUrl({
-      ...posterOptions,
-      tmdbId: details.id,
-      type,
-      imdbId: effectiveImdbId,
-      language: targetLanguage,
-    });
-    if (
-      enhancedPoster &&
-      (posterOptions.service === 'customUrl' || (await checkPosterExists(enhancedPoster)))
-    ) {
-      poster = enhancedPoster;
-    }
+  if (!nativePoster && details.images?.posters && details.images.posters.length > 0) {
+    nativePoster = `${TMDB_IMAGE_BASE}/${POSTER_SIZE}${details.images.posters[0].file_path}`;
   }
 
-  if (!poster && details.images?.posters && details.images.posters.length > 0) {
-    poster = `${TMDB_IMAGE_BASE}/${POSTER_SIZE}${details.images.posters[0].file_path}`;
-  }
-
-  if (!poster && effectiveImdbId) {
-    poster = metahubUrl('poster', effectiveImdbId);
-  }
+  const artworkContext: ArtworkContext = {
+    tmdbId: details.id,
+    imdbId: effectiveImdbId ?? undefined,
+    type,
+    language: targetLanguage,
+  };
+  const nativeUrls: NativeArtworkUrls = {
+    poster: nativePoster,
+    backdrop: nativeBackground,
+    logo: nativeLogo,
+    landscape: nativeBackground,
+  };
+  const resolved = await applyArtworkOverrides(artworkContext, nativeUrls, artworkOptions, {
+    checkExistence: true,
+  });
+  const poster = resolved.poster;
+  const background = resolved.backdrop;
+  const logo = resolved.logo || undefined;
 
   const primaryId = effectiveImdbId || `tmdb:${details.id}`;
 
@@ -798,8 +796,8 @@ export async function toStremioMetaPreview(
     poster,
     posterShape: 'poster',
     background,
-    fanart: background,
-    landscapePoster: background,
+    fanart: resolved.landscape || background,
+    landscapePoster: resolved.landscape || background,
     logo,
     description: details.overview || '',
     releaseInfo: year,

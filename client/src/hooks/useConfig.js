@@ -1,6 +1,18 @@
 import { useState, useCallback, useEffect } from 'react';
 import { api } from '../services/api';
 
+const defaultPreferences = {
+  showAdultContent: false,
+  defaultLanguage: 'en',
+  artwork: {},
+  disableImdbSearch: true,
+  disableAnilistSearch: true,
+  disableMalSearch: true,
+  disableKitsuSearch: true,
+  disableSimklSearch: true,
+  disableTraktSearch: true,
+};
+
 export function useConfig(initialUserId = null) {
   const [userId, setUserId] = useState(initialUserId);
   const [loading, setLoading] = useState(false);
@@ -13,17 +25,7 @@ export function useConfig(initialUserId = null) {
   const [apiKey, setApiKeyState] = useState('');
   const [catalogs, setCatalogs] = useState([]);
   const [configName, setConfigName] = useState('');
-  const [preferences, setPreferences] = useState({
-    showAdultContent: false,
-    defaultLanguage: 'en',
-    posterCustomUrlPattern: '',
-    disableImdbSearch: true,
-    disableAnilistSearch: true,
-    disableMalSearch: true,
-    disableKitsuSearch: true,
-    disableSimklSearch: true,
-    disableTraktSearch: true,
-  });
+  const [preferences, setPreferences] = useState(defaultPreferences);
   const [error, setError] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
@@ -107,17 +109,7 @@ export function useConfig(initialUserId = null) {
     setUserId(null);
     setCatalogs([]);
     setConfigName('');
-    setPreferences({
-      showAdultContent: false,
-      defaultLanguage: 'en',
-      posterCustomUrlPattern: '',
-      disableImdbSearch: true,
-      disableAnilistSearch: true,
-      disableMalSearch: true,
-      disableKitsuSearch: true,
-      disableSimklSearch: true,
-      disableTraktSearch: true,
-    });
+    setPreferences(defaultPreferences);
     setIsDirty(false);
   }, []);
 
@@ -126,15 +118,7 @@ export function useConfig(initialUserId = null) {
     setCatalogs(configData.catalogs || []);
     setConfigName(configData.configName || '');
     setPreferences({
-      showAdultContent: false,
-      defaultLanguage: 'en',
-      posterCustomUrlPattern: '',
-      disableImdbSearch: true,
-      disableAnilistSearch: true,
-      disableMalSearch: true,
-      disableKitsuSearch: true,
-      disableSimklSearch: true,
-      disableTraktSearch: true,
+      ...defaultPreferences,
       ...(configData.preferences || {}),
     });
     setIsDirty(false);

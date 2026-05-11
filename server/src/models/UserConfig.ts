@@ -163,16 +163,15 @@ const userConfigSchema = new mongoose.Schema({
     showAdultContent: { type: Boolean, default: false },
     defaultLanguage: { type: String, default: 'en' },
     shuffleCatalogs: { type: Boolean, default: false },
-    // Poster enhancement service (RPDB or Top Posters)
-    posterService: {
-      type: String,
-      enum: ['none', 'rpdb', 'topPosters', 'customUrl'],
-      default: 'none',
+    apiKeysEncrypted: {
+      type: Map,
+      of: String,
+      default: {},
     },
-    // Encrypted API key for the selected poster service
-    posterApiKeyEncrypted: { type: String, required: false },
-    // Custom poster URL pattern used when posterService is customUrl
-    posterCustomUrlPattern: { type: String, required: false },
+    artwork: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
     // Option to disable search catalogs
     disableSearch: { type: Boolean, default: false },
     disableTmdbSearch: { type: Boolean, default: false },

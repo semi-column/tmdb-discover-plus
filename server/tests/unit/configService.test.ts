@@ -13,7 +13,11 @@ vi.mock('../../src/infrastructure/configCache.ts', () => ({
   })),
 }));
 
-import { getApiKeyFromConfig, getPosterKeyFromConfig } from '../../src/services/configService.ts';
+import {
+  getApiKeyFromConfig,
+  getPosterKeyFromConfig,
+  getArtworkKeyFromConfig,
+} from '../../src/services/configService.ts';
 import { encrypt } from '../../src/utils/encryption.ts';
 
 describe('getApiKeyFromConfig', () => {
@@ -35,7 +39,7 @@ describe('getApiKeyFromConfig', () => {
 describe('getPosterKeyFromConfig', () => {
   it('decrypts encrypted poster key', () => {
     const encrypted = encrypt('poster-key-123');
-    const config = { preferences: { posterApiKeyEncrypted: encrypted } };
+    const config = { preferences: { artwork: { poster: { apiKeyEncrypted: encrypted } } } };
     expect(getPosterKeyFromConfig(config)).toBe('poster-key-123');
   });
 
@@ -43,5 +47,21 @@ describe('getPosterKeyFromConfig', () => {
     expect(getPosterKeyFromConfig(null)).toBeNull();
     expect(getPosterKeyFromConfig({})).toBeNull();
     expect(getPosterKeyFromConfig({ preferences: {} })).toBeNull();
+  });
+
+  it('decrypts backdrop and logo keys via generic helper', () => {
+    const backdropEncrypted = encrypt('backdrop-key-123');
+    const logoEncrypted = encrypt('logo-key-123');
+    const config = {
+      preferences: {
+        artwork: {
+          backdrop: { apiKeyEncrypted: backdropEncrypted },
+          logo: { apiKeyEncrypted: logoEncrypted },
+        },
+      },
+    };
+
+    expect(getArtworkKeyFromConfig(config, 'backdrop')).toBe('backdrop-key-123');
+    expect(getArtworkKeyFromConfig(config, 'logo')).toBe('logo-key-123');
   });
 });

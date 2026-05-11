@@ -3,6 +3,7 @@ import {
   traktToStremioMeta,
   batchConvertToStremioMeta,
 } from '../../src/services/trakt/stremioMeta.ts';
+import type { ArtworkOptions } from '../../src/types/config.ts';
 
 describe('trakt stremio meta poster handling', () => {
   const baseItem = {
@@ -19,6 +20,14 @@ describe('trakt stremio meta poster handling', () => {
     genres: ['drama'],
   };
 
+  const rpdbOptions: ArtworkOptions = {
+    poster: { apiKey: 'rpdb-key', service: 'rpdb' },
+    backdrop: null,
+    logo: null,
+    landscape: null,
+    episode: null,
+  };
+
   it('uses metahub poster by default', () => {
     const meta = traktToStremioMeta(baseItem as any, 'movie');
     expect(meta).not.toBeNull();
@@ -26,10 +35,7 @@ describe('trakt stremio meta poster handling', () => {
   });
 
   it('uses RPDB poster when poster options are provided', () => {
-    const meta = traktToStremioMeta(baseItem as any, 'movie', {
-      apiKey: 'rpdb-key',
-      service: 'rpdb',
-    });
+    const meta = traktToStremioMeta(baseItem as any, 'movie', rpdbOptions);
 
     expect(meta).not.toBeNull();
     expect(meta?.poster).toBe(
@@ -38,10 +44,7 @@ describe('trakt stremio meta poster handling', () => {
   });
 
   it('passes poster options through batch conversion', () => {
-    const metas = batchConvertToStremioMeta([baseItem as any], 'movie', {
-      apiKey: 'rpdb-key',
-      service: 'rpdb',
-    });
+    const metas = batchConvertToStremioMeta([baseItem as any], 'movie', rpdbOptions);
 
     expect(metas).toHaveLength(1);
     expect(metas[0]?.poster).toContain('api.ratingposterdb.com');

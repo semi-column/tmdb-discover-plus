@@ -49,8 +49,8 @@ describe('imdbToStremioMeta', () => {
     expect(result!.tmdbId).toBeNull();
     expect(result!.type).toBe('movie');
     expect(result!.name).toBe('The Shawshank Redemption');
-    expect(result!.poster).toBe('https://example.com/poster.jpg');
-    expect(result!.background).toBe('https://example.com/bg.jpg');
+    expect(result!.poster).toBe('https://images.metahub.space/poster/medium/tt0111161/img');
+    expect(result!.background).toBe('https://images.metahub.space/background/medium/tt0111161/img');
     expect(result!.description).toBe('Two imprisoned men bond over a number of years.');
     expect(result!.year).toBe('1994');
     expect(result!.imdbRating).toBe('9.3');

@@ -4,10 +4,12 @@ import { getCache } from '../cache/index.ts';
 import { tmdbFetch } from './client.ts';
 import { TMDB_IMAGE_BASE } from './constants.ts';
 import { formatRuntime } from './stremioMeta.ts';
+import { generateEpisodeThumbnailUrl, isValidPosterConfig } from '../artworkService.ts';
 import * as imdb from '../imdb/index.ts';
 import { CONCURRENCY, CACHE_TTLS, DISPLAY } from '../../constants.ts';
 
 import type {
+  ArtworkOptions,
   ContentType,
   Logger,
   TmdbImage,
@@ -23,6 +25,7 @@ const DETAIL_CONCURRENCY = CONCURRENCY.TMDB_DETAIL;
 interface DetailsOptions {
   displayLanguage?: string;
   language?: string;
+  artworkOptions?: ArtworkOptions | null;
 }
 
 export async function getDetails(
@@ -290,7 +293,27 @@ export async function getSeriesEpisodes(
   }
 
   const imdbId = details?.external_ids?.imdb_id || null;
+  const language = options.displayLanguage || options.language || null;
+  const episodeOptions = options.artworkOptions?.episode || null;
   const videos: StremioVideo[] = [];
+
+  const applyEpisodeThumbnailOverride = (video: StremioVideo): void => {
+    if (!episodeOptions || !isValidPosterConfig(episodeOptions)) return;
+
+    const enhancedThumbnail = generateEpisodeThumbnailUrl({
+      ...episodeOptions,
+      tmdbId,
+      type: 'series',
+      imdbId,
+      language,
+      season: video.season,
+      episode: video.episode,
+    });
+
+    if (enhancedThumbnail) {
+      video.thumbnail = enhancedThumbnail;
+    }
+  };
 
   const regularSeasons = details.seasons.filter((s) => s.season_number > 0);
 
@@ -325,19 +348,19 @@ export async function getSeriesEpisodes(
             ? `${imdbId}:${ep.season_number}:${ep.episode_number}`
             : `tmdb:${tmdbId}:${ep.season_number}:${ep.episode_number}`;
 
-          const thumbnail = ep.still_path ? `${TMDB_IMAGE_BASE}/w500${ep.still_path}` : undefined;
-
-          return {
+          const video: StremioVideo = {
             id: episodeId,
             season: ep.season_number,
             episode: ep.episode_number,
             title: ep.name || `Episode ${ep.episode_number}`,
             released: ep.air_date ? new Date(ep.air_date).toISOString() : undefined,
             overview: ep.overview || undefined,
-            thumbnail,
+            thumbnail: ep.still_path ? `${TMDB_IMAGE_BASE}/w500${ep.still_path}` : undefined,
             available: ep.air_date ? new Date(ep.air_date) <= new Date() : undefined,
             runtime: formatRuntime(ep.runtime),
           };
+
+          return video;
         });
       })
     );
@@ -392,6 +415,7 @@ export async function getSeriesEpisodes(
     if (fallbackVideos.length > 0) {
       const merged = mergeSeriesVideos(videos, fallbackVideos);
       for (const v of merged) {
+        applyEpisodeThumbnailOverride(v);
         if (!v.thumbnail) {
           v.thumbnail = seasonPosterMap[v.season] || seriesBackdrop || undefined;
         }
@@ -410,6 +434,7 @@ export async function getSeriesEpisodes(
 
   // Apply season poster / backdrop fallback for episodes without a thumbnail
   for (const v of videos) {
+    applyEpisodeThumbnailOverride(v);
     if (!v.thumbnail) {
       v.thumbnail = seasonPosterMap[v.season] || seriesBackdrop || undefined;
     }

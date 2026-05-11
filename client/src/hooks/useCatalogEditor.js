@@ -116,10 +116,13 @@ export function useCatalogEditor() {
       : { movie: [], series: [] };
   const safeOriginalLanguages = Array.isArray(originalLanguages) ? originalLanguages : [];
   const safeCountries = Array.isArray(countries) ? countries : [];
-  const safeSortOptions =
-    sortOptions && typeof sortOptions === 'object' && !Array.isArray(sortOptions)
-      ? sortOptions
-      : { movie: [], series: [] };
+  const safeSortOptions = useMemo(
+    () =>
+      sortOptions && typeof sortOptions === 'object' && !Array.isArray(sortOptions)
+        ? sortOptions
+        : { movie: [], series: [] },
+    [sortOptions]
+  );
   const safeTvStatuses = Array.isArray(tvStatuses) ? tvStatuses : [];
   const safeTvTypes = Array.isArray(tvTypes) ? tvTypes : [];
   const safeMonetizationTypes = Array.isArray(monetizationTypes) ? monetizationTypes : [];
@@ -135,6 +138,7 @@ export function useCatalogEditor() {
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
+  const [previewPosterProvider, setPreviewPosterProvider] = useState('default');
   const [searchedNetworks, setSearchedNetworks] = useState([]);
   const [selectedImdbPeople, setSelectedImdbPeople] = useState([]);
   const [selectedImdbCompanies, setSelectedImdbCompanies] = useState([]);
@@ -152,11 +156,7 @@ export function useCatalogEditor() {
     options: false,
   });
 
-  const prevCatalogIdRef = useRef(null);
-
-  // Sync all catalog-derived state when the selected catalog changes.
-  // Uses "setState during render" — React-approved pattern to avoid setState-in-effect.
-  // See: https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const prevCatalogIdRef = useRef(catalog?._id ?? null);
   const incomingCatalogId = catalog?._id ?? null;
   if (prevCatalogIdRef.current !== incomingCatalogId) {
     prevCatalogIdRef.current = incomingCatalogId;
@@ -360,6 +360,8 @@ export function useCatalogEditor() {
     setPreviewLoading,
     previewError,
     setPreviewError,
+    previewPosterProvider,
+    setPreviewPosterProvider,
     tvNetworkOptions,
     setSearchedNetworks,
     expandedSections,

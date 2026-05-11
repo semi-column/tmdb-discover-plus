@@ -7,11 +7,54 @@ import {
   toStremioFullMeta,
 } from '../../src/services/tmdb/stremioMeta.ts';
 
-vi.mock('../../src/services/posterService.ts', () => ({
-  generatePosterUrl: () => null,
-  isValidPosterConfig: () => false,
-  checkPosterExists: () => Promise.resolve(false),
-}));
+vi.mock('../../src/services/artworkService.ts', async () => {
+  const { metahubUrl } = await import('../../src/constants.ts');
+
+  const METAHUB_KIND_MAP = {
+    poster: 'poster',
+    backdrop: 'background',
+    logo: 'logo',
+    landscape: 'background',
+  };
+
+  function metahubFallback(kind, imdbId) {
+    if (!imdbId || !imdbId.startsWith('tt')) return null;
+    const metahubKind = METAHUB_KIND_MAP[kind];
+    if (!metahubKind) return null;
+    return metahubUrl(metahubKind, imdbId);
+  }
+
+  function resolveKind(kind, nativeUrls, context) {
+    let url = metahubFallback(kind, context?.imdbId);
+    if (!url) url = nativeUrls?.[kind] || null;
+    return url;
+  }
+
+  return {
+    applyArtworkOverrides: (_ctx, nativeUrls, _opts, _extra) => {
+      return Promise.resolve({
+        poster: resolveKind('poster', nativeUrls, _ctx),
+        backdrop: resolveKind('backdrop', nativeUrls, _ctx),
+        logo: resolveKind('logo', nativeUrls, _ctx),
+        landscape: resolveKind('landscape', nativeUrls, _ctx),
+        episode: null,
+      });
+    },
+    applyArtworkOverridesSync: (_ctx, nativeUrls) => ({
+      poster: resolveKind('poster', nativeUrls, _ctx),
+      backdrop: resolveKind('backdrop', nativeUrls, _ctx),
+      logo: resolveKind('logo', nativeUrls, _ctx),
+      landscape: resolveKind('landscape', nativeUrls, _ctx),
+      episode: null,
+    }),
+    checkPosterExists: () => Promise.resolve(false),
+    isValidPosterConfig: () => false,
+    generatePosterUrl: () => null,
+    generateBackdropUrl: () => null,
+    generateLogoUrl: () => null,
+    generateEpisodeThumbnailUrl: () => null,
+  };
+});
 vi.mock('../../src/services/rpdb.ts', () => ({
   getRpdbRating: () => Promise.resolve(null),
 }));

@@ -1,10 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildImdbEnrichmentCacheKey,
+  buildArtworkIntegrationScope,
   buildPosterIntegrationScope,
 } from '../../src/services/imdb/cacheKey.ts';
 
 describe('IMDb enrichment cache key segregation', () => {
+  it('differentiates artwork scope across poster/backdrop/logo', () => {
+    const scopeA = buildArtworkIntegrationScope({
+      poster: { service: 'rpdb', apiKey: 'a' },
+      backdrop: null,
+      logo: null,
+    });
+    const scopeB = buildArtworkIntegrationScope({
+      poster: { service: 'rpdb', apiKey: 'a' },
+      backdrop: { service: 'customUrl', customUrlPattern: 'https://x/{rating_id}.jpg' },
+      logo: null,
+    });
+
+    expect(scopeA).not.toBe(scopeB);
+  });
+
   it('uses none scope when no poster integration key exists', () => {
     expect(buildPosterIntegrationScope('none', null)).toBe('none:none');
     expect(buildPosterIntegrationScope(undefined, undefined)).toBe('none:none');

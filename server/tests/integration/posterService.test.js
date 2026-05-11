@@ -6,9 +6,11 @@ import { runTest, assert } from '../helpers/utils.js';
 import {
   generatePosterUrl,
   generateBackdropUrl,
+  generateLogoUrl,
+  generateEpisodeThumbnailUrl,
   isValidPosterConfig,
   PosterService,
-} from '../../src/services/posterService.ts';
+} from '../../src/services/artworkService.ts';
 
 const SUITE = 'Poster Service';
 
@@ -75,6 +77,38 @@ export async function run() {
     );
   });
 
+  await runTest(SUITE, 'should generate Top Posters logo URL with IMDb ID', async () => {
+    const result = generateLogoUrl({
+      apiKey: testApiKey,
+      service: PosterService.TOP_POSTERS,
+      imdbId: 'tt0111161',
+      type: 'movie',
+    });
+    assert(
+      result ===
+        'https://api.top-streaming.stream/test-api-key-123/imdb/logo/tt0111161.png?fallback=true'
+    );
+  });
+
+  await runTest(
+    SUITE,
+    'should generate Top Posters episode thumbnail URL for Premium flow',
+    async () => {
+      const result = generateEpisodeThumbnailUrl({
+        apiKey: testApiKey,
+        service: PosterService.TOP_POSTERS,
+        tmdbId: 1396,
+        type: 'series',
+        season: 1,
+        episode: 1,
+      });
+      assert(
+        result ===
+          'https://api.top-streaming.stream/test-api-key-123/tmdb/thumbnail/series-1396/S1E1.jpg?fallback=true'
+      );
+    }
+  );
+
   await runTest(SUITE, 'should generate custom URL using placeholders', async () => {
     const result = generatePosterUrl({
       service: PosterService.CUSTOM_URL,
@@ -113,18 +147,19 @@ export async function run() {
     );
   });
 
-  await runTest(SUITE, 'should generate Top Posters backdrop URL with TMDb ID', async () => {
-    const result = generateBackdropUrl({
-      apiKey: testApiKey,
-      service: PosterService.TOP_POSTERS,
-      tmdbId: 99999,
-      type: 'movie',
-    });
-    assert(
-      result ===
-        'https://api.top-streaming.stream/test-api-key-123/tmdb/backdrop-default/movie-99999.jpg?fallback=true'
-    );
-  });
+  await runTest(
+    SUITE,
+    'should not generate Top Posters backdrop URL (unsupported by provider)',
+    async () => {
+      const result = generateBackdropUrl({
+        apiKey: testApiKey,
+        service: PosterService.TOP_POSTERS,
+        tmdbId: 99999,
+        type: 'movie',
+      });
+      assert(result === null);
+    }
+  );
 
   await runTest(SUITE, 'should validate poster config', async () => {
     assert(isValidPosterConfig({ apiKey: 'test-key', service: PosterService.RPDB }) === true);

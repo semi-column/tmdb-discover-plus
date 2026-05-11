@@ -64,6 +64,20 @@ describe('useActiveFilters', () => {
       expect(result.current.activeFilters[0].label).toContain('Rating (High)');
     });
 
+    it('hides TMDB sort chip when sort option is invalid for current type', () => {
+      const props = createDefaultProps({
+        localCatalog: { type: 'series', filters: { sortBy: 'release_date.asc' } },
+        sortOptions: {
+          series: [{ value: 'first_air_date.desc', label: 'First Air Date (Newest)' }],
+        },
+      });
+
+      const { result } = renderHook(() => useActiveFilters(props));
+      const sortFilter = result.current.activeFilters.find((f) => f.key === 'sortBy');
+
+      expect(sortFilter).toBeUndefined();
+    });
+
     it('does not flag default sort', () => {
       const props = createDefaultProps({
         localCatalog: { type: 'movie', filters: { sortBy: 'popularity.desc' } },
@@ -273,6 +287,22 @@ describe('useActiveFilters', () => {
       const { result } = renderHook(() => useActiveFilters(props));
       expect(result.current.activeFilters.some((f) => f.key === 'tvStatus')).toBe(true);
       expect(result.current.activeFilters.some((f) => f.key === 'tvType')).toBe(true);
+    });
+
+    it('humanizes TV status and type when options are missing', () => {
+      const props = createDefaultProps({
+        localCatalog: {
+          type: 'series',
+          filters: { tvStatus: 'returning_series', tvType: 'scripted' },
+        },
+      });
+
+      const { result } = renderHook(() => useActiveFilters(props));
+      const statusChip = result.current.activeFilters.find((f) => f.key === 'tvStatus');
+      const typeChip = result.current.activeFilters.find((f) => f.key === 'tvType');
+
+      expect(statusChip?.label).toBe('Status: Returning Series');
+      expect(typeChip?.label).toBe('Type: Scripted');
     });
 
     it('detects option flags', () => {

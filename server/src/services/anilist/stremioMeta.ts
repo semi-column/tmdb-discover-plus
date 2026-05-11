@@ -3,7 +3,10 @@ import type { AnilistMedia } from './types.ts';
 import type { StremioMetaPreview } from '../../types/stremio.ts';
 import type { StremioLink, StremioTrailer } from '../../types/stremio.ts';
 import type { ContentType } from '../../types/common.ts';
+import type { ArtworkOptions } from '../../types/config.ts';
 import { generateSlug } from '../common/stremioHelpers.ts';
+import { applyArtworkOverridesSync } from '../artworkService.ts';
+import type { ArtworkContext, NativeArtworkUrls } from '../artworkService.ts';
 
 function stripHtml(text: string): string {
   let out = '';
@@ -35,7 +38,8 @@ function stripHtml(text: string): string {
 
 export function anilistToStremioMeta(
   media: AnilistMedia,
-  type: ContentType
+  type: ContentType,
+  artworkOptions: ArtworkOptions | null = null
 ): StremioMetaPreview | null {
   const stremioId = anilistIdToStremioId(media.id);
   if (!stremioId) return null;
@@ -47,9 +51,24 @@ export function anilistToStremioMeta(
 
   const title = media.title?.english || media.title?.romaji || media.title?.native || 'Unknown';
 
-  const poster = media.coverImage?.extraLarge || media.coverImage?.large || '';
-  const background = media.bannerImage || '';
+  const nativePoster = media.coverImage?.extraLarge || media.coverImage?.large || null;
+  const nativeBackground = media.bannerImage || null;
   const description = media.description ? stripHtml(media.description) : '';
+
+  const artworkContext: ArtworkContext = {
+    tmdbId: tmdbId || undefined,
+    imdbId: imdbId ?? undefined,
+    type,
+  };
+  const nativeUrls: NativeArtworkUrls = {
+    poster: nativePoster,
+    backdrop: nativeBackground,
+    logo: null,
+    landscape: nativeBackground,
+  };
+  const resolved = applyArtworkOverridesSync(artworkContext, nativeUrls, artworkOptions);
+  const poster = resolved.poster;
+  const background = resolved.backdrop;
 
   const genres = media.genres || [];
 
@@ -99,11 +118,12 @@ export function anilistToStremioMeta(
     type,
     name: title,
     slug: generateSlug(type, title, primaryId),
-    poster: poster || null,
+    poster,
     posterShape: 'poster',
-    background: background || null,
-    fanart: background || null,
-    landscapePoster: background || null,
+    background,
+    fanart: resolved.landscape || background,
+    landscapePoster: resolved.landscape || background,
+    logo: resolved.logo || undefined,
     description,
     genres,
     links: links.length > 0 ? links : undefined,
@@ -121,11 +141,12 @@ export function anilistToStremioMeta(
 
 export function batchConvertToStremioMeta(
   mediaList: AnilistMedia[],
-  type: ContentType
+  type: ContentType,
+  artworkOptions: ArtworkOptions | null = null
 ): StremioMetaPreview[] {
   const results: StremioMetaPreview[] = [];
   for (const media of mediaList) {
-    const meta = anilistToStremioMeta(media, type);
+    const meta = anilistToStremioMeta(media, type, artworkOptions);
     if (meta) results.push(meta);
   }
   return results;

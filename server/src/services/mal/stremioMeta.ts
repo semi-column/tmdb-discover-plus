@@ -3,9 +3,16 @@ import type { MalAnime } from './types.ts';
 import type { StremioMetaPreview } from '../../types/stremio.ts';
 import type { StremioLink } from '../../types/stremio.ts';
 import type { ContentType } from '../../types/common.ts';
+import type { ArtworkOptions } from '../../types/config.ts';
 import { generateSlug } from '../common/stremioHelpers.ts';
+import { applyArtworkOverridesSync } from '../artworkService.ts';
+import type { ArtworkContext, NativeArtworkUrls } from '../artworkService.ts';
 
-export function malToStremioMeta(anime: MalAnime, type: ContentType): StremioMetaPreview | null {
+export function malToStremioMeta(
+  anime: MalAnime,
+  type: ContentType,
+  artworkOptions: ArtworkOptions | null = null
+): StremioMetaPreview | null {
   const mappedStremioId = malIdToStremioId(anime.id);
   const stremioId = mappedStremioId || `mal:${anime.id}`;
 
@@ -14,9 +21,22 @@ export function malToStremioMeta(anime: MalAnime, type: ContentType): StremioMet
   const primaryId = imdbId || stremioId;
   const tmdbId = mapEntry?.themoviedb_id ?? 0;
 
-  const poster = anime.main_picture?.large || anime.main_picture?.medium || null;
+  const nativePoster = anime.main_picture?.large || anime.main_picture?.medium || null;
   const title = anime.alternative_titles?.en || anime.title;
   const genres = anime.genres?.map((g) => g.name) || [];
+
+  const artworkContext: ArtworkContext = {
+    tmdbId: tmdbId || undefined,
+    imdbId: imdbId ?? undefined,
+    type,
+  };
+  const nativeUrls: NativeArtworkUrls = {
+    poster: nativePoster,
+    backdrop: null,
+    logo: null,
+    landscape: null,
+  };
+  const resolved = applyArtworkOverridesSync(artworkContext, nativeUrls, artworkOptions);
 
   const links: StremioLink[] = [];
   if (anime.studios) {
@@ -45,11 +65,12 @@ export function malToStremioMeta(anime: MalAnime, type: ContentType): StremioMet
     type,
     name: title,
     slug: generateSlug(type, title, primaryId),
-    poster: poster,
+    poster: resolved.poster,
     posterShape: 'poster',
-    background: null,
-    fanart: null,
-    landscapePoster: null,
+    background: resolved.backdrop,
+    fanart: resolved.landscape || resolved.backdrop,
+    landscapePoster: resolved.landscape || resolved.backdrop,
+    logo: resolved.logo || undefined,
     description: anime.synopsis || '',
     genres,
     links: links.length > 0 ? links : undefined,
@@ -61,11 +82,12 @@ export function malToStremioMeta(anime: MalAnime, type: ContentType): StremioMet
 
 export function batchConvertToStremioMeta(
   animeList: MalAnime[],
-  type: ContentType
+  type: ContentType,
+  artworkOptions: ArtworkOptions | null = null
 ): StremioMetaPreview[] {
   const results: StremioMetaPreview[] = [];
   for (const anime of animeList) {
-    const meta = malToStremioMeta(anime, type);
+    const meta = malToStremioMeta(anime, type, artworkOptions);
     if (meta) results.push(meta);
   }
   return results;

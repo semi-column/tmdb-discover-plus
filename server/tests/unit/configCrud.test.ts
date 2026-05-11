@@ -28,6 +28,7 @@ import {
   saveUserConfig,
   getConfigsByApiKey,
   getApiKeyFromConfig,
+  getArtworkKeyFromConfig,
   getPosterKeyFromConfig,
   getTraktKeyFromConfig,
   deleteUserConfig,
@@ -133,13 +134,22 @@ describe('Config CRUD lifecycle', () => {
     const traktClientId = 'trakt-client-id-123456789';
     const encTraktKey = encrypt(traktClientId);
     const encPosterKey = encrypt('poster-key-123');
+    const encBackdropKey = encrypt('backdrop-key-123');
+    const encLogoKey = encrypt('logo-key-123');
 
     await saveUserConfig({
       userId: USER_ID,
       tmdbApiKeyEncrypted: encKey,
       traktClientIdEncrypted: encTraktKey,
       catalogs: [],
-      preferences: { posterApiKeyEncrypted: encPosterKey, defaultLanguage: 'en' },
+      preferences: {
+        artwork: {
+          poster: { apiKeyEncrypted: encPosterKey },
+          backdrop: { apiKeyEncrypted: encBackdropKey },
+          logo: { apiKeyEncrypted: encLogoKey },
+        },
+        defaultLanguage: 'en',
+      },
     });
 
     await saveUserConfig({
@@ -154,6 +164,8 @@ describe('Config CRUD lifecycle', () => {
     expect(config?.traktClientIdEncrypted).toBe(encTraktKey);
     expect(getTraktKeyFromConfig(config)).toBe(traktClientId);
     expect(getPosterKeyFromConfig(config)).toBe('poster-key-123');
+    expect(getArtworkKeyFromConfig(config, 'backdrop')).toBe('backdrop-key-123');
+    expect(getArtworkKeyFromConfig(config, 'logo')).toBe('logo-key-123');
     expect(config?.preferences?.defaultLanguage).toBe('es');
   });
 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Download,
   Upload,
@@ -9,11 +10,57 @@ import {
   Database,
   ExternalLink,
   Eye,
+  ChevronDown,
 } from 'lucide-react';
-import { useState } from 'react';
 import { useModalA11y } from '../../hooks/useModalA11y';
 import { useCatalog, useAppActions, useTMDBData } from '../../context/AppContext';
 import { SearchableSelect } from '../forms/SearchableSelect';
+import { ArtworkSettingsPanel } from '../config/ArtworkSettingsSection';
+import { ApiKeysSection } from '../config/ApiKeysSection';
+
+function CollapsibleSection({ title, icon: Icon, isExpanded, onToggle, children }) {
+  return (
+    <div className={`settings-section ${isExpanded ? 'expanded' : ''}`}>
+      <div
+        className="settings-section-header"
+        onClick={onToggle}
+        style={{
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          userSelect: 'none',
+        }}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Icon size={16} />
+          <h3>{title}</h3>
+        </div>
+        <div
+          style={{
+            color: 'var(--text-muted)',
+            display: 'flex',
+            transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+          }}
+        >
+          <ChevronDown size={20} />
+        </div>
+      </div>
+      <div className={`settings-section-content ${isExpanded ? 'expanded' : ''}`}>
+        <div className="settings-section-inner">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export function SettingsModal({ isOpen, onClose, onShowExport, onImportData }) {
   const modalRef = useModalA11y(isOpen, onClose);
@@ -21,58 +68,20 @@ export function SettingsModal({ isOpen, onClose, onShowExport, onImportData }) {
   const { languages = [] } = useTMDBData();
   const { addToast, handleLogout } = useAppActions();
 
-  // Poster state
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
+  // Only one section open at a time, default to first ('data')
+  const [expandedSection, setExpandedSection] = useState('data');
+
+  const toggleSection = (sectionId) => {
+    setExpandedSection((prev) => (prev === sectionId ? null : sectionId));
+  };
 
   if (!isOpen) return null;
 
   const defaultLanguage = preferences?.defaultLanguage || '';
 
-  // Poster handlers
-  const posterService = preferences?.posterService || 'none';
-  const hasPosterKey = Boolean(preferences?.posterApiKeyEncrypted);
-  const posterCustomUrlPattern = preferences?.posterCustomUrlPattern || '';
-  const isCustomPosterService = posterService === 'customUrl';
-
   const handleLanguageChange = (val) => {
     onPreferencesChange({ ...preferences, defaultLanguage: val });
   };
-
-  const handlePosterServiceChange = (e) => {
-    const newService = e.target.value;
-    onPreferencesChange({
-      ...preferences,
-      posterService: newService,
-      ...(newService === 'none' && {
-        posterApiKey: undefined,
-        posterApiKeyEncrypted: undefined,
-      }),
-    });
-    setApiKeyInput('');
-  };
-
-  const handlePosterApiKeyChange = (e) => {
-    const newKey = e.target.value;
-    setApiKeyInput(newKey);
-    if (newKey) onPreferencesChange({ ...preferences, posterApiKey: newKey });
-  };
-
-  const handleCustomPatternChange = (e) => {
-    onPreferencesChange({
-      ...preferences,
-      posterCustomUrlPattern: e.target.value,
-    });
-  };
-
-  const posterServiceUrl =
-    posterService === 'rpdb'
-      ? 'https://ratingposterdb.com'
-      : posterService === 'topPosters'
-        ? 'https://api.top-streaming.stream'
-        : null;
-  const posterServiceName =
-    posterService === 'rpdb' ? 'RPDB' : posterService === 'topPosters' ? 'Top Posters' : null;
 
   return (
     <div className="modal-overlay">
@@ -93,11 +102,12 @@ export function SettingsModal({ isOpen, onClose, onShowExport, onImportData }) {
         </div>
 
         <div className="settings-modal-body">
-          <div className="settings-section">
-            <div className="settings-section-header">
-              <Database size={16} />
-              <h3>Data Management</h3>
-            </div>
+          <CollapsibleSection
+            title="Data Management"
+            icon={Database}
+            isExpanded={expandedSection === 'data'}
+            onToggle={() => toggleSection('data')}
+          >
             <div className="settings-action-grid">
               <button
                 className="btn settings-action-card"
@@ -154,14 +164,14 @@ export function SettingsModal({ isOpen, onClose, onShowExport, onImportData }) {
                 />
               </label>
             </div>
-          </div>
+          </CollapsibleSection>
 
-          <div className="settings-section">
-            <div className="settings-section-header">
-              <Globe size={16} />
-              <h3>General Preferences</h3>
-            </div>
-
+          <CollapsibleSection
+            title="General Preferences"
+            icon={Globe}
+            isExpanded={expandedSection === 'general'}
+            onToggle={() => toggleSection('general')}
+          >
             <div className="settings-card">
               <div className="settings-row">
                 <div className="settings-row-info">
@@ -222,32 +232,29 @@ export function SettingsModal({ isOpen, onClose, onShowExport, onImportData }) {
                   </div>
                 </div>
               </div>
-
-              <div className="settings-row">
-                <div className="settings-row-info">
-                  <span className="settings-label">TMDB API Key</span>
-                  <span className="settings-desc">Update your personal TMDB access key</span>
-                </div>
-                <div className="settings-row-control align-right">
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    style={{ gap: '6px' }}
-                    onClick={() => handleLogout({ changeKey: true })}
-                  >
-                    <KeyRound size={14} />
-                    Change Key
-                  </button>
-                </div>
-              </div>
             </div>
-          </div>
+          </CollapsibleSection>
 
-          <div className="settings-section">
-            <div className="settings-section-header">
-              <Settings size={16} />
-              <h3>Search Integrations</h3>
+          <CollapsibleSection
+            title="API Keys"
+            icon={KeyRound}
+            isExpanded={expandedSection === 'apiKeys'}
+            onToggle={() => toggleSection('apiKeys')}
+          >
+            <div
+              className="settings-card"
+              style={{ padding: '16px 20px 20px 20px', overflow: 'visible' }}
+            >
+              <ApiKeysSection preferences={preferences} onChange={onPreferencesChange} />
             </div>
+          </CollapsibleSection>
 
+          <CollapsibleSection
+            title="Search Integrations"
+            icon={Settings}
+            isExpanded={expandedSection === 'search'}
+            onToggle={() => toggleSection('search')}
+          >
             <div className="settings-card">
               <div
                 className="settings-row clickable-row"
@@ -332,155 +339,31 @@ export function SettingsModal({ isOpen, onClose, onShowExport, onImportData }) {
                 </>
               )}
             </div>
-          </div>
+          </CollapsibleSection>
 
-          <div className="settings-section">
-            <div className="settings-section-header">
-              <ImageIcon size={16} />
-              <h3>Poster Support</h3>
+          <CollapsibleSection
+            title="Artwork Sources"
+            icon={ImageIcon}
+            isExpanded={expandedSection === 'artwork'}
+            onToggle={() => toggleSection('artwork')}
+          >
+            <div
+              className="settings-card"
+              style={{ padding: '16px 20px 20px 20px', overflow: 'visible' }}
+            >
+              <ArtworkSettingsPanel preferences={preferences} onChange={onPreferencesChange} />
             </div>
-
-            <div className="settings-card">
-              <div
-                className="settings-row"
-                style={{ alignItems: 'flex-start', flexDirection: 'column' }}
-              >
-                <div className="settings-row-info" style={{ marginTop: '4px', width: '100%' }}>
-                  <span className="settings-label">Poster Service</span>
-                  <span className="settings-desc" style={{ marginBottom: '12px' }}>
-                    Source high quality overlay posters
-                  </span>
-                </div>
-                <div className="flex-col" style={{ width: '100%', gap: '10px' }}>
-                  <SearchableSelect
-                    options={[
-                      { id: 'none', name: 'Default (TMDB)' },
-                      { id: 'rpdb', name: 'RPDB (Rating Posters)' },
-                      { id: 'topPosters', name: 'Top Posters' },
-                      { id: 'customUrl', name: 'Custom URL Pattern' },
-                    ]}
-                    value={posterService}
-                    onChange={(val) => handlePosterServiceChange({ target: { value: val } })}
-                    valueKey="id"
-                    labelKey="name"
-                    placeholder="Select a service"
-                    menuPlacement="top"
-                  />
-
-                  {posterService !== 'none' && (
-                    <div className="poster-key-box animate-fade-in" style={{ marginTop: '4px' }}>
-                      <div className="input-group m-0" style={{ margin: 0 }}>
-                        <label
-                          htmlFor="settings-poster-api-key"
-                          className="text-xs text-muted font-medium"
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            marginBottom: '8px',
-                          }}
-                        >
-                          {isCustomPosterService ? 'API Key (optional)' : 'API Key'}
-                          {hasPosterKey && !apiKeyInput && (
-                            <span className="text-primary">Saved ✓</span>
-                          )}
-                        </label>
-                        <div
-                          style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-                        >
-                          <input
-                            id="settings-poster-api-key"
-                            type={showApiKey ? 'text' : 'password'}
-                            className="input w-full"
-                            placeholder={
-                              hasPosterKey
-                                ? '••••••••'
-                                : isCustomPosterService
-                                  ? 'Optional (for {api_key} placeholder)'
-                                  : 'Enter API key'
-                            }
-                            value={apiKeyInput}
-                            onChange={handlePosterApiKeyChange}
-                            style={{ paddingRight: '40px' }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowApiKey(!showApiKey)}
-                            className="btn-icon"
-                            style={{
-                              position: 'absolute',
-                              right: '4px',
-                              background: 'transparent',
-                            }}
-                            title={showApiKey ? 'Hide' : 'Show'}
-                          >
-                            {showApiKey ? (
-                              <EyeOff size={16} className="text-muted" />
-                            ) : (
-                              <Eye size={16} className="text-muted" />
-                            )}
-                          </button>
-                        </div>
-                        {posterServiceUrl && posterServiceName ? (
-                          <p
-                            style={{
-                              fontSize: '11.5px',
-                              marginTop: '10px',
-                              color: 'var(--text-muted)',
-                            }}
-                          >
-                            Get your key from{' '}
-                            <a
-                              href={posterServiceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary hover:underline inline-flex items-center gap-1"
-                            >
-                              {posterServiceName} <ExternalLink size={10} />
-                            </a>
-                          </p>
-                        ) : null}
-
-                        {isCustomPosterService && (
-                          <>
-                            <label
-                              htmlFor="settings-poster-custom-url-pattern"
-                              className="text-xs text-muted font-medium"
-                              style={{ display: 'block', marginTop: '12px', marginBottom: '8px' }}
-                            >
-                              Custom URL Pattern
-                            </label>
-                            <input
-                              id="settings-poster-custom-url-pattern"
-                              type="text"
-                              className="input w-full"
-                              placeholder="https://example.com/{type}/{rating_id}.jpg"
-                              value={posterCustomUrlPattern}
-                              onChange={handleCustomPatternChange}
-                            />
-                            <p
-                              style={{
-                                fontSize: '11.5px',
-                                marginTop: '10px',
-                                color: 'var(--text-muted)',
-                                lineHeight: 1.4,
-                              }}
-                            >
-                              Placeholders: {'{type}'}, {'{imdb_id}'}, {'{tmdb_id}'},{' '}
-                              {'{rating_id}'}, {'{rating_id_type}'}, {'{api_key}'},{' '}
-                              {'{api_key_urlencoded}'}, {'{language}'}, {'{language_short}'}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          </CollapsibleSection>
         </div>
 
-        <div className="modal-footer">
+        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button
+            className="btn btn-secondary"
+            style={{ color: 'var(--text-error)' }}
+            onClick={() => handleLogout()}
+          >
+            Log Out
+          </button>
           <button className="btn btn-secondary" onClick={onClose}>
             Close
           </button>

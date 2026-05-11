@@ -262,8 +262,33 @@ class ApiService {
     return this.request(this._buildAuthUrl('/tv-networks', apiKey, { query }));
   }
 
-  async preview(apiKey, type, filters, page = 1) {
+  async preview(
+    apiKey,
+    type,
+    filters,
+    page = 1,
+    previewPosterProvider = null,
+    previewPosterApiKey = null,
+    previewPosterCustomUrlPattern = null,
+    previewEnglishArtOnly = null,
+    previewOriginalLangFallback = null
+  ) {
     const body = { type, filters, page };
+    if (previewPosterProvider) {
+      body.previewPosterProvider = previewPosterProvider;
+    }
+    if (previewPosterApiKey) {
+      body.previewPosterApiKey = previewPosterApiKey;
+    }
+    if (previewPosterCustomUrlPattern) {
+      body.previewPosterCustomUrlPattern = previewPosterCustomUrlPattern;
+    }
+    if (typeof previewEnglishArtOnly === 'boolean') {
+      body.previewEnglishArtOnly = previewEnglishArtOnly;
+    }
+    if (typeof previewOriginalLangFallback === 'boolean') {
+      body.previewOriginalLangFallback = previewOriginalLangFallback;
+    }
     const token = this.getSessionToken();
     if (!token && apiKey) {
       body.apiKey = apiKey;
@@ -296,17 +321,49 @@ class ApiService {
     );
   }
 
-  async previewImdbCatalog(type, filters) {
+  async previewImdbCatalog(
+    type,
+    filters,
+    previewPosterProvider = null,
+    previewPosterApiKey = null,
+    previewPosterCustomUrlPattern = null
+  ) {
+    const body = { type, filters };
+    if (previewPosterProvider) {
+      body.previewPosterProvider = previewPosterProvider;
+    }
+    if (previewPosterApiKey) {
+      body.previewPosterApiKey = previewPosterApiKey;
+    }
+    if (previewPosterCustomUrlPattern) {
+      body.previewPosterCustomUrlPattern = previewPosterCustomUrlPattern;
+    }
     return this.request('/imdb/preview', {
       method: 'POST',
-      body: JSON.stringify({ type, filters }),
+      body: JSON.stringify(body),
     });
   }
 
-  async previewAnilistCatalog(type, filters) {
+  async previewAnilistCatalog(
+    type,
+    filters,
+    previewPosterProvider = null,
+    previewPosterApiKey = null,
+    previewPosterCustomUrlPattern = null
+  ) {
+    const body = { type, filters };
+    if (previewPosterProvider) {
+      body.previewPosterProvider = previewPosterProvider;
+    }
+    if (previewPosterApiKey) {
+      body.previewPosterApiKey = previewPosterApiKey;
+    }
+    if (previewPosterCustomUrlPattern) {
+      body.previewPosterCustomUrlPattern = previewPosterCustomUrlPattern;
+    }
     return this.request('/anilist/preview', {
       method: 'POST',
-      body: JSON.stringify({ type, filters }),
+      body: JSON.stringify(body),
     });
   }
 
@@ -319,31 +376,95 @@ class ApiService {
     }));
   }
 
-  async previewMalCatalog(type, filters) {
+  async previewMalCatalog(
+    type,
+    filters,
+    previewPosterProvider = null,
+    previewPosterApiKey = null,
+    previewPosterCustomUrlPattern = null
+  ) {
+    const body = { type, filters };
+    if (previewPosterProvider) {
+      body.previewPosterProvider = previewPosterProvider;
+    }
+    if (previewPosterApiKey) {
+      body.previewPosterApiKey = previewPosterApiKey;
+    }
+    if (previewPosterCustomUrlPattern) {
+      body.previewPosterCustomUrlPattern = previewPosterCustomUrlPattern;
+    }
     return this.request('/mal/preview', {
       method: 'POST',
-      body: JSON.stringify({ type, filters }),
+      body: JSON.stringify(body),
     });
   }
 
-  async previewKitsuCatalog(type, filters) {
+  async previewKitsuCatalog(
+    type,
+    filters,
+    previewPosterProvider = null,
+    previewPosterApiKey = null,
+    previewPosterCustomUrlPattern = null
+  ) {
+    const body = { type, filters };
+    if (previewPosterProvider) {
+      body.previewPosterProvider = previewPosterProvider;
+    }
+    if (previewPosterApiKey) {
+      body.previewPosterApiKey = previewPosterApiKey;
+    }
+    if (previewPosterCustomUrlPattern) {
+      body.previewPosterCustomUrlPattern = previewPosterCustomUrlPattern;
+    }
     return this.request('/kitsu/preview', {
       method: 'POST',
-      body: JSON.stringify({ type, filters }),
+      body: JSON.stringify(body),
     });
   }
 
-  async previewSimklCatalog(type, filters) {
+  async previewSimklCatalog(
+    type,
+    filters,
+    previewPosterProvider = null,
+    previewPosterApiKey = null,
+    previewPosterCustomUrlPattern = null
+  ) {
+    const body = { type, filters };
+    if (previewPosterProvider) {
+      body.previewPosterProvider = previewPosterProvider;
+    }
+    if (previewPosterApiKey) {
+      body.previewPosterApiKey = previewPosterApiKey;
+    }
+    if (previewPosterCustomUrlPattern) {
+      body.previewPosterCustomUrlPattern = previewPosterCustomUrlPattern;
+    }
     return this.request('/simkl/preview', {
       method: 'POST',
-      body: JSON.stringify({ type, filters }),
+      body: JSON.stringify(body),
     });
   }
 
-  async previewTraktCatalog(type, filters) {
+  async previewTraktCatalog(
+    type,
+    filters,
+    previewPosterProvider = null,
+    previewPosterApiKey = null,
+    previewPosterCustomUrlPattern = null
+  ) {
+    const body = { type, filters };
+    if (previewPosterProvider) {
+      body.previewPosterProvider = previewPosterProvider;
+    }
+    if (previewPosterApiKey) {
+      body.previewPosterApiKey = previewPosterApiKey;
+    }
+    if (previewPosterCustomUrlPattern) {
+      body.previewPosterCustomUrlPattern = previewPosterCustomUrlPattern;
+    }
     return this.request('/trakt/preview', {
       method: 'POST',
-      body: JSON.stringify({ type, filters }),
+      body: JSON.stringify(body),
     });
   }
 
@@ -367,6 +488,13 @@ class ApiService {
 
   async validateSimklKey(apiKey) {
     return this.request('/validate-simkl-key', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey }),
+    });
+  }
+
+  async validateTvdbKey(apiKey) {
+    return this.request('/validate-tvdb-key', {
       method: 'POST',
       body: JSON.stringify({ apiKey }),
     });

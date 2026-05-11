@@ -1,5 +1,12 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
-import type { ContentType, CatalogFilters } from '../types/index.ts';
+import type {
+  ContentType,
+  CatalogFilters,
+  ArtworkOptions,
+  PosterOptions,
+  PosterServiceType,
+} from '../types/index.ts';
+import type { StremioMetaPreview } from '../types/stremio.ts';
 import { nanoid } from 'nanoid';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -27,6 +34,7 @@ import {
   setNoCacheHeaders,
   logSwallowedError,
 } from '../utils/helpers.ts';
+import { CACHE_TTLS, TIMEOUTS } from '../constants.ts';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.ts';
 import { createLogger } from '../utils/logger.ts';
 import { strictRateLimit } from '../utils/rateLimit.ts';
@@ -40,12 +48,18 @@ import {
   sanitizeString,
 } from '../utils/validation.ts';
 import { sendError, ErrorCodes, safeErrorMessage, AppError } from '../utils/AppError.ts';
-import { encrypt } from '../utils/encryption.ts';
+import { decrypt, encrypt } from '../utils/encryption.ts';
 import { requireAuth, optionalAuth, requireConfigOwnership } from '../utils/authMiddleware.ts';
 import { computeApiKeyId, getSecurityMetrics } from '../utils/security.ts';
 import { config } from '../config.ts';
 import { getConfigCache } from '../infrastructure/configCache.ts';
+import { getCache } from '../services/cache/index.ts';
 import { buildCommonCertificateRatingsByCountry } from '../services/common/certificateRatings.ts';
+import {
+  validateTvdbApiKeyAuthorization,
+  applyArtworkOverridesToMetaPreviews,
+} from '../services/artworkService.ts';
+import { validateArtworkProviderApiKey } from '../utils/artworkValidation.ts';
 import { ADDON_VERSION } from '../version.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -220,6 +234,35 @@ router.post('/validate-simkl-key', requireAuth, strictRateLimit, async (req, res
       res.json({ valid: false, error: `Simkl API returned status ${response.status}` });
     }
   } catch (error) {
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
+  }
+});
+
+router.post('/validate-tvdb-key', requireAuth, strictRateLimit, async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+
+    const formatValidation = validateArtworkProviderApiKey('tvdb', apiKey, { required: true });
+    if (!formatValidation.valid) {
+      return res.json({
+        valid: false,
+        error: formatValidation.error || 'Invalid TVDB API key format',
+      });
+    }
+
+    const result = await validateTvdbApiKeyAuthorization(formatValidation.normalizedKey);
+    if (result.valid) {
+      return res.json({ valid: true });
+    }
+
+    return res.json({
+      valid: false,
+      error: result.error || 'TVDB key validation failed',
+      statusCode: result.statusCode,
+      invalidKey: result.invalidKey,
+    });
+  } catch (error) {
+    log.error('TVDB key validation error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
@@ -781,6 +824,593 @@ router.get('/tv-networks', optionalAuth, async (req, res) => {
   return res.json(curatedMatches);
 });
 
+type PreviewPosterProvider = Extract<
+  PosterServiceType,
+  'tmdb' | 'imdb' | 'tvdb' | 'fanart' | 'rpdb' | 'topPosters' | 'customUrl'
+>;
+
+const PREVIEW_POSTER_PROVIDERS = new Set<PreviewPosterProvider>([
+  'tmdb',
+  'imdb',
+  'tvdb',
+  'fanart',
+  'rpdb',
+  'topPosters',
+  'customUrl',
+]);
+
+const CINEMETA_PREVIEW_NEGATIVE_CACHE = '__none__';
+
+function resolvePreviewPosterProvider(req: Request): PreviewPosterProvider | null {
+  const rawProvider = sanitizeString(String(req.body?.previewPosterProvider || ''), 32);
+  if (!rawProvider || rawProvider === 'default' || rawProvider === 'none') {
+    return null;
+  }
+
+  if (PREVIEW_POSTER_PROVIDERS.has(rawProvider as PreviewPosterProvider)) {
+    return rawProvider as PreviewPosterProvider;
+  }
+
+  return null;
+}
+
+async function resolvePreviewProviderApiKey(
+  req: Request,
+  provider: 'tvdb' | 'fanart' | 'rpdb' | 'topPosters' | 'customUrl'
+): Promise<string | null> {
+  const bodyKeyValidation = validateArtworkProviderApiKey(provider, req.body?.previewPosterApiKey, {
+    required: false,
+  });
+  if (bodyKeyValidation.valid && bodyKeyValidation.normalizedKey) {
+    return bodyKeyValidation.normalizedKey;
+  }
+
+  const findEncryptedProviderApiKey = (preferences: unknown): string | null => {
+    if (!preferences || typeof preferences !== 'object') return null;
+
+    const prefs = preferences as Record<string, unknown>;
+
+    const encryptedMap = prefs.apiKeysEncrypted as Map<string, unknown> | Record<string, unknown>;
+    if (encryptedMap && typeof encryptedMap === 'object') {
+      const encryptedCandidate =
+        encryptedMap instanceof Map
+          ? encryptedMap.get(provider)
+          : (encryptedMap as Record<string, unknown>)[provider];
+
+      if (typeof encryptedCandidate === 'string' && encryptedCandidate.trim()) {
+        return encryptedCandidate;
+      }
+    }
+
+    const artwork = prefs.artwork;
+    if (!artwork || typeof artwork !== 'object') return null;
+
+    const stack: unknown[] = [artwork];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current || typeof current !== 'object') continue;
+
+      const node = current as Record<string, unknown>;
+      const nodeProvider = node.provider;
+      const nodeEncryptedKey = node.apiKeyEncrypted;
+
+      if (
+        nodeProvider === provider &&
+        typeof nodeEncryptedKey === 'string' &&
+        nodeEncryptedKey.trim()
+      ) {
+        return nodeEncryptedKey;
+      }
+
+      Object.values(node).forEach((value) => {
+        if (value && typeof value === 'object') stack.push(value);
+      });
+    }
+
+    return null;
+  };
+
+  const tryExtractFromConfig = (
+    cfg: Awaited<ReturnType<typeof getUserConfig>> | null
+  ): string | null => {
+    const encrypted = findEncryptedProviderApiKey(cfg?.preferences);
+    if (!encrypted) return null;
+    try {
+      return decrypt(encrypted);
+    } catch (error) {
+      logSwallowedError(`api:preview-${provider}-decrypt`, error);
+      return null;
+    }
+  };
+
+  const authUserId = (req as Request & { user?: { userId?: string } }).user?.userId;
+
+  if (authUserId) {
+    try {
+      const configByUser = await getUserConfig(authUserId);
+      const byUserId = tryExtractFromConfig(configByUser);
+      if (byUserId) return byUserId;
+    } catch (error) {
+      logSwallowedError(`api:preview-${provider}-user-config`, error);
+    }
+  }
+
+  try {
+    if (req.apiKey) {
+      const configs = await getConfigsByApiKey(req.apiKey);
+      const byApiKey = tryExtractFromConfig(configs[0] || null);
+      if (byApiKey) return byApiKey;
+    }
+  } catch (error) {
+    logSwallowedError(`api:preview-${provider}-apikey-config`, error);
+  }
+
+  try {
+    if (req.apiKeyId) {
+      const configs = await getConfigsByApiKey(null, req.apiKeyId);
+      const byApiKeyId = tryExtractFromConfig(configs[0] || null);
+      if (byApiKeyId) return byApiKeyId;
+    }
+  } catch (error) {
+    logSwallowedError(`api:preview-${provider}-apikeyid-config`, error);
+  }
+
+  // Server-wide fallback keys (if explicitly configured)
+  if (provider === 'rpdb') {
+    return config.rpdb.apiKey || 't0-free-rpdb';
+  }
+  if (provider === 'topPosters') {
+    return config.topPosters.apiKey || null;
+  }
+
+  if (provider === 'fanart') {
+    return config.fanart.apiKey || null;
+  }
+
+  if (provider === 'customUrl') {
+    return null;
+  }
+
+  return null;
+}
+
+function resolvePreviewContentType(req: Request): 'movie' | 'series' | 'anime' {
+  const rawType = sanitizeString(String(req.body?.type || ''), 16);
+  if (rawType === 'series' || rawType === 'anime') return rawType;
+  return 'movie';
+}
+
+interface PreviewArtworkLanguagePreferences {
+  englishArtOnly: boolean;
+  originalLangFallback: boolean;
+}
+
+function extractPreviewArtworkLanguagePreferences(
+  preferences: unknown
+): PreviewArtworkLanguagePreferences {
+  const defaults: PreviewArtworkLanguagePreferences = {
+    englishArtOnly: false,
+    originalLangFallback: true,
+  };
+
+  if (!preferences || typeof preferences !== 'object') {
+    return defaults;
+  }
+
+  const prefs = preferences as Record<string, unknown>;
+  const artwork = prefs.artwork;
+  if (!artwork || typeof artwork !== 'object') {
+    return defaults;
+  }
+
+  const artworkObj = artwork as Record<string, unknown>;
+
+  return {
+    englishArtOnly: Boolean(artworkObj.englishArtOnly),
+    originalLangFallback:
+      artworkObj.originalLangFallback === undefined
+        ? true
+        : Boolean(artworkObj.originalLangFallback),
+  };
+}
+
+async function resolvePreviewArtworkLanguagePreferences(
+  req: Request
+): Promise<PreviewArtworkLanguagePreferences> {
+  const defaults: PreviewArtworkLanguagePreferences = {
+    englishArtOnly: false,
+    originalLangFallback: true,
+  };
+
+  const bodyEnglishArtOnly = req.body?.previewEnglishArtOnly;
+  const bodyOriginalLangFallback = req.body?.previewOriginalLangFallback;
+  if (typeof bodyEnglishArtOnly === 'boolean' || typeof bodyOriginalLangFallback === 'boolean') {
+    return {
+      englishArtOnly:
+        typeof bodyEnglishArtOnly === 'boolean' ? bodyEnglishArtOnly : defaults.englishArtOnly,
+      originalLangFallback:
+        typeof bodyOriginalLangFallback === 'boolean'
+          ? bodyOriginalLangFallback
+          : defaults.originalLangFallback,
+    };
+  }
+
+  const tryExtractFromConfig = (
+    cfg: Awaited<ReturnType<typeof getUserConfig>> | null
+  ): PreviewArtworkLanguagePreferences => {
+    return extractPreviewArtworkLanguagePreferences(cfg?.preferences);
+  };
+
+  const authUserId = (req as Request & { user?: { userId?: string } }).user?.userId;
+
+  if (authUserId) {
+    try {
+      const configByUser = await getUserConfig(authUserId);
+      return tryExtractFromConfig(configByUser);
+    } catch (error) {
+      logSwallowedError('api:preview-artlang-user-config', error);
+    }
+  }
+
+  try {
+    if (req.apiKey) {
+      const configs = await getConfigsByApiKey(req.apiKey);
+      if (configs[0]) {
+        return tryExtractFromConfig(configs[0]);
+      }
+    }
+  } catch (error) {
+    logSwallowedError('api:preview-artlang-apikey-config', error);
+  }
+
+  try {
+    if (req.apiKeyId) {
+      const configs = await getConfigsByApiKey(null, req.apiKeyId);
+      if (configs[0]) {
+        return tryExtractFromConfig(configs[0]);
+      }
+    }
+  } catch (error) {
+    logSwallowedError('api:preview-artlang-apikeyid-config', error);
+  }
+
+  return defaults;
+}
+
+async function resolvePreviewCustomUrlPattern(req: Request): Promise<string | null> {
+  const bodyPattern = sanitizeString(String(req.body?.previewPosterCustomUrlPattern || ''), 2048);
+  if (bodyPattern && bodyPattern.trim()) {
+    return bodyPattern.trim();
+  }
+
+  const findPatternFromPreferences = (preferences: unknown): string | null => {
+    if (!preferences || typeof preferences !== 'object') return null;
+
+    const prefs = preferences as Record<string, unknown>;
+
+    if (
+      prefs.posterService === 'customUrl' &&
+      typeof prefs.posterCustomUrlPattern === 'string' &&
+      prefs.posterCustomUrlPattern.trim()
+    ) {
+      return prefs.posterCustomUrlPattern.trim();
+    }
+
+    const artwork = prefs.artwork;
+    if (!artwork || typeof artwork !== 'object') return null;
+
+    const artworkObj = artwork as Record<string, unknown>;
+    const contentType = resolvePreviewContentType(req);
+
+    const fromContentTypePoster =
+      artworkObj[contentType] &&
+      typeof artworkObj[contentType] === 'object' &&
+      (artworkObj[contentType] as Record<string, unknown>).poster &&
+      typeof (artworkObj[contentType] as Record<string, unknown>).poster === 'object'
+        ? ((artworkObj[contentType] as Record<string, unknown>).poster as Record<string, unknown>)
+        : null;
+
+    if (
+      fromContentTypePoster?.provider === 'customUrl' &&
+      typeof fromContentTypePoster.customUrlPattern === 'string' &&
+      fromContentTypePoster.customUrlPattern.trim()
+    ) {
+      return fromContentTypePoster.customUrlPattern.trim();
+    }
+
+    const legacyPoster =
+      artworkObj.poster && typeof artworkObj.poster === 'object'
+        ? (artworkObj.poster as Record<string, unknown>)
+        : null;
+    if (
+      legacyPoster?.provider === 'customUrl' &&
+      typeof legacyPoster.customUrlPattern === 'string' &&
+      legacyPoster.customUrlPattern.trim()
+    ) {
+      return legacyPoster.customUrlPattern.trim();
+    }
+
+    return null;
+  };
+
+  const tryExtractFromConfig = (
+    cfg: Awaited<ReturnType<typeof getUserConfig>> | null
+  ): string | null => {
+    return findPatternFromPreferences(cfg?.preferences);
+  };
+
+  const authUserId = (req as Request & { user?: { userId?: string } }).user?.userId;
+
+  if (authUserId) {
+    try {
+      const configByUser = await getUserConfig(authUserId);
+      const byUserId = tryExtractFromConfig(configByUser);
+      if (byUserId) return byUserId;
+    } catch (error) {
+      logSwallowedError('api:preview-customurl-user-config', error);
+    }
+  }
+
+  try {
+    if (req.apiKey) {
+      const configs = await getConfigsByApiKey(req.apiKey);
+      const byApiKey = tryExtractFromConfig(configs[0] || null);
+      if (byApiKey) return byApiKey;
+    }
+  } catch (error) {
+    logSwallowedError('api:preview-customurl-apikey-config', error);
+  }
+
+  try {
+    if (req.apiKeyId) {
+      const configs = await getConfigsByApiKey(null, req.apiKeyId);
+      const byApiKeyId = tryExtractFromConfig(configs[0] || null);
+      if (byApiKeyId) return byApiKeyId;
+    }
+  } catch (error) {
+    logSwallowedError('api:preview-customurl-apikeyid-config', error);
+  }
+
+  return null;
+}
+
+async function buildPreviewPosterOption(
+  provider: PreviewPosterProvider | null,
+  req: Request
+): Promise<PosterOptions | null> {
+  if (!provider) return null;
+
+  if (provider === 'tmdb' || provider === 'imdb') {
+    return { service: provider };
+  }
+
+  if (provider === 'tvdb') {
+    const tvdbApiKey = await resolvePreviewProviderApiKey(req, 'tvdb');
+    if (!tvdbApiKey) {
+      log.warn('TVDB preview provider selected without configured TVDB API key');
+      return null;
+    }
+
+    return {
+      service: 'tvdb',
+      apiKey: tvdbApiKey,
+    };
+  }
+
+  if (provider === 'fanart') {
+    const fanartApiKey = await resolvePreviewProviderApiKey(req, 'fanart');
+    if (!fanartApiKey) {
+      log.warn('Fanart preview provider selected without configured Fanart API key');
+      return null;
+    }
+
+    return {
+      service: 'fanart',
+      apiKey: fanartApiKey,
+    };
+  }
+
+  if (provider === 'rpdb') {
+    const rpdbApiKey = await resolvePreviewProviderApiKey(req, 'rpdb');
+    if (!rpdbApiKey) return null;
+
+    return {
+      service: 'rpdb',
+      apiKey: rpdbApiKey,
+    };
+  }
+
+  if (provider === 'topPosters') {
+    const topPostersApiKey = await resolvePreviewProviderApiKey(req, 'topPosters');
+    if (!topPostersApiKey) {
+      log.warn('Top Posters preview provider selected without configured Top Posters API key');
+      return null;
+    }
+
+    return {
+      service: 'topPosters',
+      apiKey: topPostersApiKey,
+    };
+  }
+
+  if (provider === 'customUrl') {
+    const customUrlPattern = await resolvePreviewCustomUrlPattern(req);
+    if (!customUrlPattern) {
+      log.warn('Custom URL preview provider selected without configured URL pattern');
+      return null;
+    }
+
+    const customUrlApiKey = await resolvePreviewProviderApiKey(req, 'customUrl');
+    return {
+      service: 'customUrl',
+      customUrlPattern,
+      ...(customUrlApiKey ? { apiKey: customUrlApiKey } : {}),
+    };
+  }
+
+  return null;
+}
+
+async function buildPreviewArtworkOptions(
+  provider: PreviewPosterProvider | null,
+  req: Request
+): Promise<ArtworkOptions | null> {
+  const poster = await buildPreviewPosterOption(provider, req);
+  if (!poster) return null;
+
+  const languagePreferences = await resolvePreviewArtworkLanguagePreferences(req);
+
+  return {
+    poster,
+    backdrop: null,
+    logo: null,
+    landscape: null,
+    episode: null,
+    englishArtOnly: languagePreferences.englishArtOnly,
+    originalLangFallback: languagePreferences.originalLangFallback,
+  };
+}
+
+function inferPreviewImdbId(meta: StremioMetaPreview): string | null {
+  const candidate = meta.imdbId || meta.imdb_id || (meta.id?.startsWith('tt') ? meta.id : null);
+  if (!candidate || !/^tt\d+$/.test(candidate)) return null;
+  return candidate;
+}
+
+function normalizePreviewTypeForCinemeta(type: ContentType): 'movie' | 'series' {
+  return type === 'series' || type === 'anime' ? 'series' : 'movie';
+}
+
+function sanitizePosterUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const parsed = new URL(raw.trim());
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function customUrlPatternRequiresImdbId(pattern: string | null | undefined): boolean {
+  if (!pattern) return false;
+  return /\{imdb_id\}/.test(pattern);
+}
+
+async function fetchCinemetaPreviewPoster(
+  imdbId: string,
+  type: ContentType
+): Promise<string | null> {
+  const normalizedType = normalizePreviewTypeForCinemeta(type);
+  const cache = getCache();
+  const cacheKey = `preview:cinemeta:poster:${normalizedType}:${imdbId}`;
+
+  try {
+    const cached = (await cache.get(cacheKey)) as string | null;
+    if (cached === CINEMETA_PREVIEW_NEGATIVE_CACHE) return null;
+    if (cached) return cached;
+  } catch (error) {
+    logSwallowedError('api:preview-cinemeta-cache-get', error);
+  }
+
+  try {
+    const response = await fetch(
+      `https://v3-cinemeta.strem.io/meta/${normalizedType}/${encodeURIComponent(imdbId)}.json`,
+      {
+        signal: AbortSignal.timeout(TIMEOUTS.REQUEST_MS),
+      }
+    );
+
+    if (!response.ok) {
+      try {
+        await cache.set(cacheKey, CINEMETA_PREVIEW_NEGATIVE_CACHE, CACHE_TTLS.NEGATIVE_LOOKUP);
+      } catch (error) {
+        logSwallowedError('api:preview-cinemeta-cache-set-neg', error);
+      }
+      return null;
+    }
+
+    const payload = (await response.json()) as { meta?: { poster?: string | null } };
+    const poster = sanitizePosterUrl(payload?.meta?.poster || null);
+
+    try {
+      await cache.set(
+        cacheKey,
+        poster || CINEMETA_PREVIEW_NEGATIVE_CACHE,
+        poster ? CACHE_TTLS.DETAIL : CACHE_TTLS.NEGATIVE_LOOKUP
+      );
+    } catch (error) {
+      logSwallowedError('api:preview-cinemeta-cache-set', error);
+    }
+
+    return poster;
+  } catch (error) {
+    logSwallowedError('api:preview-cinemeta-fetch', error);
+    return null;
+  }
+}
+
+async function resolveImdbPreviewPoster(meta: StremioMetaPreview): Promise<string | null> {
+  const imdbId = inferPreviewImdbId(meta);
+  if (!imdbId) return null;
+
+  if (imdb.isImdbApiEnabled()) {
+    try {
+      const poster = await imdb.getPoster(imdbId);
+      const imdbPoster =
+        sanitizePosterUrl(poster?.primaryImage?.url || null) ||
+        sanitizePosterUrl(poster?.posterImages?.[0]?.url || null);
+      if (imdbPoster) return imdbPoster;
+    } catch (error) {
+      logSwallowedError('api:preview-imdb-poster-posterapi', error);
+      // Backward compatibility for older imdb-api deployments without /poster endpoint.
+      try {
+        const title = await imdb.getTitle(imdbId);
+        const fallbackPoster =
+          sanitizePosterUrl(title?.primaryImage?.url || null) ||
+          sanitizePosterUrl(title?.posterImages?.[0]?.url || null);
+        if (fallbackPoster) return fallbackPoster;
+      } catch (fallbackError) {
+        logSwallowedError('api:preview-imdb-poster-imdbapi-fallback', fallbackError);
+      }
+    }
+  }
+
+  return fetchCinemetaPreviewPoster(imdbId, meta.type);
+}
+
+async function applyImdbPreviewPosterProvider(
+  metas: StremioMetaPreview[]
+): Promise<StremioMetaPreview[]> {
+  const resolvedPosters = await Promise.all(metas.map((meta) => resolveImdbPreviewPoster(meta)));
+
+  return metas.map((meta, index) => ({
+    ...meta,
+    poster: resolvedPosters[index] || meta.poster || null,
+  }));
+}
+
+async function applyPreviewPosterProvider(
+  metas: StremioMetaPreview[],
+  provider: PreviewPosterProvider | null,
+  req: Request
+): Promise<StremioMetaPreview[]> {
+  if (!provider || !Array.isArray(metas) || metas.length === 0) {
+    return metas;
+  }
+
+  if (provider === 'imdb') {
+    return applyImdbPreviewPosterProvider(metas);
+  }
+
+  const artworkOptions = await buildPreviewArtworkOptions(provider, req);
+  if (!artworkOptions) return metas;
+
+  return applyArtworkOverridesToMetaPreviews(metas, artworkOptions, {
+    strictPoster: true,
+  });
+}
+
 router.post('/imdb/preview', requireAuth, async (req, res) => {
   try {
     if (!imdb.isImdbApiEnabled()) {
@@ -793,6 +1423,7 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
     }
 
     const filters = sanitizeImdbFilters(rawFilters);
+    const previewPosterProvider = resolvePreviewPosterProvider(req);
     const listType = filters.listType || 'discover';
     let titles = [];
     let totalResults = 0;
@@ -859,12 +1490,16 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
       totalResults = result.totalResults || result.titles?.length || 0;
     }
 
-    const metas = titles.map((item) => imdb.imdbToStremioMeta(item, type)).filter(Boolean);
+    const mappedMetas = titles.map(
+      (item) => imdb.imdbToStremioMeta(item, type) as StremioMetaPreview | null
+    );
+    const metas = mappedMetas.filter((meta): meta is StremioMetaPreview => Boolean(meta));
+    const previewMetas = await applyPreviewPosterProvider(metas, previewPosterProvider, req);
 
     res.json({
-      metas,
+      metas: previewMetas,
       totalResults,
-      previewEmpty: metas.length === 0,
+      previewEmpty: previewMetas.length === 0,
     });
   } catch (error) {
     log.error('POST /imdb/preview error', { error: (error as Error).message });
@@ -1018,6 +1653,7 @@ const PREVIEW_MAX_BACKFILL = 5;
 router.post('/anilist/preview', requireAuth, async (req, res) => {
   try {
     const { filters, type } = req.body;
+    const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
     const hasStudioFilter = Array.isArray(safeFilters.studios) && safeFilters.studios.length > 0;
     const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
@@ -1053,8 +1689,13 @@ router.post('/anilist/preview', requireAuth, async (req, res) => {
     }
 
     const previewMetas = randomize ? shuffleArray(metas) : metas;
+    const metasWithPreviewPoster = await applyPreviewPosterProvider(
+      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+      previewPosterProvider,
+      req
+    );
     res.json({
-      metas: previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+      metas: metasWithPreviewPoster,
       totalResults: null,
     });
   } catch (error) {
@@ -1080,6 +1721,7 @@ router.get('/anilist/studios', requireAuth, async (req, res) => {
 router.post('/mal/preview', requireAuth, async (req, res) => {
   try {
     const { filters, type } = req.body;
+    const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
     const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
     const contentType = (
@@ -1104,7 +1746,12 @@ router.post('/mal/preview', requireAuth, async (req, res) => {
     }
 
     const previewMetas = randomize ? shuffleArray(metas) : metas;
-    res.json({ metas: previewMetas.slice(0, PREVIEW_PAGE_SIZE), totalResults: null });
+    const metasWithPreviewPoster = await applyPreviewPosterProvider(
+      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+      previewPosterProvider,
+      req
+    );
+    res.json({ metas: metasWithPreviewPoster, totalResults: null });
   } catch (error) {
     log.error('POST /mal/preview error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
@@ -1114,6 +1761,7 @@ router.post('/mal/preview', requireAuth, async (req, res) => {
 router.post('/kitsu/preview', requireAuth, async (req, res) => {
   try {
     const { filters, type } = req.body;
+    const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
     const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
     const contentType = (
@@ -1138,7 +1786,12 @@ router.post('/kitsu/preview', requireAuth, async (req, res) => {
     }
 
     const previewMetas = randomize ? shuffleArray(metas) : metas;
-    res.json({ metas: previewMetas.slice(0, PREVIEW_PAGE_SIZE), totalResults: null });
+    const metasWithPreviewPoster = await applyPreviewPosterProvider(
+      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+      previewPosterProvider,
+      req
+    );
+    res.json({ metas: metasWithPreviewPoster, totalResults: null });
   } catch (error) {
     log.error('POST /kitsu/preview error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
@@ -1148,6 +1801,7 @@ router.post('/kitsu/preview', requireAuth, async (req, res) => {
 router.post('/simkl/preview', requireAuth, async (req, res) => {
   try {
     const { filters, type } = req.body;
+    const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
     const listType = safeFilters.simklListType || 'trending';
     const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
@@ -1173,8 +1827,13 @@ router.post('/simkl/preview', requireAuth, async (req, res) => {
       if (listType === 'trending' || listType === 'airing') {
         const previewMetas = shuffleArray(
           simkl.batchConvertToStremioMeta(probe.items, contentType)
+        ).slice(0, PREVIEW_PAGE_SIZE);
+        const metasWithPreviewPoster = await applyPreviewPosterProvider(
+          previewMetas,
+          previewPosterProvider,
+          req
         );
-        return res.json({ metas: previewMetas.slice(0, PREVIEW_PAGE_SIZE), totalResults: null });
+        return res.json({ metas: metasWithPreviewPoster, totalResults: null });
       }
       const maxPage = probe.hasMore ? 5 : 1;
       page = Math.floor(Math.random() * maxPage) + 1;
@@ -1190,7 +1849,12 @@ router.post('/simkl/preview', requireAuth, async (req, res) => {
     }
 
     const previewMetas = randomize ? shuffleArray(metas) : metas;
-    res.json({ metas: previewMetas.slice(0, PREVIEW_PAGE_SIZE), totalResults: null });
+    const metasWithPreviewPoster = await applyPreviewPosterProvider(
+      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+      previewPosterProvider,
+      req
+    );
+    res.json({ metas: metasWithPreviewPoster, totalResults: null });
   } catch (error) {
     log.error('POST /simkl/preview error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
@@ -1200,6 +1864,7 @@ router.post('/simkl/preview', requireAuth, async (req, res) => {
 router.post('/trakt/preview', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const { filters, type } = req.body;
+    const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
     const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
     const previewListType = safeFilters.traktListType || 'calendar';
@@ -1242,8 +1907,13 @@ router.post('/trakt/preview', requireAuth, resolveApiKey, async (req, res) => {
       ) {
         const previewMetas = shuffleArray(
           trakt.batchConvertToStremioMeta(filteredItems, contentType)
+        ).slice(0, PREVIEW_PAGE_SIZE);
+        const metasWithPreviewPoster = await applyPreviewPosterProvider(
+          previewMetas,
+          previewPosterProvider,
+          req
         );
-        return res.json({ metas: previewMetas.slice(0, PREVIEW_PAGE_SIZE), totalResults: null });
+        return res.json({ metas: metasWithPreviewPoster, totalResults: null });
       }
       const maxPage = probe.hasMore ? 5 : 1;
       page = Math.floor(Math.random() * maxPage) + 1;
@@ -1264,7 +1934,12 @@ router.post('/trakt/preview', requireAuth, resolveApiKey, async (req, res) => {
     }
 
     const previewMetas = randomize ? shuffleArray(metas) : metas;
-    res.json({ metas: previewMetas.slice(0, PREVIEW_PAGE_SIZE), totalResults: null });
+    const metasWithPreviewPoster = await applyPreviewPosterProvider(
+      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+      previewPosterProvider,
+      req
+    );
+    res.json({ metas: metasWithPreviewPoster, totalResults: null });
   } catch (error) {
     log.error('POST /trakt/preview error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
@@ -1313,6 +1988,7 @@ router.get('/geo/cities', requireAuth, async (req, res) => {
 router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
   try {
     const { type, filters: rawFilters, page: rawPage = 1 } = req.body;
+    const previewPosterProvider = resolvePreviewPosterProvider(req);
     const apiKey = getApiKey(req);
 
     if (!type || !isValidContentType(type)) {
@@ -1356,15 +2032,35 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
     }
 
     const allResults = (results?.results || []) as import('../types/index.ts').TmdbResult[];
+    const previewResults = allResults.slice(0, 20);
     const displayLanguage = resolvedFilters?.displayLanguage;
     const isCompanyFilmographyIdsOnly = Boolean(
       (results as { __companyFilmographyIdsOnly?: boolean } | null)?.__companyFilmographyIdsOnly
     );
 
+    const previewCustomUrlPattern =
+      previewPosterProvider === 'customUrl' ? await resolvePreviewCustomUrlPattern(req) : null;
+
+    const previewProviderNeedsImdbIds =
+      previewPosterProvider === 'imdb' ||
+      previewPosterProvider === 'tvdb' ||
+      (previewPosterProvider === 'customUrl' &&
+        customUrlPatternRequiresImdbId(previewCustomUrlPattern));
+
+    const shouldEnrichWithImdbIds = !isCompanyFilmographyIdsOnly && previewProviderNeedsImdbIds;
+
+    if (shouldEnrichWithImdbIds) {
+      try {
+        await tmdb.enrichItemsWithImdbIds(apiKey, previewResults, type);
+      } catch (error) {
+        logSwallowedError('api:preview-enrich-imdb-ids', error);
+      }
+    }
+
     let filteredMetas;
 
     if (isCompanyFilmographyIdsOnly) {
-      const tmdbIds = allResults.slice(0, 20).map((item) => item.id);
+      const tmdbIds = previewResults.map((item) => item.id);
       const detailsMap = await tmdb.batchGetDetails(apiKey, tmdbIds, type, { displayLanguage });
       filteredMetas = (
         await Promise.all(
@@ -1400,25 +2096,31 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
         }
       }
 
-      const metas = allResults.slice(0, 20).map((item) => {
+      const metas = previewResults.map((item) => {
         return tmdb.toStremioMeta(item, type, null, null, genreMap);
       });
 
       filteredMetas = metas.filter(Boolean);
     }
 
+    const metasWithPreviewPoster = await applyPreviewPosterProvider(
+      filteredMetas as StremioMetaPreview[],
+      previewPosterProvider,
+      req
+    );
+
     log.debug('Preview results', {
       fetchedCount: allResults.length,
-      filteredCount: filteredMetas.length,
+      filteredCount: metasWithPreviewPoster.length,
       companyFilmographyIdsOnly: isCompanyFilmographyIdsOnly,
     });
 
     res.json({
-      metas: filteredMetas,
+      metas: metasWithPreviewPoster,
       totalResults: results?.total_results ?? 0,
       totalPages: results?.total_pages ?? 0,
       page: results?.page ?? 1,
-      previewEmpty: filteredMetas.length === 0,
+      previewEmpty: metasWithPreviewPoster.length === 0,
     });
   } catch (error) {
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
@@ -1495,6 +2197,13 @@ router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, 
     res.json(response);
   } catch (error) {
     log.error('POST /config error', { error: (error as Error).message });
+    const message = safeErrorMessage(error as Error);
+    if (
+      (error as Error).message.includes('Invalid artwork API key') ||
+      (error as Error).message.includes('Invalid TMDB API key format')
+    ) {
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, message);
+    }
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });
@@ -1591,6 +2300,13 @@ router.put(
       res.json(response);
     } catch (error) {
       log.error('PUT /config/:userId error', { error: (error as Error).message });
+      const message = safeErrorMessage(error as Error);
+      if (
+        (error as Error).message.includes('Invalid artwork API key') ||
+        (error as Error).message.includes('Invalid TMDB API key format')
+      ) {
+        return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, message);
+      }
       sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
     }
   }

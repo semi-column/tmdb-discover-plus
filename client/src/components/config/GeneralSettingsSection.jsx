@@ -90,22 +90,11 @@ export function GeneralSettingsSection() {
           >
             <button
               className="btn btn-secondary"
-              onClick={() => actions.handleLogout({ changeKey: true })}
-              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => actions.handleLogout()}
+              style={{ width: '100%', justifyContent: 'center', color: 'var(--text-error)' }}
             >
-              <KeyRound size={16} />
-              Change API Key
+              Log Out
             </button>
-            <p
-              style={{
-                fontSize: '11px',
-                color: 'var(--text-muted)',
-                marginTop: '8px',
-                textAlign: 'center',
-              }}
-            >
-              Requires reconnecting to Stremio.
-            </p>
           </div>
         </div>
       )}

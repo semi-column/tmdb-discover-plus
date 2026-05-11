@@ -1,35 +1,36 @@
 import type { TraktMovie, TraktShow } from './types.ts';
 import type { StremioMetaPreview, StremioLink } from '../../types/stremio.ts';
 import type { ContentType } from '../../types/common.ts';
-import type { PosterOptions } from '../../types/config.ts';
-import { metahubUrl } from '../../constants.ts';
+import type { ArtworkOptions } from '../../types/config.ts';
 import { generateSlug } from '../common/stremioHelpers.ts';
-import { generatePosterUrl, isValidPosterConfig } from '../posterService.ts';
+import { applyArtworkOverridesSync } from '../artworkService.ts';
+import type { ArtworkContext, NativeArtworkUrls } from '../artworkService.ts';
 
 export function traktToStremioMeta(
   item: TraktMovie | TraktShow,
   type: ContentType,
-  posterOptions: PosterOptions | null = null
+  artworkOptions: ArtworkOptions | null = null
 ): StremioMetaPreview | null {
   const imdbId = item.ids.imdb;
   if (!imdbId) return null;
 
   const tmdbId = item.ids.tmdb ?? 0;
 
-  let poster = metahubUrl('poster', imdbId);
-  if (posterOptions && isValidPosterConfig(posterOptions)) {
-    const enhancedPoster = generatePosterUrl({
-      ...posterOptions,
-      tmdbId,
-      type,
-      imdbId,
-    });
-    if (enhancedPoster) {
-      poster = enhancedPoster;
-    }
-  }
-
-  const background = metahubUrl('background', imdbId);
+  const artworkContext: ArtworkContext = {
+    tmdbId,
+    imdbId,
+    type,
+  };
+  const nativeUrls: NativeArtworkUrls = {
+    poster: null,
+    backdrop: null,
+    logo: null,
+    landscape: null,
+  };
+  const resolved = applyArtworkOverridesSync(artworkContext, nativeUrls, artworkOptions);
+  const poster = resolved.poster;
+  const background = resolved.backdrop;
+  const logo = resolved.logo || undefined;
 
   const links: StremioLink[] = [];
   if (imdbId) {
@@ -52,8 +53,9 @@ export function traktToStremioMeta(
     poster,
     posterShape: 'poster',
     background,
-    fanart: background,
-    landscapePoster: background,
+    fanart: resolved.landscape || background,
+    landscapePoster: resolved.landscape || background,
+    logo,
     genres: item.genres || [],
     description: item.overview || '',
     releaseInfo: item.year ? String(item.year) : '',
@@ -66,11 +68,11 @@ export function traktToStremioMeta(
 export function batchConvertToStremioMeta(
   items: (TraktMovie | TraktShow)[],
   type: ContentType,
-  posterOptions: PosterOptions | null = null
+  artworkOptions: ArtworkOptions | null = null
 ): StremioMetaPreview[] {
   const results: StremioMetaPreview[] = [];
   for (const item of items) {
-    const meta = traktToStremioMeta(item, type, posterOptions);
+    const meta = traktToStremioMeta(item, type, artworkOptions);
     if (meta) results.push(meta);
   }
   return results;

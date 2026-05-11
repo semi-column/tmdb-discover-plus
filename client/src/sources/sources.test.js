@@ -78,6 +78,18 @@ describe('TMDB_SOURCE descriptor', () => {
     expect(chips.find((c) => c.key === 'sortBy')?.label).toContain('Rating');
   });
 
+  it('computeActiveChips hides unknown sort keys for current type', () => {
+    const chips = TMDB_SOURCE.computeActiveChips(
+      { sortBy: 'release_date.asc' },
+      {
+        contentType: 'series',
+        sortOptions: { series: [{ value: 'first_air_date.desc', label: 'First Air Date' }] },
+      }
+    );
+
+    expect(chips.find((c) => c.key === 'sortBy')).toBeUndefined();
+  });
+
   it('computeActiveChips does not report default popularity sort', () => {
     const chips = TMDB_SOURCE.computeActiveChips(
       { sortBy: 'popularity.desc' },

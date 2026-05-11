@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { resolveOptionLabel, resolveSortLabel } from '../utils/filterLabels';
 
 const NON_MAL_KEYS = [
   'sortBy',
@@ -135,10 +136,9 @@ export const MAL_SOURCE = {
     const active = [];
 
     if (filters.malRankingType && filters.malRankingType !== 'all') {
-      const match = malRankingTypes.find((r) => r.value === filters.malRankingType);
       active.push({
         key: 'malRankingType',
-        label: `Ranking: ${match?.label || filters.malRankingType}`,
+        label: `Ranking: ${resolveOptionLabel(malRankingTypes, filters.malRankingType)}`,
         section: 'filters',
       });
     }
@@ -173,10 +173,7 @@ export const MAL_SOURCE = {
     }
 
     if (filters.malMediaType?.length > 0) {
-      const names = filters.malMediaType.map((v) => {
-        const match = malMediaTypes.find((t) => t.value === v);
-        return match?.label || v;
-      });
+      const names = filters.malMediaType.map((v) => resolveOptionLabel(malMediaTypes, v));
       active.push({
         key: 'malMediaType',
         label: `Type: ${names.join(', ')}`,
@@ -185,10 +182,7 @@ export const MAL_SOURCE = {
     }
 
     if (filters.malStatus?.length > 0) {
-      const names = filters.malStatus.map((v) => {
-        const match = malStatuses.find((s) => s.value === v);
-        return match?.label || v;
-      });
+      const names = filters.malStatus.map((v) => resolveOptionLabel(malStatuses, v));
       active.push({
         key: 'malStatus',
         label: `Status: ${names.join(', ')}`,
@@ -197,10 +191,9 @@ export const MAL_SOURCE = {
     }
 
     if (filters.malRating) {
-      const match = malRatings.find((r) => r.value === filters.malRating);
       active.push({
         key: 'malRating',
-        label: `Rating: ${match?.label || filters.malRating}`,
+        label: `Rating: ${resolveOptionLabel(malRatings, filters.malRating)}`,
         section: 'format',
       });
     }
@@ -214,19 +207,17 @@ export const MAL_SOURCE = {
     }
 
     if (filters.malOrderBy) {
-      const match = malOrderByOptions.find((o) => o.value === filters.malOrderBy);
       active.push({
         key: 'malOrderBy',
-        label: `Order: ${match?.label || filters.malOrderBy}`,
+        label: `Order: ${resolveOptionLabel(malOrderByOptions, filters.malOrderBy)}`,
         section: 'score',
       });
     }
 
     if (filters.malSort) {
-      const match = malSortOptions.find((s) => s.value === filters.malSort);
       active.push({
         key: 'malSort',
-        label: `Sort: ${match?.label || filters.malSort}`,
+        label: `Sort: ${resolveSortLabel(malSortOptions, filters.malSort)}`,
         section: 'filters',
       });
     }

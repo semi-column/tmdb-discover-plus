@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { resolveSortLabel } from '../utils/filterLabels';
 
 const NON_ANILIST_KEYS = [
   'listType',
@@ -154,14 +155,11 @@ export const ANILIST_SOURCE = {
     const active = [];
 
     if (filters.sortBy && filters.sortBy !== 'TRENDING_DESC') {
-      const match = anilistSortOptions.find((s) => s.value === filters.sortBy);
-      if (match) {
-        active.push({
-          key: 'sortBy',
-          label: `Sort: ${match.label}`,
-          section: 'filters',
-        });
-      }
+      active.push({
+        key: 'sortBy',
+        label: `Sort: ${resolveSortLabel(anilistSortOptions, filters.sortBy)}`,
+        section: 'filters',
+      });
     }
 
     if (filters.genres?.length > 0) {

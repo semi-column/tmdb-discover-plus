@@ -1,12 +1,18 @@
 import type { Request, Response } from 'express';
 import type { ContentType } from '../../types/common.ts';
-import type { StremioMetaPreview, CatalogConfig } from '../../types/index.ts';
+import type { StremioMetaPreview, CatalogConfig, ArtworkOptions } from '../../types/index.ts';
 import { getUserConfig } from '../../services/configService.ts';
 import { getCache } from '../../services/cache/index.ts';
 import * as mal from '../../services/mal/index.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { shuffleArray } from '../../utils/helpers.ts';
 import { CACHE_TTLS, buildCatalogId, catalogServerTtl } from '../../constants.ts';
+import {
+  createArtworkOptions,
+  resolveContentType,
+  applyArtworkOverridesToMetaPreviews,
+} from '../../services/artworkService.ts';
+import { decrypt } from '../../utils/encryption.ts';
 
 const log = createLogger('addon:mal');
 const PAGE_SIZE = 20;
@@ -21,7 +27,8 @@ async function fetchWithBackfill(
     page: number
   ) => Promise<{ anime: import('../../services/mal/types.ts').MalAnime[]; hasMore: boolean }>,
   type: ContentType,
-  startPage: number
+  startPage: number,
+  artworkOptions: ArtworkOptions | null = null
 ): Promise<StremioMetaPreview[]> {
   const metas: StremioMetaPreview[] = [];
   let currentPage = startPage;
@@ -29,7 +36,7 @@ async function fetchWithBackfill(
 
   while (metas.length < PAGE_SIZE && pagesChecked < MAX_BACKFILL_PAGES) {
     const result = await fetchPage(currentPage);
-    const batch = mal.batchConvertToStremioMeta(result.anime, type);
+    const batch = mal.batchConvertToStremioMeta(result.anime, type, artworkOptions);
     metas.push(...batch);
     pagesChecked++;
 
@@ -60,6 +67,18 @@ export async function handleMalCatalogRequest(
       return;
     }
 
+    const artworkOptions: ArtworkOptions | null = createArtworkOptions(
+      userConfig.preferences || null,
+      (encrypted) => {
+        try {
+          return decrypt(encrypted);
+        } catch {
+          return null;
+        }
+      },
+      'anime'
+    );
+
     // Search catalog
     if (
       catalogId === 'mal-search-movie' ||
@@ -73,19 +92,21 @@ export async function handleMalCatalogRequest(
       const metas = await fetchWithBackfill(
         (p) => mal.searchAnime(searchQuery, type, p),
         type,
-        page
+        page,
+        artworkOptions
       );
+      const resolvedMetas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
       res.set(
         'Cache-Control',
         `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
       );
       log.debug('MAL search results', {
-        count: metas.length,
+        count: resolvedMetas.length,
         query: searchQuery,
         durationMs: Date.now() - startTime,
       });
       res.json({
-        metas,
+        metas: resolvedMetas,
         cacheMaxAge: CACHE_TTLS.CATALOG_HEADER,
         staleRevalidate: CACHE_TTLS.CATALOG_STALE_REVALIDATE,
       });
@@ -151,12 +172,20 @@ export async function handleMalCatalogRequest(
       metas = await fetchWithBackfill(
         (p) => mal.discover(effectiveFilters, type, p),
         type,
-        randomPage
+        randomPage,
+        artworkOptions
       );
       metas = shuffleArray(metas);
     } else {
-      metas = await fetchWithBackfill((p) => mal.discover(effectiveFilters, type, p), type, page);
+      metas = await fetchWithBackfill(
+        (p) => mal.discover(effectiveFilters, type, p),
+        type,
+        page,
+        artworkOptions
+      );
     }
+
+    metas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
 
     const response = { metas };
 

@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { resolveOptionLabel, resolveSortLabel } from '../utils/filterLabels';
 
 const IMDB_ONLY_KEYS = [
   'imdbListId',
@@ -103,12 +104,14 @@ export const TMDB_SOURCE = {
 
     if (filters.sortBy && filters.sortBy !== 'popularity.desc') {
       const sortOpts = sortOptions[contentType] || sortOptions.movie || [];
-      const match = sortOpts.find((s) => s.value === filters.sortBy);
-      active.push({
-        key: 'sortBy',
-        label: `Sort: ${match?.label || filters.sortBy}`,
-        section: 'filters',
-      });
+      const hasKnownSort = sortOpts.some((option) => option?.value === String(filters.sortBy));
+      if (sortOpts.length === 0 || hasKnownSort) {
+        active.push({
+          key: 'sortBy',
+          label: `Sort: ${resolveSortLabel(sortOpts, filters.sortBy)}`,
+          section: 'filters',
+        });
+      }
     }
 
     if (filters.genres?.length > 0) {
@@ -278,19 +281,17 @@ export const TMDB_SOURCE = {
     }
 
     if (!isMovieType && filters.tvStatus) {
-      const match = tvStatuses.find((s) => s.value === filters.tvStatus);
       active.push({
         key: 'tvStatus',
-        label: `Status: ${match?.label || filters.tvStatus}`,
+        label: `Status: ${resolveOptionLabel(tvStatuses, filters.tvStatus)}`,
         section: 'release',
       });
     }
 
     if (!isMovieType && filters.tvType) {
-      const match = tvTypes.find((t) => t.value === filters.tvType);
       active.push({
         key: 'tvType',
-        label: `Type: ${match?.label || filters.tvType}`,
+        label: `Type: ${resolveOptionLabel(tvTypes, filters.tvType)}`,
         section: 'release',
       });
     }

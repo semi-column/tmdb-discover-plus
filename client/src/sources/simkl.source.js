@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { resolveOptionLabel } from '../utils/filterLabels';
 
 const NON_SIMKL_KEYS = [
   'sortBy',
@@ -128,19 +129,17 @@ export const SIMKL_SOURCE = {
     const active = [];
 
     if (filters.simklListType && filters.simklListType !== 'trending') {
-      const match = simklListTypes.find((t) => t.value === filters.simklListType);
       active.push({
         key: 'simklListType',
-        label: `List: ${match?.label || filters.simklListType}`,
+        label: `List: ${resolveOptionLabel(simklListTypes, filters.simklListType)}`,
         section: 'filters',
       });
     }
 
     if (filters.simklTrendingPeriod && filters.simklTrendingPeriod !== 'week') {
-      const match = simklTrendingPeriods.find((p) => p.value === filters.simklTrendingPeriod);
       active.push({
         key: 'simklTrendingPeriod',
-        label: `Period: ${match?.label || filters.simklTrendingPeriod}`,
+        label: `Period: ${resolveOptionLabel(simklTrendingPeriods, filters.simklTrendingPeriod)}`,
         section: 'filters',
       });
     }
@@ -151,20 +150,18 @@ export const SIMKL_SOURCE = {
 
     if (filters.simklType && filters.simklType !== 'all') {
       if (catalogType !== 'movie' || filters.simklType === 'movies') {
-        const match = simklAnimeTypes.find((t) => t.value === filters.simklType);
         active.push({
           key: 'simklType',
-          label: `Type: ${match?.label || filters.simklType}`,
+          label: `Type: ${resolveOptionLabel(simklAnimeTypes, filters.simklType)}`,
           section: 'filters',
         });
       }
     }
 
     if (filters.simklBestFilter) {
-      const match = simklBestFilters.find((f) => f.value === filters.simklBestFilter);
       active.push({
         key: 'simklBestFilter',
-        label: `Best: ${match?.label || filters.simklBestFilter}`,
+        label: `Best: ${resolveOptionLabel(simklBestFilters, filters.simklBestFilter)}`,
         section: 'filters',
       });
     }

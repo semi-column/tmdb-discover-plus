@@ -3,9 +3,12 @@ import {
   generatePosterUrl,
   generateBackdropUrl,
   isValidPosterConfig,
-  createPosterOptions,
+  createArtworkOptions,
   checkPosterExists,
-} from '../../src/services/posterService.ts';
+  applyArtworkOverridesToMetaPreviews,
+  requiresAsyncArtworkResolution,
+  validateTvdbApiKeyAuthorization,
+} from '../../src/services/artworkService.ts';
 
 describe('generatePosterUrl', () => {
   it('returns RPDB URL using imdbId when available', () => {
@@ -105,6 +108,10 @@ describe('isValidPosterConfig', () => {
     expect(isValidPosterConfig({ apiKey: 'key', service: 'rpdb' })).toBe(true);
   });
 
+  it('returns true for fanart config with apiKey', () => {
+    expect(isValidPosterConfig({ apiKey: 'fanartkey123456', service: 'fanart' })).toBe(true);
+  });
+
   it('returns false for null', () => {
     expect(isValidPosterConfig(null)).toBe(false);
   });
@@ -117,6 +124,10 @@ describe('isValidPosterConfig', () => {
     expect(isValidPosterConfig({ apiKey: '', service: 'rpdb' })).toBe(false);
   });
 
+  it('returns false for fanart config without apiKey', () => {
+    expect(isValidPosterConfig({ apiKey: '', service: 'fanart' })).toBe(false);
+  });
+
   it('returns true for custom URL service with pattern and no apiKey', () => {
     expect(
       isValidPosterConfig({
@@ -127,53 +138,216 @@ describe('isValidPosterConfig', () => {
   });
 });
 
-describe('createPosterOptions', () => {
+describe('createArtworkOptions', () => {
   const mockDecrypt = (s: string) => (s === 'encrypted_key' ? 'decrypted_key' : null);
 
   it('returns PosterOptions when valid', () => {
-    const result = createPosterOptions(
-      { posterService: 'rpdb', posterApiKeyEncrypted: 'encrypted_key' },
+    const result = createArtworkOptions(
+      { artwork: { poster: { provider: 'rpdb', apiKeyEncrypted: 'encrypted_key' } } },
       mockDecrypt
-    );
+    ).poster;
     expect(result).toEqual({ apiKey: 'decrypted_key', service: 'rpdb' });
   });
 
   it('returns null for no preferences', () => {
-    expect(createPosterOptions(null, mockDecrypt)).toBeNull();
+    expect(createArtworkOptions(null, mockDecrypt).poster).toBeNull();
   });
 
   it('returns null for service=none', () => {
     expect(
-      createPosterOptions(
-        { posterService: 'none', posterApiKeyEncrypted: 'encrypted_key' },
+      createArtworkOptions(
+        { artwork: { poster: { provider: 'none', apiKeyEncrypted: 'encrypted_key' } } },
         mockDecrypt
-      )
+      ).poster
     ).toBeNull();
   });
 
   it('returns null when decrypt fails', () => {
     expect(
-      createPosterOptions({ posterService: 'rpdb', posterApiKeyEncrypted: 'bad_key' }, mockDecrypt)
+      createArtworkOptions(
+        { artwork: { poster: { provider: 'rpdb', apiKeyEncrypted: 'bad_key' } } },
+        mockDecrypt
+      ).poster
+    ).toEqual({ apiKey: 't0-free-rpdb', service: 'rpdb' });
+  });
+
+  it('uses free RPDB key when no encrypted key is provided', () => {
+    expect(
+      createArtworkOptions({ artwork: { poster: { provider: 'rpdb' } } }, mockDecrypt).poster
+    ).toEqual({
+      apiKey: 't0-free-rpdb',
+      service: 'rpdb',
+    });
+  });
+
+  it('does not auto-fill TOP Posters key when no encrypted key is provided', () => {
+    expect(
+      createArtworkOptions({ artwork: { poster: { provider: 'topPosters' } } }, mockDecrypt).poster
     ).toBeNull();
   });
 
-  it('returns null when no encrypted key', () => {
-    expect(createPosterOptions({ posterService: 'rpdb' }, mockDecrypt)).toBeNull();
-  });
-
   it('returns custom URL options without encrypted key', () => {
-    const result = createPosterOptions(
+    const result = createArtworkOptions(
       {
-        posterService: 'customUrl',
-        posterCustomUrlPattern: 'https://img.example.com/{rating_id}.jpg',
+        artwork: {
+          poster: {
+            provider: 'customUrl',
+            customUrlPattern: 'https://img.example.com/{rating_id}.jpg',
+          },
+        },
       },
       mockDecrypt
-    );
+    ).poster;
 
     expect(result).toEqual({
       service: 'customUrl',
       customUrlPattern: 'https://img.example.com/{rating_id}.jpg',
     });
+  });
+
+  it('returns fanart options when encrypted key is available', () => {
+    const result = createArtworkOptions(
+      { artwork: { poster: { provider: 'fanart', apiKeyEncrypted: 'encrypted_key' } } },
+      mockDecrypt
+    ).poster;
+
+    expect(result).toEqual({ apiKey: 'decrypted_key', service: 'fanart' });
+  });
+});
+
+describe('requiresAsyncArtworkResolution', () => {
+  it('returns true when poster provider is fanart', () => {
+    expect(
+      requiresAsyncArtworkResolution({
+        poster: { service: 'fanart', apiKey: 'fanartkey123456' },
+        backdrop: null,
+        logo: null,
+        landscape: null,
+        episode: null,
+      })
+    ).toBe(true);
+  });
+});
+
+describe('applyArtworkOverridesToMetaPreviews', () => {
+  it('applies RPDB preview poster overrides (sync providers)', async () => {
+    const metas = [
+      {
+        id: 'tt0137523',
+        imdbId: 'tt0137523',
+        type: 'movie',
+        name: 'Fight Club',
+        poster: 'https://images.metahub.space/poster/medium/tt0137523/img',
+        background: null,
+        fanart: null,
+        landscapePoster: null,
+      },
+    ];
+
+    const result = await applyArtworkOverridesToMetaPreviews(metas as any, {
+      poster: { service: 'rpdb', apiKey: 'preview-rpdb-key' },
+      backdrop: null,
+      logo: null,
+      landscape: null,
+      episode: null,
+    });
+
+    expect(result[0]?.poster).toBe(
+      'https://api.ratingposterdb.com/preview-rpdb-key/imdb/poster-default/tt0137523.jpg?fallback=true'
+    );
+  });
+
+  it('resolves IMDb preview poster via metahub in strict mode when imdbId is present', async () => {
+    const metas = [
+      {
+        id: 'tmdb:550',
+        tmdbId: 550,
+        imdbId: 'tt0137523',
+        imdb_id: 'tt0137523',
+        type: 'movie',
+        name: 'Fight Club',
+        poster: 'https://image.tmdb.org/t/p/w500/example.jpg',
+        background: null,
+        fanart: null,
+        landscapePoster: null,
+      },
+    ];
+
+    const result = await applyArtworkOverridesToMetaPreviews(
+      metas as any,
+      {
+        poster: { service: 'imdb' },
+        backdrop: null,
+        logo: null,
+        landscape: null,
+        episode: null,
+      },
+      { strictPoster: true }
+    );
+
+    expect(result[0]?.poster).toBe('https://images.metahub.space/poster/medium/tt0137523/img');
+  });
+
+  it('keeps native poster in strict mode when fanart lookup misses', async () => {
+    const metas = [
+      {
+        id: 'tmdb:550',
+        tmdbId: 550,
+        imdbId: 'tt0137523',
+        imdb_id: 'tt0137523',
+        type: 'movie',
+        name: 'Fight Club',
+        poster: 'https://image.tmdb.org/t/p/w500/native-poster.jpg',
+        background: null,
+        fanart: null,
+        landscapePoster: null,
+      },
+    ];
+
+    const result = await applyArtworkOverridesToMetaPreviews(
+      metas as any,
+      {
+        poster: { service: 'fanart', apiKey: 'fanartkey123456' },
+        backdrop: null,
+        logo: null,
+        landscape: null,
+        episode: null,
+      },
+      { strictPoster: true }
+    );
+
+    expect(result[0]?.poster).toBe('https://image.tmdb.org/t/p/w500/native-poster.jpg');
+  });
+
+  it('falls back to metahub in strict mode when fanart lookup misses and native poster is absent', async () => {
+    const metas = [
+      {
+        id: 'tmdb:550',
+        tmdbId: 550,
+        imdbId: 'tt0137523',
+        imdb_id: 'tt0137523',
+        type: 'movie',
+        name: 'Fight Club',
+        poster: null,
+        background: null,
+        fanart: null,
+        landscapePoster: null,
+      },
+    ];
+
+    const result = await applyArtworkOverridesToMetaPreviews(
+      metas as any,
+      {
+        poster: { service: 'fanart', apiKey: 'fanartkey123456' },
+        backdrop: null,
+        logo: null,
+        landscape: null,
+        episode: null,
+      },
+      { strictPoster: true }
+    );
+
+    expect(result[0]?.poster).toBe('https://images.metahub.space/poster/medium/tt0137523/img');
   });
 });
 
@@ -264,5 +438,66 @@ describe('checkPosterExists', () => {
     const result = await checkPosterExists('https://example.com/poster-blocked.jpg');
     expect(result).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('validateTvdbApiKeyAuthorization', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    const mod = await import('node-fetch');
+    fetchMock = mod.default as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockReset();
+  });
+
+  it('returns valid true when TVDB login succeeds with token', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { token: 'tvdb-token' } }),
+    });
+
+    const result = await validateTvdbApiKeyAuthorization('tvdb_valid_key_123456');
+    expect(result).toEqual({
+      valid: true,
+      invalidKey: false,
+      error: null,
+      statusCode: 200,
+    });
+  });
+
+  it('flags invalid key for 401/403 responses', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+    });
+
+    const result = await validateTvdbApiKeyAuthorization('tvdb_invalid_key_123456');
+    expect(result.valid).toBe(false);
+    expect(result.invalidKey).toBe(true);
+    expect(result.statusCode).toBe(401);
+  });
+
+  it('treats non-auth upstream errors as non-invalidKey failures', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+    });
+
+    const result = await validateTvdbApiKeyAuthorization('tvdb_maybe_valid_key_123456');
+    expect(result.valid).toBe(false);
+    expect(result.invalidKey).toBe(false);
+    expect(result.statusCode).toBe(500);
+  });
+
+  it('treats network failures as non-invalidKey failures', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('socket hang up'));
+
+    const result = await validateTvdbApiKeyAuthorization('tvdb_network_case_123456');
+    expect(result.valid).toBe(false);
+    expect(result.invalidKey).toBe(false);
+    expect(result.error).toContain('Failed to reach TVDB API');
   });
 });

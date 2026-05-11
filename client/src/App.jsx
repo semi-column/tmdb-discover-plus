@@ -9,7 +9,7 @@ import { ConfigDropdown } from './components/config/ConfigDropdown';
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useAppController } from './hooks/useAppController';
 import { api } from './services/api';
-import { Download, Settings, Loader, Coffee, Heart } from 'lucide-react';
+import { Expand, Shrink, Download, Settings, Loader, Coffee, Heart } from 'lucide-react';
 import { DonateModal } from './components/modals/DonateModal';
 import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
 import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
@@ -54,6 +54,7 @@ function App() {
 
   const [stats, setStats] = useState(null);
   const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   useEffect(() => {
     let stale = false;
@@ -127,7 +128,7 @@ function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${isFocusMode ? 'focus-mode' : ''}`}>
       <a href="#main-content" className="skip-to-content">
         Skip to content
       </a>
@@ -173,6 +174,15 @@ function App() {
               <CreditsBanner addonVariant={stats?.addonVariant ?? null} />
 
               <div className="actions-toolbar">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setIsFocusMode(!isFocusMode)}
+                  title={isFocusMode ? 'Exit focus mode' : 'Enter focus mode for more editor space'}
+                  aria-label="Toggle focus mode"
+                >
+                  {isFocusMode ? <Shrink size={18} /> : <Expand size={18} />}
+                </button>
+
                 {userConfigs.length > 0 && (
                   <ConfigDropdown
                     configs={userConfigs}

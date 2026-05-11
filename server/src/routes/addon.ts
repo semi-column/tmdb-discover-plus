@@ -1,12 +1,8 @@
 import { Router, type Request, type Response } from 'express';
-import {
-  getUserConfig,
-  getApiKeyFromConfig,
-  getPosterKeyFromConfig,
-} from '../services/configService.ts';
+import { getUserConfig, getApiKeyFromConfig } from '../services/configService.ts';
 import type {
   UserConfig,
-  PosterOptions,
+  ArtworkOptions,
   CatalogFilters,
   TmdbResult,
   TmdbDetails,
@@ -30,7 +26,7 @@ import { createLogger } from '../utils/logger.ts';
 import crypto from 'crypto';
 import {
   buildImdbEnrichmentCacheKey,
-  buildPosterIntegrationScope,
+  buildArtworkIntegrationScope,
 } from '../services/imdb/cacheKey.ts';
 import path from 'path';
 import fs from 'fs';
@@ -38,7 +34,6 @@ import { fileURLToPath } from 'url';
 import { etagMiddleware } from '../utils/etag.ts';
 import { CachedError } from '../services/cache/CacheWrapper.ts';
 import { getCache } from '../services/cache/index.ts';
-import { config as appConfig } from '../config.ts';
 import {
   isValidUserId,
   isValidContentType,
@@ -63,6 +58,14 @@ import { handleSimklCatalogRequest } from './handlers/simklHandler.ts';
 import { handleTraktCatalogRequest } from './handlers/traktHandler.ts';
 import { getEntryByPrefixedId } from '../services/animeIdMap/index.ts';
 import { resolveRequestedMetaId } from '../utils/metaIdResolution.ts';
+import { decrypt } from '../utils/encryption.ts';
+import {
+  createArtworkOptions,
+  resolveContentType,
+  applyArtworkOverrides,
+  applyArtworkOverridesToMetaPreviews,
+  requiresAsyncArtworkResolution,
+} from '../services/artworkService.ts';
 
 const log = createLogger('addon');
 
@@ -138,28 +141,22 @@ function pickPreferredMetaLanguage(config: UserConfig | null): string {
   return config?.preferences?.defaultLanguage || 'en';
 }
 
-function buildPosterOptions(userConfig: UserConfig): PosterOptions | null {
-  const preferences = userConfig.preferences || {};
-  const service = preferences.posterService;
-  if (!service || service === 'none') return null;
-
-  if (service === 'customUrl') {
-    const customUrlPattern = preferences.posterCustomUrlPattern?.trim();
-    if (!customUrlPattern) return null;
-    return {
-      service,
-      customUrlPattern,
-    };
-  }
-
-  const apiKey = getPosterKeyFromConfig(userConfig);
-  if (!apiKey) return null;
-
-  return {
-    apiKey,
-    service,
-    customUrlPattern: preferences.posterCustomUrlPattern,
-  };
+function buildArtworkOptions(
+  userConfig: UserConfig,
+  type?: ContentType,
+  source?: string
+): ArtworkOptions {
+  return createArtworkOptions(
+    userConfig.preferences || null,
+    (encrypted) => {
+      try {
+        return decrypt(encrypted);
+      } catch {
+        return null;
+      }
+    },
+    resolveContentType(type || 'movie', source)
+  );
 }
 
 function getPlaceholderUrls(baseUrl: string): {
@@ -394,14 +391,9 @@ async function handleImdbCatalogRequest(
     const apiKey = getApiKeyFromConfig(userConfig);
     if (!apiKey) return res.json({ metas: [] });
 
-    const posterOptions = buildPosterOptions(userConfig);
+    const artworkOptions = buildArtworkOptions(userConfig, type, 'imdb');
     const displayLanguage = userConfig.preferences?.defaultLanguage;
-    const posterService = posterOptions?.service || 'none';
-    const posterIntegrationScope = buildPosterIntegrationScope(
-      posterOptions?.service,
-      posterOptions?.apiKey,
-      posterOptions?.customUrlPattern
-    );
+    const artworkIntegrationScope = buildArtworkIntegrationScope(artworkOptions);
     const cache = getCache();
 
     const computeEnrichedMetas = async (pageTitles: ImdbTitle[]): Promise<StremioMetaPreview[]> => {
@@ -427,7 +419,7 @@ async function handleImdbCatalogRequest(
         logSwallowedError('addon:imdb-rating', err);
       }
 
-      return (
+      const mapped = (
         await Promise.all(
           pageTitles.map(async (title) => {
             const tmdbId = resolvedIds.get(title.id);
@@ -437,7 +429,7 @@ async function handleImdbCatalogRequest(
                 return tmdb.toStremioMetaPreview(
                   details,
                   type,
-                  posterOptions,
+                  artworkOptions,
                   displayLanguage || null,
                   ratingsMap
                 );
@@ -447,13 +439,15 @@ async function handleImdbCatalogRequest(
               return imdb.imdbToStremioMeta(
                 title,
                 type,
-                posterOptions
+                artworkOptions
               ) as StremioMetaPreview | null;
             }
             return null;
           })
         )
       ).filter((m): m is StremioMetaPreview => m !== null);
+
+      return applyArtworkOverridesToMetaPreviews(mapped, artworkOptions);
     };
 
     if (catalogId === 'imdb-search-movie' || catalogId === 'imdb-search-series') {
@@ -565,7 +559,7 @@ async function handleImdbCatalogRequest(
       filters,
       searchParams,
       skip,
-      posterIntegrationScope,
+      artworkIntegrationScope,
       extra.genre || ''
     );
 
@@ -638,7 +632,7 @@ async function handleImdbCatalogRequest(
         filters,
         searchParams,
         nextSkip,
-        posterIntegrationScope,
+        artworkIntegrationScope,
         extra.genre || ''
       );
       cache
@@ -719,7 +713,7 @@ async function handleCatalogRequest(
       return res.json({ metas: [] });
     }
 
-    const posterOptions = buildPosterOptions(config);
+    const artworkOptions = buildArtworkOptions(config, type, 'tmdb');
 
     let catalogConfig = config.catalogs.find((c) => {
       const id = buildCatalogId('tmdb', c);
@@ -879,7 +873,7 @@ async function handleCatalogRequest(
         }
       }
 
-      return (
+      const mapped = (
         await Promise.all(
           allItems.map(async (item) => {
             const details = detailsMap.get(item.id) as TmdbDetails | null;
@@ -887,13 +881,15 @@ async function handleCatalogRequest(
             return tmdb.toStremioMetaPreview(
               details,
               type,
-              posterOptions,
+              artworkOptions,
               displayLanguage || null,
               ratingsMap
             );
           })
         )
       ).filter((m): m is StremioMetaPreview => m !== null);
+
+      return applyArtworkOverridesToMetaPreviews(mapped, artworkOptions);
     };
 
     const metas = (
@@ -974,7 +970,7 @@ async function handleMetaRequest(
     const apiKey = getApiKeyFromConfig(config);
     if (!apiKey) return res.json({ meta: {} });
 
-    const posterOptions = buildPosterOptions(config);
+    const artworkOptions = buildArtworkOptions(config, type);
 
     const requestedId = String(id || '');
     const configuredLanguage = pickPreferredMetaLanguage(config);
@@ -990,19 +986,7 @@ async function handleMetaRequest(
     });
     const cache = getCache();
     const configVersion = config.updatedAt ? new Date(config.updatedAt).getTime() : 0;
-    const posterScopeSeed =
-      (posterOptions?.apiKey && `${posterOptions.service}:${posterOptions.apiKey}`) ||
-      (posterOptions?.customUrlPattern &&
-        `${posterOptions.service}:${posterOptions.customUrlPattern}`) ||
-      'none';
-    const posterHash =
-      posterScopeSeed !== 'none'
-        ? crypto
-            .createHmac('sha256', appConfig.encryption.key)
-            .update(posterScopeSeed)
-            .digest('hex')
-            .slice(0, 16)
-        : 'none';
+    const artworkScope = buildArtworkIntegrationScope(artworkOptions);
     const metaCacheKey = buildMetaCacheKey({
       userId,
       type,
@@ -1010,8 +994,7 @@ async function handleMetaRequest(
       language,
       baseUrl: resolvedBaseUrl,
       configVersion,
-      posterService: posterOptions?.service || 'none',
-      posterHash,
+      artworkScope,
     });
 
     const cacheEntry = await cache.getEntry(metaCacheKey);
@@ -1046,7 +1029,10 @@ async function handleMetaRequest(
       const hasLogos = (details?.images?.logos?.length ?? 0) > 0;
       const [episodesResult, allLogos] = await Promise.all([
         tmdbType === 'series'
-          ? tmdb.getSeriesEpisodes(apiKey, tmdbId, details as TmdbDetails, { language })
+          ? tmdb.getSeriesEpisodes(apiKey, tmdbId, details as TmdbDetails, {
+              language,
+              artworkOptions,
+            })
           : Promise.resolve(null),
         !hasLogos ? tmdb.getLogos(apiKey, tmdbId, tmdbType) : Promise.resolve(null),
       ]);
@@ -1086,16 +1072,49 @@ async function handleMetaRequest(
         userRegion = Array.isArray(userRegion) ? String(userRegion[0]) : String(userRegion);
       }
 
-      return tmdb.toStremioFullMeta(
+      const fullMeta = await tmdb.toStremioFullMeta(
         details,
         stremioType,
         imdbId,
         requestedId,
-        posterOptions,
+        artworkOptions,
         episodesResult,
         language,
         { manifestUrl, genreCatalogId, allLogos, userRegion }
       );
+
+      if (!requiresAsyncArtworkResolution(artworkOptions)) {
+        return fullMeta;
+      }
+
+      const resolvedArtwork = await applyArtworkOverrides(
+        {
+          tmdbId,
+          imdbId,
+          type: stremioType,
+          language,
+        },
+        {
+          poster: fullMeta.poster,
+          backdrop: fullMeta.background,
+          logo: fullMeta.logo || null,
+          landscape: fullMeta.landscapePoster || fullMeta.fanart || fullMeta.background,
+        },
+        artworkOptions,
+        { checkExistence: false }
+      );
+
+      const backdrop = resolvedArtwork.backdrop;
+      const landscape = resolvedArtwork.landscape || backdrop;
+
+      return {
+        ...fullMeta,
+        poster: resolvedArtwork.poster,
+        background: backdrop,
+        fanart: landscape,
+        landscapePoster: landscape,
+        logo: resolvedArtwork.logo || undefined,
+      };
     };
 
     let meta = null as Partial<StremioMeta> | null;

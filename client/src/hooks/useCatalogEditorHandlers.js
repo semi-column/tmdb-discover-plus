@@ -3,6 +3,90 @@ import { DEFAULT_CATALOG } from './catalogEditor.constants';
 import { getSource } from '../sources/index';
 import { promotePresetToDiscover } from './useCatalogManager';
 
+function normalizeArtworkContentType(type) {
+  return type === 'series' || type === 'anime' ? type : 'movie';
+}
+
+function extractCustomUrlPattern(posterConfig) {
+  if (typeof posterConfig?.customUrlPattern !== 'string') return null;
+  const trimmed = posterConfig.customUrlPattern.trim();
+  return trimmed || null;
+}
+
+function getPreviewCustomPosterPattern(preferences, contentType) {
+  const normalizedType = normalizeArtworkContentType(contentType);
+
+  const artwork = preferences?.artwork;
+  if (artwork && typeof artwork === 'object') {
+    const posterFromContentType = artwork?.[normalizedType]?.poster;
+    const directPattern = extractCustomUrlPattern(posterFromContentType);
+    if (directPattern) return directPattern;
+
+    for (const ct of ['movie', 'series', 'anime']) {
+      const candidatePattern = extractCustomUrlPattern(artwork?.[ct]?.poster);
+      if (candidatePattern) return candidatePattern;
+    }
+
+    const legacyPoster = artwork?.poster;
+    const legacyPattern = extractCustomUrlPattern(legacyPoster);
+    if (legacyPattern) return legacyPattern;
+  }
+
+  if (typeof preferences?.posterCustomUrlPattern === 'string') {
+    const fallbackPattern = preferences.posterCustomUrlPattern.trim();
+    if (fallbackPattern) return fallbackPattern;
+  }
+
+  return null;
+}
+
+function getPreviewArtworkLanguagePreferences(preferences) {
+  const artwork = preferences?.artwork;
+  if (!artwork || typeof artwork !== 'object') {
+    return {
+      englishArtOnly: false,
+      originalLangFallback: true,
+    };
+  }
+
+  return {
+    englishArtOnly: Boolean(artwork?.englishArtOnly),
+    originalLangFallback:
+      artwork?.originalLangFallback === undefined ? true : Boolean(artwork?.originalLangFallback),
+  };
+}
+
+const SUPPORTED_PREVIEW_POSTER_PROVIDERS = new Set([
+  'tmdb',
+  'imdb',
+  'tvdb',
+  'fanart',
+  'rpdb',
+  'topPosters',
+  'customUrl',
+]);
+
+function resolveGlobalPreviewPosterProvider(preferences, contentType) {
+  const normalizedType = normalizeArtworkContentType(contentType);
+
+  const providerFromArtwork =
+    preferences?.artwork?.[normalizedType]?.poster?.provider ||
+    preferences?.artwork?.poster?.provider ||
+    null;
+
+  const provider = providerFromArtwork || preferences?.posterService || null;
+
+  if (!provider || provider === 'none' || provider === 'default' || provider === 'metahub') {
+    return 'tmdb';
+  }
+
+  if (provider === 'customUrl') {
+    return getPreviewCustomPosterPattern(preferences, contentType) ? 'customUrl' : 'tmdb';
+  }
+
+  return SUPPORTED_PREVIEW_POSTER_PROVIDERS.has(provider) ? provider : 'tmdb';
+}
+
 function stripOppositeTypeFilters(filters, targetType, sourceId) {
   const source = getSource(sourceId ?? 'tmdb');
   const normalizedTargetType =
@@ -25,6 +109,39 @@ function pickTypeSpecificFilters(filters, type, sourceId) {
     if (filters[key] !== undefined) stash[key] = filters[key];
   }
   return stash;
+}
+
+function normalizeTmdbSortValueForType(sortBy, targetType, sortOptions) {
+  const effectiveType =
+    targetType === 'anime' ? 'series' : targetType === 'collection' ? 'movie' : targetType;
+  const typeSortOptions = sortOptions?.[effectiveType];
+
+  if (!Array.isArray(typeSortOptions) || typeSortOptions.length === 0) {
+    return sortBy;
+  }
+
+  if (sortBy == null) {
+    return undefined;
+  }
+
+  const rawSortBy = String(sortBy);
+  const validValues = new Set(typeSortOptions.map((option) => option?.value).filter(Boolean));
+  if (validValues.has(rawSortBy)) {
+    return rawSortBy;
+  }
+
+  const mappedSortBy =
+    effectiveType === 'series' && /^release_date\.(asc|desc)$/i.test(rawSortBy)
+      ? rawSortBy.replace(/^release_date\./i, 'first_air_date.')
+      : effectiveType === 'movie' && /^first_air_date\.(asc|desc)$/i.test(rawSortBy)
+        ? rawSortBy.replace(/^first_air_date\./i, 'release_date.')
+        : null;
+
+  if (mappedSortBy && validValues.has(mappedSortBy)) {
+    return mappedSortBy;
+  }
+
+  return undefined;
 }
 
 export function useCatalogEditorHandlers({
@@ -50,6 +167,8 @@ export function useCatalogEditorHandlers({
   selectedImdbPeople,
   selectedImdbCompanies,
   selectedImdbExcludeCompanies,
+  previewPosterProvider,
+  safeSortOptions,
   selectedKeywords,
   excludeKeywords,
   excludeCompanies,
@@ -137,6 +256,16 @@ export function useCatalogEditorHandlers({
           ...strippedFilters,
           ...previousStash,
         };
+        const sourceId = prev.source || 'tmdb';
+        const sourceDescriptor = getSource(sourceId);
+        const defaultSortBy = sourceDescriptor.defaultFilters?.sortBy;
+        const requestedSortBy =
+          nextTypeFilters.sortBy !== undefined ? nextTypeFilters.sortBy : defaultSortBy;
+        const normalizedSortBy =
+          sourceId === 'tmdb'
+            ? (normalizeTmdbSortValueForType(requestedSortBy, type, safeSortOptions) ??
+              defaultSortBy)
+            : requestedSortBy;
         const collectionModeListType =
           nextTypeFilters.listType === 'studio' ? 'studio' : 'collection';
         const collectionModeSortBy =
@@ -166,11 +295,7 @@ export function useCatalogEditorHandlers({
             collectionName: isCollectionType ? nextTypeFilters.collectionName : undefined,
             studioId: isCollectionType ? nextTypeFilters.studioId : undefined,
             studioName: isCollectionType ? nextTypeFilters.studioName : undefined,
-            sortBy: isCollectionType
-              ? collectionModeSortBy
-              : nextTypeFilters.sortBy !== undefined
-                ? nextTypeFilters.sortBy
-                : getSource(prev.source || 'tmdb').defaultFilters?.sortBy,
+            sortBy: isCollectionType ? collectionModeSortBy : normalizedSortBy,
             awardsWon,
             awardsNominated,
             rankedList,
@@ -189,7 +314,7 @@ export function useCatalogEditorHandlers({
       });
       if (catalog?._id && result) onUpdate(catalog._id, result);
     },
-    [catalog?._id, onUpdate, setLocalCatalog]
+    [catalog?._id, onUpdate, safeSortOptions, setLocalCatalog]
   );
 
   const handleSourceChange = useCallback(
@@ -256,6 +381,23 @@ export function useCatalogEditorHandlers({
     setPreviewLoading(true);
     setPreviewError(null);
     try {
+      const globalPreviewPosterProvider = resolveGlobalPreviewPosterProvider(
+        preferences,
+        localCatalog.type
+      );
+      const selectedPreviewPosterProvider =
+        previewPosterProvider && previewPosterProvider !== 'default'
+          ? previewPosterProvider
+          : globalPreviewPosterProvider;
+      const selectedPreviewPosterApiKey = selectedPreviewPosterProvider
+        ? preferences?.apiKeys?.[selectedPreviewPosterProvider] || null
+        : null;
+      const selectedPreviewPosterCustomUrlPattern =
+        selectedPreviewPosterProvider === 'customUrl'
+          ? getPreviewCustomPosterPattern(preferences, localCatalog.type)
+          : null;
+      const previewArtworkLanguagePreferences = getPreviewArtworkLanguagePreferences(preferences);
+
       let data;
       if (localCatalog.source === 'imdb' && onPreviewImdb) {
         const imdbFilters = {
@@ -264,17 +406,53 @@ export function useCatalogEditorHandlers({
           companies: selectedImdbCompanies.map((c) => c.id),
           excludeCompanies: selectedImdbExcludeCompanies.map((c) => c.id),
         };
-        data = await onPreviewImdb(localCatalog.type || 'movie', imdbFilters);
+        data = await onPreviewImdb(
+          localCatalog.type || 'movie',
+          imdbFilters,
+          selectedPreviewPosterProvider,
+          selectedPreviewPosterApiKey,
+          selectedPreviewPosterCustomUrlPattern
+        );
       } else if (localCatalog.source === 'anilist' && onPreviewAnilist) {
-        data = await onPreviewAnilist(localCatalog.type || 'movie', localCatalog.filters || {});
+        data = await onPreviewAnilist(
+          localCatalog.type || 'movie',
+          localCatalog.filters || {},
+          selectedPreviewPosterProvider,
+          selectedPreviewPosterApiKey,
+          selectedPreviewPosterCustomUrlPattern
+        );
       } else if (localCatalog.source === 'mal' && onPreviewMal) {
-        data = await onPreviewMal(localCatalog.type || 'movie', localCatalog.filters || {});
+        data = await onPreviewMal(
+          localCatalog.type || 'movie',
+          localCatalog.filters || {},
+          selectedPreviewPosterProvider,
+          selectedPreviewPosterApiKey,
+          selectedPreviewPosterCustomUrlPattern
+        );
       } else if (localCatalog.source === 'kitsu' && onPreviewKitsu) {
-        data = await onPreviewKitsu(localCatalog.type || 'movie', localCatalog.filters || {});
+        data = await onPreviewKitsu(
+          localCatalog.type || 'movie',
+          localCatalog.filters || {},
+          selectedPreviewPosterProvider,
+          selectedPreviewPosterApiKey,
+          selectedPreviewPosterCustomUrlPattern
+        );
       } else if (localCatalog.source === 'simkl' && onPreviewSimkl) {
-        data = await onPreviewSimkl(localCatalog.type || 'movie', localCatalog.filters || {});
+        data = await onPreviewSimkl(
+          localCatalog.type || 'movie',
+          localCatalog.filters || {},
+          selectedPreviewPosterProvider,
+          selectedPreviewPosterApiKey,
+          selectedPreviewPosterCustomUrlPattern
+        );
       } else if (localCatalog.source === 'trakt' && onPreviewTrakt) {
-        data = await onPreviewTrakt(localCatalog.type || 'movie', localCatalog.filters || {});
+        data = await onPreviewTrakt(
+          localCatalog.type || 'movie',
+          localCatalog.filters || {},
+          selectedPreviewPosterProvider,
+          selectedPreviewPosterApiKey,
+          selectedPreviewPosterCustomUrlPattern
+        );
       } else {
         const filters = {
           ...localCatalog.filters,
@@ -285,7 +463,16 @@ export function useCatalogEditorHandlers({
           excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
           excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
         };
-        data = await onPreview(localCatalog.type || 'movie', filters);
+        data = await onPreview(
+          localCatalog.type || 'movie',
+          filters,
+          1,
+          selectedPreviewPosterProvider,
+          selectedPreviewPosterApiKey,
+          selectedPreviewPosterCustomUrlPattern,
+          previewArtworkLanguagePreferences.englishArtOnly,
+          previewArtworkLanguagePreferences.originalLangFallback
+        );
       }
       setPreviewData(data);
       return true;
@@ -304,7 +491,8 @@ export function useCatalogEditorHandlers({
     onPreviewKitsu,
     onPreviewSimkl,
     onPreviewTrakt,
-    preferences?.defaultLanguage,
+    previewPosterProvider,
+    preferences,
     selectedPeople,
     selectedCompanies,
     selectedImdbPeople,

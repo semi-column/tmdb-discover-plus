@@ -1,4 +1,5 @@
-import { generatePosterUrl, isValidPosterConfig } from '../posterService.ts';
+import { applyArtworkOverridesSync } from '../artworkService.ts';
+import type { ArtworkContext, NativeArtworkUrls } from '../artworkService.ts';
 import { metahubUrl, buildStremioSearchUrl, DISPLAY } from '../../constants.ts';
 import { formatRuntime, generateSlug } from '../common/stremioHelpers.ts';
 
@@ -29,25 +30,30 @@ function buildReleaseInfo(item: ImdbTitle): string {
 export function imdbToStremioMeta(
   item: ImdbTitle,
   type: ContentType,
-  posterOptions: ImdbPosterOptions | null = null
+  artworkOptions: ImdbPosterOptions | null = null
 ): Record<string, unknown> | null {
   if (!item || !item.id) return null;
 
   const stremioType = type || mapImdbTypeToContentType(item.type);
   const year = buildYear(item);
 
-  let poster = item.primaryImage?.url || metahubUrl('poster', item.id);
-  const background = item.posterImages?.[0]?.url || metahubUrl('background', item.id);
+  const nativePoster = item.primaryImage?.url || null;
+  const nativeBackground = item.posterImages?.[0]?.url || null;
 
-  if (posterOptions && isValidPosterConfig(posterOptions)) {
-    const enhancedPoster = generatePosterUrl({
-      ...posterOptions,
-      tmdbId: '',
-      type: stremioType,
-      imdbId: item.id,
-    });
-    if (enhancedPoster) poster = enhancedPoster;
-  }
+  const artworkContext: ArtworkContext = {
+    imdbId: item.id,
+    type: stremioType,
+  };
+  const nativeUrls: NativeArtworkUrls = {
+    poster: nativePoster,
+    backdrop: nativeBackground,
+    logo: null,
+    landscape: nativeBackground,
+  };
+  const resolved = applyArtworkOverridesSync(artworkContext, nativeUrls, artworkOptions);
+  const poster = resolved.poster;
+  const background = resolved.backdrop;
+  const logo = resolved.logo;
 
   const imdbRating = item.averageRating ? String(item.averageRating) : undefined;
   const genres = item.genres || [];
@@ -98,9 +104,9 @@ export function imdbToStremioMeta(
     poster,
     posterShape: 'poster',
     background,
-    fanart: background,
-    landscapePoster: background,
-    logo: metahubUrl('logo', item.id),
+    fanart: resolved.landscape || background,
+    landscapePoster: resolved.landscape || background,
+    logo,
     description: item.description || '',
     year,
     releaseInfo: buildReleaseInfo(item),
@@ -121,9 +127,9 @@ export function imdbToStremioMeta(
 export function imdbToStremioFullMeta(
   item: ImdbTitle,
   type: ContentType,
-  posterOptions: ImdbPosterOptions | null = null
+  artworkOptions: ImdbPosterOptions | null = null
 ): Record<string, unknown> | null {
-  const base = imdbToStremioMeta(item, type, posterOptions);
+  const base = imdbToStremioMeta(item, type, artworkOptions);
   if (!base) return null;
 
   const links: Array<{ name: string; category: string; url: string }> = [];
@@ -209,15 +215,15 @@ export function imdbToStremioFullMeta(
 export function imdbRankingToStremioMeta(
   entry: ImdbRankingEntry,
   type: ContentType,
-  posterOptions: ImdbPosterOptions | null = null
+  artworkOptions: ImdbPosterOptions | null = null
 ): Record<string, unknown> | null {
-  return imdbToStremioMeta(entry as ImdbTitle, type, posterOptions);
+  return imdbToStremioMeta(entry as ImdbTitle, type, artworkOptions);
 }
 
 export function imdbListItemToStremioMeta(
   item: ImdbListItem,
   type: ContentType,
-  posterOptions: ImdbPosterOptions | null = null
+  artworkOptions: ImdbPosterOptions | null = null
 ): Record<string, unknown> | null {
-  return imdbToStremioMeta(item as ImdbTitle, type, posterOptions);
+  return imdbToStremioMeta(item as ImdbTitle, type, artworkOptions);
 }

@@ -1,4 +1,4 @@
-import type { ContentType, PosterOptions } from '../../types/index.ts';
+import type { ArtworkOptions, ContentType } from '../../types/index.ts';
 
 export interface ImdbImage {
   id?: string;
@@ -70,6 +70,12 @@ export interface ImdbTitle {
   directors: ImdbPerson[];
   writers: ImdbPerson[];
   cast: ImdbCastMember[];
+}
+
+export interface ImdbPoster {
+  id: string;
+  primaryImage: ImdbImage | null;
+  posterImages?: ImdbImage[];
 }
 
 export interface ImdbPageInfo {
@@ -456,7 +462,7 @@ export interface ImdbCatalogFilters {
   withData?: ImdbWithData[];
 }
 
-export type ImdbPosterOptions = PosterOptions;
+export type ImdbPosterOptions = ArtworkOptions;
 
 export const IMDB_PRESET_CATALOGS = {
   movie: [

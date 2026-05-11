@@ -254,11 +254,19 @@
   /* Target toolbar directly */
   .actions-toolbar {
     display: grid !important;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: auto 1fr;
     gap: 12px;
     width: 100%;
     margin-top: 16px;
     margin-left: 0 !important; /* Override auto margins */
+  }
+
+  .actions-toolbar > button[aria-label='Toggle focus mode'] {
+    width: auto;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   /* Main container adjustment to allow wrapping */
@@ -268,11 +276,11 @@
     align-items: flex-start !important;
   }
 
-  /* Config Dropdown -> Row 1, Col 1 */
+  /* Config Dropdown -> Row 1, Col 2 */
   .actions-toolbar > .config-dropdown {
     width: 100%;
     margin: 0;
-    grid-column: 1 / -1;
+    grid-column: 2;
   }
 
   /* Save Wrapper -> Full Width Menu */
@@ -531,8 +539,18 @@
 }
 
 @media (max-width: 767px) {
+  .artwork-segmented {
+    flex-wrap: wrap;
+    height: auto;
+  }
+  .artwork-segmented .segmented-btn {
+    flex: 1 1 30%;
+  }
+
   .mobile-preview-btn-container {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     padding: 24px 0 0;
     border-top: 1px solid var(--border-color);
     margin-top: auto;
@@ -550,6 +568,11 @@
   /* Hide header preview button on mobile */
   .editor-header .editor-actions {
     display: none;
+  }
+
+  .mobile-preview-provider {
+    width: 100%;
+    margin-bottom: 8px;
   }
 }
 

@@ -5,7 +5,7 @@ export {
   getInFlightCount,
 } from './client.ts';
 export { advancedSearch, getTopRanking, getPopular, getList } from './discover.ts';
-export { getTitle, getEpisodesBySeason } from './detail.ts';
+export { getTitle, getPoster, getEpisodesBySeason } from './detail.ts';
 export { search, getSuggestions, basicSearch } from './search.ts';
 export {
   getGenres,
@@ -36,6 +36,7 @@ export {
   IMDB_WITH_DATA_OPTIONS,
 } from './types.ts';
 export type {
+  ImdbPoster,
   ImdbTitle,
   ImdbSearchResult,
   ImdbRankingResult,

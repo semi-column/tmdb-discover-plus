@@ -2,6 +2,12 @@ import { useCallback, useMemo } from 'react';
 import { DATE_PRESETS } from '../constants/datePresets';
 import { getSource } from '../sources/index';
 import {
+  humanizeFilterValue,
+  humanizeSortValue,
+  resolveOptionLabel,
+  resolveSortLabel,
+} from '../utils/filterLabels';
+import {
   formatTraktCalendarWindowLabel,
   normalizeTraktListType,
   supportsTraktCalendarSettings,
@@ -142,16 +148,12 @@ export function useActiveFilters({
         : 'popularity.desc';
     const anilistSortDefault = 'TRENDING_DESC';
 
-    const humanize = (value) => {
-      if (typeof value !== 'string') return value;
-      return value
-        .toLowerCase()
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (char) => char.toUpperCase());
-    };
-
     const getOptionLabel = (options, value, valueKey = 'value', labelKey = 'label') =>
-      options.find((item) => item?.[valueKey] === value)?.[labelKey] || humanize(value);
+      resolveOptionLabel(options, value, {
+        valueKey,
+        labelKey,
+        fallbackFormatter: humanizeFilterValue,
+      });
 
     const getLabelSummary = (options, values, valueKey = 'value', labelKey = 'label') => {
       const labels = values.map((value) => getOptionLabel(options, value, valueKey, labelKey));
@@ -168,31 +170,34 @@ export function useActiveFilters({
     if (isImdb) {
       // For IMDB: only show sort chip when it differs from the IMDB default
       if (filters.sortBy && filters.sortBy !== imdbSortDefault) {
-        const match = imdbSortOptions.find((s) => s.value === filters.sortBy);
         active.push({
           key: 'sortBy',
-          label: `Sort: ${match?.label || filters.sortBy}`,
+          label: `Sort: ${resolveSortLabel(imdbSortOptions, filters.sortBy)}`,
           section: 'filters',
         });
       }
     } else if (isAnilist) {
       if (filters.sortBy && filters.sortBy !== anilistSortDefault) {
-        const match = anilistSortOptions.find((s) => s.value === filters.sortBy);
         active.push({
           key: 'sortBy',
-          label: `Sort: ${match?.label || filters.sortBy}`,
+          label: `Sort: ${resolveSortLabel(anilistSortOptions, filters.sortBy)}`,
           section: 'filters',
         });
       }
     } else if (isTmdb && filters.sortBy && String(filters.sortBy) !== tmdbSortDefault) {
       // TMDB / fallback sorting chip
       const sortOpts = sortOptions[effectiveTmdbType] || sortOptions.movie || [];
-      const match = sortOpts.find((s) => s.value === filters.sortBy);
-      active.push({
-        key: 'sortBy',
-        label: `Sort: ${match?.label || filters.sortBy}`,
-        section: 'filters',
-      });
+      const hasKnownSort = sortOpts.some((option) => option?.value === String(filters.sortBy));
+
+      // If we already have typed sort metadata, avoid showing stale values that are invalid for
+      // the current content type.
+      if (sortOpts.length === 0 || hasKnownSort) {
+        active.push({
+          key: 'sortBy',
+          label: `Sort: ${resolveSortLabel(sortOpts, filters.sortBy)}`,
+          section: 'filters',
+        });
+      }
     }
 
     if (filters.genres?.length > 0) {
@@ -398,19 +403,17 @@ export function useActiveFilters({
     }
 
     if (!isMovieType && filters.tvStatus) {
-      const statusMatch = tvStatuses.find((s) => s.value === filters.tvStatus);
       active.push({
         key: 'tvStatus',
-        label: `Status: ${statusMatch?.label || filters.tvStatus}`,
+        label: `Status: ${resolveOptionLabel(tvStatuses, filters.tvStatus)}`,
         section: 'release',
       });
     }
 
     if (!isMovieType && filters.tvType) {
-      const typeMatch = tvTypes.find((t) => t.value === filters.tvType);
       active.push({
         key: 'tvType',
-        label: `Type: ${typeMatch?.label || filters.tvType}`,
+        label: `Type: ${resolveOptionLabel(tvTypes, filters.tvType)}`,
         section: 'release',
       });
     }
@@ -848,7 +851,7 @@ export function useActiveFilters({
       ) {
         active.push({
           key: 'kitsuSort',
-          label: `Sort: ${KITSU_SORT_LABELS[filters.kitsuSort] || filters.kitsuSort}`,
+          label: `Sort: ${KITSU_SORT_LABELS[filters.kitsuSort] || humanizeSortValue(filters.kitsuSort)}`,
           section: 'filters',
         });
       }
@@ -990,7 +993,7 @@ export function useActiveFilters({
       ) {
         active.push({
           key: 'traktPeriod',
-          label: `Period: ${humanize(filters.traktPeriod)}`,
+          label: `Period: ${humanizeFilterValue(filters.traktPeriod)}`,
           section: 'filters',
         });
       }

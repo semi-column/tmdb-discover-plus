@@ -1,5 +1,5 @@
 import { AlertTriangle, Eye, Film, Loader, Sparkles, Tv, X } from 'lucide-react';
-import { memo, Suspense, useState } from 'react';
+import { memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { ActiveFiltersBar } from './catalog/ActiveFiltersBar';
 import { CatalogPreview } from './catalog/CatalogPreview';
 
@@ -7,6 +7,7 @@ import { useCatalogEditor } from '../../hooks/useCatalogEditor';
 import { useCatalogEditorHandlers } from '../../hooks/useCatalogEditorHandlers';
 import { getSource } from '../../sources/index';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { SearchableSelect } from '../forms/SearchableSelect';
 
 const SOURCE_ATTRIBUTION = {
   tmdb: { label: 'TMDB', url: 'https://www.themoviedb.org/' },
@@ -18,6 +19,153 @@ const SOURCE_ATTRIBUTION = {
   trakt: { label: 'Trakt', url: 'https://trakt.tv/' },
 };
 
+const PREVIEW_POSTER_PROVIDER_OVERRIDE_OPTIONS = [
+  { id: 'tmdb', label: 'TMDB' },
+  { id: 'imdb', label: 'IMDb' },
+  { id: 'rpdb', label: 'RPDB' },
+  { id: 'topPosters', label: 'Top Posters' },
+];
+
+const PREVIEW_POSTER_PROVIDER_OPTION_TVDB = {
+  id: 'tvdb',
+  label: 'TVDB',
+};
+
+const PREVIEW_POSTER_PROVIDER_OPTION_FANART = {
+  id: 'fanart',
+  label: 'Fanart.tv',
+};
+
+const PREVIEW_POSTER_PROVIDER_OPTION_CUSTOM_URL = {
+  id: 'customUrl',
+  label: 'Custom URL',
+};
+
+const PREVIEW_POSTER_PROVIDER_LABELS = {
+  tmdb: 'TMDB',
+  imdb: 'IMDb',
+  tvdb: 'TVDB',
+  fanart: 'Fanart.tv',
+  rpdb: 'RPDB',
+  topPosters: 'Top Posters',
+  customUrl: 'Custom URL',
+};
+
+const SUPPORTED_PREVIEW_POSTER_PROVIDERS = new Set([
+  'tmdb',
+  'imdb',
+  'tvdb',
+  'fanart',
+  'rpdb',
+  'topPosters',
+  'customUrl',
+]);
+
+function getPreviewPosterProviderHint(provider, globalProvider) {
+  if (!provider || provider === 'default') {
+    const globalLabel =
+      PREVIEW_POSTER_PROVIDER_LABELS[globalProvider] || PREVIEW_POSTER_PROVIDER_LABELS.tmdb;
+    return `Uses global poster source (${globalLabel}).`;
+  }
+
+  if (provider === 'customUrl') {
+    return 'Uses your configured Custom URL pattern for preview posters.';
+  }
+
+  const forcedLabel = PREVIEW_POSTER_PROVIDER_LABELS[provider] || provider;
+  return `Forces ${forcedLabel} posters in preview only.`;
+}
+
+function normalizeArtworkContentType(type) {
+  return type === 'series' || type === 'anime' ? type : 'movie';
+}
+
+function extractPosterArtworkConfig(preferences, contentType) {
+  const artwork = preferences?.artwork;
+  if (!artwork || typeof artwork !== 'object') return null;
+
+  const normalizedType = normalizeArtworkContentType(contentType);
+  if (artwork[normalizedType] && typeof artwork[normalizedType] === 'object') {
+    return artwork[normalizedType]?.poster || null;
+  }
+
+  if (artwork.poster && typeof artwork.poster === 'object') {
+    return artwork.poster;
+  }
+
+  return null;
+}
+
+function extractCustomUrlPattern(posterConfig) {
+  if (typeof posterConfig?.customUrlPattern !== 'string') return null;
+  const trimmed = posterConfig.customUrlPattern.trim();
+  return trimmed || null;
+}
+
+function hasProviderPreviewAccess(preferences, contentType, provider) {
+  if (preferences?.apiKeys?.[provider] || preferences?.apiKeysEncrypted?.[provider]) return true;
+
+  const directConfig = extractPosterArtworkConfig(preferences, contentType);
+  if (
+    directConfig?.provider === provider &&
+    (directConfig?.apiKey || directConfig?.apiKeyEncrypted)
+  ) {
+    return true;
+  }
+
+  return ['movie', 'series', 'anime'].some((ct) => {
+    const cfg = extractPosterArtworkConfig(preferences, ct);
+    return cfg?.provider === provider && (cfg?.apiKey || cfg?.apiKeyEncrypted);
+  });
+}
+
+function hasTvdbPreviewAccess(preferences, contentType) {
+  return hasProviderPreviewAccess(preferences, contentType, 'tvdb');
+}
+
+function hasFanartPreviewAccess(preferences, contentType) {
+  return hasProviderPreviewAccess(preferences, contentType, 'fanart');
+}
+
+function hasCustomUrlPreviewAccess(preferences, contentType) {
+  const preferredType = normalizeArtworkContentType(contentType);
+  const lookupOrder = [
+    preferredType,
+    ...['movie', 'series', 'anime'].filter((ct) => ct !== preferredType),
+  ];
+
+  const hasPatternInArtwork = lookupOrder.some((ct) => {
+    const cfg = extractPosterArtworkConfig(preferences, ct);
+    return Boolean(extractCustomUrlPattern(cfg));
+  });
+
+  if (hasPatternInArtwork) return true;
+
+  return Boolean(
+    typeof preferences?.posterCustomUrlPattern === 'string' &&
+    preferences.posterCustomUrlPattern.trim()
+  );
+}
+
+function resolveGlobalPreviewPosterProvider(preferences, contentType) {
+  const directConfig = extractPosterArtworkConfig(preferences, contentType);
+  const provider = directConfig?.provider;
+
+  if (!provider || provider === 'none' || provider === 'default') {
+    return 'tmdb';
+  }
+
+  if (provider === 'metahub') {
+    return 'tmdb';
+  }
+
+  if (provider === 'customUrl') {
+    return hasCustomUrlPreviewAccess(preferences, contentType) ? 'customUrl' : 'tmdb';
+  }
+
+  return SUPPORTED_PREVIEW_POSTER_PROVIDERS.has(provider) ? provider : 'tmdb';
+}
+
 export const CatalogEditor = memo(function CatalogEditor() {
   const isMobileSize = useIsMobile(1800);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -27,10 +175,13 @@ export const CatalogEditor = memo(function CatalogEditor() {
 
   const {
     catalog,
+    preferences,
     localCatalog,
     previewData,
     previewLoading,
     previewError,
+    previewPosterProvider,
+    setPreviewPosterProvider,
     tvNetworkOptions,
     expandedSections,
     safeGenres,
@@ -128,6 +279,48 @@ export const CatalogEditor = memo(function CatalogEditor() {
     clearAllFilters,
   } = state;
 
+  const globalPreviewPosterProvider = useMemo(
+    () => resolveGlobalPreviewPosterProvider(preferences, localCatalog?.type),
+    [preferences, localCatalog?.type]
+  );
+
+  const previewPosterProviderOptions = useMemo(() => {
+    const globalLabel =
+      PREVIEW_POSTER_PROVIDER_LABELS[globalPreviewPosterProvider] ||
+      PREVIEW_POSTER_PROVIDER_LABELS.tmdb;
+    const baseOptions = [
+      { id: 'default', label: `Global default (${globalLabel})` },
+      { id: 'tmdb', label: 'TMDB' },
+      { id: 'imdb', label: 'IMDb' },
+    ];
+
+    if (hasTvdbPreviewAccess(preferences, localCatalog?.type)) {
+      baseOptions.push(PREVIEW_POSTER_PROVIDER_OPTION_TVDB);
+    }
+
+    if (hasFanartPreviewAccess(preferences, localCatalog?.type)) {
+      baseOptions.push(PREVIEW_POSTER_PROVIDER_OPTION_FANART);
+    }
+
+    baseOptions.push(
+      ...PREVIEW_POSTER_PROVIDER_OVERRIDE_OPTIONS.filter((o) => o.id !== 'tmdb' && o.id !== 'imdb')
+    );
+
+    if (hasCustomUrlPreviewAccess(preferences, localCatalog?.type)) {
+      baseOptions.push(PREVIEW_POSTER_PROVIDER_OPTION_CUSTOM_URL);
+    }
+
+    return baseOptions.filter(
+      (option) => option.id === 'default' || option.id !== globalPreviewPosterProvider
+    );
+  }, [preferences, localCatalog?.type, globalPreviewPosterProvider]);
+
+  useEffect(() => {
+    if (!previewPosterProviderOptions.some((option) => option.id === previewPosterProvider)) {
+      setPreviewPosterProvider('default');
+    }
+  }, [previewPosterProvider, previewPosterProviderOptions, setPreviewPosterProvider]);
+
   const {
     toggleSection,
     handleFiltersChange,
@@ -169,10 +362,23 @@ export const CatalogEditor = memo(function CatalogEditor() {
 
   const currentListType = localCatalog?.filters?.listType || 'discover';
   const hasPresetOrigin = Boolean(localCatalog?.filters?.presetOrigin);
-  const isPresetCatalog = currentListType && currentListType !== 'discover' && !hasPresetOrigin;
+  const isCollectionModeListType = currentListType === 'collection' || currentListType === 'studio';
+  const isPresetCatalog =
+    currentListType &&
+    currentListType !== 'discover' &&
+    !hasPresetOrigin &&
+    !isCollectionModeListType;
   const supportsFullFilters = !isPresetCatalog && !isCollection;
   const isImdbCatalog = localCatalog?.source === 'imdb';
   const showImdbSourceDisabledNotice = isImdbCatalog && !imdbEnabled;
+  const previewPosterProviderHint = getPreviewPosterProviderHint(
+    previewPosterProvider,
+    globalPreviewPosterProvider
+  );
+  const effectivePreviewPosterProvider =
+    previewPosterProvider && previewPosterProvider !== 'default'
+      ? previewPosterProvider
+      : globalPreviewPosterProvider;
 
   const imdbSourceDisabledNotice = (
     <div className="empty-state">
@@ -398,14 +604,38 @@ export const CatalogEditor = memo(function CatalogEditor() {
             </div>
           </div>
           <div className="editor-actions">
-            <button
-              className="btn btn-secondary"
-              onClick={handlePreviewClick}
-              disabled={previewLoading}
-            >
-              {previewLoading ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
-              Preview
-            </button>
+            <div className="preview-provider-field">
+              <span className="preview-provider-label">Preview posters</span>
+              <div className="preview-provider-row">
+                <div className="preview-provider-select">
+                  <SearchableSelect
+                    options={previewPosterProviderOptions}
+                    value={previewPosterProvider}
+                    onChange={(value) => setPreviewPosterProvider(value || 'default')}
+                    valueKey="id"
+                    labelKey="label"
+                    placeholder="Select preview poster source"
+                    searchPlaceholder="Search poster source..."
+                    allowClear={false}
+                    menuPlacement="bottom"
+                    aria-label="Preview poster provider"
+                  />
+                </div>
+                <button
+                  className="btn btn-secondary preview-trigger-btn desktop-preview-btn"
+                  onClick={handlePreviewClick}
+                  disabled={previewLoading}
+                >
+                  {previewLoading ? (
+                    <Loader size={16} className="animate-spin" />
+                  ) : (
+                    <Eye size={16} />
+                  )}
+                  Preview
+                </button>
+              </div>
+              <span className="preview-provider-hint">{previewPosterProviderHint}</span>
+            </div>
           </div>
         </div>
 
@@ -461,6 +691,25 @@ export const CatalogEditor = memo(function CatalogEditor() {
           </Suspense>
 
           <div className="mobile-preview-btn-container">
+            <div className="preview-provider-field mobile-preview-provider">
+              <span className="preview-provider-label">Preview posters</span>
+              <div className="preview-provider-select">
+                <SearchableSelect
+                  options={previewPosterProviderOptions}
+                  value={previewPosterProvider}
+                  onChange={(value) => setPreviewPosterProvider(value || 'default')}
+                  valueKey="id"
+                  labelKey="label"
+                  placeholder="Select preview poster source"
+                  searchPlaceholder="Search poster source..."
+                  allowClear={false}
+                  menuPlacement="top"
+                  aria-label="Preview poster provider"
+                />
+              </div>
+              <span className="preview-provider-hint">{previewPosterProviderHint}</span>
+            </div>
+
             <button
               className="btn btn-secondary mobile-preview-btn"
               onClick={handlePreviewClick}
@@ -477,6 +726,7 @@ export const CatalogEditor = memo(function CatalogEditor() {
         loading={previewLoading}
         error={previewError}
         data={previewData}
+        previewPosterProvider={effectivePreviewPosterProvider}
         onRetry={loadPreview}
         onLoadPreview={loadPreview}
         isModal={isMobileSize}

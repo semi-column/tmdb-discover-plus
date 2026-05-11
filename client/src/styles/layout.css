@@ -783,3 +783,66 @@
     justify-content: center;
   }
 }
+
+/* =========================================
+   Focus Mode Constraints
+   ========================================= */
+.app.focus-mode .header {
+  display: none !important;
+}
+
+.app.focus-mode .builder-title-area {
+  display: none !important;
+}
+
+.app.focus-mode .credits-banner {
+  display: none !important;
+}
+
+.app.focus-mode .mobile-stats-pill {
+  display: none !important;
+}
+
+@media (min-width: 768px) {
+  .app.focus-mode {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .app.focus-mode .main {
+    padding-top: 16px;
+    padding-bottom: 16px;
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  .app.focus-mode .container {
+    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .app.focus-mode .builder-layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none !important;
+    margin-bottom: 0 !important;
+  }
+
+  .app.focus-mode .sidebar {
+    max-height: none !important;
+    height: auto;
+  }
+
+  .app.focus-mode .editor-panel {
+    min-height: 100%;
+  }
+
+  .app.focus-mode .builder-toolbar {
+    margin-bottom: 16px;
+    flex-shrink: 0;
+    justify-content: flex-end; /* right-align actions since title is gone */
+  }
+}

@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { resolveOptionLabel, resolveSortLabel } from '../utils/filterLabels';
 
 const NON_KITSU_KEYS = [
   'sortBy',
@@ -155,10 +156,9 @@ export const KITSU_SOURCE = {
     }
 
     if (filters.kitsuSort && filters.kitsuSort !== '-averageRating') {
-      const match = kitsuSortOptions.find((s) => s.value === filters.kitsuSort);
       active.push({
         key: 'kitsuSort',
-        label: `Sort: ${match?.label || filters.kitsuSort}`,
+        label: `Sort: ${resolveSortLabel(kitsuSortOptions, filters.kitsuSort)}`,
         section: 'filters',
       });
     }
@@ -194,10 +194,7 @@ export const KITSU_SOURCE = {
     }
 
     if (filters.kitsuSubtype?.length > 0) {
-      const names = filters.kitsuSubtype.map((v) => {
-        const match = kitsuSubtypes.find((t) => t.value === v);
-        return match?.label || v;
-      });
+      const names = filters.kitsuSubtype.map((v) => resolveOptionLabel(kitsuSubtypes, v));
       active.push({
         key: 'kitsuSubtype',
         label: `Type: ${names.join(', ')}`,
@@ -206,10 +203,7 @@ export const KITSU_SOURCE = {
     }
 
     if (filters.kitsuStatus?.length > 0) {
-      const names = filters.kitsuStatus.map((v) => {
-        const match = kitsuStatuses.find((s) => s.value === v);
-        return match?.label || v;
-      });
+      const names = filters.kitsuStatus.map((v) => resolveOptionLabel(kitsuStatuses, v));
       active.push({
         key: 'kitsuStatus',
         label: `Status: ${names.join(', ')}`,
@@ -218,10 +212,7 @@ export const KITSU_SOURCE = {
     }
 
     if (filters.kitsuAgeRating?.length > 0) {
-      const names = filters.kitsuAgeRating.map((v) => {
-        const match = kitsuAgeRatings.find((r) => r.value === v);
-        return match?.label || v;
-      });
+      const names = filters.kitsuAgeRating.map((v) => resolveOptionLabel(kitsuAgeRatings, v));
       active.push({
         key: 'kitsuAgeRating',
         label: `Rating: ${names.join(', ')}`,

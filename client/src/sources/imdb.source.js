@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { resolveSortLabel } from '../utils/filterLabels';
 
 const TMDB_ONLY_KEYS = [
   'listType',
@@ -80,10 +81,9 @@ export const IMDB_SOURCE = {
     const isMovieType = contentType === 'movie';
 
     if (filters.sortBy && filters.sortBy !== 'POPULARITY') {
-      const match = imdbSortOptions.find((s) => s.value === filters.sortBy);
       active.push({
         key: 'sortBy',
-        label: `Sort: ${match?.label || filters.sortBy}`,
+        label: `Sort: ${resolveSortLabel(imdbSortOptions, filters.sortBy)}`,
         section: 'filters',
       });
     }

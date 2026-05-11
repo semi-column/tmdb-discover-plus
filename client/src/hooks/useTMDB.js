@@ -199,9 +199,28 @@ export function useTMDB(apiKey) {
   }, [hasAuth]);
 
   const preview = useCallback(
-    async (type, filters, page = 1) => {
+    async (
+      type,
+      filters,
+      page = 1,
+      previewPosterProvider = null,
+      previewPosterApiKey = null,
+      previewPosterCustomUrlPattern = null,
+      previewEnglishArtOnly = null,
+      previewOriginalLangFallback = null
+    ) => {
       if (!hasAuth) throw new Error('Authentication required');
-      return api.preview(apiKey, type, filters, page);
+      return api.preview(
+        apiKey,
+        type,
+        filters,
+        page,
+        previewPosterProvider,
+        previewPosterApiKey,
+        previewPosterCustomUrlPattern,
+        previewEnglishArtOnly,
+        previewOriginalLangFallback
+      );
     },
     [apiKey, hasAuth]
   );
@@ -296,49 +315,121 @@ export function useTMDB(apiKey) {
   );
 
   const previewImdb = useCallback(
-    async (type, filters) => {
+    async (
+      type,
+      filters,
+      previewPosterProvider = null,
+      previewPosterApiKey = null,
+      previewPosterCustomUrlPattern = null
+    ) => {
       if (!hasAuth) throw new Error('Authentication required');
-      return api.previewImdbCatalog(type, filters);
+      return api.previewImdbCatalog(
+        type,
+        filters,
+        previewPosterProvider,
+        previewPosterApiKey,
+        previewPosterCustomUrlPattern
+      );
     },
     [hasAuth]
   );
 
   const previewAnilist = useCallback(
-    async (type, filters) => {
+    async (
+      type,
+      filters,
+      previewPosterProvider = null,
+      previewPosterApiKey = null,
+      previewPosterCustomUrlPattern = null
+    ) => {
       if (!hasAuth) throw new Error('Authentication required');
-      return api.previewAnilistCatalog(type, filters);
+      return api.previewAnilistCatalog(
+        type,
+        filters,
+        previewPosterProvider,
+        previewPosterApiKey,
+        previewPosterCustomUrlPattern
+      );
     },
     [hasAuth]
   );
 
   const previewMal = useCallback(
-    async (type, filters) => {
+    async (
+      type,
+      filters,
+      previewPosterProvider = null,
+      previewPosterApiKey = null,
+      previewPosterCustomUrlPattern = null
+    ) => {
       if (!hasAuth) throw new Error('Authentication required');
-      return api.previewMalCatalog(type, filters);
+      return api.previewMalCatalog(
+        type,
+        filters,
+        previewPosterProvider,
+        previewPosterApiKey,
+        previewPosterCustomUrlPattern
+      );
     },
     [hasAuth]
   );
 
   const previewKitsu = useCallback(
-    async (type, filters) => {
+    async (
+      type,
+      filters,
+      previewPosterProvider = null,
+      previewPosterApiKey = null,
+      previewPosterCustomUrlPattern = null
+    ) => {
       if (!hasAuth) throw new Error('Authentication required');
-      return api.previewKitsuCatalog(type, filters);
+      return api.previewKitsuCatalog(
+        type,
+        filters,
+        previewPosterProvider,
+        previewPosterApiKey,
+        previewPosterCustomUrlPattern
+      );
     },
     [hasAuth]
   );
 
   const previewSimkl = useCallback(
-    async (type, filters) => {
+    async (
+      type,
+      filters,
+      previewPosterProvider = null,
+      previewPosterApiKey = null,
+      previewPosterCustomUrlPattern = null
+    ) => {
       if (!hasAuth) throw new Error('Authentication required');
-      return api.previewSimklCatalog(type, filters);
+      return api.previewSimklCatalog(
+        type,
+        filters,
+        previewPosterProvider,
+        previewPosterApiKey,
+        previewPosterCustomUrlPattern
+      );
     },
     [hasAuth]
   );
 
   const previewTrakt = useCallback(
-    async (type, filters) => {
+    async (
+      type,
+      filters,
+      previewPosterProvider = null,
+      previewPosterApiKey = null,
+      previewPosterCustomUrlPattern = null
+    ) => {
       if (!hasAuth) throw new Error('Authentication required');
-      return api.previewTraktCatalog(type, filters);
+      return api.previewTraktCatalog(
+        type,
+        filters,
+        previewPosterProvider,
+        previewPosterApiKey,
+        previewPosterCustomUrlPattern
+      );
     },
     [hasAuth]
   );

@@ -6,6 +6,11 @@ const FOCUSABLE_SELECTOR =
 export function useModalA11y(isOpen, onClose) {
   const modalRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -22,7 +27,7 @@ export function useModalA11y(isOpen, onClose) {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current?.();
         return;
       }
 
@@ -58,7 +63,7 @@ export function useModalA11y(isOpen, onClose) {
         previousFocusRef.current.focus();
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return modalRef;
 }

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { ContentType } from '../../types/common.ts';
-import type { StremioMetaPreview, CatalogConfig } from '../../types/index.ts';
+import type { StremioMetaPreview, CatalogConfig, ArtworkOptions } from '../../types/index.ts';
 import { getUserConfig, getSimklKeyFromConfig } from '../../services/configService.ts';
 import { getCache } from '../../services/cache/index.ts';
 import * as simkl from '../../services/simkl/index.ts';
@@ -8,6 +8,12 @@ import { config } from '../../config.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { shuffleArray } from '../../utils/helpers.ts';
 import { CACHE_TTLS, buildCatalogId, catalogServerTtl } from '../../constants.ts';
+import {
+  createArtworkOptions,
+  resolveContentType,
+  applyArtworkOverridesToMetaPreviews,
+} from '../../services/artworkService.ts';
+import { decrypt } from '../../utils/encryption.ts';
 
 const log = createLogger('addon:simkl');
 const PAGE_SIZE = 20;
@@ -40,7 +46,8 @@ async function fetchWithBackfill(
   ) => Promise<{ items: (simkl.SimklAnime | simkl.SimklTrendingItem)[]; hasMore: boolean }>,
   type: ContentType,
   startPage: number,
-  genreName?: string | null
+  genreName?: string | null,
+  artworkOptions: ArtworkOptions | null = null
 ): Promise<StremioMetaPreview[]> {
   const metas: StremioMetaPreview[] = [];
   let currentPage = startPage;
@@ -49,7 +56,7 @@ async function fetchWithBackfill(
   while (metas.length < PAGE_SIZE && pagesChecked < MAX_BACKFILL_PAGES) {
     const result = await fetchPage(currentPage);
     const filteredItems = filterByExtraGenre(result.items, genreName);
-    const batch = simkl.batchConvertToStremioMeta(filteredItems, type);
+    const batch = simkl.batchConvertToStremioMeta(filteredItems, type, artworkOptions);
     metas.push(...batch);
     pagesChecked++;
 
@@ -80,6 +87,18 @@ export async function handleSimklCatalogRequest(
       return;
     }
 
+    const artworkOptions: ArtworkOptions | null = createArtworkOptions(
+      userConfig.preferences || null,
+      (encrypted) => {
+        try {
+          return decrypt(encrypted);
+        } catch {
+          return null;
+        }
+      },
+      resolveContentType(type, 'simkl')
+    );
+
     // Resolve Simkl API key: server-side key, or user-provided key as fallback
     const simklApiKey = config.simklApi.clientId || getSimklKeyFromConfig(userConfig) || undefined;
 
@@ -96,19 +115,21 @@ export async function handleSimklCatalogRequest(
       const results = await simkl.searchAnime(searchQuery, page, simklApiKey);
       const metas = simkl.batchConvertToStremioMeta(
         results.map((r) => ({ ...r, genres: [], overview: '' }) as simkl.SimklAnime),
-        type
+        type,
+        artworkOptions
       );
+      const resolvedMetas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
       res.set(
         'Cache-Control',
         `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
       );
       log.debug('Simkl search results', {
-        count: metas.length,
+        count: resolvedMetas.length,
         query: searchQuery,
         durationMs: Date.now() - startTime,
       });
       res.json({
-        metas,
+        metas: resolvedMetas,
         cacheMaxAge: CACHE_TTLS.CATALOG_HEADER,
         staleRevalidate: CACHE_TTLS.CATALOG_STALE_REVALIDATE,
       });
@@ -166,7 +187,7 @@ export async function handleSimklCatalogRequest(
       const probe = await simkl.discover(filters, type, 1, simklApiKey);
       const probeFiltered = filterByExtraGenre(probe.items, selectedExtraGenre);
       if (listType === 'trending' || listType === 'airing') {
-        metas = simkl.batchConvertToStremioMeta(probeFiltered, type);
+        metas = simkl.batchConvertToStremioMeta(probeFiltered, type, artworkOptions);
         metas = shuffleArray(metas).slice(0, PAGE_SIZE);
       } else {
         const maxPage = probe.hasMore ? 5 : 1;
@@ -175,7 +196,8 @@ export async function handleSimklCatalogRequest(
           (p) => simkl.discover(filters, type, p, simklApiKey),
           type,
           randomPage,
-          selectedExtraGenre
+          selectedExtraGenre,
+          artworkOptions
         );
         metas = shuffleArray(metas);
       }
@@ -184,9 +206,12 @@ export async function handleSimklCatalogRequest(
         (p) => simkl.discover(filters, type, p, simklApiKey),
         type,
         page,
-        selectedExtraGenre
+        selectedExtraGenre,
+        artworkOptions
       );
     }
+
+    metas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
 
     const response = { metas };
 
