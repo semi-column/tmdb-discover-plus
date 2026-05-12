@@ -20,16 +20,72 @@ import type {
 import type { TraktCatalogFilters } from '../../types/config.ts';
 import type { ContentType } from '../../types/common.ts';
 
+export type DiscoverOptions = {
+  /** Optional callback for per-step timing instrumentation */
+  onProfile?: DiscoverProfileHook;
+};
+
+export type DiscoverProfileEvent = {
+  phase: string;
+  durationMs: number;
+  details?: Record<string, unknown>;
+};
+
+export type DiscoverProfileHook = (event: DiscoverProfileEvent) => void;
+
+function monotonicNowNs(): bigint {
+  return process.hrtime.bigint();
+}
+
+function monotonicDurationMs(startNs: bigint): number {
+  return Number(process.hrtime.bigint() - startNs) / 1_000_000;
+}
+
+function emitProfile(
+  options: DiscoverOptions | undefined,
+  phase: string,
+  startNs: bigint,
+  details?: Record<string, unknown>
+): void {
+  const hook = options?.onProfile;
+  if (!hook) return;
+  hook({ phase, durationMs: monotonicDurationMs(startNs), details });
+}
+
 const log = createLogger('trakt:discover');
 const PAGE_LIMIT = 20;
-const MAX_CALENDAR_CHUNK = 31;
+const MAX_CALENDAR_CHUNK = 33;
 const MAX_CALENDAR_RANGE_DAYS = 3650;
 const MAX_RECENTLY_AIRED_DAYS = 3650;
 const MAX_CALENDAR_EXPLICIT_RANGE_DAYS = 3650;
 const DEFAULT_CALENDAR_WINDOW_DAYS = 30;
 const CALENDAR_CHUNK_BATCH_SIZE = 6;
 const CALENDAR_CACHE_TTL_MS = 5 * 60 * 1000;
+const CALENDAR_IMMUTABLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_CACHE_ENTRIES = 100;
+const MAX_RAW_CACHE_ENTRIES = 50;
+
+type RawCacheEntry = {
+  items: (TraktMovie | TraktShow)[];
+  ts: number;
+  sortDirection: CalendarSortDirection;
+  complete: boolean;
+};
+
 const calendarCache = new Map<string, { items: (TraktMovie | TraktShow)[]; ts: number }>();
+const rawCalendarCache = new Map<string, RawCacheEntry>();
+
+function getCalendarCacheTtl(endDate: Date): number {
+  const today = startOfTodayUtc();
+  return endDate < today ? CALENDAR_IMMUTABLE_CACHE_TTL_MS : CALENDAR_CACHE_TTL_MS;
+}
+
+function evictOldest<V>(cache: Map<string, V>, maxEntries: number): void {
+  if (cache.size >= maxEntries) {
+    const firstKey = cache.keys().next().value;
+    if (firstKey) cache.delete(firstKey);
+  }
+}
 const FILTERABLE_LIST_TYPES = new Set([
   'trending',
   'popular',
@@ -502,22 +558,8 @@ function applyCorePostFilters(
 
   let filtered = items;
 
-  if (filters.traktRatingMin != null || filters.traktRatingMax != null) {
-    const minR = (filters.traktRatingMin ?? 0) / 10;
-    const maxR = (filters.traktRatingMax ?? 100) / 10;
-    filtered = filtered.filter((item) => {
-      const r = item.rating;
-      return r == null || (r >= minR && r <= maxR);
-    });
-  }
-
-  if (filters.traktVotesMin != null) {
-    const minVotes = filters.traktVotesMin;
-    filtered = filtered.filter((item) => {
-      const votes = item.votes;
-      return votes == null || votes >= minVotes;
-    });
-  }
+  // Note: traktRatingMin/Max and traktVotesMin are handled server-side via
+  // buildFilterParams (ratings= and votes= query params) and are not re-applied here.
 
   if (filters.traktAiredEpisodesMin != null || filters.traktAiredEpisodesMax != null) {
     const minAiredEpisodes = filters.traktAiredEpisodesMin ?? 0;
@@ -763,23 +805,60 @@ export async function getUpcomingCalendar(
   type: ContentType,
   filters?: TraktCatalogFilters,
   clientId?: string,
-  page = 1
+  page = 1,
+  options?: DiscoverOptions
 ): Promise<{ items: (TraktMovie | TraktShow)[]; hasMore: boolean }> {
+  const totalStartNs = monotonicNowNs();
   const calendarSort = normalizeCalendarSort(filters?.traktCalendarSort, 'desc');
   const isDescending = calendarSort === 'desc';
   const requiredCount = page * PAGE_LIMIT + 1;
-  const cacheKey = `upcoming:${calendarType}:${range.signature}:${calendarSort}:${type}:${clientId ?? ''}:${buildFilterParams(filters ?? {})}:${buildPostFilterCacheSignature(filters)}`;
+  const apiFilterStr = buildFilterParams(filters ?? {});
+  const cacheKey = `upcoming:${calendarType}:${range.signature}:${calendarSort}:${type}:${clientId ?? ''}:${apiFilterStr}:${buildPostFilterCacheSignature(filters)}`;
+  const rawCacheKey = `raw:upcoming:${calendarType}:${range.signature}:${type}:${clientId ?? ''}:${apiFilterStr}`;
   const now = Date.now();
+  const ttl = getCalendarCacheTtl(range.endDate);
+  const cacheLookupStartNs = monotonicNowNs();
   const cached = calendarCache.get(cacheKey);
+  emitProfile(options, 'upcoming.cache_lookup', cacheLookupStartNs, {
+    hit: Boolean(cached && now - cached.ts < ttl),
+  });
   let hasMoreFromEarlyStop = false;
 
   let allItems: (TraktMovie | TraktShow)[] = [];
   let hasResolvedItems = false;
 
-  if (cached && now - cached.ts < CALENDAR_CACHE_TTL_MS) {
+  // Tier 1: filtered cache (exact match including sort + post-filter params)
+  if (cached && now - cached.ts < ttl) {
     allItems = cached.items;
     hasResolvedItems = true;
-  } else {
+  }
+
+  // Tier 2: raw cache (same API data, different sort/post-filter)
+  if (!hasResolvedItems) {
+    const rawCached = rawCalendarCache.get(rawCacheKey);
+    if (rawCached && now - rawCached.ts < ttl) {
+      let rawItems = rawCached.items;
+      if (rawCached.sortDirection !== calendarSort) {
+        rawItems = [...rawItems].reverse();
+      }
+      const postFiltered = applyCorePostFilters(rawItems, filters);
+      emitProfile(options, 'upcoming.raw_cache_hit', monotonicNowNs(), {
+        complete: rawCached.complete,
+        cachedCount: rawCached.items.length,
+        postFilteredCount: postFiltered.length,
+      });
+      allItems = postFiltered;
+      evictOldest(calendarCache, MAX_CACHE_ENTRIES);
+      calendarCache.set(cacheKey, { items: allItems, ts: now });
+      hasResolvedItems = true;
+      if (!rawCached.complete && postFiltered.length >= requiredCount) {
+        hasMoreFromEarlyStop = true;
+      }
+    }
+  }
+
+  // Tier 3: fetch from API
+  if (!hasResolvedItems) {
     const chunks = buildCalendarChunks(range.startDate, range.endDate);
 
     log.debug('Trakt upcoming calendar', {
@@ -818,6 +897,7 @@ export async function getUpcomingCalendar(
         batchStart += CALENDAR_CHUNK_BATCH_SIZE
       ) {
         const chunkBatch = orderedChunks.slice(batchStart, batchStart + CALENDAR_CHUNK_BATCH_SIZE);
+        const fetchBatchStartNs = monotonicNowNs();
         const chunkResults = await Promise.all(
           chunkBatch.map((chunk) => {
             const path = buildCalendarPath(calendarType, chunk.startDate, chunk.chunkDays, type);
@@ -825,7 +905,14 @@ export async function getUpcomingCalendar(
             return traktFetch<TraktCalendarMovie[]>(url, clientId);
           })
         );
+        emitProfile(options, 'upcoming.batch_fetch', fetchBatchStartNs, {
+          batchStart,
+          batchSize: chunkBatch.length,
+          rows: chunkResults.reduce((sum, rows) => sum + rows.length, 0),
+          mode: 'movie',
+        });
 
+        const mergeBatchStartNs = monotonicNowNs();
         for (const entry of chunkResults.flat()) {
           const key = entry.movie.ids.imdb || String(entry.movie.ids.tmdb || entry.movie.ids.trakt);
           const existing = movieMap.get(key);
@@ -838,21 +925,53 @@ export async function getUpcomingCalendar(
             movieMap.set(key, entry);
           }
         }
+        emitProfile(options, 'upcoming.batch_merge', mergeBatchStartNs, {
+          batchStart,
+          dedupedCount: movieMap.size,
+          mode: 'movie',
+        });
 
-        const candidateItems = applyCorePostFilters(materializeMovies(), filters);
+        const filterBatchStartNs = monotonicNowNs();
+        const rawCandidateItems = materializeMovies();
+        const candidateItems = applyCorePostFilters(rawCandidateItems, filters);
+        emitProfile(options, 'upcoming.batch_filter', filterBatchStartNs, {
+          batchStart,
+          candidateCount: candidateItems.length,
+          requiredCount,
+          mode: 'movie',
+        });
         const hasRemainingChunks = batchStart + CALENDAR_CHUNK_BATCH_SIZE < orderedChunks.length;
 
         if (candidateItems.length >= requiredCount && hasRemainingChunks) {
           allItems = candidateItems;
           hasResolvedItems = true;
           stoppedEarly = true;
+          // Store partial raw cache so subsequent page requests reuse it
+          evictOldest(rawCalendarCache, MAX_RAW_CACHE_ENTRIES);
+          rawCalendarCache.set(rawCacheKey, {
+            items: rawCandidateItems,
+            ts: now,
+            sortDirection: calendarSort,
+            complete: false,
+          });
           break;
         }
       }
 
       if (!hasResolvedItems) {
-        allItems = applyCorePostFilters(materializeMovies(), filters);
+        const rawItems = materializeMovies();
+        allItems = applyCorePostFilters(rawItems, filters);
         hasResolvedItems = true;
+        // Store in both caches (raw + filtered)
+        evictOldest(rawCalendarCache, MAX_RAW_CACHE_ENTRIES);
+        rawCalendarCache.set(rawCacheKey, {
+          items: rawItems,
+          ts: now,
+          sortDirection: calendarSort,
+          complete: true,
+        });
+        evictOldest(calendarCache, MAX_CACHE_ENTRIES);
+        calendarCache.set(cacheKey, { items: allItems, ts: now });
       }
     } else {
       const showMap = new Map<string, { entry: TraktCalendarShow; maxSeason?: number }>();
@@ -872,6 +991,7 @@ export async function getUpcomingCalendar(
         batchStart += CALENDAR_CHUNK_BATCH_SIZE
       ) {
         const chunkBatch = orderedChunks.slice(batchStart, batchStart + CALENDAR_CHUNK_BATCH_SIZE);
+        const fetchBatchStartNs = monotonicNowNs();
         const chunkResults = await Promise.all(
           chunkBatch.map((chunk) => {
             const path = buildCalendarPath(calendarType, chunk.startDate, chunk.chunkDays, type);
@@ -879,7 +999,14 @@ export async function getUpcomingCalendar(
             return traktFetch<TraktCalendarShow[]>(url, clientId);
           })
         );
+        emitProfile(options, 'upcoming.batch_fetch', fetchBatchStartNs, {
+          batchStart,
+          batchSize: chunkBatch.length,
+          rows: chunkResults.reduce((sum, rows) => sum + rows.length, 0),
+          mode: 'show',
+        });
 
+        const mergeBatchStartNs = monotonicNowNs();
         for (const entry of chunkResults.flat()) {
           const key = entry.show.ids.imdb || entry.show.ids.slug || String(entry.show.ids.trakt);
           const seasonNumber = toPositiveInteger(entry.episode?.season);
@@ -907,37 +1034,68 @@ export async function getUpcomingCalendar(
             existing.entry = entry;
           }
         }
+        emitProfile(options, 'upcoming.batch_merge', mergeBatchStartNs, {
+          batchStart,
+          dedupedCount: showMap.size,
+          mode: 'show',
+        });
 
-        const candidateItems = applyCorePostFilters(materializeShows(), filters);
+        const filterBatchStartNs = monotonicNowNs();
+        const rawCandidateItems = materializeShows();
+        const candidateItems = applyCorePostFilters(rawCandidateItems, filters);
+        emitProfile(options, 'upcoming.batch_filter', filterBatchStartNs, {
+          batchStart,
+          candidateCount: candidateItems.length,
+          requiredCount,
+          mode: 'show',
+        });
         const hasRemainingChunks = batchStart + CALENDAR_CHUNK_BATCH_SIZE < orderedChunks.length;
 
         if (candidateItems.length >= requiredCount && hasRemainingChunks) {
           allItems = candidateItems;
           hasResolvedItems = true;
           stoppedEarly = true;
+          // Store partial raw cache so subsequent page requests reuse it
+          evictOldest(rawCalendarCache, MAX_RAW_CACHE_ENTRIES);
+          rawCalendarCache.set(rawCacheKey, {
+            items: rawCandidateItems,
+            ts: now,
+            sortDirection: calendarSort,
+            complete: false,
+          });
           break;
         }
       }
 
       if (!hasResolvedItems) {
-        allItems = applyCorePostFilters(materializeShows(), filters);
+        const rawItems = materializeShows();
+        allItems = applyCorePostFilters(rawItems, filters);
         hasResolvedItems = true;
+        // Store in both caches (raw + filtered)
+        evictOldest(rawCalendarCache, MAX_RAW_CACHE_ENTRIES);
+        rawCalendarCache.set(rawCacheKey, {
+          items: rawItems,
+          ts: now,
+          sortDirection: calendarSort,
+          complete: true,
+        });
+        evictOldest(calendarCache, MAX_CACHE_ENTRIES);
+        calendarCache.set(cacheKey, { items: allItems, ts: now });
       }
     }
 
     if (stoppedEarly) {
       hasMoreFromEarlyStop = true;
-    } else {
-      calendarCache.set(cacheKey, { items: allItems, ts: now });
-      if (calendarCache.size > 100) {
-        const firstKey = calendarCache.keys().next().value;
-        if (firstKey) calendarCache.delete(firstKey);
-      }
     }
   }
 
   const start = (page - 1) * PAGE_LIMIT;
   const hasMore = hasMoreFromEarlyStop ? true : start + PAGE_LIMIT < allItems.length;
+  emitProfile(options, 'upcoming.total', totalStartNs, {
+    page,
+    returnedCount: allItems.slice(start, start + PAGE_LIMIT).length,
+    totalCount: allItems.length,
+  });
   return {
     items: allItems.slice(start, start + PAGE_LIMIT),
     hasMore,
@@ -950,23 +1108,60 @@ export async function getRecentlyAired(
   type: ContentType,
   filters?: TraktCatalogFilters,
   clientId?: string,
-  page = 1
+  page = 1,
+  options?: DiscoverOptions
 ): Promise<{ items: (TraktMovie | TraktShow)[]; hasMore: boolean }> {
+  const totalStartNs = monotonicNowNs();
   const calendarSort = normalizeCalendarSort(filters?.traktCalendarSort, 'desc');
   const isDescending = calendarSort === 'desc';
   const requiredCount = page * PAGE_LIMIT + 1;
-  const cacheKey = `recently:${calendarType}:${range.signature}:${calendarSort}:${type}:${clientId ?? ''}:${buildFilterParams(filters ?? {})}:${buildPostFilterCacheSignature(filters)}`;
+  const apiFilterStr = buildFilterParams(filters ?? {});
+  const cacheKey = `recently:${calendarType}:${range.signature}:${calendarSort}:${type}:${clientId ?? ''}:${apiFilterStr}:${buildPostFilterCacheSignature(filters)}`;
+  const rawCacheKey = `raw:recently:${calendarType}:${range.signature}:${type}:${clientId ?? ''}:${apiFilterStr}`;
   const now = Date.now();
+  const ttl = getCalendarCacheTtl(range.endDate);
+  const cacheLookupStartNs = monotonicNowNs();
   const cached = calendarCache.get(cacheKey);
+  emitProfile(options, 'recently.cache_lookup', cacheLookupStartNs, {
+    hit: Boolean(cached && now - cached.ts < ttl),
+  });
   let hasMoreFromEarlyStop = false;
 
   let allItems: (TraktMovie | TraktShow)[] = [];
   let hasResolvedItems = false;
 
-  if (cached && now - cached.ts < CALENDAR_CACHE_TTL_MS) {
+  // Tier 1: filtered cache (exact match including sort + post-filter params)
+  if (cached && now - cached.ts < ttl) {
     allItems = cached.items;
     hasResolvedItems = true;
-  } else {
+  }
+
+  // Tier 2: raw cache (same API data, different sort/post-filter)
+  if (!hasResolvedItems) {
+    const rawCached = rawCalendarCache.get(rawCacheKey);
+    if (rawCached && now - rawCached.ts < ttl) {
+      let rawItems = rawCached.items;
+      if (rawCached.sortDirection !== calendarSort) {
+        rawItems = [...rawItems].reverse();
+      }
+      const postFiltered = applyCorePostFilters(rawItems, filters);
+      emitProfile(options, 'recently.raw_cache_hit', monotonicNowNs(), {
+        complete: rawCached.complete,
+        cachedCount: rawCached.items.length,
+        postFilteredCount: postFiltered.length,
+      });
+      allItems = postFiltered;
+      evictOldest(calendarCache, MAX_CACHE_ENTRIES);
+      calendarCache.set(cacheKey, { items: allItems, ts: now });
+      hasResolvedItems = true;
+      if (!rawCached.complete && postFiltered.length >= requiredCount) {
+        hasMoreFromEarlyStop = true;
+      }
+    }
+  }
+
+  // Tier 3: fetch from API
+  if (!hasResolvedItems) {
     const chunks = buildCalendarChunks(range.startDate, range.endDate);
 
     log.debug('Trakt recently aired', {
@@ -1005,6 +1200,7 @@ export async function getRecentlyAired(
         batchStart += CALENDAR_CHUNK_BATCH_SIZE
       ) {
         const chunkBatch = orderedChunks.slice(batchStart, batchStart + CALENDAR_CHUNK_BATCH_SIZE);
+        const fetchBatchStartNs = monotonicNowNs();
         const chunkResults = await Promise.all(
           chunkBatch.map((chunk) => {
             const path = buildCalendarPath(calendarType, chunk.startDate, chunk.chunkDays, type);
@@ -1012,7 +1208,14 @@ export async function getRecentlyAired(
             return traktFetch<TraktCalendarMovie[]>(url, clientId);
           })
         );
+        emitProfile(options, 'recently.batch_fetch', fetchBatchStartNs, {
+          batchStart,
+          batchSize: chunkBatch.length,
+          rows: chunkResults.reduce((sum, rows) => sum + rows.length, 0),
+          mode: 'movie',
+        });
 
+        const mergeBatchStartNs = monotonicNowNs();
         for (const entry of chunkResults.flat()) {
           const key = entry.movie.ids.imdb || String(entry.movie.ids.tmdb || entry.movie.ids.trakt);
           const existing = movieMap.get(key);
@@ -1025,21 +1228,52 @@ export async function getRecentlyAired(
             movieMap.set(key, entry);
           }
         }
+        emitProfile(options, 'recently.batch_merge', mergeBatchStartNs, {
+          batchStart,
+          dedupedCount: movieMap.size,
+          mode: 'movie',
+        });
 
-        const candidateItems = applyCorePostFilters(materializeMovies(), filters);
+        const filterBatchStartNs = monotonicNowNs();
+        const rawCandidateItems = materializeMovies();
+        const candidateItems = applyCorePostFilters(rawCandidateItems, filters);
+        emitProfile(options, 'recently.batch_filter', filterBatchStartNs, {
+          batchStart,
+          candidateCount: candidateItems.length,
+          requiredCount,
+          mode: 'movie',
+        });
         const hasRemainingChunks = batchStart + CALENDAR_CHUNK_BATCH_SIZE < orderedChunks.length;
 
         if (candidateItems.length >= requiredCount && hasRemainingChunks) {
           allItems = candidateItems;
           hasResolvedItems = true;
           stoppedEarly = true;
+          evictOldest(rawCalendarCache, MAX_RAW_CACHE_ENTRIES);
+          rawCalendarCache.set(rawCacheKey, {
+            items: rawCandidateItems,
+            ts: now,
+            sortDirection: calendarSort,
+            complete: false,
+          });
           break;
         }
       }
 
       if (!hasResolvedItems) {
-        allItems = applyCorePostFilters(materializeMovies(), filters);
+        const rawItems = materializeMovies();
+        allItems = applyCorePostFilters(rawItems, filters);
         hasResolvedItems = true;
+        // Store in both caches (raw + filtered)
+        evictOldest(rawCalendarCache, MAX_RAW_CACHE_ENTRIES);
+        rawCalendarCache.set(rawCacheKey, {
+          items: rawItems,
+          ts: now,
+          sortDirection: calendarSort,
+          complete: true,
+        });
+        evictOldest(calendarCache, MAX_CACHE_ENTRIES);
+        calendarCache.set(cacheKey, { items: allItems, ts: now });
       }
     } else {
       const showMap = new Map<string, { entry: TraktCalendarShow; maxSeason?: number }>();
@@ -1059,6 +1293,7 @@ export async function getRecentlyAired(
         batchStart += CALENDAR_CHUNK_BATCH_SIZE
       ) {
         const chunkBatch = orderedChunks.slice(batchStart, batchStart + CALENDAR_CHUNK_BATCH_SIZE);
+        const fetchBatchStartNs = monotonicNowNs();
         const chunkResults = await Promise.all(
           chunkBatch.map((chunk) => {
             const path = buildCalendarPath(calendarType, chunk.startDate, chunk.chunkDays, type);
@@ -1066,7 +1301,14 @@ export async function getRecentlyAired(
             return traktFetch<TraktCalendarShow[]>(url, clientId);
           })
         );
+        emitProfile(options, 'recently.batch_fetch', fetchBatchStartNs, {
+          batchStart,
+          batchSize: chunkBatch.length,
+          rows: chunkResults.reduce((sum, rows) => sum + rows.length, 0),
+          mode: 'show',
+        });
 
+        const mergeBatchStartNs = monotonicNowNs();
         for (const entry of chunkResults.flat()) {
           const key = entry.show.ids.imdb || entry.show.ids.slug || String(entry.show.ids.trakt);
           const seasonNumber = toPositiveInteger(entry.episode?.season);
@@ -1094,37 +1336,67 @@ export async function getRecentlyAired(
             existing.entry = entry;
           }
         }
+        emitProfile(options, 'recently.batch_merge', mergeBatchStartNs, {
+          batchStart,
+          dedupedCount: showMap.size,
+          mode: 'show',
+        });
 
-        const candidateItems = applyCorePostFilters(materializeShows(), filters);
+        const filterBatchStartNs = monotonicNowNs();
+        const rawCandidateItems = materializeShows();
+        const candidateItems = applyCorePostFilters(rawCandidateItems, filters);
+        emitProfile(options, 'recently.batch_filter', filterBatchStartNs, {
+          batchStart,
+          candidateCount: candidateItems.length,
+          requiredCount,
+          mode: 'show',
+        });
         const hasRemainingChunks = batchStart + CALENDAR_CHUNK_BATCH_SIZE < orderedChunks.length;
 
         if (candidateItems.length >= requiredCount && hasRemainingChunks) {
           allItems = candidateItems;
           hasResolvedItems = true;
           stoppedEarly = true;
+          evictOldest(rawCalendarCache, MAX_RAW_CACHE_ENTRIES);
+          rawCalendarCache.set(rawCacheKey, {
+            items: rawCandidateItems,
+            ts: now,
+            sortDirection: calendarSort,
+            complete: false,
+          });
           break;
         }
       }
 
       if (!hasResolvedItems) {
-        allItems = applyCorePostFilters(materializeShows(), filters);
+        const rawItems = materializeShows();
+        allItems = applyCorePostFilters(rawItems, filters);
         hasResolvedItems = true;
+        // Store in both caches (raw + filtered)
+        evictOldest(rawCalendarCache, MAX_RAW_CACHE_ENTRIES);
+        rawCalendarCache.set(rawCacheKey, {
+          items: rawItems,
+          ts: now,
+          sortDirection: calendarSort,
+          complete: true,
+        });
+        evictOldest(calendarCache, MAX_CACHE_ENTRIES);
+        calendarCache.set(cacheKey, { items: allItems, ts: now });
       }
     }
 
     if (stoppedEarly) {
       hasMoreFromEarlyStop = true;
-    } else {
-      calendarCache.set(cacheKey, { items: allItems, ts: now });
-      if (calendarCache.size > 100) {
-        const firstKey = calendarCache.keys().next().value;
-        if (firstKey) calendarCache.delete(firstKey);
-      }
     }
   }
 
   const start = (page - 1) * PAGE_LIMIT;
   const hasMore = hasMoreFromEarlyStop ? true : start + PAGE_LIMIT < allItems.length;
+  emitProfile(options, 'recently.total', totalStartNs, {
+    page,
+    returnedCount: allItems.slice(start, start + PAGE_LIMIT).length,
+    totalCount: allItems.length,
+  });
   return {
     items: allItems.slice(start, start + PAGE_LIMIT),
     hasMore,
@@ -1173,14 +1445,17 @@ export async function discover(
   filters: TraktCatalogFilters,
   type: ContentType,
   page: number,
-  clientId?: string
+  clientId?: string,
+  options?: DiscoverOptions
 ): Promise<{ items: (TraktMovie | TraktShow)[]; hasMore: boolean }> {
+  const totalStartNs = monotonicNowNs();
   const listType = normalizeTraktListType(filters.traktListType);
   const period = filters.traktPeriod || 'weekly';
   const normalizedFilters = stripUnreliableRatingFilters(listType, type, filters);
   const endpointFilters = shouldApplyFilters(listType) ? normalizedFilters : undefined;
 
   let result: { items: (TraktMovie | TraktShow)[]; hasMore: boolean };
+  const endpointFetchStartNs = monotonicNowNs();
 
   switch (listType) {
     case 'trending':
@@ -1214,13 +1489,29 @@ export async function discover(
     case 'calendar': {
       const calType = filters.traktCalendarType || (type === 'movie' ? 'movies' : 'shows');
       const range = resolveCalendarDateRange(filters, 'calendar', MAX_CALENDAR_RANGE_DAYS);
-      result = await getUpcomingCalendar(calType, range, type, endpointFilters, clientId, page);
+      result = await getUpcomingCalendar(
+        calType,
+        range,
+        type,
+        endpointFilters,
+        clientId,
+        page,
+        options
+      );
       break;
     }
     case 'recently_aired': {
       const calType = filters.traktCalendarType || (type === 'movie' ? 'movies' : 'shows');
       const range = resolveCalendarDateRange(filters, 'recently_aired', MAX_RECENTLY_AIRED_DAYS);
-      result = await getRecentlyAired(calType, range, type, endpointFilters, clientId, page);
+      result = await getRecentlyAired(
+        calType,
+        range,
+        type,
+        endpointFilters,
+        clientId,
+        page,
+        options
+      );
       break;
     }
     case 'recommended':
@@ -1236,13 +1527,40 @@ export async function discover(
       result = await getTrending(type, page, endpointFilters, clientId);
       break;
   }
+  emitProfile(options, 'discover.endpoint_fetch', endpointFetchStartNs, {
+    listType,
+    type,
+    page,
+    hasMore: result.hasMore,
+    itemsCount: result.items.length,
+  });
 
   if (listType === 'calendar' || listType === 'recently_aired') {
+    emitProfile(options, 'discover.total', totalStartNs, {
+      listType,
+      type,
+      page,
+      returnedCount: result.items.length,
+    });
     return result;
   }
 
+  const postFilterStartNs = monotonicNowNs();
+  const filteredItems = applyCorePostFilters(result.items, normalizedFilters);
+  emitProfile(options, 'discover.post_filter', postFilterStartNs, {
+    listType,
+    beforeCount: result.items.length,
+    afterCount: filteredItems.length,
+  });
+  emitProfile(options, 'discover.total', totalStartNs, {
+    listType,
+    type,
+    page,
+    returnedCount: filteredItems.length,
+  });
+
   return {
     ...result,
-    items: applyCorePostFilters(result.items, normalizedFilters),
+    items: filteredItems,
   };
 }

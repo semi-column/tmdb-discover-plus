@@ -17,6 +17,7 @@ export {
   getListItems,
   discover,
 } from './discover.ts';
+export type { DiscoverOptions } from './discover.ts';
 export { traktToStremioMeta, batchConvertToStremioMeta } from './stremioMeta.ts';
 export * from './reference.ts';
 export type {

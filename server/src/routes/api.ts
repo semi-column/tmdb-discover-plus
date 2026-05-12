@@ -158,6 +158,7 @@ async function resolveApiKey(req: Request, res: Response, next: NextFunction) {
     if (!req.apiKey) {
       return sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Configuration error');
     }
+    setPreviewLookupConfig(req, configs[0] || null);
     next();
   } catch (error) {
     log.error('resolveApiKey error', { error: (error as Error).message });
@@ -841,6 +842,56 @@ const PREVIEW_POSTER_PROVIDERS = new Set<PreviewPosterProvider>([
 
 const CINEMETA_PREVIEW_NEGATIVE_CACHE = '__none__';
 
+type PreviewLookupConfig = Awaited<ReturnType<typeof getUserConfig>>;
+type PreviewLookupRequest = Request & {
+  __previewLookupConfigPromise?: Promise<PreviewLookupConfig | null>;
+};
+
+function setPreviewLookupConfig(req: Request, cfg: PreviewLookupConfig | null): void {
+  (req as PreviewLookupRequest).__previewLookupConfigPromise = Promise.resolve(cfg);
+}
+
+async function getPreviewLookupConfig(req: Request): Promise<PreviewLookupConfig | null> {
+  const requestWithCache = req as PreviewLookupRequest;
+
+  if (!requestWithCache.__previewLookupConfigPromise) {
+    requestWithCache.__previewLookupConfigPromise = (async () => {
+      const authUserId = (req as Request & { user?: { userId?: string } }).user?.userId;
+
+      if (authUserId) {
+        try {
+          const configByUser = await getUserConfig(authUserId);
+          if (configByUser) return configByUser;
+        } catch (error) {
+          logSwallowedError('api:preview-lookup-user-config', error);
+        }
+      }
+
+      if (req.apiKey) {
+        try {
+          const configs = await getConfigsByApiKey(req.apiKey);
+          if (configs[0]) return configs[0];
+        } catch (error) {
+          logSwallowedError('api:preview-lookup-apikey-config', error);
+        }
+      }
+
+      if (req.apiKeyId) {
+        try {
+          const configs = await getConfigsByApiKey(null, req.apiKeyId);
+          if (configs[0]) return configs[0];
+        } catch (error) {
+          logSwallowedError('api:preview-lookup-apikeyid-config', error);
+        }
+      }
+
+      return null;
+    })();
+  }
+
+  return requestWithCache.__previewLookupConfigPromise;
+}
+
 function resolvePreviewPosterProvider(req: Request): PreviewPosterProvider | null {
   const rawProvider = sanitizeString(String(req.body?.previewPosterProvider || ''), 32);
   if (!rawProvider || rawProvider === 'default' || rawProvider === 'none') {
@@ -923,37 +974,9 @@ async function resolvePreviewProviderApiKey(
     }
   };
 
-  const authUserId = (req as Request & { user?: { userId?: string } }).user?.userId;
-
-  if (authUserId) {
-    try {
-      const configByUser = await getUserConfig(authUserId);
-      const byUserId = tryExtractFromConfig(configByUser);
-      if (byUserId) return byUserId;
-    } catch (error) {
-      logSwallowedError(`api:preview-${provider}-user-config`, error);
-    }
-  }
-
-  try {
-    if (req.apiKey) {
-      const configs = await getConfigsByApiKey(req.apiKey);
-      const byApiKey = tryExtractFromConfig(configs[0] || null);
-      if (byApiKey) return byApiKey;
-    }
-  } catch (error) {
-    logSwallowedError(`api:preview-${provider}-apikey-config`, error);
-  }
-
-  try {
-    if (req.apiKeyId) {
-      const configs = await getConfigsByApiKey(null, req.apiKeyId);
-      const byApiKeyId = tryExtractFromConfig(configs[0] || null);
-      if (byApiKeyId) return byApiKeyId;
-    }
-  } catch (error) {
-    logSwallowedError(`api:preview-${provider}-apikeyid-config`, error);
-  }
+  const lookupConfig = await getPreviewLookupConfig(req);
+  const byResolvedConfig = tryExtractFromConfig(lookupConfig);
+  if (byResolvedConfig) return byResolvedConfig;
 
   // Server-wide fallback keys (if explicitly configured)
   if (provider === 'rpdb') {
@@ -1041,37 +1064,9 @@ async function resolvePreviewArtworkLanguagePreferences(
     return extractPreviewArtworkLanguagePreferences(cfg?.preferences);
   };
 
-  const authUserId = (req as Request & { user?: { userId?: string } }).user?.userId;
-
-  if (authUserId) {
-    try {
-      const configByUser = await getUserConfig(authUserId);
-      return tryExtractFromConfig(configByUser);
-    } catch (error) {
-      logSwallowedError('api:preview-artlang-user-config', error);
-    }
-  }
-
-  try {
-    if (req.apiKey) {
-      const configs = await getConfigsByApiKey(req.apiKey);
-      if (configs[0]) {
-        return tryExtractFromConfig(configs[0]);
-      }
-    }
-  } catch (error) {
-    logSwallowedError('api:preview-artlang-apikey-config', error);
-  }
-
-  try {
-    if (req.apiKeyId) {
-      const configs = await getConfigsByApiKey(null, req.apiKeyId);
-      if (configs[0]) {
-        return tryExtractFromConfig(configs[0]);
-      }
-    }
-  } catch (error) {
-    logSwallowedError('api:preview-artlang-apikeyid-config', error);
+  const lookupConfig = await getPreviewLookupConfig(req);
+  if (lookupConfig) {
+    return tryExtractFromConfig(lookupConfig);
   }
 
   return defaults;
@@ -1139,37 +1134,9 @@ async function resolvePreviewCustomUrlPattern(req: Request): Promise<string | nu
     return findPatternFromPreferences(cfg?.preferences);
   };
 
-  const authUserId = (req as Request & { user?: { userId?: string } }).user?.userId;
-
-  if (authUserId) {
-    try {
-      const configByUser = await getUserConfig(authUserId);
-      const byUserId = tryExtractFromConfig(configByUser);
-      if (byUserId) return byUserId;
-    } catch (error) {
-      logSwallowedError('api:preview-customurl-user-config', error);
-    }
-  }
-
-  try {
-    if (req.apiKey) {
-      const configs = await getConfigsByApiKey(req.apiKey);
-      const byApiKey = tryExtractFromConfig(configs[0] || null);
-      if (byApiKey) return byApiKey;
-    }
-  } catch (error) {
-    logSwallowedError('api:preview-customurl-apikey-config', error);
-  }
-
-  try {
-    if (req.apiKeyId) {
-      const configs = await getConfigsByApiKey(null, req.apiKeyId);
-      const byApiKeyId = tryExtractFromConfig(configs[0] || null);
-      if (byApiKeyId) return byApiKeyId;
-    }
-  } catch (error) {
-    logSwallowedError('api:preview-customurl-apikeyid-config', error);
-  }
+  const lookupConfig = await getPreviewLookupConfig(req);
+  const byResolvedConfig = tryExtractFromConfig(lookupConfig);
+  if (byResolvedConfig) return byResolvedConfig;
 
   return null;
 }
@@ -1650,6 +1617,134 @@ router.get('/imdb/search/suggestions', requireAuth, async (req, res) => {
 const PREVIEW_PAGE_SIZE = 20;
 const PREVIEW_MAX_BACKFILL = 5;
 
+type RequestProfileStep = {
+  name: string;
+  durationMs: number;
+  details?: Record<string, unknown>;
+};
+
+type RequestProfileStepAggregate = {
+  name: string;
+  count: number;
+  totalMs: number;
+  maxMs: number;
+  avgMs: number;
+};
+
+type RequestProfileSummary = {
+  totalMs: number;
+  stepCount: number;
+  topSteps: RequestProfileStepAggregate[];
+  steps: RequestProfileStep[];
+};
+
+function monotonicNowNs(): bigint {
+  return process.hrtime.bigint();
+}
+
+function monotonicDurationMs(startNs: bigint): number {
+  return Number(process.hrtime.bigint() - startNs) / 1_000_000;
+}
+
+class RequestProfiler {
+  private readonly enabled: boolean;
+
+  private readonly startedAtNs: bigint;
+
+  private readonly steps: RequestProfileStep[] = [];
+
+  constructor(enabled: boolean) {
+    this.enabled = enabled;
+    this.startedAtNs = monotonicNowNs();
+  }
+
+  start(name: string): { name: string; startedAtNs: bigint } | null {
+    if (!this.enabled) return null;
+    return { name, startedAtNs: monotonicNowNs() };
+  }
+
+  end(
+    token: { name: string; startedAtNs: bigint } | null,
+    details?: Record<string, unknown>
+  ): void {
+    if (!this.enabled || !token) return;
+    this.record(token.name, monotonicDurationMs(token.startedAtNs), details);
+  }
+
+  record(name: string, durationMs: number, details?: Record<string, unknown>): void {
+    if (!this.enabled) return;
+    this.steps.push({
+      name,
+      durationMs: Number(durationMs.toFixed(3)),
+      ...(details ? { details } : {}),
+    });
+  }
+
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  summary(): RequestProfileSummary | null {
+    if (!this.enabled) return null;
+
+    const grouped = new Map<string, { count: number; totalMs: number; maxMs: number }>();
+    for (const step of this.steps) {
+      const existing = grouped.get(step.name);
+      if (!existing) {
+        grouped.set(step.name, {
+          count: 1,
+          totalMs: step.durationMs,
+          maxMs: step.durationMs,
+        });
+        continue;
+      }
+
+      existing.count += 1;
+      existing.totalMs += step.durationMs;
+      existing.maxMs = Math.max(existing.maxMs, step.durationMs);
+    }
+
+    const topSteps = Array.from(grouped.entries())
+      .map(([name, entry]) => ({
+        name,
+        count: entry.count,
+        totalMs: Number(entry.totalMs.toFixed(3)),
+        maxMs: Number(entry.maxMs.toFixed(3)),
+        avgMs: Number((entry.totalMs / entry.count).toFixed(3)),
+      }))
+      .sort((a, b) => b.totalMs - a.totalMs)
+      .slice(0, 20);
+
+    return {
+      totalMs: Number(monotonicDurationMs(this.startedAtNs).toFixed(3)),
+      stepCount: this.steps.length,
+      topSteps,
+      steps: this.steps.slice(0, 200),
+    };
+  }
+}
+
+function parseBooleanFlag(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (Array.isArray(value)) return value.some((item) => parseBooleanFlag(item));
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return (
+      normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+    );
+  }
+  return false;
+}
+
+function isTraktPreviewProfilingEnabled(req: Request): boolean {
+  return (
+    parseBooleanFlag(req.body?.profile) ||
+    parseBooleanFlag(req.query?.profile) ||
+    parseBooleanFlag(req.headers['x-profile'])
+  );
+}
+
 router.post('/anilist/preview', requireAuth, async (req, res) => {
   try {
     const { filters, type } = req.body;
@@ -1863,23 +1958,68 @@ router.post('/simkl/preview', requireAuth, async (req, res) => {
 
 router.post('/trakt/preview', requireAuth, resolveApiKey, async (req, res) => {
   try {
+    const profiler = new RequestProfiler(isTraktPreviewProfilingEnabled(req));
+    const initTimer = profiler.start('preview.init');
     const { filters, type } = req.body;
     const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
-    const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
-    const previewListType = safeFilters.traktListType || 'calendar';
+    const queryFilters = { ...safeFilters };
+    const randomize = Boolean(queryFilters.randomize || queryFilters.sortBy === 'random');
+    const previewListType = queryFilters.traktListType || 'calendar';
+    const isCalendarType = previewListType === 'calendar' || previewListType === 'recently_aired';
     const contentType = (type === 'series' ? 'series' : 'movie') as ContentType;
     const metas: import('../types/stremio.ts').StremioMetaPreview[] = [];
     let page = 1;
+    profiler.end(initTimer, {
+      listType: previewListType,
+      contentType,
+      randomize,
+      isCalendarType,
+    });
 
-    const apiKey = getApiKey(req);
-    const configs = await getConfigsByApiKey(apiKey);
+    const finalizeResponse = (previewMetas: StremioMetaPreview[]) => {
+      const response: {
+        metas: StremioMetaPreview[];
+        totalResults: null;
+        profile?: RequestProfileSummary;
+      } = {
+        metas: previewMetas,
+        totalResults: null,
+      };
+
+      const profileSummary = profiler.summary();
+      if (profileSummary) {
+        response.profile = profileSummary;
+        log.info('Trakt preview profile', {
+          listType: previewListType,
+          contentType,
+          randomize,
+          totalMs: profileSummary.totalMs,
+          topSteps: profileSummary.topSteps.slice(0, 10),
+        });
+      }
+
+      return response;
+    };
+
+    const discoverProfileHook:
+      | import('../services/trakt/discover.ts').DiscoverProfileHook
+      | undefined = profiler.isEnabled()
+      ? (event) => {
+          profiler.record(`discover.${event.phase}`, event.durationMs, event.details);
+        }
+      : undefined;
+
+    getApiKey(req);
+    const configLoadTimer = profiler.start('preview.config_lookup');
+    const lookupConfig = await getPreviewLookupConfig(req);
+    profiler.end(configLoadTimer, { configCount: lookupConfig ? 1 : 0 });
 
     // Resolve Trakt Client ID: server env var → user's saved key
     let traktClientId: string | null = config.traktApi.clientId || null;
     if (!traktClientId) {
-      if (configs.length > 0) {
-        traktClientId = getTraktKeyFromConfig(configs[0]);
+      if (lookupConfig) {
+        traktClientId = getTraktKeyFromConfig(lookupConfig);
       }
     }
     if (!traktClientId) {
@@ -1891,29 +2031,62 @@ router.post('/trakt/preview', requireAuth, resolveApiKey, async (req, res) => {
       );
     }
 
-    const excludeGenres: string[] | undefined = safeFilters.traktExcludeGenres;
+    const excludeGenres: string[] | undefined = Array.isArray(queryFilters.traktExcludeGenres)
+      ? queryFilters.traktExcludeGenres.filter(
+          (genre: unknown): genre is string => typeof genre === 'string'
+        )
+      : undefined;
+
+    const discoverOptions: import('../services/trakt/discover.ts').DiscoverOptions | undefined =
+      discoverProfileHook ? { onProfile: discoverProfileHook } : undefined;
 
     if (randomize) {
-      const probe = await trakt.discover(safeFilters, contentType, 1, traktClientId);
+      const randomProbeTimer = profiler.start('preview.random_probe.discover');
+      const probe = await trakt.discover(
+        queryFilters,
+        contentType,
+        1,
+        traktClientId,
+        discoverOptions
+      );
+      profiler.end(randomProbeTimer, {
+        itemsCount: probe.items.length,
+        hasMore: probe.hasMore,
+      });
+
+      const randomFilterTimer = profiler.start('preview.random_probe.filter');
       const filteredItems = excludeGenres?.length
         ? probe.items.filter(
-            (item) => !(item.genres || []).some((g: string) => excludeGenres.includes(g))
+            (item) => !(item.genres || []).some((g: string) => excludeGenres!.includes(g))
           )
         : probe.items;
-      if (
-        previewListType === 'boxoffice' ||
-        previewListType === 'calendar' ||
-        previewListType === 'recently_aired'
-      ) {
+      profiler.end(randomFilterTimer, {
+        beforeCount: probe.items.length,
+        afterCount: filteredItems.length,
+        excluded: excludeGenres?.length || 0,
+      });
+
+      if (previewListType === 'boxoffice' || isCalendarType) {
+        const convertTimer = profiler.start('preview.random_probe.convert_and_shuffle');
         const previewMetas = shuffleArray(
           trakt.batchConvertToStremioMeta(filteredItems, contentType)
         ).slice(0, PREVIEW_PAGE_SIZE);
+        profiler.end(convertTimer, {
+          inputCount: filteredItems.length,
+          outputCount: previewMetas.length,
+        });
+
+        const artworkTimer = profiler.start('preview.apply_preview_poster');
         const metasWithPreviewPoster = await applyPreviewPosterProvider(
           previewMetas,
           previewPosterProvider,
           req
         );
-        return res.json({ metas: metasWithPreviewPoster, totalResults: null });
+        profiler.end(artworkTimer, {
+          provider: previewPosterProvider || 'default',
+          count: metasWithPreviewPoster.length,
+        });
+        return res.json(finalizeResponse(metasWithPreviewPoster));
       }
       const maxPage = probe.hasMore ? 5 : 1;
       page = Math.floor(Math.random() * maxPage) + 1;
@@ -1921,25 +2094,65 @@ router.post('/trakt/preview', requireAuth, resolveApiKey, async (req, res) => {
 
     let pages = 0;
     while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
-      const result = await trakt.discover(safeFilters, contentType, page, traktClientId);
+      const discoverTimer = profiler.start('preview.backfill.discover');
+      const result = await trakt.discover(
+        queryFilters,
+        contentType,
+        page,
+        traktClientId,
+        discoverOptions
+      );
+      profiler.end(discoverTimer, {
+        page,
+        itemsCount: result.items.length,
+        hasMore: result.hasMore,
+      });
+
+      const filterTimer = profiler.start('preview.backfill.filter');
       const filtered = excludeGenres?.length
         ? result.items.filter(
-            (item) => !(item.genres || []).some((g: string) => excludeGenres.includes(g))
+            (item) => !(item.genres || []).some((g: string) => excludeGenres!.includes(g))
           )
         : result.items;
+      profiler.end(filterTimer, {
+        page,
+        beforeCount: result.items.length,
+        afterCount: filtered.length,
+        excluded: excludeGenres?.length || 0,
+      });
+
+      const convertTimer = profiler.start('preview.backfill.convert');
       metas.push(...trakt.batchConvertToStremioMeta(filtered, contentType));
+      profiler.end(convertTimer, {
+        page,
+        convertedCount: filtered.length,
+        metasAccumulated: metas.length,
+      });
       pages++;
       if (!result.hasMore || result.items.length === 0) break;
       page++;
     }
 
+    const finalSliceTimer = profiler.start('preview.finalize_slice');
     const previewMetas = randomize ? shuffleArray(metas) : metas;
+    const finalMetas = previewMetas.slice(0, PREVIEW_PAGE_SIZE);
+    profiler.end(finalSliceTimer, {
+      beforeSliceCount: previewMetas.length,
+      afterSliceCount: finalMetas.length,
+    });
+
+    const artworkTimer = profiler.start('preview.apply_preview_poster');
     const metasWithPreviewPoster = await applyPreviewPosterProvider(
-      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+      finalMetas,
       previewPosterProvider,
       req
     );
-    res.json({ metas: metasWithPreviewPoster, totalResults: null });
+    profiler.end(artworkTimer, {
+      provider: previewPosterProvider || 'default',
+      count: metasWithPreviewPoster.length,
+    });
+
+    res.json(finalizeResponse(metasWithPreviewPoster));
   } catch (error) {
     log.error('POST /trakt/preview error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));

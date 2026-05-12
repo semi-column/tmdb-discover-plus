@@ -336,10 +336,10 @@ describe('trakt discover routing', () => {
 
     const firstUrl = String(mockedTraktFetch.mock.calls[0][0]);
     expect(firstUrl).toContain('/calendars/all/movies/');
-    expect(firstUrl).toMatch(/\/(10|31)\?/);
+    expect(firstUrl).toMatch(/\/(6|33)\?/);
   });
 
-  it('chunks explicit calendar date ranges into <=31 day windows', async () => {
+  it('chunks explicit calendar date ranges into <=33 day windows', async () => {
     mockedTraktFetch.mockResolvedValue(responseForListType('calendar'));
 
     await discover(
@@ -356,8 +356,8 @@ describe('trakt discover routing', () => {
 
     const calls = mockedTraktFetch.mock.calls.map((call) => String(call[0]));
     expect(calls.length).toBeGreaterThan(1);
-    expect(calls.some((url) => url.includes('/calendars/all/movies/2024-01-01/31'))).toBe(true);
-    expect(calls.some((url) => url.includes('/calendars/all/movies/2024-02-01/15'))).toBe(true);
+    expect(calls.some((url) => url.includes('/calendars/all/movies/2024-01-01/33'))).toBe(true);
+    expect(calls.some((url) => url.includes('/calendars/all/movies/2024-02-03/13'))).toBe(true);
   });
 
   it('supports descending date order for upcoming calendar range', async () => {
@@ -493,7 +493,7 @@ describe('trakt discover routing', () => {
     expect(result.items[0]?.title).toContain('2026');
   });
 
-  it('applies Trakt Min Votes post-filter on calendar results', async () => {
+  it('sends Trakt Min Votes as API query param (server-side filtering)', async () => {
     mockedTraktFetch.mockResolvedValue([
       {
         released: '2024-01-01',
@@ -513,7 +513,7 @@ describe('trakt discover routing', () => {
       },
     ]);
 
-    const result = await discover(
+    await discover(
       {
         traktListType: 'calendar',
         traktCalendarType: 'movies',
@@ -525,11 +525,12 @@ describe('trakt discover routing', () => {
       'client-id-calendar-filter-check'
     );
 
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]?.title).toBe('High Votes');
+    // Votes filtering is sent to the API as a query param
+    const firstUrl = String(mockedTraktFetch.mock.calls[0][0]);
+    expect(firstUrl).toContain('votes=100-');
   });
 
-  it('applies Trakt Rating post-filter on calendar using 0-100 slider scale', async () => {
+  it('sends Trakt Rating as API query param (server-side filtering)', async () => {
     mockedTraktFetch.mockResolvedValue([
       {
         released: '2024-01-01',
@@ -549,7 +550,7 @@ describe('trakt discover routing', () => {
       },
     ]);
 
-    const result = await discover(
+    await discover(
       {
         traktListType: 'calendar',
         traktCalendarType: 'movies',
@@ -561,8 +562,9 @@ describe('trakt discover routing', () => {
       'client-id-calendar-external-strip'
     );
 
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]?.title).toBe('Rated 8.2');
+    // Rating filtering is sent to the API as a query param
+    const firstUrl = String(mockedTraktFetch.mock.calls[0][0]);
+    expect(firstUrl).toContain('ratings=80-100');
   });
 
   it('sends only supported external rating/vote filters to movie calendar endpoints', async () => {
@@ -643,7 +645,7 @@ describe('trakt discover routing', () => {
     expect(firstUrl).toContain('tmdb_votes=1000-');
   });
 
-  it('applies Trakt Min Votes post-filter on trending as fallback safety net', async () => {
+  it('sends Trakt Min Votes as API query param for trending endpoint', async () => {
     mockedTraktFetch.mockResolvedValue([
       {
         watchers: 1,
@@ -663,7 +665,7 @@ describe('trakt discover routing', () => {
       },
     ]);
 
-    const result = await discover(
+    await discover(
       {
         traktListType: 'trending',
         traktVotesMin: 100,
@@ -673,8 +675,9 @@ describe('trakt discover routing', () => {
       'client-id'
     );
 
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]?.title).toBe('Trending High Votes');
+    // Votes filtering is sent to the API as a query param
+    const firstUrl = String(mockedTraktFetch.mock.calls[0][0]);
+    expect(firstUrl).toContain('votes=100-');
   });
 
   it('sends aired episode range as direct endpoint filter when provided', async () => {
@@ -835,6 +838,7 @@ describe('trakt discover routing', () => {
 
     expect(withToggle.items).toHaveLength(1);
     expect(withToggle.items[0]?.title).toBe('Cached Returning Show');
-    expect(mockedTraktFetch).toHaveBeenCalledTimes(2);
+    // Raw cache reuses API data — only 1 fetch needed
+    expect(mockedTraktFetch).toHaveBeenCalledTimes(1);
   });
 });

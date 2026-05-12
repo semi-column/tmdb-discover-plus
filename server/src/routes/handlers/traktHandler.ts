@@ -161,7 +161,11 @@ export async function handleTraktCatalogRequest(
 
     const listType = effectiveFilters.traktListType || 'calendar';
     const randomize = Boolean(effectiveFilters.randomize || effectiveFilters.sortBy === 'random');
-    const excludeGenres = effectiveFilters.traktExcludeGenres as string[] | undefined;
+    const excludeGenres = Array.isArray(effectiveFilters.traktExcludeGenres)
+      ? effectiveFilters.traktExcludeGenres.filter(
+          (genre): genre is string => typeof genre === 'string'
+        )
+      : undefined;
 
     if (!traktClientId) {
       log.warn('Trakt Client ID not configured', { userId, listType });

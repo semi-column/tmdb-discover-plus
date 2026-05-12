@@ -6,38 +6,32 @@ const log = createLogger('trakt:client');
 
 const TRAKT_API_BASE = 'https://api.trakt.tv';
 const TRAKT_API_ORIGIN = new URL(TRAKT_API_BASE).origin;
-const MIN_INTERVAL_MS = 350;
+const MAX_CONCURRENT = 8;
 const USER_AGENT = 'TMDB-Discover-Plus/2.9.2';
 
-let lastRequestTime = 0;
-const requestQueue: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
-let processingQueue = false;
-
-async function processQueue(): Promise<void> {
-  if (processingQueue) return;
-  processingQueue = true;
-  while (requestQueue.length > 0) {
-    const now = Date.now();
-    const elapsed = now - lastRequestTime;
-    if (elapsed < MIN_INTERVAL_MS) {
-      await new Promise((r) => setTimeout(r, MIN_INTERVAL_MS - elapsed));
-    }
-    lastRequestTime = Date.now();
-    const item = requestQueue.shift();
-    item?.resolve();
-  }
-  processingQueue = false;
-}
+let activeCount = 0;
+const waitQueue: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
 
 async function acquireSlot(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (requestQueue.length >= 100) {
-      reject(new Error('Trakt request queue full'));
-      return;
-    }
-    requestQueue.push({ resolve, reject });
-    processQueue();
+  if (activeCount < MAX_CONCURRENT) {
+    activeCount++;
+    return;
+  }
+  if (waitQueue.length >= 100) {
+    throw new Error('Trakt request queue full');
+  }
+  return new Promise<void>((resolve, reject) => {
+    waitQueue.push({ resolve, reject });
   });
+}
+
+function releaseSlot(): void {
+  if (waitQueue.length > 0) {
+    const next = waitQueue.shift()!;
+    next.resolve();
+  } else {
+    activeCount--;
+  }
 }
 
 const circuitBreaker = {
@@ -104,53 +98,58 @@ export async function traktFetch<T>(path: string, clientId?: string): Promise<T>
 
   await acquireSlot();
 
-  const url = resolveTraktUrl(path);
-  let lastError: Error | null = null;
+  try {
+    const url = resolveTraktUrl(path);
+    let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          'trakt-api-version': '2',
-          'trakt-api-key': key,
-          'User-Agent': USER_AGENT,
-        },
-        signal: AbortSignal.timeout(TIMEOUTS.TRAKT_FETCH_MS),
-      });
-
-      if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get('Retry-After') || '5', 10);
-        log.warn('Trakt rate limited', { status: 429, attempt, retryAfter });
-        await new Promise((r) => setTimeout(r, retryAfter * 1000));
-        continue;
-      }
-
-      if (response.status === 503) {
-        log.warn('Trakt service unavailable', { attempt });
-        await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
-        continue;
-      }
-
-      if (!response.ok) {
-        throw Object.assign(new Error(`Trakt API error: ${response.status}`), {
-          statusCode: response.status,
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+            'trakt-api-version': '2',
+            'trakt-api-key': key,
+            'User-Agent': USER_AGENT,
+          },
+          signal: AbortSignal.timeout(TIMEOUTS.TRAKT_FETCH_MS),
         });
-      }
 
-      const data = (await response.json()) as T;
-      recordSuccess();
-      return data;
-    } catch (err) {
-      lastError = err as Error;
-      const code = (err as { statusCode?: number }).statusCode;
-      if (code === 429 || code === 503) continue;
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 300 * Math.pow(2, attempt)));
+        if (response.status === 429) {
+          const retryAfter = parseInt(response.headers.get('Retry-After') || '5', 10);
+          log.warn('Trakt rate limited', { status: 429, attempt, retryAfter });
+          await new Promise((r) => setTimeout(r, retryAfter * 1000));
+          continue;
+        }
+
+        if (response.status === 503) {
+          log.warn('Trakt service unavailable', { attempt });
+          await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
+          continue;
+        }
+
+        if (!response.ok) {
+          throw Object.assign(new Error(`Trakt API error: ${response.status}`), {
+            statusCode: response.status,
+          });
+        }
+
+        const data = (await response.json()) as T;
+        recordSuccess();
+        return data;
+      } catch (err) {
+        lastError = err as Error;
+        const code = (err as { statusCode?: number }).statusCode;
+        if (code === 429 || code === 503) continue;
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 300 * Math.pow(2, attempt)));
+        }
       }
     }
-  }
 
-  recordFailure();
-  throw lastError || new Error('Trakt API request failed');
+    recordFailure();
+    throw lastError || new Error('Trakt API request failed');
+  } finally {
+    releaseSlot();
+  }
 }

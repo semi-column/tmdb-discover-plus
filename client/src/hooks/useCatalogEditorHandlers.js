@@ -73,8 +73,7 @@ function resolveGlobalPreviewPosterProvider(preferences, contentType) {
     preferences?.artwork?.[normalizedType]?.poster?.provider ||
     preferences?.artwork?.poster?.provider ||
     null;
-
-  const provider = providerFromArtwork || preferences?.posterService || null;
+  const provider = providerFromArtwork;
 
   if (!provider || provider === 'none' || provider === 'default' || provider === 'metahub') {
     return 'tmdb';
