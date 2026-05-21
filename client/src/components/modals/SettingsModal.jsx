@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { createElement, useState } from 'react';
 import {
   Download,
   Upload,
@@ -18,7 +18,7 @@ import { SearchableSelect } from '../forms/SearchableSelect';
 import { ArtworkSettingsPanel } from '../config/ArtworkSettingsSection';
 import { ApiKeysSection } from '../config/ApiKeysSection';
 
-function CollapsibleSection({ title, icon: Icon, isExpanded, onToggle, children }) {
+function CollapsibleSection({ title, icon, isExpanded, onToggle, children }) {
   return (
     <div className={`settings-section ${isExpanded ? 'expanded' : ''}`}>
       <div
@@ -41,7 +41,7 @@ function CollapsibleSection({ title, icon: Icon, isExpanded, onToggle, children 
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Icon size={16} />
+          {icon ? createElement(icon, { size: 16 }) : null}
           <h3>{title}</h3>
         </div>
         <div
