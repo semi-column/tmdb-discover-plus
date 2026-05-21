@@ -14,7 +14,7 @@ import { DonateModal } from './components/modals/DonateModal';
 import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
 import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
 import { CreditsBanner } from './components/layout/CreditsBanner';
-import { DiscordIcon } from './components/social/DiscordButton.jsx';
+import { SocialButtons } from './components/social/SocialButtons.jsx';
 import { AppProviders } from './context/AppContext';
 
 import './styles/globals.css';
@@ -217,26 +217,10 @@ function App() {
                 )}
               </div>
 
-              <div className="mobile-support-under-actions">
-                <a
-                  href="https://discord.gg/X2N3btmEG2"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="sidebar-support-btn sidebar-support-discord"
-                  title="Join our Discord community"
-                >
-                  <DiscordIcon className="sidebar-support-icon" />
-                  <span>Discord</span>
-                </a>
-                <button
-                  onClick={() => setIsDonateModalOpen(true)}
-                  className="sidebar-support-btn sidebar-support-donate"
-                  title="Donate"
-                >
-                  <Heart size={14} />
-                  <span>Donate</span>
-                </button>
-              </div>
+              <SocialButtons
+                onDonateClick={() => setIsDonateModalOpen(true)}
+                className="mobile-support-under-actions"
+              />
             </div>
 
             <div className="builder-layout">
@@ -271,6 +255,7 @@ function App() {
           onClose={() => state.setShowInstallModal(false)}
           installUrl={installData?.installUrl}
           stremioUrl={installData?.stremioUrl}
+          onDonateClick={() => setIsDonateModalOpen(true)}
         />
 
         <ConfigMismatchModal

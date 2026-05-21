@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { X, Copy, Check, ExternalLink, Download } from 'lucide-react';
 import { useModalA11y } from '../../hooks/useModalA11y';
 import { logger } from '../../utils/logger';
+import { SocialButtons } from '../social/SocialButtons.jsx';
 
-export function InstallModal({ isOpen, onClose, installUrl, stremioUrl }) {
+export function InstallModal({ isOpen, onClose, installUrl, stremioUrl, onDonateClick }) {
   const [copied, setCopied] = useState(false);
   const modalRef = useModalA11y(isOpen, onClose);
 
@@ -110,6 +111,9 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl }) {
               catalogs. Stremio may cache addon data—if you don't see changes, refresh the Addons
               page or restart Stremio.
             </p>
+          </div>
+          <div className="setup-support-row" style={{ marginTop: '24px' }}>
+            <SocialButtons onDonateClick={onDonateClick} />
           </div>
         </div>
 

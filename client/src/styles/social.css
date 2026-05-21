@@ -95,3 +95,135 @@
     margin-top: 6px;
   }
 }
+
+/* Quirky Tooltips */
+.social-btn-wrapper {
+  position: relative;
+  display: flex;
+}
+
+.quirky-social-bubble {
+  position: absolute;
+  background: var(--bg-tertiary);
+  padding: 12px 28px 12px 14px;
+  border-radius: 12px;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  width: 220px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-primary);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  /* The Transition Engine */
+  transition:
+    opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    bottom 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.discord-bubble {
+  border: 1px solid rgba(88, 101, 242, 0.5);
+  left: 0;
+}
+
+.donate-bubble {
+  border: 1px solid rgba(255, 105, 180, 0.5);
+  right: 0;
+}
+
+.quirky-social-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+  z-index: 2;
+  margin: 0;
+  width: auto;
+  height: auto;
+}
+
+.quirky-social-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.quirky-social-text {
+  line-height: 1.5;
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
+  white-space: normal;
+  display: block;
+}
+
+.quirky-social-arrow {
+  position: absolute;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  background: var(--bg-tertiary);
+  transform: rotate(45deg);
+  z-index: 0;
+}
+
+.discord-bubble .quirky-social-arrow {
+  left: 20px;
+  border-bottom: 1px solid rgba(88, 101, 242, 0.5);
+  border-right: 1px solid rgba(88, 101, 242, 0.5);
+}
+
+.donate-bubble .quirky-social-arrow {
+  right: 20px;
+  border-bottom: 1px solid rgba(255, 105, 180, 0.5);
+  border-right: 1px solid rgba(255, 105, 180, 0.5);
+}
+
+/* Visibility states handled by React */
+.quirky-social-bubble.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  bottom: calc(100% + 14px);
+  pointer-events: auto;
+}
+
+.quirky-social-bubble.is-hidden {
+  opacity: 0;
+  /* Push it slightly down and scale it down for exit */
+  transform: translateY(8px) scale(0.96);
+  bottom: calc(100% + 10px);
+  pointer-events: none;
+}
+
+/* Fix for SocialButtons inside setup-support-row or mobile view */
+.setup-support-row .sidebar-support-links {
+  width: 100%;
+}
+.setup-support-row .social-btn-wrapper {
+  flex: 1;
+}
+.mobile-support-under-actions .social-btn-wrapper,
+.sidebar-support--top .social-btn-wrapper {
+  flex: 1;
+}
+
+@media (max-width: 767px) {
+  .quirky-social-bubble {
+    width: max-content;
+    max-width: 160px;
+  }
+}

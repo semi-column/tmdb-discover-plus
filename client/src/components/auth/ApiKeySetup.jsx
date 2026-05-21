@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Key, Loader, ArrowRight, ExternalLink, Eye, EyeOff, Coffee, Heart } from 'lucide-react';
-import { DiscordIcon } from '../social/DiscordButton.jsx';
+import { SocialButtons } from '../social/SocialButtons.jsx';
 import { DonateModal } from '../modals/DonateModal';
 import { api } from '../../services/api';
 
@@ -119,25 +119,7 @@ export function ApiKeySetup({ onLogin, isSessionExpired = false, returnUserId = 
           </button>
 
           <div className="setup-support-row">
-            <a
-              href="https://discord.gg/X2N3btmEG2"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="sidebar-support-btn sidebar-support-discord"
-              title="Join our Discord community"
-            >
-              <DiscordIcon className="sidebar-support-icon" />
-              <span>Discord</span>
-            </a>
-            <button
-              type="button"
-              onClick={() => setIsDonateOpen(true)}
-              className="sidebar-support-btn sidebar-support-donate"
-              title="Donate"
-            >
-              <Heart size={14} />
-              <span>Donate</span>
-            </button>
+            <SocialButtons onDonateClick={() => setIsDonateOpen(true)} />
           </div>
         </form>
       </div>
