@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.2](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.1...v2.10.2) (2026-05-23)
+
+
+### Features
+
+* Added Custom Url support for Posters ([41272a1](https://github.com/semi-column/tmdb-discover-plus/commit/41272a1651d3a8fe3fe52c0a07e502e77b8d84b3))
+* Added Kitsu support ([4c4eb2a](https://github.com/semi-column/tmdb-discover-plus/commit/4c4eb2ad589b11c5f59188f3ca11f71592fef357))
+* Added support for TMDB Collections ([ca8afcb](https://github.com/semi-column/tmdb-discover-plus/commit/ca8afcbab0b71d2c1c03128fbfaa16d3e5448ee7)), closes [#81](https://github.com/semi-column/tmdb-discover-plus/issues/81)
+* poster settings overhaul - per category selection ([54896fa](https://github.com/semi-column/tmdb-discover-plus/commit/54896fa7f34bafb9e64f0347138351c382f193d0))
+* **tmdb:** add studio mode to collection catalogs ([afe84d6](https://github.com/semi-column/tmdb-discover-plus/commit/afe84d6d0a80f72b149f670fbe96a62d4724eb38))
+* **trakt:** add aired-episodes and new-series exclusion filters with faster calendar discovery ([c9a1b56](https://github.com/semi-column/tmdb-discover-plus/commit/c9a1b560662c1ee25ab33909d5e7d5056dbd7acb))
+
+
+### Bug Fixes
+
+* appending search providers on UI selection ([0b96dca](https://github.com/semi-column/tmdb-discover-plus/commit/0b96dca054d24ae3070459555d58139c6a7729f4))
+* improve clarity on trakt recommended lists ([4c7b13e](https://github.com/semi-column/tmdb-discover-plus/commit/4c7b13ed70ea8732070f2bd595e41ef027642a80)), closes [#85](https://github.com/semi-column/tmdb-discover-plus/issues/85)
+* MAL API request failing due to missing header ([20c9c9f](https://github.com/semi-column/tmdb-discover-plus/commit/20c9c9fd63ed6776b6b393f8419d7e29043ce288))
+* place duplicated catalog immediately after source instead of appending to bottom ([d7b1b52](https://github.com/semi-column/tmdb-discover-plus/commit/d7b1b52eb21b536205d6f69da53da6e16611289c))
+
 ## [2.10.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.0...v2.10.1) (2026-04-18)
 
 ### Bug Fixes
