@@ -8,6 +8,7 @@ describe('UserConfig preferences schema', () => {
       'preferences.disableImdbSearch',
       'preferences.disableAnilistSearch',
       'preferences.disableMalSearch',
+      'preferences.disableKitsuSearch',
       'preferences.disableSimklSearch',
       'preferences.disableTraktSearch',
     ];
@@ -24,8 +25,29 @@ describe('UserConfig preferences schema', () => {
     expect(doc.preferences.disableImdbSearch).toBe(true);
     expect(doc.preferences.disableAnilistSearch).toBe(true);
     expect(doc.preferences.disableMalSearch).toBe(true);
+    expect(doc.preferences.disableKitsuSearch).toBe(true);
     expect(doc.preferences.disableSimklSearch).toBe(true);
     expect(doc.preferences.disableTraktSearch).toBe(true);
+  });
+
+  it('accepts kitsu as a valid catalog source', () => {
+    const doc = new UserConfig({
+      userId: 'schema-kitsu-source-user',
+      catalogs: [
+        {
+          name: 'Kitsu Test',
+          type: 'anime',
+          source: 'kitsu',
+          filters: {
+            listType: 'discover',
+          },
+        },
+      ],
+      preferences: {},
+    });
+
+    const error = doc.validateSync();
+    expect(error).toBeUndefined();
   });
 
   it('preserves nested artwork custom URL settings', () => {

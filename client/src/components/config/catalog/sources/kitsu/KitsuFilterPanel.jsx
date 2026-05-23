@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect } from 'react';
 import { Settings, Sparkles, Layers, Calendar, Eye } from 'lucide-react';
 import { FilterSection } from '../../FilterSection';
 import { GenreSelector } from '../../GenreSelector';
@@ -100,9 +100,16 @@ export function KitsuFilterPanel({
   const isTrending = filters.kitsuListType === 'trending';
 
   const availableSubtypes = useMemo(() => {
-    if (type === 'movie') return KITSU_SUBTYPES.filter((s) => s.value === 'movie');
+    if (type === 'movie') return [];
+    if (type === 'anime') return KITSU_SUBTYPES;
     return KITSU_SUBTYPES.filter((s) => s.value !== 'movie');
   }, [type]);
+
+  useEffect(() => {
+    if (type === 'movie' && (filters.kitsuSubtype || []).length > 0) {
+      onFiltersChange('kitsuSubtype', []);
+    }
+  }, [type, filters.kitsuSubtype, onFiltersChange]);
 
   const categoryObjects = useMemo(
     () => KITSU_CATEGORIES.map((c) => ({ id: c.slug, name: c.title })),
@@ -275,17 +282,19 @@ export function KitsuFilterPanel({
           onToggle={onToggleSection}
           badgeCount={getFormatBadge()}
         >
-          <div className="filter-group">
-            <LabelWithTooltip
-              label="Subtype"
-              tooltip="Filter by anime format: TV, Movie, OVA, ONA, Special."
-            />
-            <AnimeFormatSelector
-              selected={filters.kitsuSubtype || []}
-              options={availableSubtypes}
-              onChange={(values) => onFiltersChange('kitsuSubtype', values)}
-            />
-          </div>
+          {availableSubtypes.length > 0 && (
+            <div className="filter-group">
+              <LabelWithTooltip
+                label="Subtype"
+                tooltip="Filter by anime format: TV, Movie, OVA, ONA, Special."
+              />
+              <AnimeFormatSelector
+                selected={filters.kitsuSubtype || []}
+                options={availableSubtypes}
+                onChange={(values) => onFiltersChange('kitsuSubtype', values)}
+              />
+            </div>
+          )}
 
           <div className="filter-group">
             <LabelWithTooltip label="Status" tooltip="Filter by airing status." />
