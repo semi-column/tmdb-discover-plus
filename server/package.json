@@ -28,7 +28,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.0.0",
+    "mongoose": "^8.22.1",
     "nanoid": "^5.0.4",
     "node-cache": "^5.1.2",
     "node-fetch": "^3.3.2",
