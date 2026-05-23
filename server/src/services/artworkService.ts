@@ -972,6 +972,16 @@ function metahubFallback(kind: ArtworkKind, imdbId: string | null | undefined): 
   return metahubUrl(metahubKind, imdbId);
 }
 
+function resolveTmdbFallback(
+  kind: ArtworkKind,
+  context: ArtworkContext,
+  nativeUrls: NativeArtworkUrls
+): string | null {
+  const nativeTmdbUrl = getNativePreferredForService(nativeUrls[kind] ?? null, 'tmdb');
+  if (nativeTmdbUrl) return nativeTmdbUrl;
+  return metahubFallback(kind, context.imdbId);
+}
+
 export interface ApplyArtworkOverridesOptions {
   checkExistence?: boolean;
 }
@@ -1040,26 +1050,11 @@ export async function applyArtworkOverrides(
         url = getNativePreferredForService(nativeUrls[kind] ?? null, service);
       }
 
-      // IMDb provider: if native IMDb artwork wasn't available, resolve via IMDb ID.
-      if (!url && service === 'imdb') {
-        url = metahubFallback(kind, effectiveContext.imdbId);
+      // Any missing provider artwork falls back to TMDB.
+      if (!url) {
+        url = resolveTmdbFallback(kind, effectiveContext, nativeUrls);
       }
 
-      // TMDB provider: if native TMDB wasn't available, resolve from IMDb via Metahub
-      if (!url && service === 'tmdb') {
-        url = metahubFallback(kind, effectiveContext.imdbId);
-      }
-
-      // Fanart provider: if no fanart asset exists (or request fails), keep native artwork
-      // to avoid blank posters/cards, then fallback to metahub when IMDb ID is available.
-      if (!url && service === 'fanart') {
-        url = nativeUrls[kind] ?? null;
-        if (!url) {
-          url = metahubFallback(kind, effectiveContext.imdbId);
-        }
-      }
-
-      // Explicit provider selection is strict: do not silently fallback to another provider.
       result[kind] = url;
       continue;
     }
@@ -1118,25 +1113,11 @@ export function applyArtworkOverridesSync(
         url = getNativePreferredForService(nativeUrls[kind] ?? null, service);
       }
 
-      // IMDb provider: if native IMDb artwork wasn't available, resolve via IMDb ID.
-      if (!url && service === 'imdb') {
-        url = metahubFallback(kind, effectiveContext.imdbId);
+      // Any missing provider artwork falls back to TMDB.
+      if (!url) {
+        url = resolveTmdbFallback(kind, effectiveContext, nativeUrls);
       }
 
-      // TMDB provider: if native TMDB wasn't available, resolve from IMDb via Metahub
-      if (!url && service === 'tmdb') {
-        url = metahubFallback(kind, effectiveContext.imdbId);
-      }
-
-      // Fanart provider: keep native artwork when fanart does not resolve.
-      if (!url && service === 'fanart') {
-        url = nativeUrls[kind] ?? null;
-        if (!url) {
-          url = metahubFallback(kind, effectiveContext.imdbId);
-        }
-      }
-
-      // Explicit provider selection is strict: do not silently fallback to another provider.
       result[kind] = url;
       continue;
     }

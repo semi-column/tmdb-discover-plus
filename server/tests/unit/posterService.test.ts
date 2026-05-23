@@ -257,7 +257,7 @@ describe('applyArtworkOverridesToMetaPreviews', () => {
     );
   });
 
-  it('resolves IMDb preview poster via metahub in strict mode when imdbId is present', async () => {
+  it('falls back to TMDB poster when IMDb provider has no native artwork in strict mode', async () => {
     const metas = [
       {
         id: 'tmdb:550',
@@ -285,7 +285,7 @@ describe('applyArtworkOverridesToMetaPreviews', () => {
       { strictPoster: true }
     );
 
-    expect(result[0]?.poster).toBe('https://images.metahub.space/poster/medium/tt0137523/img');
+    expect(result[0]?.poster).toBe('https://image.tmdb.org/t/p/w500/example.jpg');
   });
 
   it('keeps native poster in strict mode when fanart lookup misses', async () => {
@@ -329,6 +329,37 @@ describe('applyArtworkOverridesToMetaPreviews', () => {
         type: 'movie',
         name: 'Fight Club',
         poster: null,
+        background: null,
+        fanart: null,
+        landscapePoster: null,
+      },
+    ];
+
+    const result = await applyArtworkOverridesToMetaPreviews(
+      metas as any,
+      {
+        poster: { service: 'fanart', apiKey: 'fanartkey123456' },
+        backdrop: null,
+        logo: null,
+        landscape: null,
+        episode: null,
+      },
+      { strictPoster: true }
+    );
+
+    expect(result[0]?.poster).toBe('https://images.metahub.space/poster/medium/tt0137523/img');
+  });
+
+  it('uses TMDB fallback instead of non-TMDB native poster when selected provider misses', async () => {
+    const metas = [
+      {
+        id: 'tmdb:550',
+        tmdbId: 550,
+        imdbId: 'tt0137523',
+        imdb_id: 'tt0137523',
+        type: 'movie',
+        name: 'Fight Club',
+        poster: 'https://m.media-amazon.com/images/M/native-imdb.jpg',
         background: null,
         fanart: null,
         landscapePoster: null,
