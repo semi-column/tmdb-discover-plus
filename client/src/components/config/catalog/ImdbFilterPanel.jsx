@@ -24,6 +24,7 @@ import { SearchInput } from '../../forms/SearchInput';
 import { RangeSlider, SingleSlider } from '../../forms/RangeSlider';
 import { LabelWithTooltip } from '../../forms/Tooltip';
 import { StremioExtras } from './StremioExtras';
+import { RUNTIME_MAX_MINUTES } from '../../../constants/filterLimits';
 
 const MAX_RANK_HIDDEN = false;
 
@@ -305,7 +306,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
   const handleRuntimeChange = useCallback(
     (range) => {
       onFiltersChange('runtimeMin', range[0] === 0 ? undefined : range[0]);
-      onFiltersChange('runtimeMax', range[1] === 400 ? undefined : range[1]);
+      onFiltersChange('runtimeMax', range[1] === RUNTIME_MAX_MINUTES ? undefined : range[1]);
     },
     [onFiltersChange]
   );
@@ -737,7 +738,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             min={0}
             max={400}
             step={1}
-            value={[filters.runtimeMin || 0, filters.runtimeMax || 400]}
+            value={[filters.runtimeMin || 0, filters.runtimeMax || RUNTIME_MAX_MINUTES]}
             onChange={handleRuntimeChange}
             formatValue={(v) => (v === 0 ? 'Any' : v === 400 ? '400+' : `${v}m`)}
             showInputs
@@ -760,14 +761,14 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
             <button
               type="button"
               className={`date-preset ${filters.runtimeMin === 150 ? 'active' : ''}`}
-              onClick={() => handleRuntimeChange([150, 400])}
+              onClick={() => handleRuntimeChange([150, RUNTIME_MAX_MINUTES])}
             >
               Long (&gt;150m)
             </button>
             <button
               type="button"
               className="date-preset"
-              onClick={() => handleRuntimeChange([0, 400])}
+              onClick={() => handleRuntimeChange([0, RUNTIME_MAX_MINUTES])}
             >
               Any
             </button>

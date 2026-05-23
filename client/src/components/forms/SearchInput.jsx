@@ -24,6 +24,7 @@ export function SearchInput({
 
   useEffect(() => {
     if (query.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear stale results when query becomes too short
       setResults([]);
       return;
     }
@@ -90,6 +91,7 @@ export function SearchInput({
         window.removeEventListener('scroll', updateDropdownPosition, true);
       };
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset dropdown position when it closes
     setDropdownStyle(null);
     return undefined;
   }, [isOpen, results, updateDropdownPosition]);

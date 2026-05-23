@@ -3,6 +3,7 @@ import { RangeSlider, SingleSlider } from '../../forms/RangeSlider';
 import { MultiSelect } from '../../forms/MultiSelect';
 import { SearchableSelect } from '../../forms/SearchableSelect';
 import { LabelWithTooltip } from '../../forms/Tooltip';
+import { RUNTIME_MAX_MINUTES } from '../../../constants/filterLimits';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -46,7 +47,7 @@ export const FilterPanel = memo(function FilterPanel({
   const handleRuntimeRangeChange = useCallback(
     (range) => {
       onFiltersChange('runtimeMin', range[0] === 0 ? undefined : range[0]);
-      onFiltersChange('runtimeMax', range[1] === 400 ? undefined : range[1]);
+      onFiltersChange('runtimeMax', range[1] === RUNTIME_MAX_MINUTES ? undefined : range[1]);
     },
     [onFiltersChange]
   );
@@ -142,7 +143,10 @@ export const FilterPanel = memo(function FilterPanel({
           min={0}
           max={400}
           step={1}
-          value={[localCatalog?.filters?.runtimeMin || 0, localCatalog?.filters?.runtimeMax || 400]}
+          value={[
+            localCatalog?.filters?.runtimeMin || 0,
+            localCatalog?.filters?.runtimeMax || RUNTIME_MAX_MINUTES,
+          ]}
           onChange={handleRuntimeRangeChange}
           formatValue={(v) => (v === 0 ? 'Any' : v === 400 ? '400+' : `${v}m`)}
           showInputs
@@ -164,22 +168,22 @@ export const FilterPanel = memo(function FilterPanel({
           </button>
           <button
             type="button"
-            className={`date-preset ${localCatalog?.filters?.runtimeMin === 150 && localCatalog?.filters?.runtimeMax === 400 ? 'active' : ''}`}
-            onClick={() => handleRuntimeRangeChange([150, 400])}
+            className={`date-preset ${localCatalog?.filters?.runtimeMin === 150 && localCatalog?.filters?.runtimeMax === RUNTIME_MAX_MINUTES ? 'active' : ''}`}
+            onClick={() => handleRuntimeRangeChange([150, RUNTIME_MAX_MINUTES])}
           >
             Long (&gt;150m)
           </button>
           <button
             type="button"
             className={`date-preset ${localCatalog?.filters?.runtimeMin === 180 ? 'active' : ''}`}
-            onClick={() => handleRuntimeRangeChange([180, 400])}
+            onClick={() => handleRuntimeRangeChange([180, RUNTIME_MAX_MINUTES])}
           >
             Epic (&gt;3h)
           </button>
           <button
             type="button"
             className="date-preset"
-            onClick={() => handleRuntimeRangeChange([0, 400])}
+            onClick={() => handleRuntimeRangeChange([0, RUNTIME_MAX_MINUTES])}
           >
             Any
           </button>

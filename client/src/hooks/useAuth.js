@@ -28,6 +28,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
     const currentUrlUserId = getUrlUserId();
 
     if (config.isAuthenticated) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- auth state machine reacts to async auth check
       setIsSetup(false);
       setIsSessionExpired(false);
 
@@ -76,6 +77,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
 
     let stale = false;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- show loader and clear previous catalog before async load
     setPageLoading(true);
     setActiveCatalog(null);
     config

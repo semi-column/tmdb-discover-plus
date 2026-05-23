@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import type { ContentType } from '../../types/common.ts';
 import type { StremioMetaPreview, CatalogConfig, ArtworkOptions } from '../../types/index.ts';
+import type { AnilistCatalogFilters } from '../../types/config.ts';
 import { getUserConfig } from '../../services/configService.ts';
 import { getCache } from '../../services/cache/index.ts';
 import * as anilist from '../../services/anilist/index.ts';
@@ -161,12 +162,13 @@ export async function handleAnilistCatalogRequest(
     }
 
     let metas: StremioMetaPreview[];
+    const browseFilters = effectiveFilters as unknown as AnilistCatalogFilters;
     if (randomize) {
-      const probe = await anilist.browse(effectiveFilters as any, type, 1);
+      const probe = await anilist.browse(browseFilters, type, 1);
       const lastPage = Math.ceil(probe.total / 50) || 1;
       const randomPage = Math.floor(Math.random() * Math.min(lastPage, 50)) + 1;
       metas = await fetchWithBackfill(
-        (p) => anilist.browse(effectiveFilters as any, type, p),
+        (p) => anilist.browse(browseFilters, type, p),
         type,
         randomPage,
         artworkOptions
@@ -174,7 +176,7 @@ export async function handleAnilistCatalogRequest(
       metas = shuffleArray(metas);
     } else {
       metas = await fetchWithBackfill(
-        (p) => anilist.browse(effectiveFilters as any, type, p),
+        (p) => anilist.browse(browseFilters, type, p),
         type,
         page,
         artworkOptions

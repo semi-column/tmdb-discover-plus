@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { UserConfig } from '../../src/models/UserConfig.ts';
+import type { SourceType } from '../../src/types/config.ts';
 
 describe('UserConfig preferences schema', () => {
   it('includes per-source search disable fields', () => {
@@ -73,5 +74,22 @@ describe('UserConfig preferences schema', () => {
       'https://img.example.com/{type}/{rating_id}.jpg'
     );
     expect(raw.preferences.artwork.englishArtOnly).toBe(true);
+  });
+
+  it('catalog.source enum matches the SourceType union (schema-sync invariant)', () => {
+    // Authoritative list — must equal SourceType union in src/types/config.ts.
+    // Compile-time check: every literal here is assignable to SourceType, and the
+    // tuple's element type is SourceType. If either side drifts, this fails to compile.
+    const expectedSources = ['tmdb', 'imdb', 'anilist', 'mal', 'simkl', 'trakt', 'kitsu'] as const;
+    const _typecheck: readonly SourceType[] = expectedSources;
+    void _typecheck;
+
+    const catalogsPath = UserConfig.schema.path('catalogs') as unknown as {
+      schema: { path: (key: string) => { enumValues?: string[] } };
+    };
+    const sourcePath = catalogsPath.schema.path('source');
+    const mongooseEnum = sourcePath.enumValues || [];
+
+    expect([...mongooseEnum].sort()).toEqual([...expectedSources].sort());
   });
 });

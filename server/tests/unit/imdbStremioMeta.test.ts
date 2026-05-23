@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  imdbToStremioMeta,
-  imdbToStremioFullMeta,
-  imdbRankingToStremioMeta,
-  imdbListItemToStremioMeta,
-} from '../../src/services/imdb/stremioMeta.ts';
+import { imdbToStremioMeta, imdbToStremioFullMeta } from '../../src/services/imdb/stremioMeta.ts';
 
 const mockImdbTitle = {
   id: 'tt0111161',
@@ -143,22 +138,6 @@ describe('imdbToStremioFullMeta', () => {
   it('includes release date', () => {
     const result = imdbToStremioFullMeta(mockImdbTitle as any, 'movie');
     expect(result!.released).toBe('1994-09-23');
-  });
-});
-
-describe('imdbRankingToStremioMeta', () => {
-  it('delegates to imdbToStremioMeta', () => {
-    const result = imdbRankingToStremioMeta(mockImdbTitle as any, 'movie');
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('tt0111161');
-  });
-});
-
-describe('imdbListItemToStremioMeta', () => {
-  it('delegates to imdbToStremioMeta', () => {
-    const result = imdbListItemToStremioMeta(mockImdbTitle as any, 'movie');
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('tt0111161');
   });
 });
 

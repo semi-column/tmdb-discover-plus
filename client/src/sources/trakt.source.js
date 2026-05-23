@@ -1,5 +1,6 @@
 import { lazy } from 'react';
 import { humanizeFilterValue, resolveOptionLabel } from '../utils/filterLabels';
+import { RUNTIME_MAX_MINUTES } from '../constants/filterLimits';
 import {
   formatTraktCalendarWindowLabel,
   normalizeTraktListType,
@@ -234,7 +235,7 @@ export const TRAKT_SOURCE = {
 
     if (filters.traktRuntimeMin != null || filters.traktRuntimeMax != null) {
       const min = filters.traktRuntimeMin ?? 0;
-      const max = filters.traktRuntimeMax ?? 400;
+      const max = filters.traktRuntimeMax ?? RUNTIME_MAX_MINUTES;
       active.push({ key: 'traktRuntime', label: `Runtime: ${min}-${max}m`, section: 'filters' });
     }
 

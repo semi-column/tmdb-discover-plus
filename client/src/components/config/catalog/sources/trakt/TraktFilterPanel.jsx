@@ -13,6 +13,7 @@ import {
 import { FilterSection } from '../../FilterSection';
 import { SearchableSelect } from '../../../../forms/SearchableSelect';
 import { MultiSelect } from '../../../../forms/MultiSelect';
+import { RUNTIME_MAX_MINUTES } from '../../../../../constants/filterLimits';
 import { LabelWithTooltip } from '../../../../forms/Tooltip';
 import { StremioExtras } from '../../StremioExtras';
 import { AnimeFormatSelector } from '../../shared/AnimeFormatSelector';
@@ -99,6 +100,7 @@ export function TraktFilterPanel({
 
   useEffect(() => {
     if (traktHasKey) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- short-circuit when parent already confirmed key is present
       setKeyState('ready');
       return;
     }
@@ -117,6 +119,7 @@ export function TraktFilterPanel({
     };
   }, [traktHasKey]);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- React Compiler cannot preserve memoization across the surrounding state-machine; manual useCallback is intentional
   const handleSaveKey = useCallback(async () => {
     if (!traktKey.trim()) return;
     setKeyValidating(true);
@@ -571,6 +574,7 @@ export function TraktFilterPanel({
   // Sync from prop if it arrives with data (e.g. after parent refresh)
   useEffect(() => {
     if (Array.isArray(traktNetworks) && traktNetworks.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional prop→state mirror for late-arriving networks
       setLocalNetworks(traktNetworks);
     }
   }, [traktNetworks]);
@@ -578,9 +582,11 @@ export function TraktFilterPanel({
   // Auto-fetch on mount if prop is empty
   useEffect(() => {
     if (!Array.isArray(traktNetworks) || traktNetworks.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only fetch; fetchNetworks owns its own setState
       fetchNetworks();
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only fetch
+  }, []);
 
   const safeNetworks = localNetworks;
 
@@ -1084,10 +1090,10 @@ export function TraktFilterPanel({
             min={0}
             max={400}
             step={5}
-            value={[filters.traktRuntimeMin ?? 0, filters.traktRuntimeMax ?? 400]}
+            value={[filters.traktRuntimeMin ?? 0, filters.traktRuntimeMax ?? RUNTIME_MAX_MINUTES]}
             onChange={([min, max]) => {
               onFiltersChange('traktRuntimeMin', min > 0 ? min : undefined);
-              onFiltersChange('traktRuntimeMax', max < 400 ? max : undefined);
+              onFiltersChange('traktRuntimeMax', max < RUNTIME_MAX_MINUTES ? max : undefined);
             }}
           />
         )}

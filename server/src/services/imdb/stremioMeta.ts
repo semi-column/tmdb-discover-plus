@@ -4,7 +4,7 @@ import { metahubUrl, buildStremioSearchUrl, DISPLAY } from '../../constants.ts';
 import { formatRuntime, generateSlug } from '../common/stremioHelpers.ts';
 
 import type { ContentType } from '../../types/index.ts';
-import type { ImdbTitle, ImdbRankingEntry, ImdbListItem, ImdbPosterOptions } from './types.ts';
+import type { ImdbTitle, ImdbPosterOptions } from './types.ts';
 
 function mapImdbTypeToContentType(imdbType: string): ContentType {
   if (['tvSeries', 'tvMiniSeries', 'tvSpecial', 'tvShort'].includes(imdbType)) {
@@ -210,20 +210,4 @@ export function imdbToStremioFullMeta(
     released: item.releaseDate?.date || undefined,
     status: item.endYear ? 'Ended' : null,
   };
-}
-
-export function imdbRankingToStremioMeta(
-  entry: ImdbRankingEntry,
-  type: ContentType,
-  artworkOptions: ImdbPosterOptions | null = null
-): Record<string, unknown> | null {
-  return imdbToStremioMeta(entry as ImdbTitle, type, artworkOptions);
-}
-
-export function imdbListItemToStremioMeta(
-  item: ImdbListItem,
-  type: ContentType,
-  artworkOptions: ImdbPosterOptions | null = null
-): Record<string, unknown> | null {
-  return imdbToStremioMeta(item as ImdbTitle, type, artworkOptions);
 }

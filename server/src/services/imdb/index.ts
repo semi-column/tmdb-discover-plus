@@ -1,9 +1,4 @@
-export {
-  imdbFetch,
-  getImdbCircuitBreakerState,
-  resetImdbCircuitBreaker,
-  getInFlightCount,
-} from './client.ts';
+export { imdbFetch, getImdbCircuitBreakerState, resetImdbCircuitBreaker } from './client.ts';
 export { advancedSearch, getTopRanking, getPopular, getList } from './discover.ts';
 export { getTitle, getPoster, getEpisodesBySeason } from './detail.ts';
 export { search, getSuggestions, basicSearch } from './search.ts';
@@ -18,12 +13,7 @@ export {
   getRankedLists,
   getWithDataOptions,
 } from './reference.ts';
-export {
-  imdbToStremioMeta,
-  imdbToStremioFullMeta,
-  imdbRankingToStremioMeta,
-  imdbListItemToStremioMeta,
-} from './stremioMeta.ts';
+export { imdbToStremioMeta, imdbToStremioFullMeta } from './stremioMeta.ts';
 export {
   IMDB_GENRES,
   IMDB_KEYWORDS,

@@ -331,7 +331,3 @@ async function executeImdbFetch(
 
   throw lastError;
 }
-
-export function getInFlightCount(): number {
-  return inFlightRequests.size;
-}

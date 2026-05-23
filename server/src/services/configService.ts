@@ -5,6 +5,7 @@ import { sanitizeString, isValidUserId, isValidApiKeyFormat } from '../utils/val
 import {
   artworkProviderRequiresApiKey,
   validateArtworkProviderApiKey,
+  type ArtworkProviderForValidation,
 } from '../utils/artworkValidation.ts';
 import { validateTvdbApiKeyAuthorization } from './artworkService.ts';
 import { encrypt, decrypt } from '../utils/encryption.ts';
@@ -285,7 +286,8 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
           for (const [kind, sourceConfig] of Object.entries(ctConfig)) {
             if (!sourceConfig) continue;
             const provider = (sourceConfig.provider || 'none') as string;
-            const requiresApiKey = artworkProviderRequiresApiKey(provider as any);
+            const providerForValidation = provider as ArtworkProviderForValidation;
+            const requiresApiKey = artworkProviderRequiresApiKey(providerForValidation);
 
             if (sourceConfig.customUrlPattern) {
               const safePattern = sanitizeString(sourceConfig.customUrlPattern, 2000).trim();
@@ -295,9 +297,13 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
 
             const rawKey = sourceConfig.apiKey;
             if (rawKey !== undefined) {
-              const validation = validateArtworkProviderApiKey(provider as any, String(rawKey), {
-                required: requiresApiKey,
-              });
+              const validation = validateArtworkProviderApiKey(
+                providerForValidation,
+                String(rawKey),
+                {
+                  required: requiresApiKey,
+                }
+              );
               if (!validation.valid) {
                 throw new Error(
                   `Invalid artwork API key for ${provider} (${ct}/${kind}): ${validation.error}`
@@ -347,7 +353,8 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
         const legacyArtwork = artwork as Record<string, ArtworkSourceConfig>;
         for (const [type, sourceConfig] of Object.entries(legacyArtwork)) {
           const provider = (sourceConfig.provider || 'none') as string;
-          const requiresApiKey = artworkProviderRequiresApiKey(provider as any);
+          const providerForValidation = provider as ArtworkProviderForValidation;
+          const requiresApiKey = artworkProviderRequiresApiKey(providerForValidation);
 
           if (sourceConfig.customUrlPattern) {
             const safePattern = sanitizeString(sourceConfig.customUrlPattern, 2000).trim();
@@ -356,9 +363,13 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
 
           const rawKey = sourceConfig.apiKey;
           if (rawKey !== undefined) {
-            const validation = validateArtworkProviderApiKey(provider as any, String(rawKey), {
-              required: requiresApiKey,
-            });
+            const validation = validateArtworkProviderApiKey(
+              providerForValidation,
+              String(rawKey),
+              {
+                required: requiresApiKey,
+              }
+            );
             if (!validation.valid) {
               throw new Error(
                 `Invalid artwork API key for ${provider} (${type}): ${validation.error}`

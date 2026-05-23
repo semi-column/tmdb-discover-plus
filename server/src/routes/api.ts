@@ -1617,6 +1617,38 @@ router.get('/imdb/search/suggestions', requireAuth, async (req, res) => {
 const PREVIEW_PAGE_SIZE = 20;
 const PREVIEW_MAX_BACKFILL = 5;
 
+function normalizePreviewContentType(type: unknown): ContentType {
+  if (type === 'anime') return 'anime';
+  if (type === 'series') return 'series';
+  return 'movie';
+}
+
+async function runPreviewBackfill(opts: {
+  fetchPage: (page: number) => Promise<{ metas: StremioMetaPreview[]; hasMore: boolean }>;
+  startPage?: number;
+  randomize: boolean;
+  previewPosterProvider: PreviewPosterProvider | null;
+  req: Request;
+}): Promise<StremioMetaPreview[]> {
+  const { fetchPage, startPage = 1, randomize, previewPosterProvider, req } = opts;
+  const metas: StremioMetaPreview[] = [];
+  let page = startPage;
+  let pages = 0;
+  while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
+    const result = await fetchPage(page);
+    metas.push(...result.metas);
+    pages++;
+    if (!result.hasMore || result.metas.length === 0) break;
+    page++;
+  }
+  const ordered = randomize ? shuffleArray(metas) : metas;
+  return applyPreviewPosterProvider(
+    ordered.slice(0, PREVIEW_PAGE_SIZE),
+    previewPosterProvider,
+    req
+  );
+}
+
 type RequestProfileStep = {
   name: string;
   durationMs: number;
@@ -1752,43 +1784,45 @@ router.post('/anilist/preview', requireAuth, async (req, res) => {
     const safeFilters = filters || {};
     const hasStudioFilter = Array.isArray(safeFilters.studios) && safeFilters.studios.length > 0;
     const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
-    const contentType = (
-      type === 'anime' ? 'anime' : type === 'series' ? 'series' : 'movie'
-    ) as ContentType;
-    const metas: import('../types/stremio.ts').StremioMetaPreview[] = [];
-    let page = 1;
+    const contentType = normalizePreviewContentType(type);
+    let startPage = 1;
 
     if (randomize) {
       const probe = await anilist.browse(safeFilters, contentType, 1);
       const lastPage = Math.ceil(probe.total / 50) || 1;
-      page = Math.floor(Math.random() * Math.min(lastPage, 50)) + 1;
+      startPage = Math.floor(Math.random() * Math.min(lastPage, 50)) + 1;
     }
 
+    let metasWithPreviewPoster: StremioMetaPreview[];
     if (hasStudioFilter && !randomize) {
       const pageNumbers = Array.from({ length: PREVIEW_MAX_BACKFILL }, (_, i) => i + 1);
       const batched = await anilist.browseBatch(safeFilters, contentType, pageNumbers);
-
+      const metas: StremioMetaPreview[] = [];
       for (const result of batched) {
         metas.push(...anilist.batchConvertToStremioMeta(result.media, contentType));
         if (metas.length >= PREVIEW_PAGE_SIZE) break;
       }
+      metasWithPreviewPoster = await applyPreviewPosterProvider(
+        metas.slice(0, PREVIEW_PAGE_SIZE),
+        previewPosterProvider,
+        req
+      );
     } else {
-      let pages = 0;
-      while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
-        const result = await anilist.browse(safeFilters, contentType, page);
-        metas.push(...anilist.batchConvertToStremioMeta(result.media, contentType));
-        pages++;
-        if (!result.hasNextPage || result.media.length === 0) break;
-        page++;
-      }
+      metasWithPreviewPoster = await runPreviewBackfill({
+        fetchPage: async (p) => {
+          const r = await anilist.browse(safeFilters, contentType, p);
+          return {
+            metas: anilist.batchConvertToStremioMeta(r.media, contentType),
+            hasMore: r.hasNextPage,
+          };
+        },
+        startPage,
+        randomize,
+        previewPosterProvider,
+        req,
+      });
     }
 
-    const previewMetas = randomize ? shuffleArray(metas) : metas;
-    const metasWithPreviewPoster = await applyPreviewPosterProvider(
-      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
-      previewPosterProvider,
-      req
-    );
     res.json({
       metas: metasWithPreviewPoster,
       totalResults: null,
@@ -1819,33 +1853,28 @@ router.post('/mal/preview', requireAuth, async (req, res) => {
     const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
     const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
-    const contentType = (
-      type === 'anime' ? 'anime' : type === 'series' ? 'series' : 'movie'
-    ) as ContentType;
-    const metas: import('../types/stremio.ts').StremioMetaPreview[] = [];
-    let page = 1;
+    const contentType = normalizePreviewContentType(type);
+    let startPage = 1;
 
     if (randomize) {
       const probe = await mal.discover(safeFilters, contentType, 1);
       const totalPages = Math.ceil(probe.total / 25) || 1;
-      page = Math.floor(Math.random() * Math.min(totalPages, 20)) + 1;
+      startPage = Math.floor(Math.random() * Math.min(totalPages, 20)) + 1;
     }
 
-    let pages = 0;
-    while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
-      const result = await mal.discover(safeFilters, contentType, page);
-      metas.push(...mal.batchConvertToStremioMeta(result.anime, contentType));
-      pages++;
-      if (!result.hasMore || result.anime.length === 0) break;
-      page++;
-    }
-
-    const previewMetas = randomize ? shuffleArray(metas) : metas;
-    const metasWithPreviewPoster = await applyPreviewPosterProvider(
-      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+    const metasWithPreviewPoster = await runPreviewBackfill({
+      fetchPage: async (p) => {
+        const r = await mal.discover(safeFilters, contentType, p);
+        return {
+          metas: mal.batchConvertToStremioMeta(r.anime, contentType),
+          hasMore: r.hasMore && r.anime.length > 0,
+        };
+      },
+      startPage,
+      randomize,
       previewPosterProvider,
-      req
-    );
+      req,
+    });
     res.json({ metas: metasWithPreviewPoster, totalResults: null });
   } catch (error) {
     log.error('POST /mal/preview error', { error: (error as Error).message });
@@ -1859,33 +1888,28 @@ router.post('/kitsu/preview', requireAuth, async (req, res) => {
     const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
     const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
-    const contentType = (
-      type === 'anime' ? 'anime' : type === 'series' ? 'series' : 'movie'
-    ) as ContentType;
-    const metas: import('../types/stremio.ts').StremioMetaPreview[] = [];
-    let page = 1;
+    const contentType = normalizePreviewContentType(type);
+    let startPage = 1;
 
     if (randomize) {
       const probe = await kitsu.discover(safeFilters, contentType, 1);
       const totalPages = Math.ceil(probe.total / 20) || 1;
-      page = Math.floor(Math.random() * Math.min(totalPages, 20)) + 1;
+      startPage = Math.floor(Math.random() * Math.min(totalPages, 20)) + 1;
     }
 
-    let pages = 0;
-    while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
-      const result = await kitsu.discover(safeFilters, contentType, page);
-      metas.push(...kitsu.batchConvertToStremioMeta(result.anime, contentType));
-      pages++;
-      if (!result.hasMore || result.anime.length === 0) break;
-      page++;
-    }
-
-    const previewMetas = randomize ? shuffleArray(metas) : metas;
-    const metasWithPreviewPoster = await applyPreviewPosterProvider(
-      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+    const metasWithPreviewPoster = await runPreviewBackfill({
+      fetchPage: async (p) => {
+        const r = await kitsu.discover(safeFilters, contentType, p);
+        return {
+          metas: kitsu.batchConvertToStremioMeta(r.anime, contentType),
+          hasMore: r.hasMore && r.anime.length > 0,
+        };
+      },
+      startPage,
+      randomize,
       previewPosterProvider,
-      req
-    );
+      req,
+    });
     res.json({ metas: metasWithPreviewPoster, totalResults: null });
   } catch (error) {
     log.error('POST /kitsu/preview error', { error: (error as Error).message });
@@ -1911,11 +1935,8 @@ router.post('/simkl/preview', requireAuth, async (req, res) => {
         'Simkl API key not configured on server.'
       );
     }
-    const contentType = (
-      type === 'anime' ? 'anime' : type === 'series' ? 'series' : 'movie'
-    ) as ContentType;
-    const metas: import('../types/stremio.ts').StremioMetaPreview[] = [];
-    let page = 1;
+    const contentType = normalizePreviewContentType(type);
+    let startPage = 1;
 
     if (randomize) {
       const probe = await simkl.discover(safeFilters, contentType, 1, simklApiKey || undefined);
@@ -1931,24 +1952,22 @@ router.post('/simkl/preview', requireAuth, async (req, res) => {
         return res.json({ metas: metasWithPreviewPoster, totalResults: null });
       }
       const maxPage = probe.hasMore ? 5 : 1;
-      page = Math.floor(Math.random() * maxPage) + 1;
+      startPage = Math.floor(Math.random() * maxPage) + 1;
     }
 
-    let pages = 0;
-    while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
-      const result = await simkl.discover(safeFilters, contentType, page, simklApiKey || undefined);
-      metas.push(...simkl.batchConvertToStremioMeta(result.items, contentType));
-      pages++;
-      if (!result.hasMore || result.items.length === 0) break;
-      page++;
-    }
-
-    const previewMetas = randomize ? shuffleArray(metas) : metas;
-    const metasWithPreviewPoster = await applyPreviewPosterProvider(
-      previewMetas.slice(0, PREVIEW_PAGE_SIZE),
+    const metasWithPreviewPoster = await runPreviewBackfill({
+      fetchPage: async (p) => {
+        const r = await simkl.discover(safeFilters, contentType, p, simklApiKey || undefined);
+        return {
+          metas: simkl.batchConvertToStremioMeta(r.items, contentType),
+          hasMore: r.hasMore && r.items.length > 0,
+        };
+      },
+      startPage,
+      randomize,
       previewPosterProvider,
-      req
-    );
+      req,
+    });
     res.json({ metas: metasWithPreviewPoster, totalResults: null });
   } catch (error) {
     log.error('POST /simkl/preview error', { error: (error as Error).message });

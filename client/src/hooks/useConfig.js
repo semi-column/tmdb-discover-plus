@@ -19,6 +19,7 @@ export function useConfig(initialUserId = null) {
 
   useEffect(() => {
     if (initialUserId && initialUserId !== userId && !loading) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional prop→state sync when parent URL changes
       setUserId(initialUserId);
     }
   }, [initialUserId, loading, userId]);
