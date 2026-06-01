@@ -1,38 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  mockFetch,
-  mockConfig,
-  cacheGet,
-  cacheSet,
-  cacheSetError,
-  throttleAcquire,
-  trackProviderCall,
-  recordImdbApiCall,
-} = vi.hoisted(() => ({
-  mockFetch: vi.fn(),
-  mockConfig: {
-    imdbApi: {
-      apiKey: 'test-key',
-      apiHost: 'imdb-api.semicolumn.workers.dev',
-      apiKeyHeader: 'x-rapidapi-key',
-      apiHostHeader: 'x-rapidapi-host',
-      rateLimit: 5,
+const { mockFetch, mockConfig, cacheGet, cacheSet, cacheSetError, throttleAcquire } = vi.hoisted(
+  () => ({
+    mockFetch: vi.fn(),
+    mockConfig: {
+      imdbApi: {
+        apiKey: 'test-key',
+        apiHost: 'imdb-api.semicolumn.workers.dev',
+        apiKeyHeader: 'x-rapidapi-key',
+        apiHostHeader: 'x-rapidapi-host',
+        rateLimit: 5,
+      },
+      addon: {
+        variant: 'nightly',
+      },
+      baseUrl: 'https://tmdb-nightly.elfhosted.com',
+      logging: { level: 'info', format: 'text' },
+      nodeEnv: 'test',
     },
-    addon: {
-      variant: 'nightly',
-    },
-    baseUrl: 'https://tmdb-nightly.elfhosted.com',
-    logging: { level: 'info', format: 'text' },
-    nodeEnv: 'test',
-  },
-  cacheGet: vi.fn(),
-  cacheSet: vi.fn(),
-  cacheSetError: vi.fn(),
-  throttleAcquire: vi.fn(),
-  trackProviderCall: vi.fn(),
-  recordImdbApiCall: vi.fn(),
-}));
+    cacheGet: vi.fn(),
+    cacheSet: vi.fn(),
+    cacheSetError: vi.fn(),
+    throttleAcquire: vi.fn(),
+  })
+);
 
 vi.mock('node-fetch', () => ({
   default: mockFetch,
@@ -53,17 +44,6 @@ vi.mock('../../src/services/cache/index.ts', () => ({
 vi.mock('../../src/infrastructure/imdbThrottle.ts', () => ({
   getImdbThrottle: vi.fn(() => ({
     acquire: throttleAcquire,
-  })),
-}));
-
-vi.mock('../../src/infrastructure/imdbQuota.ts', () => ({
-  isQuotaExceeded: vi.fn(() => false),
-  recordImdbApiCall,
-}));
-
-vi.mock('../../src/infrastructure/metrics.ts', () => ({
-  getMetrics: vi.fn(() => ({
-    trackProviderCall,
   })),
 }));
 

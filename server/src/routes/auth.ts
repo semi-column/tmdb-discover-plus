@@ -20,7 +20,7 @@ const log = createLogger('auth');
 
 router.post('/login', strictRateLimit, async (req, res) => {
   try {
-    const { apiKey, userId: requestedUserId, rememberMe = true } = req.body;
+    const { apiKey, userId: requestedUserId, rememberMe = false } = req.body;
 
     if (!apiKey) {
       return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'API key is required');

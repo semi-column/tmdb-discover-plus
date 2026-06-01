@@ -306,11 +306,10 @@ Rate limit: 1000/min. All responses include ETag headers for caching.
 
 ## Operational
 
-| Method | Path       | Description                                              |
-| ------ | ---------- | -------------------------------------------------------- |
-| GET    | `/health`  | Comprehensive health check (returns 503 during shutdown) |
-| GET    | `/ready`   | Readiness probe — `{ ready: boolean }`                   |
-| GET    | `/metrics` | Prometheus-compatible metrics (text/plain)               |
+| Method | Path      | Description                                                      |
+| ------ | --------- | ---------------------------------------------------------------- | ------------- |
+| GET    | `/health` | Comprehensive health check (returns 503 during shutdown)         |
+| GET    | `/ready`  | Readiness probe — `{ ready: boolean, cacheWarming: "in_progress" | "complete" }` |
 
 ---
 

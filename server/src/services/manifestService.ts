@@ -8,8 +8,9 @@ import * as anilist from './anilist/index.ts';
 import * as mal from './mal/index.ts';
 import * as simkl from './simkl/index.ts';
 import * as trakt from './trakt/index.ts';
-import { getSource } from './sources/registry.ts';
+import { getSource, getAllSources } from './sources/registry.ts';
 import { normalizeGenreName, parseIdArray } from '../utils/helpers.ts';
+import { stableStringify } from '../utils/stableStringify.ts';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.ts';
 import { createLogger } from '../utils/logger.ts';
 import { getApiKeyFromConfig, updateCatalogGenres } from './configService.ts';
@@ -59,7 +60,7 @@ function buildManifestVersion(userConfig: UserConfig | null): string {
 
   const hash = crypto
     .createHash('sha256')
-    .update(JSON.stringify(signaturePayload))
+    .update(stableStringify(signaturePayload))
     .digest('hex')
     .slice(0, 12);
 
@@ -279,133 +280,38 @@ export function buildManifest(userConfig: UserConfig | null, baseUrl: string): S
     });
 
   if (userConfig?.preferences?.disableSearch !== true) {
-    if (userConfig?.preferences?.disableTmdbSearch !== true) {
-      catalogs.push({
-        id: 'tmdb-search-movie',
-        type: 'movie',
-        name: 'TMDB Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'tmdb-search-series',
-        type: 'series',
-        name: 'TMDB Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-    }
+    // Each source owns its own search catalog definitions.
+    // The preference key convention is `disable<SourceId>Search`.
+    const SEARCH_PREF_MAP: Record<string, keyof import('../types/config.ts').UserPreferences> = {
+      tmdb: 'disableTmdbSearch',
+      imdb: 'disableImdbSearch',
+      anilist: 'disableAnilistSearch',
+      mal: 'disableMalSearch',
+      kitsu: 'disableKitsuSearch',
+      simkl: 'disableSimklSearch',
+      trakt: 'disableTraktSearch',
+    };
 
-    if (imdb.isImdbApiEnabled() && userConfig?.preferences?.disableImdbSearch === false) {
-      catalogs.push({
-        id: 'imdb-search-movie',
-        type: 'movie',
-        name: 'IMDb Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'imdb-search-series',
-        type: 'series',
-        name: 'IMDb Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-    }
+    for (const source of getAllSources()) {
+      const prefKey = SEARCH_PREF_MAP[source.sourceId];
+      // TMDB search is enabled by default; others are opt-in (disabled by default).
+      const isDisabled = prefKey
+        ? source.sourceId === 'tmdb'
+          ? userConfig?.preferences?.[prefKey] === true
+          : userConfig?.preferences?.[prefKey] !== false
+        : true;
 
-    if (userConfig?.preferences?.disableAnilistSearch === false) {
-      catalogs.push({
-        id: 'anilist-search-movie',
-        type: 'movie',
-        name: 'AniList Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'anilist-search-series',
-        type: 'series',
-        name: 'AniList Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'anilist-search-anime',
-        type: 'anime',
-        name: 'AniList Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-    }
+      if (isDisabled) continue;
+      // Some sources can be enabled via per-user credentials even when
+      // global env credentials are not configured.
+      const hasUserScopedCredential =
+        (source.sourceId === 'mal' && !!userConfig?.malClientIdEncrypted) ||
+        (source.sourceId === 'simkl' && !!userConfig?.simklApiKeyEncrypted) ||
+        (source.sourceId === 'trakt' && !!userConfig?.traktClientIdEncrypted);
+      if (!source.isEnabled() && !hasUserScopedCredential) continue;
 
-    if (userConfig?.preferences?.disableMalSearch === false) {
-      catalogs.push({
-        id: 'mal-search-movie',
-        type: 'movie',
-        name: 'MAL Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'mal-search-series',
-        type: 'series',
-        name: 'MAL Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'mal-search-anime',
-        type: 'anime',
-        name: 'MAL Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-    }
-
-    if (userConfig?.preferences?.disableKitsuSearch === false) {
-      catalogs.push({
-        id: 'kitsu-search-movie',
-        type: 'movie',
-        name: 'Kitsu Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'kitsu-search-series',
-        type: 'series',
-        name: 'Kitsu Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'kitsu-search-anime',
-        type: 'anime',
-        name: 'Kitsu Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-    }
-
-    if (simkl.isSimklEnabled() && userConfig?.preferences?.disableSimklSearch === false) {
-      catalogs.push({
-        id: 'simkl-search-movie',
-        type: 'movie',
-        name: 'Simkl Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'simkl-search-series',
-        type: 'series',
-        name: 'Simkl Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'simkl-search-anime',
-        type: 'anime',
-        name: 'Simkl Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-    }
-
-    if (trakt.isTraktEnabled() && userConfig?.preferences?.disableTraktSearch === false) {
-      catalogs.push({
-        id: 'trakt-search-movie',
-        type: 'movie',
-        name: 'Trakt Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
-      catalogs.push({
-        id: 'trakt-search-series',
-        type: 'series',
-        name: 'Trakt Search',
-        extra: [{ name: 'search', isRequired: true }, { name: 'skip' }],
-      });
+      const searchCatalogs = source.getSearchCatalogs();
+      catalogs.push(...searchCatalogs);
     }
   }
 

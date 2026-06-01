@@ -459,7 +459,10 @@ export function useCatalogEditorHandlers({
           withPeople: selectedPeople.map((p) => p.id).join(',') || undefined,
           withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
           withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
-          excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
+          excludeKeywords:
+            localCatalog?.source === 'imdb'
+              ? localCatalog?.filters?.excludeKeywords
+              : excludeKeywords.map((k) => k.id).join(',') || undefined,
           excludeCompanies: excludeCompanies.map((c) => c.id).join(',') || undefined,
         };
         data = await onPreview(

@@ -3,7 +3,6 @@ import { getCache } from '../cache/index.ts';
 import { CachedError, classifyError } from '../cache/CacheWrapper.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { getTmdbThrottle } from '../../infrastructure/tmdbThrottle.ts';
-import { getMetrics } from '../../infrastructure/metrics.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
 import { TIMEOUTS, CONCURRENCY, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
@@ -162,7 +161,6 @@ export async function tmdbFetch(
 
 async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Promise<unknown> {
   const cache = getCache();
-  const metrics = getMetrics();
 
   if (isCircuitOpen()) {
     const err = new Error('TMDB circuit breaker is open') as TmdbFetchError;
@@ -215,8 +213,6 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       const fetchDuration = Date.now() - fetchStart;
 
       if (!response.ok) {
-        metrics.trackProviderCall('tmdb', fetchDuration, true);
-
         if (response.status >= 500 || response.status === 429) {
           if (response.status === 429) {
             const retryAfter = response.headers.get('Retry-After');
@@ -238,7 +234,6 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
         throw err;
       }
 
-      metrics.trackProviderCall('tmdb', fetchDuration, false);
       const data: unknown = await response.json();
       recordCircuitSuccess();
 
@@ -308,7 +303,6 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       });
     }
   }
-  metrics.trackError(errorType);
 
   throw lastError;
 }

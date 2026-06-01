@@ -62,6 +62,7 @@ import { buildManifest } from '../../src/services/manifestService.ts';
 import { enrichManifestWithGenres } from '../../src/services/manifestService.ts';
 import { enrichManifestWithExtras } from '../../src/services/manifestService.ts';
 import * as tmdb from '../../src/services/tmdb/index.ts';
+import * as traktService from '../../src/services/trakt/index.ts';
 import { getApiKeyFromConfig } from '../../src/services/configService.ts';
 
 describe('buildManifest', () => {
@@ -147,6 +148,23 @@ describe('buildManifest', () => {
       {
         catalogs: [{ _id: 'tmdb-list', name: 'TMDB List', type: 'movie', source: 'tmdb' }],
         preferences: { disableTraktSearch: false },
+      },
+      baseUrl
+    );
+
+    const ids = manifest.catalogs.map((catalog: any) => catalog.id);
+    expect(ids).toContain('trakt-search-movie');
+    expect(ids).toContain('trakt-search-series');
+  });
+
+  it('includes Trakt search catalogs when user has Trakt key even if env Trakt is disabled', () => {
+    vi.mocked(traktService.isTraktEnabled).mockReturnValue(false);
+
+    const manifest = buildManifest(
+      {
+        catalogs: [{ _id: 'tmdb-list', name: 'TMDB List', type: 'movie', source: 'tmdb' }],
+        preferences: { disableTraktSearch: false },
+        traktClientIdEncrypted: 'encrypted-user-trakt-key',
       },
       baseUrl
     );

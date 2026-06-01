@@ -45,8 +45,6 @@ export type {
 
 import { config } from '../../config.ts';
 import { createLogger } from '../../utils/logger.ts';
-import { initImdbQuota } from '../../infrastructure/imdbQuota.ts';
-import { logSwallowedError } from '../../utils/helpers.ts';
 
 const log = createLogger('imdb:init');
 
@@ -64,5 +62,4 @@ export function initImdbApi(): void {
     return;
   }
   log.info('IMDb API enabled', { rateLimit: config.imdbApi.rateLimit });
-  initImdbQuota().catch((err) => logSwallowedError('imdb:quota-init', err));
 }

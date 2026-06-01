@@ -8,9 +8,14 @@ import type { Logger } from '../types/index.ts';
 
 const log = createLogger('security') as Logger;
 
-const JWT_EXPIRY_PERSISTENT = 'never';
-const JWT_EXPIRY_SESSION = '24h';
-const NON_EXPIRING_REVOKE_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+/**
+ * Token lifetime policy.
+ *
+ * All issued tokens carry an `exp` claim. Tokens lacking `exp` are rejected at
+ * verify time — there is no never-expiring path.
+ */
+export const JWT_EXPIRY_REMEMBER_ME = '30d';
+export const JWT_EXPIRY_SESSION = '24h';
 
 const PBKDF2_CACHE_MAX = 1000;
 const PBKDF2_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -22,7 +27,7 @@ function pbkdf2CacheKey(apiKey: string): string {
 
 const revokedTokens = new Map<string, number>();
 
-interface RevocationStore {
+export interface RevocationStore {
   add(jti: string, expiresAtMs: number): Promise<void>;
   has(jti: string): Promise<boolean>;
 }
@@ -32,6 +37,10 @@ let externalStore: RevocationStore | null = null;
 export function setRevocationStore(store: RevocationStore): void {
   externalStore = store;
   log.info('External revocation store configured');
+}
+
+export function getRevocationStore(): RevocationStore | null {
+  return externalStore;
 }
 
 const REVOKE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
@@ -92,40 +101,52 @@ export async function computeApiKeyId(apiKey: string): Promise<string> {
   return result;
 }
 
+/**
+ * Issue a signed JWT.
+ *
+ * - `rememberMe=false` (default) → 24h session token
+ * - `rememberMe=true`             → 30d token
+ *
+ * Tokens always include an `exp` claim. There is no never-expiring path.
+ */
 export async function generateToken(
   apiKey: string,
-  rememberMe: boolean = true
+  rememberMe: boolean = false
 ): Promise<{ token: string; expiresIn: string }> {
   const apiKeyId = await computeApiKeyId(apiKey);
   const jti = crypto.randomUUID();
-  const token = rememberMe
-    ? jwt.sign({ apiKeyId, jti }, getJwtSecret())
-    : jwt.sign({ apiKeyId, jti }, getJwtSecret(), { expiresIn: JWT_EXPIRY_SESSION });
-  const expiresIn = rememberMe ? JWT_EXPIRY_PERSISTENT : JWT_EXPIRY_SESSION;
+  const expiresIn = rememberMe ? JWT_EXPIRY_REMEMBER_ME : JWT_EXPIRY_SESSION;
+  const token = jwt.sign({ apiKeyId, jti }, getJwtSecret(), { expiresIn });
   return { token, expiresIn };
 }
 
-export async function verifyToken(token: string): Promise<jwt.JwtPayload | string | null> {
+export async function verifyToken(token: string): Promise<jwt.JwtPayload | null> {
   try {
     const decoded = jwt.verify(token, getJwtSecret());
-    if (typeof decoded === 'object' && decoded.jti) {
-      if (revokedTokens.has(decoded.jti)) {
-        log.debug('Rejected revoked token', { jti: decoded.jti });
-        return null;
-      }
-      if (externalStore) {
-        try {
-          if (await externalStore.has(decoded.jti)) {
-            revokedTokens.set(decoded.jti, (decoded.exp ?? 0) * 1000);
-            log.debug('Rejected revoked token (external store)', { jti: decoded.jti });
-            return null;
-          }
-        } catch (err) {
-          log.warn('External revocation check failed, rejecting token', {
-            error: (err as Error).message,
-          });
+    if (typeof decoded !== 'object' || decoded === null) return null;
+    if (typeof decoded.jti !== 'string') return null;
+    // Reject tokens without an explicit expiry — policy requires bounded lifetime.
+    if (typeof decoded.exp !== 'number') {
+      log.debug('Rejected token without exp claim', { jti: decoded.jti });
+      return null;
+    }
+
+    if (revokedTokens.has(decoded.jti)) {
+      log.debug('Rejected revoked token (local)', { jti: decoded.jti });
+      return null;
+    }
+    if (externalStore) {
+      try {
+        if (await externalStore.has(decoded.jti)) {
+          revokedTokens.set(decoded.jti, decoded.exp * 1000);
+          log.debug('Rejected revoked token (external store)', { jti: decoded.jti });
           return null;
         }
+      } catch (err) {
+        log.warn('External revocation check failed, rejecting token', {
+          error: (err as Error).message,
+        });
+        return null;
       }
     }
     return decoded;
@@ -138,7 +159,14 @@ export async function verifyToken(token: string): Promise<jwt.JwtPayload | strin
 export function revokeToken(token: string): boolean {
   try {
     const decoded = jwt.decode(token);
-    if (!decoded || typeof decoded === 'string' || !decoded.jti) return false;
+    if (
+      !decoded ||
+      typeof decoded === 'string' ||
+      typeof decoded.jti !== 'string' ||
+      typeof decoded.exp !== 'number'
+    ) {
+      return false;
+    }
     if (revokedTokens.size >= MAX_REVOKED_TOKENS) {
       const now = Date.now();
       for (const [jti, expiresAt] of revokedTokens) {
@@ -149,8 +177,8 @@ export function revokeToken(token: string): boolean {
         if (oldest) revokedTokens.delete(oldest);
       }
     }
-    const expiresAtMs = decoded.exp ? decoded.exp * 1000 : Date.now() + NON_EXPIRING_REVOKE_TTL_MS;
-    revokedTokens.set(decoded.jti as string, expiresAtMs);
+    const expiresAtMs = decoded.exp * 1000;
+    revokedTokens.set(decoded.jti, expiresAtMs);
 
     if (externalStore) {
       externalStore.add(decoded.jti as string, expiresAtMs).catch((err) => {
@@ -173,6 +201,7 @@ export function destroySecurity(): void {
   clearInterval(revokeCleanupTimer);
   revokedTokens.clear();
   pbkdf2Cache.clear();
+  externalStore = null;
 }
 
 export function getSecurityMetrics(): { pbkdf2CacheSize: number; revokedTokensSize: number } {

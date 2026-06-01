@@ -1638,7 +1638,7 @@ async function runPreviewBackfill(opts: {
     const result = await fetchPage(page);
     metas.push(...result.metas);
     pages++;
-    if (!result.hasMore || result.metas.length === 0) break;
+    if (!result.hasMore) break;
     page++;
   }
   const ordered = randomize ? shuffleArray(metas) : metas;
@@ -2148,7 +2148,7 @@ router.post('/trakt/preview', requireAuth, resolveApiKey, async (req, res) => {
         metasAccumulated: metas.length,
       });
       pages++;
-      if (!result.hasMore || result.items.length === 0) break;
+      if (!result.hasMore) break;
       page++;
     }
 

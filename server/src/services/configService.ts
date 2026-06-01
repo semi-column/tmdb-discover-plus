@@ -20,21 +20,40 @@ import type {
   ArtKind,
 } from '../types/index.ts';
 
+// ─── Re-exports from extracted modules ────────────────────
+// These keep the public surface of configService stable so
+// existing consumers don't need import changes.
+export {
+  decryptTmdbApiKey,
+  decryptMalClientId,
+  decryptSimklApiKey,
+  decryptTraktClientId,
+  decryptArtworkKey,
+} from './configEncryption.ts';
+
+export { getConfigsByApiKeyId, getPublicStats as getPublicStats_repo } from './configRepository.ts';
+
+import {
+  decryptTmdbApiKey,
+  decryptArtworkKey,
+  decryptMalClientId,
+  decryptSimklApiKey,
+  decryptTraktClientId,
+} from './configEncryption.ts';
+import {
+  saveUserConfig as persistToStorage,
+  deleteUserConfig as removeFromStorage,
+  loadRawConfig,
+} from './configRepository.ts';
+
 const log = createLogger('configService');
 
+/**
+ * @deprecated Use decryptTmdbApiKey from configEncryption.ts directly.
+ * Kept for backward compatibility with existing consumers.
+ */
 export function getApiKeyFromConfig(config: UserConfig | null): string | null {
-  if (!config) return null;
-
-  if (config.tmdbApiKeyEncrypted) {
-    try {
-      const decrypted = decrypt(config.tmdbApiKeyEncrypted);
-      if (decrypted) return decrypted;
-    } catch (err) {
-      log.error('Failed to decrypt TMDB API key', { error: (err as Error).message });
-    }
-  }
-
-  return null;
+  return decryptTmdbApiKey(config);
 }
 
 export function getPosterKeyFromConfig(config: UserConfig | null): string | null {
@@ -45,35 +64,7 @@ export function getArtworkKeyFromConfig(
   config: UserConfig | null,
   artworkType: ArtKind
 ): string | null {
-  const artwork = config?.preferences?.artwork;
-  if (!artwork) return null;
-
-  let encryptedValue: string | undefined;
-
-  // New per-content-type format: check movie config as default
-  const ART_CONTENT_TYPES: ArtContentType[] = ['movie', 'series', 'anime'];
-  if (ART_CONTENT_TYPES.some((ct) => ct in artwork)) {
-    const settings = artwork as ArtworkSettings;
-    encryptedValue =
-      settings.movie?.[artworkType]?.apiKeyEncrypted ||
-      settings.series?.[artworkType]?.apiKeyEncrypted ||
-      settings.anime?.[artworkType]?.apiKeyEncrypted;
-  } else {
-    // Legacy flat format
-    encryptedValue = (artwork as Record<string, ArtworkSourceConfig>)[artworkType]?.apiKeyEncrypted;
-  }
-
-  if (!encryptedValue) return null;
-
-  try {
-    return decrypt(encryptedValue);
-  } catch (err) {
-    log.error('Failed to decrypt artwork API key', {
-      artworkType,
-      error: (err as Error).message,
-    });
-    return null;
-  }
+  return decryptArtworkKey(config, artworkType);
 }
 
 export async function getUserConfig(
@@ -578,31 +569,13 @@ export async function getPublicStats(): Promise<PublicStats> {
 }
 
 export function getMalKeyFromConfig(config: UserConfig | null): string | null {
-  if (!config?.malClientIdEncrypted) return null;
-  try {
-    return decrypt(config.malClientIdEncrypted);
-  } catch (err) {
-    log.error('Failed to decrypt MAL client ID', { error: (err as Error).message });
-    return null;
-  }
+  return decryptMalClientId(config);
 }
 
 export function getSimklKeyFromConfig(config: UserConfig | null): string | null {
-  if (!config?.simklApiKeyEncrypted) return null;
-  try {
-    return decrypt(config.simklApiKeyEncrypted);
-  } catch (err) {
-    log.error('Failed to decrypt Simkl API key', { error: (err as Error).message });
-    return null;
-  }
+  return decryptSimklApiKey(config);
 }
 
 export function getTraktKeyFromConfig(config: UserConfig | null): string | null {
-  if (!config?.traktClientIdEncrypted) return null;
-  try {
-    return decrypt(config.traktClientIdEncrypted);
-  } catch (err) {
-    log.error('Failed to decrypt Trakt Client ID', { error: (err as Error).message });
-    return null;
-  }
+  return decryptTraktClientId(config);
 }

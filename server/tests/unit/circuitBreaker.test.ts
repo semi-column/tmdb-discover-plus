@@ -15,13 +15,6 @@ vi.mock('../../src/infrastructure/tmdbThrottle.ts', () => ({
   })),
 }));
 
-vi.mock('../../src/infrastructure/metrics.ts', () => ({
-  getMetrics: vi.fn(() => ({
-    trackProviderCall: vi.fn(),
-    trackError: vi.fn(),
-  })),
-}));
-
 vi.mock('node-fetch', () => ({
   default: vi.fn(),
 }));

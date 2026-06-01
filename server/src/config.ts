@@ -98,7 +98,6 @@ export const config = Object.freeze({
     apiHostHeader: env('IMDB_DATA_ATTR_H'),
     rateLimit: envInt('IMDB_DATA_RATE_LIMIT', 5),
     get enabled(): boolean {
-      if (isNightlyVariant) return false;
       const explicit = process.env['IMDB_DATA_ENABLED'];
       if (explicit) return explicit === 'true' || explicit === '1';
       return !!process.env['IMDB_DATA_KEY'];
@@ -109,9 +108,6 @@ export const config = Object.freeze({
     cacheTtlPopular: envInt('IMDB_CACHE_TTL_POPULAR', 21600),
     cacheTtlList: envInt('IMDB_CACHE_TTL_LIST', 21600),
     cacheTtlReference: envInt('IMDB_CACHE_TTL_REFERENCE', 2592000),
-    budgetMonthly: envInt('IMDB_BUDGET_MONTHLY', 500000),
-    budgetWarnPercent: envInt('IMDB_BUDGET_WARN_PERCENT', 80),
-    budgetLimitPercent: envInt('IMDB_BUDGET_LIMIT_PERCENT', 95),
   }),
 
   rpdb: Object.freeze({
@@ -160,7 +156,6 @@ export const config = Object.freeze({
     disableRateLimit:
       envBool('DISABLE_RATE_LIMIT') &&
       ['development', 'test'].includes(env('NODE_ENV', 'production')),
-    disableMetrics: envBool('DISABLE_METRICS'),
   }),
 
   trustProxy: env('TRUST_PROXY', '1'),

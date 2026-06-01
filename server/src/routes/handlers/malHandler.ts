@@ -40,7 +40,7 @@ async function fetchWithBackfill(
     metas.push(...batch);
     pagesChecked++;
 
-    if (!result.hasMore || result.anime.length === 0) break;
+    if (!result.hasMore) break;
     currentPage++;
   }
 

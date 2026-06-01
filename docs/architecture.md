@@ -17,7 +17,7 @@ TMDB Discover+ is a Stremio addon that lets users create custom content catalogs
 │                                                                 │
 │  Middleware Pipeline:                                           │
 │  CORS → JSON → Compression → Security Headers → Request ID     │
-│  → Rate Limit (300/min) → Metrics                              │
+│  → Rate Limit (300/min)                                        │
 │                                                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐    │
 │  │ Addon Routes │  │  API Routes  │  │   Auth Routes      │    │
@@ -54,7 +54,7 @@ TMDB Discover+ is a Stremio addon that lets users create custom content catalogs
 ### Stremio Catalog Request
 
 1. **Inbound** — Stremio sends `GET /:userId/catalog/:type/:catalogId/:extra.json`
-2. **Middleware** — CORS, compression, security headers, request ID, rate limit (1000/min for addon routes), metrics, ETag
+2. **Middleware** — CORS, compression, security headers, request ID, rate limit (1000/min for addon routes), ETag
 3. **Config resolution** — `getUserConfig(userId)` loads user config via `ConfigCache` (LRU, 5-min TTL, stampede protection) backed by the storage adapter
 4. **API key decryption** — AES-256-GCM decrypts the stored TMDB API key
 5. **TMDB fetch** via `tmdbFetch()`:

@@ -15,12 +15,11 @@ import { createLogger } from './utils/logger.ts';
 import { getBaseUrl, logSwallowedError } from './utils/helpers.ts';
 import { apiRateLimit } from './utils/rateLimit.ts';
 import { monitoringRateLimit } from './utils/rateLimit.ts';
-import { setRevocationStore } from './utils/security.ts';
+import { setRevocationStore, destroySecurity } from './utils/security.ts';
+import { RedisRevocationStore } from './infrastructure/revocationStore.ts';
 import { warmEssentialCaches } from './infrastructure/cacheWarmer.ts';
-import { getMetrics, destroyMetrics } from './infrastructure/metrics.ts';
 import { destroyTmdbThrottle, getTmdbThrottle } from './infrastructure/tmdbThrottle.ts';
 import { destroyImdbThrottle } from './infrastructure/imdbThrottle.ts';
-import { destroySecurity } from './utils/security.ts';
 import { getConfigCache } from './infrastructure/configCache.ts';
 import {
   initImdbRatings,
@@ -29,7 +28,6 @@ import {
 } from './services/imdbRatings/index.ts';
 import { getCircuitBreakerState } from './services/tmdb/client.ts';
 import { getImdbCircuitBreakerState } from './services/imdb/client.ts';
-import { getImdbQuotaStats } from './infrastructure/imdbQuota.ts';
 import { isImdbApiEnabled } from './services/imdb/index.ts';
 import { initImdbApi } from './services/imdb/index.ts';
 import { initAnimeIdMap } from './services/animeIdMap/index.ts';
@@ -47,6 +45,7 @@ const SERVER_VERSION = pkg.version;
 
 let server: Server | null = null;
 let isShuttingDown = false;
+let revocationStoreInstance: RedisRevocationStore | null = null;
 
 /**
  * Server status — tracks startup state, degradation, and readiness.
@@ -56,13 +55,19 @@ const serverStatus: {
   degraded: boolean;
   reason: string;
   startedAt: string | null;
-  cacheWarming: { warmed: number; failed: number; skipped?: boolean; elapsedMs?: number };
+  cacheWarming: {
+    warmed: number;
+    failed: number;
+    skipped?: boolean;
+    elapsedMs?: number;
+    inProgress?: boolean;
+  };
 } = {
   healthy: false,
   degraded: false,
   reason: '',
   startedAt: null,
-  cacheWarming: { warmed: 0, failed: 0, skipped: false },
+  cacheWarming: { warmed: 0, failed: 0, skipped: false, inProgress: false },
 };
 
 const trustProxySetting = config.trustProxy;
@@ -72,14 +77,17 @@ if (
   !VALID_TRUST_PROXY.test(trustProxySetting) &&
   !/^[\d.\/,: ]+$/.test(trustProxySetting)
 ) {
-  log.warn('Invalid TRUST_PROXY value, falling back to 1', { value: trustProxySetting });
-  app.set('trust proxy', 1);
-} else {
-  app.set(
-    'trust proxy',
-    /^\d+$/.test(trustProxySetting) ? parseInt(trustProxySetting, 10) : trustProxySetting
+  log.error('Invalid TRUST_PROXY value', { value: trustProxySetting });
+  throw new Error(
+    `Invalid TRUST_PROXY value: ${trustProxySetting}. ` +
+      `Must be a number, boolean, named preset (loopback|linklocal|uniquelocal), ` +
+      `or comma-separated list of IPs/CIDRs.`
   );
 }
+app.set(
+  'trust proxy',
+  /^\d+$/.test(trustProxySetting) ? parseInt(trustProxySetting, 10) : trustProxySetting
+);
 
 const rawOrigins = config.cors.origin;
 const allowedOrigins =
@@ -170,7 +178,7 @@ app.use((req, res, next) => {
 
 app.use(requestIdMiddleware());
 
-const REQUEST_LOG_IGNORED_PREFIXES = ['/health', '/ready', '/metrics'];
+const REQUEST_LOG_IGNORED_PREFIXES = ['/health', '/ready'];
 const REQUEST_LOG_IGNORED_EXTENSIONS = /\.(?:js|css|map|png|jpg|jpeg|gif|svg|ico|webp|woff2?)$/i;
 
 const shouldLogCorrelationForPath = (pathname: string): boolean => {
@@ -216,11 +224,6 @@ app.use((req, res, next) => {
 
 // Global generic rate limit for all routes
 app.use(apiRateLimit);
-
-// Request metrics tracking
-const metrics = getMetrics();
-metrics.setCacheStatsProvider(() => getCacheStatus());
-app.use(metrics.middleware());
 
 const clientDistPath = path.join(__dirname, '../../client/dist');
 const distManifest = path.join(clientDistPath, 'manifest.json');
@@ -321,7 +324,10 @@ app.get('/ready', (req, res) => {
   if (!serverStatus.healthy) {
     return res.status(503).json({ ready: false, reason: 'starting' });
   }
-  res.json({ ready: true });
+  res.json({
+    ready: true,
+    cacheWarming: serverStatus.cacheWarming.inProgress ? 'in_progress' : 'complete',
+  });
 });
 
 // ============================================
@@ -351,7 +357,6 @@ app.get('/health', monitoringRateLimit, (req, res) => {
   else if (serverStatus.degraded) status = 'degraded';
 
   const cacheStatus = getCacheStatus();
-  const metricsData = getMetrics().getSummary();
   const throttleStats = getTmdbThrottle().getStats();
   const configCacheStats = getConfigCache().getStats();
 
@@ -372,11 +377,9 @@ app.get('/health', monitoringRateLimit, (req, res) => {
       ? {
           enabled: true,
           circuitBreaker: getImdbCircuitBreakerState(),
-          quota: getImdbQuotaStats(),
         }
       : { enabled: false },
     cacheWarming: serverStatus.cacheWarming,
-    metrics: metricsData,
     memory: {
       rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
@@ -396,12 +399,6 @@ app.get('/health', monitoringRateLimit, (req, res) => {
 
   const httpStatus = status === 'ok' || status === 'degraded' ? 200 : 503;
   res.status(httpStatus).json(health);
-});
-
-app.get('/metrics', monitoringRateLimit, (req, res) => {
-  res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-  res.set('Cache-Control', 'no-store');
-  res.send(getMetrics().toPrometheus());
 });
 
 app.use('/api/auth', authRouter);
@@ -442,8 +439,12 @@ function gracefulShutdown(signal: string) {
   // Cleanup singletons
   destroyTmdbThrottle();
   destroyImdbThrottle();
-  destroyMetrics();
   destroySecurity();
+  if (revocationStoreInstance) {
+    revocationStoreInstance
+      .destroy()
+      .catch((err) => logSwallowedError('shutdown:revocation-store', err));
+  }
   destroyImdbRatings().catch((err) => logSwallowedError('shutdown:imdb-ratings', err));
 
   if (server) {
@@ -497,17 +498,24 @@ async function start() {
       serverStatus.reason = 'Cache initialization failed — using memory fallback';
     }
 
-    const { getCache } = await import('./services/cache/index.ts');
-    const cache = getCache();
-    setRevocationStore({
-      async add(jti, expiresAtMs) {
-        const ttlSec = Math.max(1, Math.ceil((expiresAtMs - Date.now()) / 1000));
-        await cache.set(`revoked:${jti}`, true, ttlSec);
-      },
-      async has(jti) {
-        return (await cache.get(`revoked:${jti}`)) === true;
-      },
-    });
+    if (config.cache.redisUrl) {
+      try {
+        const revocationStore = new RedisRevocationStore(config.cache.redisUrl);
+        await revocationStore.connect();
+        setRevocationStore(revocationStore);
+        revocationStoreInstance = revocationStore;
+        log.info('JWT revocation store: Redis (multi-replica safe)');
+      } catch (err) {
+        log.warn('Redis revocation store unavailable, using in-process fallback', {
+          error: (err as Error).message,
+        });
+        serverStatus.degraded = true;
+        serverStatus.reason =
+          serverStatus.reason || 'JWT revocation store unavailable — single-replica only';
+      }
+    } else {
+      log.info('JWT revocation store: in-process Map (single-replica only)');
+    }
 
     await initStorage();
 
@@ -524,13 +532,15 @@ async function start() {
       serverStatus.cacheWarming = { warmed: 0, failed: 0, skipped: true };
       log.info('Skipping startup cache warming for nightly profile');
     } else {
+      serverStatus.cacheWarming.inProgress = true;
       const defaultApiKey = config.tmdb.apiKey;
       warmEssentialCaches(defaultApiKey)
         .then((result) => {
-          serverStatus.cacheWarming = result;
+          serverStatus.cacheWarming = { ...result, inProgress: false };
           log.info('Background cache warming finished', result);
         })
         .catch((err) => {
+          serverStatus.cacheWarming.inProgress = false;
           log.warn('Background cache warming failed (non-critical)', { error: err.message });
         });
     }

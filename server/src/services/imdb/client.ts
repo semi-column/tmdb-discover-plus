@@ -2,8 +2,6 @@ import fetch, { type RequestInit } from 'node-fetch';
 import { getCache } from '../cache/index.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { getImdbThrottle } from '../../infrastructure/imdbThrottle.ts';
-import { recordImdbApiCall, isQuotaExceeded } from '../../infrastructure/imdbQuota.ts';
-import { getMetrics } from '../../infrastructure/metrics.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
 import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
@@ -108,12 +106,6 @@ export async function imdbFetch(
     throw new Error('IMDb API host not configured');
   }
 
-  if (isQuotaExceeded()) {
-    const err = new Error('IMDb API monthly quota exceeded') as ImdbFetchError;
-    err.statusCode = 429;
-    throw err;
-  }
-
   const ep = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const isLocalhost = apiHost.startsWith('localhost') || apiHost.startsWith('127.0.0.1');
   const protocol = isLocalhost ? 'http' : 'https';
@@ -142,7 +134,6 @@ export async function imdbFetch(
   const cacheKey = `imdb:${url.pathname}${url.search}`;
   const freshnessKey = `imdb:fresh:${url.pathname}${url.search}`;
   const cache = getCache();
-  const metrics = getMetrics();
 
   if (isCircuitOpen()) {
     const err = new Error('IMDb circuit breaker is open') as ImdbFetchError;
@@ -208,7 +199,6 @@ async function executeImdbFetch(
   const keyHeader = config.imdbApi.apiKeyHeader;
   const hostHeader = config.imdbApi.apiHostHeader;
   const cache = getCache();
-  const metrics = getMetrics();
 
   let lastError: ImdbFetchError | undefined;
 
@@ -237,11 +227,7 @@ async function executeImdbFetch(
       }
       const fetchDuration = Date.now() - fetchStart;
 
-      recordImdbApiCall(ep);
-
       if (!response.ok) {
-        metrics.trackProviderCall('imdb', fetchDuration, true);
-
         if (response.status >= 500 || response.status === 429) {
           if (response.status === 429) {
             const retryAfter = response.headers.get('Retry-After');
@@ -263,7 +249,6 @@ async function executeImdbFetch(
         throw err;
       }
 
-      metrics.trackProviderCall('imdb', fetchDuration, false);
       const data: unknown = await response.json();
       recordCircuitSuccess();
 

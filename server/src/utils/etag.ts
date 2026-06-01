@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { createLogger } from './logger.ts';
 import { ADDON_VERSION } from '../version.ts';
+import { stableStringify } from './stableStringify.ts';
 
 import type { Request, Response, NextFunction } from 'express';
 
@@ -17,7 +18,8 @@ const addonVersion = ADDON_VERSION;
  * @returns {string} ETag value (weak validator)
  */
 export function generateETag(data: unknown, extra: string = ''): string {
-  const content = `${addonVersion}:${extra}:${typeof data === 'string' ? data : JSON.stringify(data)}`;
+  const serialized = typeof data === 'string' ? data : stableStringify(data);
+  const content = `${addonVersion}:${extra}:${serialized}`;
   const hash = crypto.createHash('sha256').update(content).digest('hex').substring(0, 20);
   return `W/"${hash}"`;
 }

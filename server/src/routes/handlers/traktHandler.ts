@@ -64,7 +64,7 @@ async function fetchWithBackfill(
     metas.push(...batch);
     pagesChecked++;
 
-    if (!result.hasMore || result.items.length === 0) break;
+    if (!result.hasMore) break;
     currentPage++;
   }
 

@@ -220,7 +220,10 @@ export function useCatalogEditor() {
         withPeople: selectedPeople.map((p) => p.id).join(',') || undefined,
         withCompanies: selectedCompanies.map((c) => c.id).join(',') || undefined,
         withKeywords: selectedKeywords.map((k) => k.id).join(',') || undefined,
-        excludeKeywords: excludeKeywords.map((k) => k.id).join(',') || undefined,
+        excludeKeywords:
+          localCatalog?.source === 'imdb'
+            ? localCatalog?.filters?.excludeKeywords
+            : excludeKeywords.map((k) => k.id).join(',') || undefined,
         excludeCompanies:
           localCatalog?.source === 'imdb'
             ? selectedImdbExcludeCompanies.map((c) => c.id)

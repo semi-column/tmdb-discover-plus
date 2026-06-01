@@ -89,7 +89,6 @@ Storage backend selection priority: explicit `DATABASE_DRIVER` → auto-detect f
 | Variable             | Description                                                                                               | Default |
 | -------------------- | --------------------------------------------------------------------------------------------------------- | ------- |
 | `DISABLE_RATE_LIMIT` | Disable API rate limiting. Only effective in `development` or `test` environments; ignored in production. | `false` |
-| `DISABLE_METRICS`    | Disable the in-memory Prometheus-style metrics collector                                                  | `false` |
 
 ## Addon Identity
 
@@ -106,11 +105,11 @@ When `ADDON_VARIANT=nightly`, runtime applies a constrained profile for memory-o
 | `TMDB_RATE_LIMIT` default    | `35`             | `12`                   |
 | `CACHE_MAX_KEYS` default     | `20000`          | `6000`                 |
 | `CACHE_WARM_REGIONS` default | `US,GB,DE,FR,ES` | `US`                   |
-| IMDb API (`imdbApi.enabled`) | env-driven       | forced `false`         |
+| IMDb API (`imdbApi.enabled`) | env-driven       | env-driven             |
 | IMDb Ratings updater         | env-driven       | unchanged (env-driven) |
 | Startup cache warming        | enabled          | skipped                |
 
-Explicit env values still override the default numeric/cache settings. In nightly, only IMDb source/API is force-disabled.
+Explicit env values still override the default numeric/cache settings.
 
 ## Deployment Examples
 
