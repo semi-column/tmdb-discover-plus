@@ -50,11 +50,36 @@ export interface AnilistMedia {
   siteUrl?: string;
 }
 
+export interface AnilistAiringScheduleNode {
+  episode: number;
+  airingAt: number;
+}
+
+export interface AnilistStreamingEpisode {
+  title?: string;
+  thumbnail?: string;
+  url?: string;
+  site?: string;
+}
+
+/**
+ * Full single-media payload used for metadata (detail) requests. Extends the
+ * shared media shape with episode-level data only fetched on demand.
+ */
+export interface AnilistMediaDetail extends AnilistMedia {
+  airingSchedule?: { nodes?: AnilistAiringScheduleNode[] };
+  streamingEpisodes?: AnilistStreamingEpisode[];
+}
+
+export interface AnilistMediaResponse {
+  data: {
+    Media: AnilistMediaDetail | null;
+  };
+}
+
 export interface AnilistPageInfo {
-  total: number;
-  perPage: number;
   currentPage: number;
-  lastPage: number;
+  perPage: number;
   hasNextPage: boolean;
 }
 

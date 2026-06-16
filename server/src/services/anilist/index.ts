@@ -1,8 +1,18 @@
 export { anilistFetch } from './client.ts';
 export { browse, browseBatch, search, searchStudios } from './discover.ts';
-export { anilistToStremioMeta, batchConvertToStremioMeta } from './stremioMeta.ts';
+export {
+  anilistToStremioMeta,
+  anilistToStremioFullMeta,
+  batchConvertToStremioMeta,
+} from './stremioMeta.ts';
+export { fetchAnilistMedia, getAnimeMeta } from './detail.ts';
 export * from './reference.ts';
-export type { AnilistMedia, AnilistPageResponse, AnilistPageInfo } from './types.ts';
+export type {
+  AnilistMedia,
+  AnilistMediaDetail,
+  AnilistPageResponse,
+  AnilistPageInfo,
+} from './types.ts';
 export {
   ANILIST_GENRES,
   ANILIST_FORMATS,

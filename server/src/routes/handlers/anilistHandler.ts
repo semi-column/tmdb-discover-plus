@@ -164,16 +164,15 @@ export async function handleAnilistCatalogRequest(
     let metas: StremioMetaPreview[];
     const browseFilters = effectiveFilters as unknown as AnilistCatalogFilters;
     if (randomize) {
-      const probe = await anilist.browse(browseFilters, type, 1);
-      const lastPage = Math.ceil(probe.total / 50) || 1;
-      const randomPage = Math.floor(Math.random() * Math.min(lastPage, 50)) + 1;
+      // AniList API fields (total, lastPage) are unreliable per official docs
+      // Disable randomization for AniList to avoid performance issues
+      log.debug('AniList randomization disabled - using page 1 instead', { type, catalogId });
       metas = await fetchWithBackfill(
         (p) => anilist.browse(browseFilters, type, p),
         type,
-        randomPage,
+        1,
         artworkOptions
       );
-      metas = shuffleArray(metas);
     } else {
       metas = await fetchWithBackfill(
         (p) => anilist.browse(browseFilters, type, p),

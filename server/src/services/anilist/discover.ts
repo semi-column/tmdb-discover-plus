@@ -170,7 +170,7 @@ export async function browse(
   filters: AnilistCatalogFilters,
   type: ContentType,
   page: number
-): Promise<{ media: AnilistMedia[]; hasNextPage: boolean; total: number }> {
+): Promise<{ media: AnilistMedia[]; hasNextPage: boolean }> {
   const studioIds = filters.studios && filters.studios.length > 0 ? new Set(filters.studios) : null;
   const variables = buildVariables(filters, type, page);
   log.debug('AniList browse', { type, page, sort: variables.sort });
@@ -186,7 +186,6 @@ export async function browse(
   return {
     media,
     hasNextPage: pageData.pageInfo.hasNextPage,
-    total: pageData.pageInfo.total,
   };
 }
 
@@ -246,7 +245,7 @@ export async function search(
   query: string,
   type: ContentType,
   page: number
-): Promise<{ media: AnilistMedia[]; hasNextPage: boolean; total: number }> {
+): Promise<{ media: AnilistMedia[]; hasNextPage: boolean }> {
   const variables: Record<string, unknown> = {
     search: query,
     page,
@@ -262,7 +261,6 @@ export async function search(
   return {
     media: pageData.media,
     hasNextPage: pageData.pageInfo.hasNextPage,
-    total: pageData.pageInfo.total,
   };
 }
 

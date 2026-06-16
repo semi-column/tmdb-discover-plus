@@ -9,6 +9,8 @@ describe('resolveRequestedMetaId', () => {
       tmdbId: null,
       imdbId: 'tt1375666',
       requiresImdbLookup: true,
+      anilistId: null,
+      malId: null,
     });
   });
 
@@ -19,6 +21,8 @@ describe('resolveRequestedMetaId', () => {
       tmdbId: 150540,
       imdbId: null,
       requiresImdbLookup: false,
+      anilistId: null,
+      malId: null,
     });
   });
 
@@ -29,6 +33,8 @@ describe('resolveRequestedMetaId', () => {
       tmdbId: 150540,
       imdbId: null,
       requiresImdbLookup: false,
+      anilistId: null,
+      malId: null,
     });
   });
 
@@ -37,6 +43,7 @@ describe('resolveRequestedMetaId', () => {
       if (id === 'mal:5114') {
         return {
           mal_id: 5114,
+          anilist_id: 5114,
           themoviedb_id: 269,
         };
       }
@@ -50,6 +57,8 @@ describe('resolveRequestedMetaId', () => {
       tmdbId: 269,
       imdbId: null,
       requiresImdbLookup: false,
+      anilistId: 5114,
+      malId: 5114,
     });
   });
 
@@ -58,6 +67,7 @@ describe('resolveRequestedMetaId', () => {
       if (id === 'kitsu:1234') {
         return {
           kitsu_id: 1234,
+          anilist_id: 9876,
           imdb_id: 'tt2085059',
         };
       }
@@ -68,6 +78,32 @@ describe('resolveRequestedMetaId', () => {
       tmdbId: null,
       imdbId: 'tt2085059',
       requiresImdbLookup: true,
+      anilistId: 9876,
+      malId: null,
+    });
+  });
+
+  it('surfaces the AniList id from an anilist-prefixed id when unmapped', () => {
+    const result = resolveRequestedMetaId('anilist:1535', () => undefined);
+
+    expect(result).toEqual({
+      tmdbId: null,
+      imdbId: null,
+      requiresImdbLookup: false,
+      anilistId: 1535,
+      malId: null,
+    });
+  });
+
+  it('surfaces the MAL id from a mal-prefixed id when unmapped', () => {
+    const result = resolveRequestedMetaId('mal:5114', () => undefined);
+
+    expect(result).toEqual({
+      tmdbId: null,
+      imdbId: null,
+      requiresImdbLookup: false,
+      anilistId: null,
+      malId: 5114,
     });
   });
 
@@ -78,6 +114,8 @@ describe('resolveRequestedMetaId', () => {
       tmdbId: null,
       imdbId: null,
       requiresImdbLookup: false,
+      anilistId: null,
+      malId: null,
     });
   });
 });

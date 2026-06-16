@@ -188,7 +188,7 @@ export function AnilistFilterPanel({
     return count;
   };
 
-  const getOptionsBadge = () => (filters.isAdult ? 1 : 0) + (filters.randomize ? 1 : 0);
+  const getOptionsBadge = () => (filters.isAdult ? 1 : 0);
 
   return (
     <>
@@ -451,7 +451,7 @@ export function AnilistFilterPanel({
       <FilterSection
         id="options"
         title="Options"
-        description="Adult content and randomization"
+        description="Adult content settings"
         icon={Eye}
         isOpen={expandedSections?.options}
         onToggle={onToggleSection}
@@ -463,13 +463,6 @@ export function AnilistFilterPanel({
             onChange={(checked) => onFiltersChange('isAdult', checked || undefined)}
             label="Include adult content"
             tooltip="Include adult/18+ rated anime in results."
-          />
-
-          <Checkbox
-            checked={!!filters.randomize}
-            onChange={(checked) => onFiltersChange('randomize', checked || undefined)}
-            label="Randomize Results"
-            tooltip="Fetch a random page from matching results and shuffle them."
           />
         </div>
       </FilterSection>

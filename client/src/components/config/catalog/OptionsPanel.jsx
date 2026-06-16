@@ -23,13 +23,6 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
       )}
 
       <Checkbox
-        checked={!!filters.randomize}
-        onChange={(checked) => onFiltersChange('randomize', checked || undefined)}
-        label="Randomize Results"
-        tooltip="Fetch a random page from the matching results and shuffle them. Great for discovering something new every time."
-      />
-
-      <Checkbox
         checked={!!filters.discoverOnly}
         onChange={(checked) => onFiltersChange('discoverOnly', checked || undefined)}
         label="Discover Only"

@@ -1788,9 +1788,10 @@ router.post('/anilist/preview', requireAuth, async (req, res) => {
     let startPage = 1;
 
     if (randomize) {
-      const probe = await anilist.browse(safeFilters, contentType, 1);
-      const lastPage = Math.ceil(probe.total / 50) || 1;
-      startPage = Math.floor(Math.random() * Math.min(lastPage, 50)) + 1;
+      // AniList API fields (total, lastPage) are unreliable per official docs
+      // Disable randomization for AniList to avoid performance issues
+      log.debug('AniList randomization disabled - using page 1 instead', { type });
+      startPage = 1;
     }
 
     let metasWithPreviewPoster: StremioMetaPreview[];
@@ -1859,7 +1860,8 @@ router.post('/mal/preview', requireAuth, async (req, res) => {
     if (randomize) {
       const probe = await mal.discover(safeFilters, contentType, 1);
       const totalPages = Math.ceil(probe.total / 25) || 1;
-      startPage = Math.floor(Math.random() * Math.min(totalPages, 20)) + 1;
+      // Pick a random page within valid bounds (1 to totalPages inclusive)
+      startPage = Math.floor(Math.random() * totalPages) + 1;
     }
 
     const metasWithPreviewPoster = await runPreviewBackfill({
@@ -1894,7 +1896,8 @@ router.post('/kitsu/preview', requireAuth, async (req, res) => {
     if (randomize) {
       const probe = await kitsu.discover(safeFilters, contentType, 1);
       const totalPages = Math.ceil(probe.total / 20) || 1;
-      startPage = Math.floor(Math.random() * Math.min(totalPages, 20)) + 1;
+      // Pick a random page within valid bounds (1 to totalPages inclusive)
+      startPage = Math.floor(Math.random() * totalPages) + 1;
     }
 
     const metasWithPreviewPoster = await runPreviewBackfill({

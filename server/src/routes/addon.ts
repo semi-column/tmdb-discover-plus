@@ -13,6 +13,7 @@ import type {
 import type { ImdbTitle } from '../services/imdb/types.ts';
 import * as tmdb from '../services/tmdb/index.ts';
 import * as imdb from '../services/imdb/index.ts';
+import * as anilist from '../services/anilist/index.ts';
 import {
   shuffleArray,
   getBaseUrl,
@@ -674,17 +675,31 @@ async function handleMetaRequest(
       let tmdbId = resolvedId.tmdbId;
       let imdbId = resolvedId.imdbId;
 
+      // Hybrid metadata: TMDB is primary for all types. Anime that have no TMDB
+      // mapping fall back to AniList (rich anime metadata + real episode lists).
+      const resolveAnilistFallbackMeta = async (): Promise<Partial<StremioMeta> | null> => {
+        if (stremioType !== 'anime') return null;
+        if (!resolvedId.anilistId && !resolvedId.malId) return null;
+        return anilist.getAnimeMeta({
+          anilistId: resolvedId.anilistId,
+          malId: resolvedId.malId,
+          type: stremioType,
+          requestedId,
+          artworkOptions,
+        });
+      };
+
       if (!tmdbId && resolvedId.requiresImdbLookup && imdbId) {
         const found = await tmdb.findByImdbId(apiKey, imdbId, tmdbType, { language });
         tmdbId = found?.tmdbId || null;
       }
 
-      if (!tmdbId) return null;
+      if (!tmdbId) return resolveAnilistFallbackMeta();
 
       const details = (await tmdb.getDetails(apiKey, tmdbId, tmdbType, {
         language,
       })) as TmdbDetails | null;
-      if (!details) return null;
+      if (!details) return resolveAnilistFallbackMeta();
 
       const detailsImdb = details?.external_ids?.imdb_id || null;
       imdbId = imdbId || detailsImdb;
