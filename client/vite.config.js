@@ -19,10 +19,20 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Prevent aggressive chunk merging that can cause hoisting issues
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          lucide: ['lucide-react'],
-          'dnd-kit': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+        manualChunks: (id) => {
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'react-vendor';
+          }
+          if (id.includes('node_modules/lucide-react')) {
+            return 'lucide';
+          }
+          if (
+            id.includes('node_modules/@dnd-kit/core') ||
+            id.includes('node_modules/@dnd-kit/sortable') ||
+            id.includes('node_modules/@dnd-kit/utilities')
+          ) {
+            return 'dnd-kit';
+          }
         },
       },
     },
