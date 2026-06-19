@@ -6,10 +6,11 @@ import { NewCatalogModal } from './components/modals/NewCatalogModal';
 import { ConfigMismatchModal } from './components/modals/ConfigMismatchModal';
 import { ToastContainer } from './components/layout/Toast';
 import { ConfigDropdown } from './components/config/ConfigDropdown';
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { MarketplaceBrowser } from './components/marketplace/MarketplaceBrowser';
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useAppController } from './hooks/useAppController';
 import { api } from './services/api';
-import { Expand, Shrink, Download, Settings, Loader, Coffee, Heart } from 'lucide-react';
+import { Expand, Shrink, Download, Settings, Loader, Coffee, Heart, Store } from 'lucide-react';
 import { DonateModal } from './components/modals/DonateModal';
 import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
 import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
@@ -54,7 +55,24 @@ function App() {
 
   const [stats, setStats] = useState(null);
   const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
+  const [isMarketplaceMode, setIsMarketplaceMode] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
+
+  const exitMarketplace = useCallback(() => setIsMarketplaceMode(false), []);
+
+  // Selecting (or creating) a catalog should bring the editor forward. Wrap the
+  // context's setActiveCatalog so any catalog selection exits marketplace mode
+  // in the event handler (rather than reacting to it in an effect).
+  const marketplaceAwareState = useMemo(
+    () => ({
+      ...state,
+      setActiveCatalog: (catalog) => {
+        if (catalog) exitMarketplace();
+        state.setActiveCatalog(catalog);
+      },
+    }),
+    [state, exitMarketplace]
+  );
 
   useEffect(() => {
     let stale = false;
@@ -134,7 +152,7 @@ function App() {
       </a>
       <Header userId={config.userId} stats={stats} />
 
-      <AppProviders state={state} actions={actions} config={config} tmdb={tmdb}>
+      <AppProviders state={marketplaceAwareState} actions={actions} config={config} tmdb={tmdb}>
         <main
           className={`main ${state.activeCatalog?.source && state.activeCatalog.source !== 'tmdb' ? `theme-${state.activeCatalog.source}` : ''}`}
           id="main-content"
@@ -183,6 +201,17 @@ function App() {
                   {isFocusMode ? <Shrink size={18} /> : <Expand size={18} />}
                 </button>
 
+                <button
+                  className={`btn ${isMarketplaceMode ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setIsMarketplaceMode((m) => !m)}
+                  title="Browse the catalog marketplace"
+                  aria-label="Toggle catalog marketplace"
+                  aria-pressed={isMarketplaceMode}
+                >
+                  <Store size={18} />
+                  Marketplace
+                </button>
+
                 {userConfigs.length > 0 && (
                   <ConfigDropdown
                     configs={userConfigs}
@@ -229,15 +258,23 @@ function App() {
               </PanelErrorBoundary>
 
               <PanelErrorBoundary fallbackMessage="The editor encountered an error.">
-                <Suspense
-                  fallback={
-                    <div className="editor-panel editor-loading">
-                      <div className="spinner" />
-                    </div>
-                  }
-                >
-                  <CatalogEditor />
-                </Suspense>
+                {isMarketplaceMode ? (
+                  <MarketplaceBrowser
+                    userId={config.userId}
+                    refreshConfig={() => config.loadConfig(config.userId)}
+                    apiKey={config.apiKey || null}
+                  />
+                ) : (
+                  <Suspense
+                    fallback={
+                      <div className="editor-panel editor-loading">
+                        <div className="spinner" />
+                      </div>
+                    }
+                  >
+                    <CatalogEditor />
+                  </Suspense>
+                )}
               </PanelErrorBoundary>
             </div>
           </div>
@@ -246,7 +283,10 @@ function App() {
         <NewCatalogModal
           isOpen={showNewCatalogModal}
           onClose={() => state.setShowNewCatalogModal(false)}
-          onAdd={actions.handleAddCatalog}
+          onAdd={(catalog) => {
+            exitMarketplace();
+            actions.handleAddCatalog(catalog);
+          }}
           imdbEnabled={tmdb.imdbEnabled}
         />
 

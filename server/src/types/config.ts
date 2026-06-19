@@ -311,6 +311,13 @@ export interface CatalogFormState {
   expandedSections?: Record<string, boolean>;
 }
 
+export interface ClonedFrom {
+  marketplaceId: string;
+  originUserId: string;
+  originCatalogId: string;
+  clonedAt: string; // ISO timestamp
+}
+
 export interface CatalogConfig {
   _id: string;
   id?: string;
@@ -320,6 +327,8 @@ export interface CatalogConfig {
   filters: CatalogFilters;
   formState?: CatalogFormState;
   enabled?: boolean;
+  published?: boolean;
+  clonedFrom?: ClonedFrom;
 }
 
 export interface UserConfig {

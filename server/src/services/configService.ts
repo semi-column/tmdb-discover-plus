@@ -430,6 +430,8 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
 
     const result = await storage.saveUserConfig(updateData);
 
+    // Config cache invalidation MUST always run after a successful write and
+    // before reconciliation so the cached config never diverges from storage.
     const configCache = getConfigCache();
     configCache.invalidate(safeUserId);
     if (result) configCache.set(safeUserId, result);
@@ -438,6 +440,29 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
       userId: result?.userId,
       catalogCount: result?.catalogs?.length || 0,
     });
+
+    // Req 5.1/5.4/5.6: after the config is persisted, bring the marketplace
+    // index in sync with the saved configuration (publish/unpublish/content
+    // changes). marketplaceService imports from configService, so a static
+    // import here would create a hard module cycle — use a lazy dynamic import
+    // so the binding is only resolved at call time.
+    //
+    // Error handling (Req 5.6): the config has already been persisted at this
+    // point. Rethrowing a reconcile failure would fail the user's save even
+    // though their configuration was saved successfully, which is undesirable.
+    // The marketplace index is repairable and will be re-reconciled on the next
+    // save, so we log the reconcile error and continue rather than corrupting
+    // the save response.
+    try {
+      const { reconcileMarketplaceEntries } = await import('./marketplaceService.ts');
+      await reconcileMarketplaceEntries(existingConfig ?? null, result);
+    } catch (reconcileError) {
+      log.error('Marketplace reconciliation after save did not complete', {
+        userId: safeUserId,
+        error: (reconcileError as Error).message,
+      });
+    }
+
     return result;
   } catch (dbError) {
     log.error('Storage save error', { error: (dbError as Error).message });
@@ -551,6 +576,25 @@ export async function deleteUserConfig(
     configCache.invalidate(safeUserId);
 
     log.info('Config deleted from storage', { userId: safeUserId });
+
+    // Req 5.4/5.6: deleting the config removes the user entirely, so every
+    // marketplace entry that user published must be removed from the index.
+    // Reconcile against a snapshot of the deleted config whose catalogs are all
+    // gone, so reconciliation diffs every previously-published catalog as
+    // removed. The dynamic import avoids a hard module cycle (marketplaceService
+    // imports from configService). Cache invalidation above always runs first;
+    // a reconcile failure is logged (the index is repairable) rather than
+    // failing the delete, which has already been committed to storage.
+    try {
+      const { reconcileMarketplaceEntries } = await import('./marketplaceService.ts');
+      await reconcileMarketplaceEntries(config, { ...config, catalogs: [] });
+    } catch (reconcileError) {
+      log.error('Marketplace reconciliation after delete did not complete', {
+        userId: safeUserId,
+        error: (reconcileError as Error).message,
+      });
+    }
+
     return { deleted: true, userId: safeUserId };
   } catch (err) {
     log.error('Storage delete error', { error: (err as Error).message });

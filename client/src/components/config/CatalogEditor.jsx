@@ -1,4 +1,4 @@
-import { AlertTriangle, Eye, Film, Loader, Sparkles, Tv, X } from 'lucide-react';
+import { AlertTriangle, Eye, Film, Globe, Loader, Lock, Sparkles, Tv, X } from 'lucide-react';
 import { memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { ActiveFiltersBar } from './catalog/ActiveFiltersBar';
 import { CatalogPreview } from './catalog/CatalogPreview';
@@ -335,6 +335,7 @@ export const CatalogEditor = memo(function CatalogEditor() {
     handleTriStateGenreClick,
     loadPreview,
     handleTVNetworkSearch,
+    handleTogglePublished,
   } = handlers;
 
   const handlePreviewClick = async () => {
@@ -607,6 +608,20 @@ export const CatalogEditor = memo(function CatalogEditor() {
                   {SOURCE_ATTRIBUTION[localCatalog?.source]?.label || SOURCE_ATTRIBUTION.tmdb.label}
                 </a>
               </div>
+              <button
+                type="button"
+                className={`catalog-visibility-toggle ${localCatalog?.published === false ? 'is-private' : 'is-public'}`}
+                onClick={handleTogglePublished}
+                aria-pressed={localCatalog?.published === false}
+                title={
+                  localCatalog?.published === false
+                    ? 'Private — hidden from the marketplace. Click to make public.'
+                    : 'Public — discoverable in the marketplace. Click to make private.'
+                }
+              >
+                {localCatalog?.published === false ? <Lock size={12} /> : <Globe size={12} />}
+                {localCatalog?.published === false ? 'Private' : 'Public'}
+              </button>
             </div>
           </div>
           <div className="editor-actions">

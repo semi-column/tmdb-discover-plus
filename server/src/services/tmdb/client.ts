@@ -293,7 +293,18 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
   // Never cache auth errors (401/403) globally — they are API-key-specific.
   // Caching them would block valid users from getting results for up to 30 minutes.
   const isAuthError = lastError!.statusCode === 401 || lastError!.statusCode === 403;
-  if (!isAuthError) {
+  // Do not cache transient connection-level errors (resets/timeouts/refused).
+  // In filtered/unreliable network environments these are intermittent; caching
+  // them on a shared key would block all users (e.g. login validation) for the
+  // negative-cache TTL even though the next attempt may well succeed.
+  const isTransientNetworkError =
+    !lastError!.statusCode &&
+    (lastError!.code === 'ECONNREFUSED' ||
+      lastError!.code === 'ECONNRESET' ||
+      lastError!.code === 'ETIMEDOUT' ||
+      lastError!.name === 'FetchError' ||
+      lastError!.name === 'AbortError');
+  if (!isAuthError && !isTransientNetworkError) {
     try {
       await cache.setError(cacheKey, errorType, lastError!.message);
     } catch (e) {

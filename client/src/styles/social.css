@@ -227,3 +227,250 @@
     max-width: 160px;
   }
 }
+
+/* ========================================
+   Marketplace Engagement Controls
+   ======================================== */
+
+/* Like toggle button */
+.like-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast) ease,
+    border-color var(--transition-fast) ease,
+    color var(--transition-fast) ease,
+    transform var(--transition-fast) ease;
+}
+
+.like-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-light);
+  color: #ff6b9d;
+  transform: translateY(-1px);
+}
+
+.like-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.like-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.like-button .like-button-icon {
+  flex-shrink: 0;
+  transition: transform var(--transition-fast) ease;
+}
+
+/* Liked state */
+.like-button.liked {
+  background: linear-gradient(135deg, rgba(255, 105, 180, 0.15), rgba(255, 20, 147, 0.2));
+  border-color: rgba(255, 105, 180, 0.5);
+  color: #ff69b4;
+}
+
+.like-button.liked:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(255, 105, 180, 0.25), rgba(255, 20, 147, 0.3));
+  border-color: rgba(255, 105, 180, 0.7);
+  color: #ff85c2;
+}
+
+.like-button.liked .like-button-icon {
+  transform: scale(1.05);
+}
+
+.like-button-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Engagement counters (installs / likes / views) */
+.engagement-counters {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.engagement-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.engagement-counter-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.engagement-counter-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Per-catalog marketplace visibility toggle (CatalogEditor header) */
+.catalog-visibility-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast) ease,
+    border-color var(--transition-fast) ease,
+    color var(--transition-fast) ease;
+}
+
+.catalog-visibility-toggle:hover {
+  border-color: var(--border-light);
+  background: var(--bg-hover);
+}
+
+.catalog-visibility-toggle.is-public {
+  color: var(--accent-primary, #6c8cff);
+  border-color: rgba(108, 140, 255, 0.4);
+  background: rgba(108, 140, 255, 0.1);
+}
+
+.catalog-visibility-toggle.is-private {
+  color: var(--text-muted);
+}
+
+/* ===========================================================================
+   Marketplace results — compact list layout
+   =========================================================================== */
+.marketplace-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.marketplace-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color var(--transition-fast) ease;
+}
+
+.marketplace-row:last-child {
+  border-bottom: none;
+}
+
+.marketplace-row:hover {
+  background: var(--bg-hover);
+}
+
+.marketplace-row-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.marketplace-row-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.marketplace-row-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.marketplace-row-source {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.marketplace-row-type {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.marketplace-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.marketplace-row-genre {
+  font-size: 11px;
+  padding: 1px 8px;
+}
+
+.marketplace-row-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.marketplace-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.marketplace-like-btn.liked {
+  color: #ff69b4;
+}
+
+@media (max-width: 720px) {
+  .marketplace-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .marketplace-row-actions {
+    justify-content: flex-end;
+  }
+
+  .marketplace-action-label {
+    display: none;
+  }
+}

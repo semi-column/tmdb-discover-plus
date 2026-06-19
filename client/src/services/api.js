@@ -564,6 +564,45 @@ class ApiService {
   async deleteConfig(userId, apiKey) {
     return this.request(this._buildAuthUrl(`/config/${userId}`, apiKey), { method: 'DELETE' });
   }
+
+  async searchMarketplace({ q, source, type, genres, sort, page = 0, limit = 24 } = {}) {
+    const params = { q, source, type, sort, page: String(page), limit: String(limit) };
+    if (Array.isArray(genres) && genres.length) params.genres = genres.join(',');
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    ).toString();
+    return this.request(`/marketplace/search?${qs}`);
+  }
+
+  async getMarketplaceEntry(id) {
+    return this.request(`/marketplace/${encodeURIComponent(id)}`);
+  }
+
+  async publishCatalog(userId, catalogId, { description, tags } = {}) {
+    return this.request('/marketplace/publish', {
+      method: 'POST',
+      body: JSON.stringify({ userId, catalogId, description, tags }),
+    });
+  }
+
+  async unpublishCatalog(id) {
+    return this.request(`/marketplace/${encodeURIComponent(id)}/unpublish`, { method: 'POST' });
+  }
+
+  async installMarketplaceCatalog(id, targetUserId) {
+    return this.request(`/marketplace/${encodeURIComponent(id)}/install`, {
+      method: 'POST',
+      body: JSON.stringify({ targetUserId }),
+    });
+  }
+
+  async likeMarketplaceCatalog(id) {
+    return this.request(`/marketplace/${encodeURIComponent(id)}/like`, { method: 'POST' });
+  }
+
+  async unlikeMarketplaceCatalog(id) {
+    return this.request(`/marketplace/${encodeURIComponent(id)}/like`, { method: 'DELETE' });
+  }
 }
 
 export const api = new ApiService();

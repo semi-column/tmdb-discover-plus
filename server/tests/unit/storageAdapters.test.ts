@@ -30,6 +30,22 @@ vi.mock('../../src/models/UserConfig.ts', () => {
   return { UserConfig: mockModel };
 });
 
+// MongoAdapter imports the marketplace models, which build real mongoose
+// schemas at module load. The minimal mongoose mock above has no `Schema`, so
+// mock the model module directly (mirroring the UserConfig mock) to keep the
+// adapter import side-effect free for these tests.
+vi.mock('../../src/models/MarketplaceEntry.ts', () => {
+  const makeModel = () => ({
+    findOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    findOneAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    deleteMany: vi.fn(),
+    create: vi.fn(),
+  });
+  return { MarketplaceEntryModel: makeModel(), MarketplaceLikeModel: makeModel() };
+});
+
 vi.mock('../../src/utils/logger.ts', () => ({
   createLogger: () => ({
     info: vi.fn(),

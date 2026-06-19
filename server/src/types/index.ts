@@ -5,6 +5,7 @@ export * from './tmdb.ts';
 export * from './stremio.ts';
 export * from './cache.ts';
 export * from './storage.ts';
+export * from './marketplace.ts';
 
 // Express global augmentation (side-effect import)
 import './express.ts';
