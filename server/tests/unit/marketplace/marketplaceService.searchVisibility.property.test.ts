@@ -123,6 +123,15 @@ function isPublicActive(entry: MarketplaceEntry): boolean {
   return entry.visibility === 'public' && entry.moderation === 'active';
 }
 
+function matchesTypeFacet(entry: MarketplaceEntry, type: MarketplaceSearchQuery['type']): boolean {
+  if (!type) return true;
+  if (entry.type === type) return true;
+  if (type === 'anime') {
+    return entry.type === 'series' && ['anilist', 'mal', 'kitsu', 'simkl'].includes(entry.source);
+  }
+  return false;
+}
+
 describe('marketplaceService search visibility (Property 7 — Req 7.1-7.4)', () => {
   it('search returns exactly the public+active entries matching the query/facets', async () => {
     await fc.assert(
@@ -173,7 +182,7 @@ describe('marketplaceService search visibility (Property 7 — Req 7.1-7.4)', ()
           const expected = entries.filter((e) => {
             if (!isPublicActive(e)) return false;
             if (scenario.source && e.source !== scenario.source) return false;
-            if (scenario.type && e.type !== scenario.type) return false;
+            if (!matchesTypeFacet(e, scenario.type)) return false;
             return true;
           });
           const expectedIds = new Set(expected.map((e) => e.marketplaceId));

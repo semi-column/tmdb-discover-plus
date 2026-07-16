@@ -43,9 +43,8 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
   // Search / facet / sort state. Default sort is trending so the landing view is
   // populated for users who have not typed a query yet.
   const [query, setQuery] = useState('');
-  const [source, setSource] = useState(undefined);
+  const [source, setSource] = useState([]);
   const [type, setType] = useState(undefined);
-  const [genres, setGenres] = useState([]);
   const [sort, setSort] = useState('trending');
 
   // Native preview surface state (mirrors CatalogEditor's preview wiring).
@@ -59,15 +58,15 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
 
   // Initial browse on mount (empty query => trending).
   useEffect(() => {
-    search({ q: '', source, type, genres, sort });
+    search({ q: '', source, type, sort });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const triggerSearch = useCallback(
     (overrides = {}) => {
-      search({ q: query, source, type, genres, sort, ...overrides });
+      search({ q: query, source, type, sort, ...overrides });
     },
-    [search, query, source, type, genres, sort]
+    [search, query, source, type, sort]
   );
 
   const handleQueryChange = (value) => {
@@ -76,10 +75,9 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
   };
 
   const handleFacetsChange = (next) => {
-    setSource(next.source);
+    setSource(Array.isArray(next.source) ? next.source : []);
     setType(next.type);
-    setGenres(next.genres);
-    triggerSearch({ source: next.source, type: next.type, genres: next.genres });
+    triggerSearch({ source: Array.isArray(next.source) ? next.source : [], type: next.type });
   };
 
   const handleSortChange = (next) => {
@@ -125,9 +123,18 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
     [install]
   );
 
+  const handleOpenPreferences = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('open-preferences', {
+        detail: { section: 'apiKeys' },
+      })
+    );
+  }, []);
+
   return (
-    <div className="editor-container">
-      <div className="editor-panel">
+    <div className="editor-container marketplace-browser">
+      <div className="editor-panel marketplace-panel">
         <div className="editor-header">
           <div
             className="editor-title"
@@ -155,17 +162,12 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
           </div>
         </div>
 
-        <div className="editor-content">
-          <div className="filter-group" style={{ marginBottom: '12px' }}>
+        <div className="editor-content marketplace-content">
+          <div className="marketplace-search-group">
             <MarketplaceSearchBar value={query} onChange={handleQueryChange} />
           </div>
 
-          <MarketplaceFacets
-            source={source}
-            type={type}
-            genres={genres}
-            onChange={handleFacetsChange}
-          />
+          <MarketplaceFacets source={source} type={type} onChange={handleFacetsChange} />
 
           <div className="marketplace-results-header" style={{ margin: '16px 0 8px' }}>
             <span className="filter-label">
@@ -189,37 +191,44 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
             </div>
           )}
 
-          <div className="marketplace-list">
-            {results.map((entry) => (
-              <MarketplaceCard
-                key={entry.marketplaceId}
-                entry={entry}
-                onPreview={runPreview}
-                onInstall={handleInstall}
-                onToggleLike={toggleLike}
-                liked={entry.liked}
-                installing={installingId === entry.marketplaceId}
-              />
-            ))}
+          <div className="marketplace-results-region">
+            <div className="marketplace-list">
+              {results.map((entry) => (
+                <MarketplaceCard
+                  key={entry.marketplaceId}
+                  entry={entry}
+                  onPreview={runPreview}
+                  onInstall={handleInstall}
+                  onToggleLike={toggleLike}
+                  liked={entry.liked}
+                  installing={installingId === entry.marketplaceId}
+                />
+              ))}
+              {loading && (
+                <div
+                  className="marketplace-list-footer"
+                  style={{ textAlign: 'center', padding: '24px 12px' }}
+                >
+                  <Loader
+                    size={28}
+                    className="animate-spin"
+                    style={{ color: 'var(--accent-primary)' }}
+                  />
+                </div>
+              )}
+
+              {!loading && hasMore && (
+                <div
+                  className="marketplace-list-footer"
+                  style={{ textAlign: 'center', padding: '16px 0' }}
+                >
+                  <button type="button" className="btn btn-secondary" onClick={loadMore}>
+                    Load more
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-
-          {loading && (
-            <div style={{ textAlign: 'center', padding: '24px 12px' }}>
-              <Loader
-                size={28}
-                className="animate-spin"
-                style={{ color: 'var(--accent-primary)' }}
-              />
-            </div>
-          )}
-
-          {!loading && hasMore && (
-            <div style={{ textAlign: 'center', padding: '16px 0' }}>
-              <button type="button" className="btn btn-secondary" onClick={loadMore}>
-                Load more
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -229,6 +238,7 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
         data={previewData}
         previewPosterProvider={undefined}
         onRetry={handleRetryPreview}
+        onOpenPreferences={handleOpenPreferences}
         isModal={isMobileSize}
         isOpen={isPreviewModalOpen}
         onClose={() => setIsPreviewModalOpen(false)}

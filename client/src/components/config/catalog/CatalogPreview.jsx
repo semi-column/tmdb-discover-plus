@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import {
   Eye,
+  Settings,
   Loader,
   RefreshCw,
   ImageOff,
@@ -18,6 +19,7 @@ export const CatalogPreview = memo(function CatalogPreview({
   data,
   previewPosterProvider,
   onRetry,
+  onOpenPreferences,
   isModal,
   isOpen,
   onClose,
@@ -37,6 +39,8 @@ export const CatalogPreview = memo(function CatalogPreview({
 
   const hasData = data && Array.isArray(data.metas) && data.metas.length > 0;
   const isCompactState = (!hasData && loading) || error || (!loading && !hasData);
+  const canOpenApiKeysFromError =
+    typeof error === 'string' && /trakt client id.*not configured/i.test(error);
   const shouldAlwaysHideDetails = ['rpdb', 'topPosters', 'customUrl'].includes(
     previewPosterProvider
   );
@@ -100,10 +104,25 @@ export const CatalogPreview = memo(function CatalogPreview({
             <div className="preview-error" style={{ textAlign: 'center', padding: '24px 12px' }}>
               <AlertCircle size={32} style={{ marginBottom: '12px', color: 'var(--error)' }} />
               <p style={{ margin: '0 0 16px 0', fontSize: '0.875rem' }}>{error}</p>
-              <button className="btn btn-secondary" onClick={onRetry}>
-                <RefreshCw size={16} />
-                Retry
-              </button>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                {canOpenApiKeysFromError && typeof onOpenPreferences === 'function' && (
+                  <button className="btn btn-primary" onClick={onOpenPreferences}>
+                    <Settings size={16} />
+                    Open preferences
+                  </button>
+                )}
+                <button className="btn btn-secondary" onClick={onRetry}>
+                  <RefreshCw size={16} />
+                  Retry
+                </button>
+              </div>
             </div>
           )}
 

@@ -4,13 +4,13 @@ import { getStorage } from './storage/index.ts';
 import { getUserConfig, saveUserConfig } from './configService.ts';
 import { toPublicProjection, containsNoSecrets } from './marketplace/projection.ts';
 import { validateMarketplaceEntry } from './marketplace/validation.ts';
+import { parseSources, parseGenres } from './marketplace/facetParsing.ts';
 import { getMarketplaceCache } from '../infrastructure/marketplaceCache.ts';
 import {
   MARKETPLACE_LIMITS,
   MARKETPLACE_PAGINATION,
   MARKETPLACE_RANKING,
   MARKETPLACE_SORT_MODES,
-  MARKETPLACE_SOURCES,
   MARKETPLACE_TYPES,
 } from '../constants.ts';
 import { createLogger } from '../utils/logger.ts';
@@ -386,12 +386,10 @@ export async function reconcileMarketplaceEntries(
 const { MAX_QUERY_LENGTH } = MARKETPLACE_LIMITS;
 const { DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE, MAX_PAGE_SIZE, TOTAL_COUNT_CAP } = MARKETPLACE_PAGINATION;
 
-const VALID_SOURCES = new Set<string>(MARKETPLACE_SOURCES);
 const VALID_TYPES = new Set<string>(MARKETPLACE_TYPES);
 const VALID_SORTS = new Set<string>(MARKETPLACE_SORT_MODES);
 
 const SEARCH_CACHE_PREFIX = 'mkt:search:';
-const MAX_GENRE_FACETS = 10;
 
 /**
  * Normalize and truncate the raw query string.
@@ -421,11 +419,12 @@ function validateAndParseFacets(
   const facets: MarketplaceSearchFacets = {};
 
   if (query.source !== undefined && query.source !== null && query.source !== ('' as SourceType)) {
-    const source = String(query.source);
-    if (!VALID_SOURCES.has(source)) {
-      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, `Invalid source facet: "${source}"`);
+    const sources = parseSources(query.source);
+    if (sources?.length === 1) {
+      facets.source = sources[0];
+    } else if (sources && sources.length > 1) {
+      facets.source = sources;
     }
-    facets.source = source as SourceType;
   }
 
   if (query.type !== undefined && query.type !== null && query.type !== ('' as ContentType)) {
@@ -436,20 +435,8 @@ function validateAndParseFacets(
     facets.type = type as ContentType;
   }
 
-  if (typeof query.genres === 'string' && query.genres.trim().length > 0) {
-    const seen = new Set<string>();
-    const genres: string[] = [];
-    for (const raw of query.genres.split(',')) {
-      if (genres.length >= MAX_GENRE_FACETS) break;
-      const token = sanitizeString(raw, 60);
-      if (token.length < 1) continue;
-      const dedupeKey = token.toLowerCase();
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-      genres.push(token);
-    }
-    if (genres.length > 0) facets.genres = genres;
-  }
+  const genres = parseGenres(query.genres);
+  if (genres.length > 0) facets.genres = genres;
 
   // Only attach a facets object when at least one constraint is present.
   if (facets.source === undefined && facets.type === undefined && facets.genres === undefined) {

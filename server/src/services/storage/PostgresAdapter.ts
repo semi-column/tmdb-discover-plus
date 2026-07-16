@@ -2,6 +2,7 @@ import pg from 'pg';
 import { StorageInterface } from './StorageInterface.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { MARKETPLACE_RANKING, MARKETPLACE_PAGINATION } from '../../constants.ts';
+import { resolveSort, clampLimit, LEGACY_ANIME_SOURCES } from './searchHelpers.ts';
 import type {
   UserConfig,
   PublicStats,
@@ -16,8 +17,7 @@ const { Pool } = pg;
 const { W_TEXT, W_FUZZY, W_FACET, W_POP, POP_INSTALLS_WEIGHT, POP_LIKES_WEIGHT, FUZZY_THRESHOLD } =
   MARKETPLACE_RANKING;
 
-const { DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE, MAX_PAGE_SIZE, TOTAL_COUNT_CAP, ADAPTER_RESPONSE_CAP } =
-  MARKETPLACE_PAGINATION;
+const { TOTAL_COUNT_CAP, ADAPTER_RESPONSE_CAP } = MARKETPLACE_PAGINATION;
 
 // Text-search configuration used consistently for both indexing (to_tsvector) and
 // querying (websearch_to_tsquery) so ranking is comparable across writes/reads.
@@ -34,16 +34,6 @@ const COUNTER_COLUMNS: Record<'installs' | 'likes' | 'views', string> = {
 // Accepts canonical UUID strings; used to avoid issuing a query with a malformed id
 // (which Postgres would reject for a UUID column) and instead return "not found".
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function clampLimit(limit: number | undefined): number {
-  if (limit === undefined || !Number.isFinite(limit)) return DEFAULT_PAGE_SIZE;
-  return Math.min(MAX_PAGE_SIZE, Math.max(MIN_PAGE_SIZE, Math.floor(limit)));
-}
-
-function resolveSort(sort: MarketplaceSort | undefined, hasQuery: boolean): MarketplaceSort {
-  if (sort) return sort;
-  return hasQuery ? 'relevance' : 'trending';
-}
 
 export class PostgresAdapter extends StorageInterface {
   private pool: InstanceType<typeof Pool>;
@@ -505,10 +495,24 @@ export class PostgresAdapter extends StorageInterface {
 
     const facets = params.facets;
     if (facets?.source) {
-      values.push(facets.source);
-      conditions.push(`source = $${values.length}`);
+      const sources = Array.isArray(facets.source) ? facets.source : [facets.source];
+      if (sources.length > 1) {
+        values.push(sources);
+        conditions.push(`source = ANY($${values.length}::text[])`);
+      } else {
+        values.push(sources[0]);
+        conditions.push(`source = $${values.length}`);
+      }
     }
-    if (facets?.type) {
+    if (facets?.type === 'anime') {
+      values.push('anime');
+      const animeTypeIdx = values.length;
+      values.push([...LEGACY_ANIME_SOURCES]);
+      const legacySourcesIdx = values.length;
+      conditions.push(
+        `(type = $${animeTypeIdx} OR (type = 'series' AND source = ANY($${legacySourcesIdx}::text[])))`
+      );
+    } else if (facets?.type) {
       values.push(facets.type);
       conditions.push(`type = $${values.length}`);
     }

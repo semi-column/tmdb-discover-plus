@@ -1,22 +1,9 @@
 import { Download, Eye, Heart } from 'lucide-react';
+import { getAllSources } from '../../sources';
+import { MARKETPLACE_TYPES } from '../../constants/marketplaceTypes';
 
-const SOURCE_LABELS = {
-  tmdb: 'TMDB',
-  imdb: 'IMDb',
-  anilist: 'AniList',
-  mal: 'MAL',
-  kitsu: 'Kitsu',
-  simkl: 'Simkl',
-  trakt: 'Trakt',
-};
-
-const TYPE_LABELS = {
-  movie: 'Movies',
-  series: 'Series',
-  anime: 'Anime',
-  collection: 'Collections',
-};
-
+const SOURCE_LABELS = Object.fromEntries(getAllSources().map((s) => [s.id, s.label]));
+const TYPE_LABELS = Object.fromEntries(MARKETPLACE_TYPES.map((t) => [t.id, t.label]));
 const MAX_GENRE_CHIPS = 4;
 
 function formatCount(value) {

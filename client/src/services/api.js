@@ -566,7 +566,9 @@ class ApiService {
   }
 
   async searchMarketplace({ q, source, type, genres, sort, page = 0, limit = 24 } = {}) {
-    const params = { q, source, type, sort, page: String(page), limit: String(limit) };
+    const params = { q, type, sort, page: String(page), limit: String(limit) };
+    if (Array.isArray(source) && source.length) params.source = source.join(',');
+    else if (typeof source === 'string' && source) params.source = source;
     if (Array.isArray(genres) && genres.length) params.genres = genres.join(',');
     const qs = new URLSearchParams(
       Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')

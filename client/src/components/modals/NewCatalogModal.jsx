@@ -4,13 +4,13 @@ import { useModalA11y } from '../../hooks/useModalA11y';
 import { getSource } from '../../sources';
 
 const SOURCES = [
-  { id: 'tmdb', label: 'TMDB', desc: 'Standard TMDB discovery', alwaysVisible: true },
-  { id: 'imdb', label: 'IMDb', desc: 'IMDb metadata & lists', enabledKey: 'imdbEnabled' },
-  { id: 'anilist', label: 'AniList', desc: 'AniList anime database', alwaysVisible: true },
-  { id: 'mal', label: 'MAL', desc: 'MyAnimeList rankings', alwaysVisible: true },
-  { id: 'kitsu', label: 'Kitsu', desc: 'Kitsu anime catalogs', alwaysVisible: true },
-  { id: 'simkl', label: 'Simkl', desc: 'Simkl anime discovery', alwaysVisible: true },
-  { id: 'trakt', label: 'Trakt', desc: 'Trakt movie & TV discovery', alwaysVisible: true },
+  { id: 'tmdb', desc: 'Standard TMDB discovery', alwaysVisible: true },
+  { id: 'imdb', desc: 'IMDb metadata & lists', enabledKey: 'imdbEnabled' },
+  { id: 'anilist', desc: 'AniList anime database', alwaysVisible: true },
+  { id: 'mal', desc: 'MyAnimeList rankings', alwaysVisible: true },
+  { id: 'kitsu', desc: 'Kitsu anime catalogs', alwaysVisible: true },
+  { id: 'simkl', desc: 'Simkl anime discovery', alwaysVisible: true },
+  { id: 'trakt', desc: 'Trakt movie & TV discovery', alwaysVisible: true },
 ];
 
 export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false }) {
@@ -118,7 +118,7 @@ export function NewCatalogModal({ isOpen, onClose, onAdd, imdbEnabled = false })
                     title={s.desc}
                   >
                     <span className={`source-dot ${s.id}`} />
-                    {s.label}
+                    {getSource(s.id).label}
                   </button>
                 ))}
               </div>

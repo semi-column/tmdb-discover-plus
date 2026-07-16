@@ -1,6 +1,8 @@
 import { createLogger } from '../../utils/logger.ts';
-import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
+import { TIMEOUTS } from '../../constants.ts';
 import { ADDON_VERSION } from '../../version.ts';
+import { createCircuitBreaker } from '../common/circuitBreaker.ts';
+import { fetchWithRetry } from '../common/fetchWithRetry.ts';
 
 const log = createLogger('kitsu:client');
 
@@ -44,35 +46,9 @@ async function acquireSlot(): Promise<void> {
   });
 }
 
-const circuitBreaker = {
-  failures: [] as number[],
-  openedAt: 0,
-  threshold: CIRCUIT_BREAKER_DEFAULTS.THRESHOLD,
-  windowMs: CIRCUIT_BREAKER_DEFAULTS.WINDOW_MS,
-  cooldownMs: CIRCUIT_BREAKER_DEFAULTS.COOLDOWN_MS,
-};
-
-function isCircuitOpen(): boolean {
-  if (!circuitBreaker.openedAt) return false;
-  return Date.now() - circuitBreaker.openedAt < circuitBreaker.cooldownMs;
-}
-
-function recordFailure(): void {
-  const now = Date.now();
-  circuitBreaker.failures = circuitBreaker.failures.filter(
-    (t) => now - t < circuitBreaker.windowMs
-  );
-  circuitBreaker.failures.push(now);
-  if (circuitBreaker.failures.length >= circuitBreaker.threshold) {
-    circuitBreaker.openedAt = now;
-    log.warn('circuit breaker opened for Kitsu API');
-  }
-}
-
-function recordSuccess(): void {
-  circuitBreaker.failures = [];
-  circuitBreaker.openedAt = 0;
-}
+const circuitBreaker = createCircuitBreaker({
+  onOpen: () => log.warn('circuit breaker opened for Kitsu API'),
+});
 
 function resolveKitsuUrl(requestPath: string): string {
   if (!requestPath) throw new Error('Kitsu path is required');
@@ -93,46 +69,29 @@ function resolveKitsuUrl(requestPath: string): string {
 }
 
 export async function kitsuFetch<T>(path: string): Promise<T> {
-  if (isCircuitOpen()) {
+  if (circuitBreaker.isOpen()) {
     throw Object.assign(new Error('Kitsu circuit breaker open'), { statusCode: 503 });
   }
 
   await acquireSlot();
 
   const url = resolveKitsuUrl(path);
-  let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const response = await fetch(url, {
-        headers: KITSU_HEADERS,
-        signal: AbortSignal.timeout(TIMEOUTS.KITSU_FETCH_MS),
-      });
-
-      if (response.status === 429) {
-        log.warn('Kitsu rate limited', { attempt });
-        await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
-        continue;
+  try {
+    const data = await fetchWithRetry<T>(
+      url,
+      { headers: KITSU_HEADERS },
+      {
+        providerName: 'Kitsu',
+        timeoutMs: TIMEOUTS.KITSU_FETCH_MS,
+        onRateLimited: (_response, attempt) => log.warn('Kitsu rate limited', { attempt }),
+        getRetryDelayMs: (_response, attempt) => 2000 * Math.pow(2, attempt),
       }
-
-      if (!response.ok) {
-        throw Object.assign(new Error(`Kitsu API error: ${response.status}`), {
-          statusCode: response.status,
-        });
-      }
-
-      const data = (await response.json()) as T;
-      recordSuccess();
-      return data;
-    } catch (err) {
-      lastError = err as Error;
-      if ((err as { statusCode?: number }).statusCode === 429) continue;
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 300 * Math.pow(2, attempt)));
-      }
-    }
+    );
+    circuitBreaker.recordSuccess();
+    return data;
+  } catch (err) {
+    circuitBreaker.recordFailure();
+    throw err;
   }
-
-  recordFailure();
-  throw lastError || new Error('Kitsu API request failed');
 }

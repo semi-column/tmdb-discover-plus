@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 export function toPlaceholdersFromCsv(csv, sep = ',') {
   if (!csv) return [];
@@ -93,93 +93,64 @@ export function useResolvedFilters({
     networks: undefined,
   });
 
-  const resolvePeople = useCallback((filterValue, resolvedValue) => {
-    if (resolvedRef.current.people === filterValue) return;
-    resolvedRef.current.people = filterValue;
+  // Shared shape behind resolvePeople/resolveCompanies/resolveKeywords/resolveExcludeKeywords/
+  // resolveExcludeCompanies/resolveNetworks: skip if the raw filter value hasn't changed, apply
+  // already-resolved `{value, label}` pairs directly, otherwise show CSV placeholders immediately
+  // and resolve real names asynchronously by id (or by search fallback). `resolvedRef`/`fnRef` are
+  // closed over (not passed as call arguments) so refs are only ever read inside the callback that
+  // runs later, never synchronously while building the resolver during render.
+  const makeResolver = useCallback(
+    (refKey, setter, fetchByIdKey, searchKey, csvSep = ',') =>
+      (filterValue, resolvedValue) => {
+        if (resolvedRef.current[refKey] === filterValue) return;
+        resolvedRef.current[refKey] = filterValue;
 
-    if (Array.isArray(resolvedValue) && resolvedValue.length > 0) {
-      setSelectedPeople(resolvedValue.map((p) => ({ id: String(p.value), name: p.label })));
-      return;
-    }
-    const initial = toPlaceholdersFromCsv(filterValue);
-    setSelectedPeople(initial);
-    if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getPersonById, fnRef.current.searchPerson).then(
-        setSelectedPeople
-      );
-    }
-  }, []);
+        if (Array.isArray(resolvedValue) && resolvedValue.length > 0) {
+          setter(resolvedValue.map((item) => ({ id: String(item.value), name: item.label })));
+          return;
+        }
+        const initial = toPlaceholdersFromCsv(filterValue, csvSep);
+        setter(initial);
+        if (initial.length > 0) {
+          resolveItems(
+            initial,
+            fnRef.current[fetchByIdKey],
+            searchKey ? fnRef.current[searchKey] : undefined
+          ).then(setter);
+        }
+      },
+    []
+  );
 
-  const resolveCompanies = useCallback((filterValue, resolvedValue) => {
-    if (resolvedRef.current.companies === filterValue) return;
-    resolvedRef.current.companies = filterValue;
+  const resolvePeople = useMemo(
+    () => makeResolver('people', setSelectedPeople, 'getPersonById', 'searchPerson'),
+    [makeResolver]
+  );
 
-    if (Array.isArray(resolvedValue) && resolvedValue.length > 0) {
-      setSelectedCompanies(resolvedValue.map((c) => ({ id: String(c.value), name: c.label })));
-      return;
-    }
-    const initial = toPlaceholdersFromCsv(filterValue);
-    setSelectedCompanies(initial);
-    if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getCompanyById, fnRef.current.searchCompany).then(
-        setSelectedCompanies
-      );
-    }
-  }, []);
+  const resolveCompanies = useMemo(
+    () => makeResolver('companies', setSelectedCompanies, 'getCompanyById', 'searchCompany'),
+    [makeResolver]
+  );
 
-  const resolveKeywords = useCallback((filterValue, resolvedValue) => {
-    if (resolvedRef.current.keywords === filterValue) return;
-    resolvedRef.current.keywords = filterValue;
+  const resolveKeywords = useMemo(
+    () => makeResolver('keywords', setSelectedKeywords, 'getKeywordById', 'searchKeyword'),
+    [makeResolver]
+  );
 
-    if (Array.isArray(resolvedValue) && resolvedValue.length > 0) {
-      setSelectedKeywords(resolvedValue.map((k) => ({ id: String(k.value), name: k.label })));
-      return;
-    }
-    const initial = toPlaceholdersFromCsv(filterValue);
-    setSelectedKeywords(initial);
-    if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getKeywordById, fnRef.current.searchKeyword).then(
-        setSelectedKeywords
-      );
-    }
-  }, []);
+  const resolveExcludeKeywords = useMemo(
+    () => makeResolver('excludeKeywords', setExcludeKeywords, 'getKeywordById', 'searchKeyword'),
+    [makeResolver]
+  );
 
-  const resolveExcludeKeywords = useCallback((filterValue) => {
-    if (resolvedRef.current.excludeKeywords === filterValue) return;
-    resolvedRef.current.excludeKeywords = filterValue;
+  const resolveExcludeCompanies = useMemo(
+    () => makeResolver('excludeCompanies', setExcludeCompanies, 'getCompanyById', 'searchCompany'),
+    [makeResolver]
+  );
 
-    const initial = toPlaceholdersFromCsv(filterValue);
-    setExcludeKeywords(initial);
-    if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getKeywordById, fnRef.current.searchKeyword).then(
-        setExcludeKeywords
-      );
-    }
-  }, []);
-
-  const resolveExcludeCompanies = useCallback((filterValue) => {
-    if (resolvedRef.current.excludeCompanies === filterValue) return;
-    resolvedRef.current.excludeCompanies = filterValue;
-
-    const initial = toPlaceholdersFromCsv(filterValue);
-    setExcludeCompanies(initial);
-    if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getCompanyById, fnRef.current.searchCompany).then(
-        setExcludeCompanies
-      );
-    }
-  }, []);
-
-  const resolveNetworks = useCallback((filterValue) => {
-    if (resolvedRef.current.networks === filterValue) return;
-    resolvedRef.current.networks = filterValue;
-
-    const initial = toPlaceholdersFromCsv(filterValue, '|');
-    setSelectedNetworks(initial);
-    if (initial.length > 0) {
-      resolveItems(initial, fnRef.current.getNetworkById).then(setSelectedNetworks);
-    }
-  }, []);
+  const resolveNetworks = useMemo(
+    () => makeResolver('networks', setSelectedNetworks, 'getNetworkById', null, '|'),
+    [makeResolver]
+  );
 
   const catalogId = catalog?._id;
   const catalogFormState = catalog?.formState;

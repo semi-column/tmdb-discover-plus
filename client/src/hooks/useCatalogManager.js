@@ -97,7 +97,7 @@ export function useCatalogManager(config, addToast) {
     if (!catalog) return;
 
     const newCatalog = {
-      ...JSON.parse(JSON.stringify(catalog)),
+      ...structuredClone(catalog),
       _id: crypto.randomUUID(),
       id: crypto.randomUUID(),
       name: `${catalog.name} (Copy)`,

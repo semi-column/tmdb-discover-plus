@@ -4,6 +4,7 @@ import {
   generateBackdropUrl,
   isValidPosterConfig,
   createArtworkOptions,
+  applyArtworkOverridesSync,
   checkPosterExists,
   applyArtworkOverridesToMetaPreviews,
   requiresAsyncArtworkResolution,
@@ -230,6 +231,24 @@ describe('requiresAsyncArtworkResolution', () => {
 });
 
 describe('applyArtworkOverridesToMetaPreviews', () => {
+  it('keeps native poster when TMDB provider cannot resolve an ID-backed poster', () => {
+    const resolved = applyArtworkOverridesSync(
+      { type: 'anime', imdbId: null, tmdbId: 0 },
+      {
+        poster: 'https://cdn.myanimelist.net/images/anime/123/456.jpg',
+      },
+      {
+        poster: { service: 'tmdb' },
+        backdrop: null,
+        logo: null,
+        landscape: null,
+        episode: null,
+      }
+    );
+
+    expect(resolved.poster).toBe('https://cdn.myanimelist.net/images/anime/123/456.jpg');
+  });
+
   it('applies RPDB preview poster overrides (sync providers)', async () => {
     const metas = [
       {

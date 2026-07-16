@@ -121,7 +121,7 @@ router.get('/search', optionalAuth, async (req: Request, res: Response) => {
     const normalized = parseSearchQuery(req.query);
     const query: MarketplaceSearchQuery = {
       q: normalized.q,
-      source: normalized.source,
+      source: normalized.source?.join(','),
       type: normalized.type,
       genres: normalized.genres.join(','),
       sort: normalized.sort,

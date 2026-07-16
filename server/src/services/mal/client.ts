@@ -1,6 +1,8 @@
 import { createLogger } from '../../utils/logger.ts';
-import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
+import { TIMEOUTS } from '../../constants.ts';
 import { ADDON_VERSION } from '../../version.ts';
+import { createCircuitBreaker } from '../common/circuitBreaker.ts';
+import { fetchWithRetry } from '../common/fetchWithRetry.ts';
 
 const log = createLogger('mal:client');
 
@@ -43,35 +45,9 @@ async function acquireSlot(): Promise<void> {
   });
 }
 
-const circuitBreaker = {
-  failures: [] as number[],
-  openedAt: 0,
-  threshold: CIRCUIT_BREAKER_DEFAULTS.THRESHOLD,
-  windowMs: CIRCUIT_BREAKER_DEFAULTS.WINDOW_MS,
-  cooldownMs: CIRCUIT_BREAKER_DEFAULTS.COOLDOWN_MS,
-};
-
-function isCircuitOpen(): boolean {
-  if (!circuitBreaker.openedAt) return false;
-  return Date.now() - circuitBreaker.openedAt < circuitBreaker.cooldownMs;
-}
-
-function recordFailure(): void {
-  const now = Date.now();
-  circuitBreaker.failures = circuitBreaker.failures.filter(
-    (t) => now - t < circuitBreaker.windowMs
-  );
-  circuitBreaker.failures.push(now);
-  if (circuitBreaker.failures.length >= circuitBreaker.threshold) {
-    circuitBreaker.openedAt = now;
-    log.warn('circuit breaker opened for Jikan API');
-  }
-}
-
-function recordSuccess(): void {
-  circuitBreaker.failures = [];
-  circuitBreaker.openedAt = 0;
-}
+const circuitBreaker = createCircuitBreaker({
+  onOpen: () => log.warn('circuit breaker opened for Jikan API'),
+});
 
 function resolveJikanUrl(requestPath: string): string {
   if (!requestPath) throw new Error('Jikan path is required');
@@ -92,46 +68,29 @@ function resolveJikanUrl(requestPath: string): string {
 }
 
 export async function jikanFetch<T>(path: string): Promise<T> {
-  if (isCircuitOpen()) {
+  if (circuitBreaker.isOpen()) {
     throw Object.assign(new Error('Jikan circuit breaker open'), { statusCode: 503 });
   }
 
   await acquireSlot();
 
   const url = resolveJikanUrl(path);
-  let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const response = await fetch(url, {
-        headers: JIKAN_HEADERS,
-        signal: AbortSignal.timeout(TIMEOUTS.MAL_FETCH_MS),
-      });
-
-      if (response.status === 429) {
-        log.warn('Jikan rate limited', { attempt });
-        await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
-        continue;
+  try {
+    const data = await fetchWithRetry<T>(
+      url,
+      { headers: JIKAN_HEADERS },
+      {
+        providerName: 'Jikan',
+        timeoutMs: TIMEOUTS.MAL_FETCH_MS,
+        onRateLimited: (_response, attempt) => log.warn('Jikan rate limited', { attempt }),
+        getRetryDelayMs: (_response, attempt) => 2000 * Math.pow(2, attempt),
       }
-
-      if (!response.ok) {
-        throw Object.assign(new Error(`Jikan API error: ${response.status}`), {
-          statusCode: response.status,
-        });
-      }
-
-      const data = (await response.json()) as T;
-      recordSuccess();
-      return data;
-    } catch (err) {
-      lastError = err as Error;
-      if ((err as { statusCode?: number }).statusCode === 429) continue;
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 300 * Math.pow(2, attempt)));
-      }
-    }
+    );
+    circuitBreaker.recordSuccess();
+    return data;
+  } catch (err) {
+    circuitBreaker.recordFailure();
+    throw err;
   }
-
-  recordFailure();
-  throw lastError || new Error('Jikan API request failed');
 }

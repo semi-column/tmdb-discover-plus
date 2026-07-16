@@ -58,9 +58,8 @@ export function useMarketplace({ userId = null, refreshConfig = null, apiKey = n
   // Latest query parameters used by `search`; reused by `loadMore`.
   const queryRef = useRef({
     q: '',
-    source: undefined,
+    source: [],
     type: undefined,
-    genres: [],
     sort: undefined,
     limit: DEFAULT_LIMIT,
   });
@@ -87,9 +86,8 @@ export function useMarketplace({ userId = null, refreshConfig = null, apiKey = n
     const requestId = ++requestIdRef.current;
     const query = {
       q: params.q ?? '',
-      source: params.source,
+      source: Array.isArray(params.source) ? params.source : [],
       type: params.type,
-      genres: Array.isArray(params.genres) ? params.genres : [],
       sort: params.sort,
       limit: params.limit ?? DEFAULT_LIMIT,
     };

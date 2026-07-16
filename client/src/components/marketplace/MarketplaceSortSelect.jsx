@@ -24,7 +24,7 @@ export function MarketplaceSortSelect({ value = 'relevance', onChange, id = 'mar
   return (
     <select
       id={id}
-      className="input"
+      className="select marketplace-sort-select"
       value={value}
       onChange={(e) => onChange?.(e.target.value)}
       aria-label="Sort marketplace results"

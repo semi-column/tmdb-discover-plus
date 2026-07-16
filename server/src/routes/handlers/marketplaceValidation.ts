@@ -21,8 +21,8 @@
 
 import { AppError, ErrorCodes } from '../../utils/AppError.ts';
 import { isValidUserId, isValidCatalogId, sanitizeString } from '../../utils/validation.ts';
+import { parseSources, parseGenres } from '../../services/marketplace/facetParsing.ts';
 import {
-  MARKETPLACE_SOURCES,
   MARKETPLACE_TYPES,
   MARKETPLACE_SORT_MODES,
   MARKETPLACE_LIMITS,
@@ -39,17 +39,12 @@ const { MAX_QUERY_LENGTH } = MARKETPLACE_LIMITS;
 const { DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE, MAX_PAGE_SIZE } = MARKETPLACE_PAGINATION;
 
 /** Maximum sanitized description length (Req 20.2). */
-export const MAX_DESCRIPTION_LENGTH = 500;
+const MAX_DESCRIPTION_LENGTH = 500;
 /** Maximum sanitized length of a single tag (Req 20.2). */
-export const MAX_TAG_LENGTH = 40;
+const MAX_TAG_LENGTH = 40;
 /** Maximum number of tags accepted on a publish request (Req 3.3). */
-export const MAX_TAGS = 20;
-/** Maximum number of genre facet tokens retained after dedupe (Req 20.6). */
-export const MAX_GENRE_FACETS = 10;
-/** Maximum length of a single genre facet token before sanitization cap. */
-const MAX_GENRE_TOKEN_LENGTH = 60;
+const MAX_TAGS = 20;
 
-const VALID_SOURCES = new Set<string>(MARKETPLACE_SOURCES);
 const VALID_TYPES = new Set<string>(MARKETPLACE_TYPES);
 const VALID_SORTS = new Set<string>(MARKETPLACE_SORT_MODES);
 
@@ -58,7 +53,7 @@ const VALID_SORTS = new Set<string>(MARKETPLACE_SORT_MODES);
 /** Normalized GET /marketplace/search query (post-validation). */
 export interface NormalizedSearchQuery {
   q: string;
-  source?: SourceType;
+  source?: SourceType[];
   type?: ContentType;
   genres: string[];
   sort: MarketplaceSort;
@@ -122,15 +117,8 @@ export function parseSearchQuery(reqQuery: unknown): NormalizedSearchQuery {
   // q — sanitize + truncate to MAX_QUERY_LENGTH (Req 20.1, 20.2).
   const q = sanitizeString(query.q, MAX_QUERY_LENGTH);
 
-  // source — allow-list (Req 20.5).
-  let source: SourceType | undefined;
-  if (isPresent(query.source)) {
-    const value = String(query.source);
-    if (!VALID_SOURCES.has(value)) {
-      fail('source', `Invalid source: "${value}"`);
-    }
-    source = value as SourceType;
-  }
+  // source — allow-list (Req 20.5), supporting single or comma-separated multi-select.
+  const source = parseSources(query.source);
 
   // type — allow-list (Req 20.5).
   let type: ContentType | undefined;
@@ -169,39 +157,10 @@ export function parseSearchQuery(reqQuery: unknown): NormalizedSearchQuery {
 }
 
 /**
- * Split a comma-separated genre value into trimmed, de-duplicated tokens,
- * dropping empties and retaining only the first 10 after deduplication
- * (Req 20.6). Accepts either a raw string or an array of strings.
- */
-export function parseGenres(raw: unknown): string[] {
-  let parts: string[];
-  if (Array.isArray(raw)) {
-    parts = raw.map((entry) => String(entry));
-  } else if (typeof raw === 'string') {
-    parts = raw.split(',');
-  } else {
-    return [];
-  }
-
-  const seen = new Set<string>();
-  const genres: string[] = [];
-  for (const part of parts) {
-    if (genres.length >= MAX_GENRE_FACETS) break;
-    const token = sanitizeString(part, MAX_GENRE_TOKEN_LENGTH);
-    if (token.length < 1) continue;
-    const dedupeKey = token.toLowerCase();
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-    genres.push(token);
-  }
-  return genres;
-}
-
-/**
  * Normalize the zero-based page index: a non-negative integer, defaulting to 0
  * when omitted, non-numeric, or negative.
  */
-export function normalizePage(raw: unknown): number {
+function normalizePage(raw: unknown): number {
   const value = typeof raw === 'number' ? raw : Number(raw);
   if (!Number.isFinite(value) || value < 0) return 0;
   return Math.floor(value);
@@ -211,7 +170,7 @@ export function normalizePage(raw: unknown): number {
  * Normalize the page size: clamped to the inclusive range [1, 50], defaulting to
  * 24 when omitted or non-numeric.
  */
-export function normalizeLimit(raw: unknown): number {
+function normalizeLimit(raw: unknown): number {
   const value = typeof raw === 'number' ? raw : Number(raw);
   if (!Number.isFinite(value)) return DEFAULT_PAGE_SIZE;
   return Math.min(MAX_PAGE_SIZE, Math.max(MIN_PAGE_SIZE, Math.floor(value)));

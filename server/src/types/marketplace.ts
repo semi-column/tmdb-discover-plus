@@ -63,7 +63,7 @@ export type MarketplaceSort = 'relevance' | 'popular' | 'most-installed' | 'newe
 
 // Normalized facets used internally by the storage layer.
 export interface MarketplaceSearchFacets {
-  source?: SourceType;
+  source?: SourceType | SourceType[];
   type?: ContentType;
   genres?: string[];
 }
@@ -80,7 +80,7 @@ export interface MarketplaceSearchParams {
 // Raw query received on GET /marketplace/search (pre-normalization).
 export interface MarketplaceSearchQuery {
   q?: string;
-  source?: SourceType;
+  source?: SourceType | string;
   type?: ContentType;
   genres?: string; // comma-separated, parsed to string[]
   sort?: MarketplaceSort;
