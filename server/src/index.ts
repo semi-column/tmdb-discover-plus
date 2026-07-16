@@ -11,6 +11,7 @@ import { initCache, getCacheStatus } from './services/cache/index.ts';
 import { addonRouter } from './routes/addon.ts';
 import { apiRouter } from './routes/api.ts';
 import { authRouter } from './routes/auth.ts';
+import marketplaceRouter from './routes/marketplace.ts';
 import { createLogger } from './utils/logger.ts';
 import { getBaseUrl, logSwallowedError } from './utils/helpers.ts';
 import { apiRateLimit } from './utils/rateLimit.ts';
@@ -402,6 +403,8 @@ app.get('/health', monitoringRateLimit, (req, res) => {
 });
 
 app.use('/api/auth', authRouter);
+
+app.use('/api/marketplace', marketplaceRouter);
 
 app.use('/api', apiRouter);
 

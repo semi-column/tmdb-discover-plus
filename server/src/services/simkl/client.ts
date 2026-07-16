@@ -1,6 +1,8 @@
 import { createLogger } from '../../utils/logger.ts';
 import { config } from '../../config.ts';
-import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
+import { TIMEOUTS } from '../../constants.ts';
+import { createCircuitBreaker } from '../common/circuitBreaker.ts';
+import { fetchWithRetry } from '../common/fetchWithRetry.ts';
 
 const log = createLogger('simkl:client');
 
@@ -41,35 +43,9 @@ async function acquireSlot(): Promise<void> {
   });
 }
 
-const circuitBreaker = {
-  failures: [] as number[],
-  openedAt: 0,
-  threshold: CIRCUIT_BREAKER_DEFAULTS.THRESHOLD,
-  windowMs: CIRCUIT_BREAKER_DEFAULTS.WINDOW_MS,
-  cooldownMs: CIRCUIT_BREAKER_DEFAULTS.COOLDOWN_MS,
-};
-
-function isCircuitOpen(): boolean {
-  if (!circuitBreaker.openedAt) return false;
-  return Date.now() - circuitBreaker.openedAt < circuitBreaker.cooldownMs;
-}
-
-function recordFailure(): void {
-  const now = Date.now();
-  circuitBreaker.failures = circuitBreaker.failures.filter(
-    (t) => now - t < circuitBreaker.windowMs
-  );
-  circuitBreaker.failures.push(now);
-  if (circuitBreaker.failures.length >= circuitBreaker.threshold) {
-    circuitBreaker.openedAt = now;
-    log.warn('circuit breaker opened for Simkl API');
-  }
-}
-
-function recordSuccess(): void {
-  circuitBreaker.failures = [];
-  circuitBreaker.openedAt = 0;
-}
+const circuitBreaker = createCircuitBreaker({
+  onOpen: () => log.warn('circuit breaker opened for Simkl API'),
+});
 
 export function getSimklApiKey(userKey?: string): string {
   return userKey || config.simklApi.clientId;
@@ -117,52 +93,38 @@ export async function simklFetch<T>(path: string, apiKey?: string): Promise<T> {
     throw Object.assign(new Error('Simkl API key not configured'), { statusCode: 503 });
   }
 
-  if (isCircuitOpen()) {
+  if (circuitBreaker.isOpen()) {
     throw Object.assign(new Error('Simkl circuit breaker open'), { statusCode: 503 });
   }
 
   await acquireSlot();
 
   const url = resolveSimklApiUrl(path);
-  let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const response = await fetch(url, {
+  try {
+    const data = await fetchWithRetry<T>(
+      url,
+      {
         headers: {
           'Content-Type': 'application/json',
           'simkl-api-key': key,
         },
-        signal: AbortSignal.timeout(TIMEOUTS.SIMKL_FETCH_MS),
-      });
-
-      if (response.status === 429 || response.status === 503) {
-        log.warn('Simkl rate limited', { status: response.status, attempt });
-        await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
-        continue;
+      },
+      {
+        providerName: 'Simkl',
+        timeoutMs: TIMEOUTS.SIMKL_FETCH_MS,
+        isRateLimited: (status) => status === 429 || status === 503,
+        onRateLimited: (response, attempt) =>
+          log.warn('Simkl rate limited', { status: response.status, attempt }),
+        getRetryDelayMs: (_response, attempt) => 2000 * Math.pow(2, attempt),
       }
-
-      if (!response.ok) {
-        throw Object.assign(new Error(`Simkl API error: ${response.status}`), {
-          statusCode: response.status,
-        });
-      }
-
-      const data = (await response.json()) as T;
-      recordSuccess();
-      return data;
-    } catch (err) {
-      lastError = err as Error;
-      const code = (err as { statusCode?: number }).statusCode;
-      if (code === 429 || code === 503) continue;
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 300 * Math.pow(2, attempt)));
-      }
-    }
+    );
+    circuitBreaker.recordSuccess();
+    return data;
+  } catch (err) {
+    circuitBreaker.recordFailure();
+    throw err;
   }
-
-  recordFailure();
-  throw lastError || new Error('Simkl API request failed');
 }
 
 export async function simklCdnFetch<T>(path: string): Promise<T> {

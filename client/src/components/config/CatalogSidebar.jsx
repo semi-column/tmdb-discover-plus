@@ -80,12 +80,30 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState('data');
   const [isDonateOpen, setIsDonateOpen] = useState(false);
 
   useEffect(() => {
     setMoviePresetsCollapsed(isMobile);
     setTvPresetsCollapsed(isMobile);
   }, [isMobile]);
+
+  useEffect(() => {
+    const handleOpenPreferences = (event) => {
+      const requestedSection = event?.detail?.section;
+      setSettingsInitialSection(
+        typeof requestedSection === 'string' && requestedSection.length > 0
+          ? requestedSection
+          : 'data'
+      );
+      setShowSettingsModal(true);
+    };
+
+    window.addEventListener('open-preferences', handleOpenPreferences);
+    return () => {
+      window.removeEventListener('open-preferences', handleOpenPreferences);
+    };
+  }, []);
 
   // Sync global source if active catalog changes
   useEffect(() => {
@@ -127,7 +145,10 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
           </button>
           <button
             className="btn btn-secondary btn-sm sidebar-settings-btn"
-            onClick={() => setShowSettingsModal(true)}
+            onClick={() => {
+              setSettingsInitialSection('data');
+              setShowSettingsModal(true);
+            }}
             aria-label="Settings"
             title="Global Preferences"
           >
@@ -332,15 +353,18 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
           }}
         />
       )}
-      <SettingsModal
-        isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-        onShowExport={setShowExportModal}
-        onImportData={(data) => {
-          setImportData(data);
-          setShowImportModal(true);
-        }}
-      />
+      {showSettingsModal && (
+        <SettingsModal
+          isOpen={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          onShowExport={setShowExportModal}
+          initialSection={settingsInitialSection}
+          onImportData={(data) => {
+            setImportData(data);
+            setShowImportModal(true);
+          }}
+        />
+      )}
       <DonateModal isOpen={isDonateOpen} onClose={() => setIsDonateOpen(false)} />
     </aside>
   );

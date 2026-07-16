@@ -1055,6 +1055,11 @@ export async function applyArtworkOverrides(
         url = resolveTmdbFallback(kind, effectiveContext, nativeUrls);
       }
 
+      // Final safety net: keep source-native artwork instead of returning null.
+      if (!url) {
+        url = nativeUrls[kind] ?? null;
+      }
+
       result[kind] = url;
       continue;
     }
@@ -1116,6 +1121,11 @@ export function applyArtworkOverridesSync(
       // Any missing provider artwork falls back to TMDB.
       if (!url) {
         url = resolveTmdbFallback(kind, effectiveContext, nativeUrls);
+      }
+
+      // Final safety net: keep source-native artwork instead of returning null.
+      if (!url) {
+        url = nativeUrls[kind] ?? null;
       }
 
       result[kind] = url;

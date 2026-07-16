@@ -62,14 +62,20 @@ function CollapsibleSection({ title, icon, isExpanded, onToggle, children }) {
   );
 }
 
-export function SettingsModal({ isOpen, onClose, onShowExport, onImportData }) {
+export function SettingsModal({
+  isOpen,
+  onClose,
+  onShowExport,
+  onImportData,
+  initialSection = 'data',
+}) {
   const modalRef = useModalA11y(isOpen, onClose);
   const { preferences, setPreferences: onPreferencesChange } = useCatalog();
   const { languages = [] } = useTMDBData();
   const { addToast, handleLogout } = useAppActions();
 
-  // Only one section open at a time, default to first ('data')
-  const [expandedSection, setExpandedSection] = useState('data');
+  // Only one section open at a time, default to caller-provided section.
+  const [expandedSection, setExpandedSection] = useState(initialSection);
 
   const toggleSection = (sectionId) => {
     setExpandedSection((prev) => (prev === sectionId ? null : sectionId));

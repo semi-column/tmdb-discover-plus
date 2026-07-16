@@ -1,4 +1,5 @@
 import type { UserConfig } from './config.ts';
+import type { MarketplaceEntry, MarketplaceSearchParams } from './marketplace.ts';
 
 export interface IStorageAdapter {
   connect(): Promise<void>;
@@ -8,6 +9,22 @@ export interface IStorageAdapter {
   getConfigsByApiKeyId(apiKeyId: string): Promise<UserConfig[]>;
   deleteUserConfig(userId: string): Promise<boolean>;
   getPublicStats(): Promise<PublicStats>;
+
+  // --- Marketplace persistence ---
+  upsertMarketplaceEntry(entry: MarketplaceEntry): Promise<MarketplaceEntry>;
+  deleteMarketplaceEntryByOrigin(originUserId: string, originCatalogId: string): Promise<boolean>;
+  getMarketplaceEntry(marketplaceId: string): Promise<MarketplaceEntry | null>;
+  searchMarketplaceEntries(params: MarketplaceSearchParams): Promise<MarketplaceEntry[]>;
+  countMarketplaceEntries(params: MarketplaceSearchParams): Promise<number>;
+  incrementMarketplaceCounter(
+    marketplaceId: string,
+    field: 'installs' | 'likes' | 'views',
+    delta: 1 | -1
+  ): Promise<number>;
+  setTrendingScore(marketplaceId: string, score: number): Promise<number>;
+  recordLike(marketplaceId: string, actorUserId: string): Promise<boolean>;
+  removeLike(marketplaceId: string, actorUserId: string): Promise<boolean>;
+  hasLiked(marketplaceId: string, actorUserId: string): Promise<boolean>;
 }
 
 export interface PublicStats {

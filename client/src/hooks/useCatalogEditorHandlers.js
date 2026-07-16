@@ -515,6 +515,22 @@ export function useCatalogEditorHandlers({
     [setLocalCatalog]
   );
 
+  // Toggle a catalog's marketplace visibility. Catalogs are public-by-default,
+  // so `published === false` means private; toggling flips between the two and
+  // persists immediately via onUpdate so a subsequent save reconciles the
+  // marketplace index.
+  const handleTogglePublished = useCallback(() => {
+    let result;
+    setLocalCatalog((prev) => {
+      const current = prev || DEFAULT_CATALOG;
+      const isPrivate = current.published === false;
+      const updated = { ...current, published: isPrivate ? true : false };
+      result = updated;
+      return updated;
+    });
+    if (catalog?._id && result) onUpdate(catalog._id, result);
+  }, [catalog?._id, onUpdate, setLocalCatalog]);
+
   const handleTVNetworkSearch = useCallback(
     async (query) => {
       if (!searchTVNetworks) return;
@@ -558,5 +574,6 @@ export function useCatalogEditorHandlers({
     loadPreview,
     handleImport,
     handleTVNetworkSearch,
+    handleTogglePublished,
   };
 }

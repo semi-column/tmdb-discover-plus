@@ -1,5 +1,7 @@
 import { createLogger } from '../../utils/logger.ts';
-import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
+import { TIMEOUTS } from '../../constants.ts';
+import { createCircuitBreaker } from '../common/circuitBreaker.ts';
+import { fetchWithRetry } from '../common/fetchWithRetry.ts';
 
 const log = createLogger('anilist:client');
 
@@ -39,82 +41,46 @@ async function acquireSlot(): Promise<void> {
 }
 
 // Circuit breaker
-const circuitBreaker = {
-  failures: [] as number[],
-  openedAt: 0,
-  threshold: CIRCUIT_BREAKER_DEFAULTS.THRESHOLD,
-  windowMs: CIRCUIT_BREAKER_DEFAULTS.WINDOW_MS,
-  cooldownMs: CIRCUIT_BREAKER_DEFAULTS.COOLDOWN_MS,
-};
-
-function isCircuitOpen(): boolean {
-  if (!circuitBreaker.openedAt) return false;
-  return Date.now() - circuitBreaker.openedAt < circuitBreaker.cooldownMs;
-}
-
-function recordFailure(): void {
-  const now = Date.now();
-  circuitBreaker.failures = circuitBreaker.failures.filter(
-    (t) => now - t < circuitBreaker.windowMs
-  );
-  circuitBreaker.failures.push(now);
-  if (circuitBreaker.failures.length >= circuitBreaker.threshold) {
-    circuitBreaker.openedAt = now;
-    log.warn('circuit breaker opened for AniList API');
-  }
-}
-
-function recordSuccess(): void {
-  circuitBreaker.failures = [];
-  circuitBreaker.openedAt = 0;
-}
+const circuitBreaker = createCircuitBreaker({
+  onOpen: () => log.warn('circuit breaker opened for AniList API'),
+});
 
 export async function anilistFetch<T>(
   query: string,
   variables: Record<string, unknown> = {}
 ): Promise<T> {
-  if (isCircuitOpen()) {
+  if (circuitBreaker.isOpen()) {
     throw Object.assign(new Error('AniList circuit breaker open'), { statusCode: 503 });
   }
 
   await acquireSlot();
 
-  let lastError: Error | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const response = await fetch(ANILIST_API_URL, {
+  try {
+    const data = await fetchWithRetry<T>(
+      ANILIST_API_URL,
+      {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ query, variables }),
-        signal: AbortSignal.timeout(TIMEOUTS.ANILIST_FETCH_MS),
-      });
-
-      if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get('retry-after') || '60', 10);
-        log.warn('AniList rate limited', { retryAfter, attempt });
-        await new Promise((r) => setTimeout(r, Math.min(retryAfter * 1000, 65_000)));
-        continue;
+      },
+      {
+        providerName: 'AniList',
+        timeoutMs: TIMEOUTS.ANILIST_FETCH_MS,
+        includeResponseBodyInError: true,
+        onRateLimited: (response, attempt) => {
+          const retryAfter = parseInt(response.headers.get('retry-after') || '60', 10);
+          log.warn('AniList rate limited', { retryAfter, attempt });
+        },
+        getRetryDelayMs: (response) => {
+          const retryAfter = parseInt(response.headers.get('retry-after') || '60', 10);
+          return Math.min(retryAfter * 1000, 65_000);
+        },
       }
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        throw Object.assign(new Error(`AniList API error: ${response.status} ${body}`), {
-          statusCode: response.status,
-        });
-      }
-
-      const data = (await response.json()) as T;
-      recordSuccess();
-      return data;
-    } catch (err) {
-      lastError = err as Error;
-      if ((err as { statusCode?: number }).statusCode === 429) continue;
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 300 * Math.pow(2, attempt)));
-      }
-    }
+    );
+    circuitBreaker.recordSuccess();
+    return data;
+  } catch (err) {
+    circuitBreaker.recordFailure();
+    throw err;
   }
-
-  recordFailure();
-  throw lastError || new Error('AniList API request failed');
 }

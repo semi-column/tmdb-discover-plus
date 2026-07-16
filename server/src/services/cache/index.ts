@@ -2,6 +2,7 @@ import { RedisAdapter } from './RedisAdapter.ts';
 import { MemoryAdapter } from './MemoryAdapter.ts';
 import { CacheWrapper } from './CacheWrapper.ts';
 import { createLogger } from '../../utils/logger.ts';
+import { resolveRedisOrMemory } from '../../utils/resolveRedisOrMemory.ts';
 import { config } from '../../config.ts';
 import { ADDON_VERSION } from '../../version.ts';
 import type { ICacheAdapter } from '../../types/index.ts';
@@ -20,52 +21,21 @@ let degraded = false;
 export async function initCache(): Promise<CacheWrapper> {
   if (cacheInstance) return cacheInstance;
 
-  const redisUrl = config.cache.redisUrl;
-  const driver = config.cache.driver;
-
-  let adapter: ICacheAdapter | null = null;
-
-  if (driver === 'redis' && redisUrl) {
-    try {
-      log.info('Initializing Redis Adapter (Explicit)');
-      const redis = new RedisAdapter(redisUrl);
+  const resolved = await resolveRedisOrMemory<ICacheAdapter>({
+    redisUrl: config.cache.redisUrl,
+    driver: config.cache.driver,
+    createRedis: async (url) => {
+      const redis = new RedisAdapter(url);
       await redis.connect();
-      adapter = redis;
-      activeDriver = 'redis';
-    } catch (err) {
-      log.warn('Redis init failed, falling back to Memory Adapter', {
-        error: (err as Error).message,
-      });
-      adapter = new MemoryAdapter();
-      activeDriver = 'memory';
-      degraded = true;
-    }
-  } else if (driver === 'memory') {
-    log.info('Initializing Memory Adapter (Explicit)');
-    adapter = new MemoryAdapter();
-    activeDriver = 'memory';
-  } else if (redisUrl) {
-    try {
-      log.info('Initializing Redis Adapter (Auto-detected)');
-      const redis = new RedisAdapter(redisUrl);
-      await redis.connect();
-      adapter = redis;
-      activeDriver = 'redis';
-    } catch (err) {
-      log.warn('Redis auto-detect failed, falling back to Memory Adapter', {
-        error: (err as Error).message,
-      });
-      adapter = new MemoryAdapter();
-      activeDriver = 'memory';
-      degraded = true;
-    }
-  } else {
-    log.info('Initializing Memory Adapter (Default)');
-    adapter = new MemoryAdapter();
-    activeDriver = 'memory';
-  }
+      return redis;
+    },
+    createMemory: () => new MemoryAdapter(),
+    logLabel: 'CacheFactory',
+  });
+  activeDriver = resolved.driver;
+  degraded = resolved.degraded;
 
-  cacheInstance = new CacheWrapper(adapter, { version: getCacheVersion() });
+  cacheInstance = new CacheWrapper(resolved.adapter, { version: getCacheVersion() });
   log.info('Cache initialized with CacheWrapper', {
     driver: activeDriver,
     degraded,
