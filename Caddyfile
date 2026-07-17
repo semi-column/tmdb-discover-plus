@@ -1,0 +1,4 @@
+tmdb-discover-plus.duckdns.org {
+  encode zstd gzip
+  reverse_proxy tmdb-discover-plus:7000
+}

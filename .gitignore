@@ -1,6 +1,7 @@
 # Environment
 .env
 .env.local
+*.key
 
 # Dependencies
 node_modules/

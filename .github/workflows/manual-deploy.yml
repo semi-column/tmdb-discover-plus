@@ -43,28 +43,26 @@ jobs:
         env:
           ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
           ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
-          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" << 'EOF'
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_SHA='$DEPLOY_SHA' bash -s" << 'EOF'
           set -euo pipefail
 
-          cd ~/tmdb-discover-plus
-          git fetch origin
-          git reset --hard ${{ github.sha }}
+          cd /opt/tmdb-discover-plus
+          git fetch origin main
+          git reset --hard "$DEPLOY_SHA"
+          git clean -fd -e .env -e .env.pre-supplied-config
 
-          cd server
-          npm ci --omit=dev
+          version=$(sed -n 's/  "version": "\([^"]*\)".*/\1/p' package.json | head -n 1)
+          printf '{\n  "version": "%s",\n  "tag": "manual",\n  "channel": "nightly",\n  "commitHash": "%s",\n  "buildTime": "%s"\n}\n' \
+            "$version" "${DEPLOY_SHA:0:7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > server/src/metadata.json
 
-          cd ../client
-          npm ci
-          npm run build
-          cp -r public/* dist/ 2>/dev/null || true
-
-          cd ..
-          sudo systemctl restart tmdb-nightly
+          docker compose -f docker-compose.production.yml up -d --build --remove-orphans
 
           ok=0
           for i in $(seq 1 45); do
-            if curl -fsS http://localhost:7000/health > /dev/null; then
+            if docker exec tmdb-discover-plus wget -q --spider http://127.0.0.1:7000/health; then
               ok=1
               break
             fi
@@ -73,8 +71,8 @@ jobs:
 
           if [ "$ok" -ne 1 ]; then
             echo "Health check failed after restart"
-            sudo systemctl status tmdb-nightly --no-pager || true
-            sudo journalctl -u tmdb-nightly -n 120 --no-pager || true
+            docker compose -f docker-compose.production.yml ps
+            docker logs --tail 120 tmdb-discover-plus || true
             exit 1
           fi
 

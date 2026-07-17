@@ -9,6 +9,14 @@ on:
       - 'client/public/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'server/package.json'
+      - 'server/package-lock.json'
+      - 'client/package.json'
+      - 'client/package-lock.json'
+      - 'Dockerfile.docker'
+      - 'docker-compose.production.yml'
+      - 'Caddyfile'
+      - '.github/workflows/nightly.yml'
 
 # Ensure only one nightly build runs at a time
 concurrency:
@@ -127,9 +135,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          cd server && npm ci
-          cd ../client && npm ci
+          npm install
+          cd server && npm install
+          cd ../client && npm install
 
       - name: Run server tests
         env:
@@ -174,27 +182,27 @@ jobs:
         env:
           ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
           ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_TAG: ${{ steps.gen_tag.outputs.tag_name }}
         run: |
-          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" << 'EOF'
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_TAG='$DEPLOY_TAG' bash -s" << 'EOF'
           set -euo pipefail
 
-          cd ~/tmdb-discover-plus
+          cd /opt/tmdb-discover-plus
           git fetch origin main
-          git reset --hard origin/main
+          git reset --hard "$DEPLOY_SHA"
+          git clean -fd -e .env -e .env.pre-supplied-config
 
-          cd server
-          npm ci --omit=dev
+          version=$(sed -n 's/  "version": "\([^"]*\)".*/\1/p' package.json | head -n 1)
+          printf '{\n  "version": "%s",\n  "tag": "%s",\n  "channel": "nightly",\n  "commitHash": "%s",\n  "buildTime": "%s"\n}\n' \
+            "$version" "$DEPLOY_TAG" "${DEPLOY_SHA:0:7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > server/src/metadata.json
 
-          cd ../client
-          npm ci
-          npm run build
-          cp -r public/* dist/ 2>/dev/null || true
+          docker compose -f docker-compose.production.yml up -d --build --remove-orphans
 
-          cd ..
-          sudo systemctl restart tmdb-nightly
           ok=0
           for i in $(seq 1 45); do
-            if curl -fsS http://localhost:7000/health > /dev/null; then
+            if docker exec tmdb-discover-plus wget -q --spider http://127.0.0.1:7000/health; then
               ok=1
               break
             fi
@@ -203,8 +211,8 @@ jobs:
 
           if [ "$ok" -ne 1 ]; then
             echo "Health check failed after restart"
-            sudo systemctl status tmdb-nightly --no-pager || true
-            sudo journalctl -u tmdb-nightly -n 120 --no-pager || true
+            docker compose -f docker-compose.production.yml ps
+            docker logs --tail 120 tmdb-discover-plus || true
             exit 1
           fi
           echo "Nightly deploy completed on Oracle VM"
