@@ -1626,16 +1626,17 @@ function normalizePreviewContentType(type: unknown): ContentType {
 async function runPreviewBackfill(opts: {
   fetchPage: (page: number) => Promise<{ metas: StremioMetaPreview[]; hasMore: boolean }>;
   startPage?: number;
+  firstPageResult?: { metas: StremioMetaPreview[]; hasMore: boolean };
   randomize: boolean;
   previewPosterProvider: PreviewPosterProvider | null;
   req: Request;
 }): Promise<StremioMetaPreview[]> {
-  const { fetchPage, startPage = 1, randomize, previewPosterProvider, req } = opts;
+  const { fetchPage, startPage = 1, firstPageResult, randomize, previewPosterProvider, req } = opts;
   const metas: StremioMetaPreview[] = [];
   let page = startPage;
   let pages = 0;
   while (metas.length < PREVIEW_PAGE_SIZE && pages < PREVIEW_MAX_BACKFILL) {
-    const result = await fetchPage(page);
+    const result = pages === 0 && firstPageResult ? firstPageResult : await fetchPage(page);
     metas.push(...result.metas);
     pages++;
     if (!result.hasMore) break;
@@ -1853,13 +1854,53 @@ router.post('/mal/preview', requireAuth, async (req, res) => {
     const { filters, type } = req.body;
     const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
+    const contentType = normalizePreviewContentType(type);
+
+    const fetchPage = async (p: number) => {
+      const r = await mal.discover(safeFilters, contentType, p);
+      if (r.upstreamUnavailable) {
+        throw new AppError(
+          503,
+          ErrorCodes.INTERNAL_ERROR,
+          'MyAnimeList results are temporarily unavailable because Jikan cannot reach its upstream service. Please try again later.'
+        );
+      }
+      return {
+        metas: mal.batchConvertToStremioMeta(r.anime, contentType),
+        hasMore: r.hasMore && r.anime.length > 0,
+      };
+    };
+
+    const metasWithPreviewPoster = await runPreviewBackfill({
+      fetchPage,
+      startPage: 1,
+      randomize: false,
+      previewPosterProvider,
+      req,
+    });
+
+    res.json({ metas: metasWithPreviewPoster, totalResults: null });
+  } catch (error) {
+    log.error('POST /mal/preview error', { error: (error as Error).message });
+    if (error instanceof AppError) {
+      return sendError(res, error.statusCode, error.code, error.message);
+    }
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
+  }
+});
+
+router.post('/kitsu/preview', requireAuth, async (req, res) => {
+  try {
+    const { filters, type } = req.body;
+    const previewPosterProvider = resolvePreviewPosterProvider(req);
+    const safeFilters = filters || {};
     const randomize = Boolean(safeFilters.randomize || safeFilters.sortBy === 'random');
     const contentType = normalizePreviewContentType(type);
     let startPage = 1;
 
     if (randomize) {
-      const probe = await mal.discover(safeFilters, contentType, 1);
-      const totalPages = Math.ceil(probe.total / 25) || 1;
+      const probe = await kitsu.discover(safeFilters, contentType, 1);
+      const totalPages = Math.ceil(probe.total / 20) || 1;
       // Pick a random page within valid bounds (1 to totalPages inclusive)
       startPage = Math.floor(Math.random() * totalPages) + 1;
     }

@@ -5,11 +5,13 @@ import { Film, Tv, GripVertical, Trash2, Copy, Sparkles } from 'lucide-react';
 export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onDuplicate }) {
   const getCatalogKey = (cat) => String(cat?._id || cat?.id || cat?.name);
   const id = getCatalogKey(catalog);
+  const isSourceDisabled = catalog?.source === 'mal';
   const isCollectionCatalog =
     catalog?.type === 'collection' || catalog?.filters?.listType === 'collection';
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
+    disabled: isSourceDisabled,
   });
 
   const style = {
@@ -21,18 +23,19 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
     <div
       ref={setNodeRef}
       style={style}
-      className={`catalog-item ${isActive ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`catalog-item ${isActive ? 'active' : ''} ${isDragging ? 'dragging' : ''} ${isSourceDisabled ? 'disabled' : ''}`}
     >
       <div
         className="catalog-item-main"
-        onClick={() => onSelect(catalog)}
+        onClick={() => !isSourceDisabled && onSelect(catalog)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          if (!isSourceDisabled && (e.key === 'Enter' || e.key === ' ')) {
             onSelect(catalog);
           }
         }}
         role="button"
-        tabIndex={0}
+        tabIndex={isSourceDisabled ? -1 : 0}
+        aria-disabled={isSourceDisabled}
       >
         <div className="catalog-item-icon">
           {catalog.type === 'anime' ? (
@@ -65,35 +68,42 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
                 catalog.source ||
                 'tmdb'}
             </span>
+            {isSourceDisabled && (
+              <span className="catalog-item-badge catalog-item-badge--disabled">Disabled</span>
+            )}
             {catalog.filters?.listType &&
               catalog.filters.listType !== 'discover' &&
               !isCollectionCatalog && <span className="catalog-item-badge">Preset</span>}
           </div>
         </div>
         <div className="catalog-item-actions">
-          <button
-            className="btn btn-ghost btn-icon catalog-drag-handle"
-            type="button"
-            title="Drag to reorder"
-            aria-label="Drag to reorder"
-            onClick={(e) => e.stopPropagation()}
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical size={16} />
-          </button>
-          <div className="catalog-item-desktop-actions">
+          {!isSourceDisabled && (
             <button
-              className="btn btn-ghost btn-icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDuplicate(catalog._id);
-              }}
-              title="Duplicate catalog"
+              className="btn btn-ghost btn-icon catalog-drag-handle"
               type="button"
+              title="Drag to reorder"
+              aria-label="Drag to reorder"
+              onClick={(e) => e.stopPropagation()}
+              {...attributes}
+              {...listeners}
             >
-              <Copy size={16} />
+              <GripVertical size={16} />
             </button>
+          )}
+          <div className="catalog-item-desktop-actions">
+            {!isSourceDisabled && (
+              <button
+                className="btn btn-ghost btn-icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDuplicate(catalog._id);
+                }}
+                title="Duplicate catalog"
+                type="button"
+              >
+                <Copy size={16} />
+              </button>
+            )}
             <button
               className="btn btn-ghost btn-icon text-danger"
               onClick={(e) => {
@@ -109,7 +119,7 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
           </div>
         </div>
       </div>
-      {isActive && (
+      {isActive && !isSourceDisabled && (
         <div className="catalog-item-expanded">
           <button
             className="btn-action-minimal"

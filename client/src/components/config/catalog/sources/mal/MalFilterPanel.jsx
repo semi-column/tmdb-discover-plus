@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from 'react';
-import { Settings, Calendar, Eye, Sparkles, Layers, Star } from 'lucide-react';
+import { Settings, Calendar, Sparkles, Layers, Star } from 'lucide-react';
 import { FilterSection } from '../../FilterSection';
 import { GenreSelector } from '../../GenreSelector';
 import { AnimeSeasonSelector } from '../../shared/AnimeSeasonSelector';
@@ -8,8 +8,6 @@ import { StremioExtras } from '../../StremioExtras';
 import { SearchableSelect } from '../../../../forms/SearchableSelect';
 import { RangeSlider } from '../../../../forms/RangeSlider';
 import { LabelWithTooltip } from '../../../../forms/Tooltip';
-
-import { Checkbox } from '../../../../forms/Checkbox';
 
 const MAL_SEASON_OPTIONS = [
   { value: 'winter', label: 'Winter' },
@@ -95,8 +93,6 @@ export function MalFilterPanel({
     if (filters.malOrderBy) count++;
     return count;
   };
-
-  const getOptionsBadge = () => (filters.randomize ? 1 : 0) + (filters.includeAdult ? 1 : 0);
 
   const hasAdvancedFilters =
     (filters.malGenres || []).length > 0 ||
@@ -349,32 +345,6 @@ export function MalFilterPanel({
             />
           </div>
         )}
-      </FilterSection>
-
-      <FilterSection
-        id="options"
-        title="Options"
-        description="Adult content and randomization"
-        icon={Eye}
-        isOpen={expandedSections?.options}
-        onToggle={onToggleSection}
-        badgeCount={getOptionsBadge()}
-      >
-        <div className="checkbox-grid">
-          <Checkbox
-            checked={!!filters.includeAdult}
-            onChange={(checked) => onFiltersChange('includeAdult', checked || undefined)}
-            label="Include adult content"
-            tooltip="Include adult/18+ rated anime in results."
-          />
-
-          <Checkbox
-            checked={!!filters.randomize}
-            onChange={(checked) => onFiltersChange('randomize', checked || undefined)}
-            label="Randomize Results"
-            tooltip="Fetch a random page from matching results and shuffle them."
-          />
-        </div>
       </FilterSection>
 
       <FilterSection

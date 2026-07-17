@@ -202,7 +202,7 @@ function App() {
                 </button>
 
                 <button
-                  className={`btn ${isMarketplaceMode ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn marketplace-toolbar-toggle ${isMarketplaceMode ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setIsMarketplaceMode((m) => !m)}
                   title="Browse the catalog marketplace"
                   aria-label="Toggle catalog marketplace"
@@ -256,6 +256,17 @@ function App() {
               <PanelErrorBoundary fallbackMessage="The sidebar encountered an error.">
                 <CatalogSidebar />
               </PanelErrorBoundary>
+
+              <button
+                className={`btn mobile-marketplace-toggle ${isMarketplaceMode ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setIsMarketplaceMode((m) => !m)}
+                title="Browse the catalog marketplace"
+                aria-label="Toggle catalog marketplace"
+                aria-pressed={isMarketplaceMode}
+              >
+                <Store size={18} />
+                Marketplace
+              </button>
 
               <PanelErrorBoundary fallbackMessage="The editor encountered an error.">
                 {isMarketplaceMode ? (

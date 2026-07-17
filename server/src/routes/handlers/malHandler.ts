@@ -5,7 +5,6 @@ import { getUserConfig } from '../../services/configService.ts';
 import { getCache } from '../../services/cache/index.ts';
 import * as mal from '../../services/mal/index.ts';
 import { createLogger } from '../../utils/logger.ts';
-import { shuffleArray } from '../../utils/helpers.ts';
 import { CACHE_TTLS, buildCatalogId, catalogServerTtl } from '../../constants.ts';
 import {
   createArtworkOptions,
@@ -144,66 +143,41 @@ export async function handleMalCatalogRequest(
       }
     }
 
-    const randomize = Boolean(effectiveFilters.randomize || effectiveFilters.sortBy === 'random');
     const cache = getCache();
     const cacheKey = `mal:catalog:${catalogId}:${type}:${page}:${selectedExtraGenre || ''}`;
 
-    if (!randomize) {
-      const cached = await cache.get(cacheKey);
-      if (cached) {
-        res.set(
-          'Cache-Control',
-          `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
-        );
-        res.json({
-          ...cached,
-          cacheMaxAge: CACHE_TTLS.CATALOG_HEADER,
-          staleRevalidate: CACHE_TTLS.CATALOG_STALE_REVALIDATE,
-        });
-        return;
-      }
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      res.set(
+        'Cache-Control',
+        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+      );
+      res.json({
+        ...cached,
+        cacheMaxAge: CACHE_TTLS.CATALOG_HEADER,
+        staleRevalidate: CACHE_TTLS.CATALOG_STALE_REVALIDATE,
+      });
+      return;
     }
 
-    let metas: StremioMetaPreview[];
-    if (randomize) {
-      const probe = await mal.discover(effectiveFilters, type, 1);
-      const totalPages = Math.ceil(probe.total / 25) || 1;
-      const randomPage = Math.floor(Math.random() * Math.min(totalPages, 20)) + 1;
-      metas = await fetchWithBackfill(
-        (p) => mal.discover(effectiveFilters, type, p),
-        type,
-        randomPage,
-        artworkOptions
-      );
-      metas = shuffleArray(metas);
-    } else {
-      metas = await fetchWithBackfill(
-        (p) => mal.discover(effectiveFilters, type, p),
-        type,
-        page,
-        artworkOptions
-      );
-    }
+    let metas = await fetchWithBackfill(
+      (p) => mal.discover(effectiveFilters, type, p),
+      type,
+      page,
+      artworkOptions
+    );
 
     metas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
 
     const response = { metas };
 
-    if (!randomize) {
-      const ttl = catalogServerTtl('discover');
-      cache.set(cacheKey, response, ttl).catch(() => {});
-    }
+    const ttl = catalogServerTtl('discover');
+    cache.set(cacheKey, response, ttl).catch(() => {});
 
-    if (randomize) {
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.set('Pragma', 'no-cache');
-      res.set('Expires', '0');
-    } else {
-      res.set(
-        'Cache-Control',
-        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
-      );
-    }
+    res.set(
+      'Cache-Control',
+      `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+    );
 
     log.debug('MAL catalog response', {
       catalogId,
@@ -214,8 +188,8 @@ export async function handleMalCatalogRequest(
 
     res.json({
       ...response,
-      cacheMaxAge: randomize ? 0 : CACHE_TTLS.CATALOG_HEADER,
-      staleRevalidate: randomize ? 0 : CACHE_TTLS.CATALOG_STALE_REVALIDATE,
+      cacheMaxAge: CACHE_TTLS.CATALOG_HEADER,
+      staleRevalidate: CACHE_TTLS.CATALOG_STALE_REVALIDATE,
     });
   } catch (err) {
     log.error('MAL catalog error', {

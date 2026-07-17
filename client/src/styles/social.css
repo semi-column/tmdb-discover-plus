@@ -392,12 +392,21 @@
   min-height: 0;
 }
 
-@media (min-width: 1025px) {
+@media (min-width: 768px) {
   .marketplace-browser,
   .marketplace-panel,
   .marketplace-content,
   .marketplace-results-region {
     min-height: 0;
+  }
+
+  .marketplace-browser {
+    overflow: hidden;
+  }
+
+  .marketplace-panel {
+    height: 100%;
+    overflow: hidden;
   }
 
   .marketplace-content {

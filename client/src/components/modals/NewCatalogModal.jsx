@@ -7,7 +7,6 @@ const SOURCES = [
   { id: 'tmdb', desc: 'Standard TMDB discovery', alwaysVisible: true },
   { id: 'imdb', desc: 'IMDb metadata & lists', enabledKey: 'imdbEnabled' },
   { id: 'anilist', desc: 'AniList anime database', alwaysVisible: true },
-  { id: 'mal', desc: 'MyAnimeList rankings', alwaysVisible: true },
   { id: 'kitsu', desc: 'Kitsu anime catalogs', alwaysVisible: true },
   { id: 'simkl', desc: 'Simkl anime discovery', alwaysVisible: true },
   { id: 'trakt', desc: 'Trakt movie & TV discovery', alwaysVisible: true },

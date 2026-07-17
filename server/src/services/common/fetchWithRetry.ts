@@ -15,6 +15,8 @@ export interface FetchWithRetryConfig {
   onRateLimited?: (response: Response, attempt: number) => void;
   /** Include the response body text in the thrown error message (default false). */
   includeResponseBodyInError?: boolean;
+  /** Optional fetch implementation for providers that require a specific HTTP client. */
+  fetchImplementation?: typeof fetch;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -42,13 +44,14 @@ export async function fetchWithRetry<T>(
     getRetryDelayMs,
     onRateLimited,
     includeResponseBodyInError = false,
+    fetchImplementation = fetch,
   } = config;
 
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchImplementation(url, {
         ...init,
         signal: AbortSignal.timeout(timeoutMs),
       });

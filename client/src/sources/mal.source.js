@@ -222,10 +222,6 @@ export const MAL_SOURCE = {
       });
     }
 
-    if (filters.randomize) {
-      active.push({ key: 'randomize', label: 'Randomized', section: 'options' });
-    }
-
     return active;
   },
 

@@ -8,6 +8,13 @@ import type { ContentType } from '../../types/common.ts';
 const log = createLogger('mal:discover');
 const PAGE_SIZE = 25; // Jikan default/max page size
 
+export interface MalDiscoverResult {
+  anime: MalAnime[];
+  hasMore: boolean;
+  total: number;
+  upstreamUnavailable?: true;
+}
+
 function isRecoverableJikanError(error: unknown): boolean {
   const statusCode =
     typeof error === 'object' && error !== null && 'statusCode' in error
@@ -40,12 +47,10 @@ function contentTypeToJikanType(type: ContentType): string | null {
 export async function getRanking(
   rankingType: string,
   type: ContentType,
-  page: number,
-  includeAdult?: boolean
-): Promise<{ anime: MalAnime[]; hasMore: boolean; total: number }> {
+  page: number
+): Promise<MalDiscoverResult> {
   const params = new URLSearchParams();
   params.set('page', String(page));
-  params.set('sfw', includeAdult ? 'false' : 'true');
 
   // Ranking types that ARE a type filter (tv, movie, ova, special)
   const typeRankings = ['tv', 'movie', 'ova', 'special', 'ona', 'music'];
@@ -90,12 +95,10 @@ export async function getSeasonal(
   season: string,
   sort: string | undefined,
   type: ContentType,
-  page: number,
-  includeAdult?: boolean
-): Promise<{ anime: MalAnime[]; hasMore: boolean; total: number }> {
+  page: number
+): Promise<MalDiscoverResult> {
   const params = new URLSearchParams();
   params.set('page', String(page));
-  params.set('sfw', includeAdult ? 'false' : 'true');
   const jikanSeasonType = contentTypeToJikanType(type);
   if (jikanSeasonType) params.set('filter', jikanSeasonType);
 
@@ -118,13 +121,11 @@ export async function getSeasonal(
 export async function searchAnime(
   query: string,
   type: ContentType,
-  page: number,
-  includeAdult?: boolean
-): Promise<{ anime: MalAnime[]; hasMore: boolean; total: number }> {
+  page: number
+): Promise<MalDiscoverResult> {
   const params = new URLSearchParams();
   params.set('q', query);
   params.set('page', String(page));
-  params.set('sfw', includeAdult ? 'false' : 'true');
   const jikanSearchType = contentTypeToJikanType(type);
   if (jikanSearchType) params.set('type', jikanSearchType);
   params.set('order_by', 'members');
@@ -150,12 +151,10 @@ export async function searchAnime(
 export async function browseAnime(
   filters: MalCatalogFilters,
   type: ContentType,
-  page: number,
-  includeAdult?: boolean
-): Promise<{ anime: MalAnime[]; hasMore: boolean; total: number }> {
+  page: number
+): Promise<MalDiscoverResult> {
   const params = new URLSearchParams();
   params.set('page', String(page));
-  params.set('sfw', includeAdult ? 'false' : 'true');
 
   // Media type:
   // - If user explicitly picked one, use it.
@@ -233,9 +232,7 @@ export async function discover(
   filters: MalCatalogFilters,
   type: ContentType,
   page: number
-): Promise<{ anime: MalAnime[]; hasMore: boolean; total: number }> {
-  const includeAdult = filters.includeAdult;
-
+): Promise<MalDiscoverResult> {
   try {
     if (filters.malSeason && filters.malSeasonYear) {
       return await getSeasonal(
@@ -243,8 +240,7 @@ export async function discover(
         filters.malSeason,
         filters.malSort,
         type,
-        page,
-        includeAdult
+        page
       );
     }
 
@@ -259,11 +255,11 @@ export async function discover(
       filters.malOrderBy;
 
     if (hasAdvancedFilters) {
-      return await browseAnime(filters, type, page, includeAdult);
+      return await browseAnime(filters, type, page);
     }
 
     const rankingType = filters.malRankingType || 'all';
-    return await getRanking(rankingType, type, page, includeAdult);
+    return await getRanking(rankingType, type, page);
   } catch (error) {
     if (isRecoverableJikanError(error)) {
       log.warn('Jikan unavailable; returning empty MAL discover result', {
@@ -271,7 +267,7 @@ export async function discover(
         page,
         rankingType: filters.malRankingType || 'all',
       });
-      return { anime: [], hasMore: false, total: 0 };
+      return { anime: [], hasMore: false, total: 0, upstreamUnavailable: true };
     }
     throw error;
   }

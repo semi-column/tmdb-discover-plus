@@ -43,6 +43,10 @@
   display: none;
 }
 
+.mobile-marketplace-toggle {
+  display: none;
+}
+
 @media (max-width: 767px) {
   .container {
     padding: 0 var(--space-4);
@@ -316,6 +320,34 @@
 
 /* Mobile Sidebar */
 @media (max-width: 767px) {
+  .marketplace-toolbar-toggle {
+    display: none;
+  }
+
+  .mobile-marketplace-toggle {
+    display: inline-flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+  }
+
+  .marketplace-type-toggle {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 0;
+  }
+
+  .marketplace-type-toggle .type-btn {
+    min-width: 0;
+    padding: 10px;
+  }
+
+  .marketplace-type-toggle .marketplace-type-label {
+    display: none;
+  }
+
   .sidebar-header {
     flex-direction: column;
     gap: 12px;

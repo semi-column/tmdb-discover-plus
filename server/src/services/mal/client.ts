@@ -1,3 +1,4 @@
+import nodeFetch, { type RequestInit } from 'node-fetch';
 import { createLogger } from '../../utils/logger.ts';
 import { TIMEOUTS } from '../../constants.ts';
 import { ADDON_VERSION } from '../../version.ts';
@@ -13,6 +14,9 @@ const JIKAN_HEADERS = {
   Accept: 'application/json',
   'User-Agent': `TMDB-Discover-Plus/${ADDON_VERSION} (+https://github.com/semi-column/tmdb-discover-plus)`,
 } as const;
+
+const jikanFetchImplementation: typeof fetch = (url, init) =>
+  nodeFetch(String(url), init as unknown as RequestInit) as unknown as ReturnType<typeof fetch>;
 
 let lastRequestTime = 0;
 const requestQueue: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
@@ -83,6 +87,7 @@ export async function jikanFetch<T>(path: string): Promise<T> {
       {
         providerName: 'Jikan',
         timeoutMs: TIMEOUTS.MAL_FETCH_MS,
+        fetchImplementation: jikanFetchImplementation,
         onRateLimited: (_response, attempt) => log.warn('Jikan rate limited', { attempt }),
         getRetryDelayMs: (_response, attempt) => 2000 * Math.pow(2, attempt),
       }

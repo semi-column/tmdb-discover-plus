@@ -698,6 +698,15 @@ export const CatalogEditor = memo(function CatalogEditor() {
             )}
           </div>
 
+          {localCatalog?.source === 'mal' && (
+            <div className="mal-jikan-warning" role="status">
+              <AlertTriangle size={16} aria-hidden="true" />
+              <span>
+                Some MAL results may be temporarily unavailable when Jikan cannot reach MyAnimeList.
+              </span>
+            </div>
+          )}
+
           {!(isImdbCatalog && isPresetCatalog) && (
             <ActiveFiltersBar
               activeFilters={activeFilters}

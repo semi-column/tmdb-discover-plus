@@ -38,6 +38,7 @@ const GENRE_ONLY_STREMIO_EXTRA_MODES: StremioExtraMode[] = ['genre'];
 const SUPPORTED_ID_PREFIXES = ['tmdb:', 'tt', 'mal:', 'kitsu:', 'anilist:', 'anidb:'];
 
 const MIN_DROPDOWN_YEAR = 1900;
+const DISABLED_SOURCES = new Set(['mal']);
 
 function buildManifestVersion(userConfig: UserConfig | null): string {
   if (!userConfig) {
@@ -257,7 +258,7 @@ export function buildManifest(userConfig: UserConfig | null, baseUrl: string): S
     ? `${BASE_ADDON_NAME} - ${userConfig.configName}`
     : BASE_ADDON_NAME;
   const catalogs: ManifestCatalog[] = (userConfig?.catalogs || [])
-    .filter((c) => c.enabled !== false)
+    .filter((c) => c.enabled !== false && !DISABLED_SOURCES.has(c.source ?? 'tmdb'))
     .map((catalog) => {
       const source = getSource(catalog.source ?? 'tmdb');
       const prefix = source.catalogIdPrefix;
@@ -293,6 +294,7 @@ export function buildManifest(userConfig: UserConfig | null, baseUrl: string): S
     };
 
     for (const source of getAllSources()) {
+      if (DISABLED_SOURCES.has(source.sourceId)) continue;
       const prefKey = SEARCH_PREF_MAP[source.sourceId];
       // TMDB search is enabled by default; others are opt-in (disabled by default).
       const isDisabled = prefKey

@@ -1,7 +1,9 @@
 import { getAllSources } from '../../sources';
 import { MARKETPLACE_TYPES as TYPES } from '../../constants/marketplaceTypes';
 
-const SOURCES = getAllSources().map((s) => ({ id: s.id, label: s.label }));
+const SOURCES = getAllSources()
+  .filter((s) => s.id !== 'mal')
+  .map((s) => ({ id: s.id, label: s.label }));
 
 /**
  * MarketplaceFacets — source/type facet controls for marketplace search.
@@ -63,7 +65,10 @@ export function MarketplaceFacets({ source, type, onChange }) {
       {/* Type facets */}
       <div className="filter-group" style={{ marginTop: '16px' }}>
         <span className="filter-label">Type</span>
-        <div className="content-type-toggle" style={{ marginBottom: 0, flexWrap: 'wrap' }}>
+        <div
+          className="content-type-toggle marketplace-type-toggle"
+          style={{ marginBottom: 0, flexWrap: 'wrap' }}
+        >
           {TYPES.map((t) => (
             <button
               key={t.id}
@@ -71,9 +76,11 @@ export function MarketplaceFacets({ source, type, onChange }) {
               className={`type-btn ${type === t.id ? 'active' : ''}`}
               onClick={() => toggleType(t.id)}
               aria-pressed={type === t.id}
+              aria-label={t.label}
+              title={t.label}
             >
               <t.Icon size={16} />
-              {t.label}
+              <span className="marketplace-type-label">{t.label}</span>
             </button>
           ))}
         </div>
