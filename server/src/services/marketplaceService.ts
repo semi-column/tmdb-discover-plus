@@ -10,6 +10,7 @@ import {
   MARKETPLACE_LIMITS,
   MARKETPLACE_PAGINATION,
   MARKETPLACE_RANKING,
+  MARKETPLACE_SOURCES,
   MARKETPLACE_SORT_MODES,
   MARKETPLACE_TYPES,
 } from '../constants.ts';
@@ -39,6 +40,9 @@ import type {
 
 const log = createLogger('marketplaceService');
 const DISABLED_MARKETPLACE_SOURCES = new Set<SourceType>(['mal']);
+const ENABLED_MARKETPLACE_SOURCES = MARKETPLACE_SOURCES.filter(
+  (source): source is SourceType => !DISABLED_MARKETPLACE_SOURCES.has(source as SourceType)
+);
 
 /**
  * Options accepted by {@link publishCatalog}. Author-supplied description/tags
@@ -562,7 +566,7 @@ export async function searchMarketplace(
   // 1. Normalize + truncate the query, validate facets, and resolve the sort
   //    mode / pagination bounds. Facet validation may reject with a 400.
   const q = normalizeQuery(query.q);
-  const facets = validateAndParseFacets(query);
+  const facets = validateAndParseFacets(query) ?? {};
   const sort = resolveSortMode(query.sort, q.length > 0);
   const limit = resolveLimit(query.limit);
   const page = resolvePage(query.page);
@@ -576,6 +580,8 @@ export async function searchMarketplace(
       return { items: [], page, limit, total: 0, sort };
     }
     facets.source = enabledSources.length === 1 ? enabledSources[0] : enabledSources;
+  } else {
+    facets.source = ENABLED_MARKETPLACE_SOURCES;
   }
 
   // 2. Compose the normalized adapter params. The adapter is 1-based; convert
@@ -601,9 +607,7 @@ export async function searchMarketplace(
 
     // Defensive invariant: the adapter already excludes non-public / non-active
     // rows, but never project a row that slipped through.
-    const visible = rows.filter(
-      (entry) => isPublicActive(entry) && !DISABLED_MARKETPLACE_SOURCES.has(entry.source)
-    );
+    const visible = rows.filter(isPublicActive);
 
     const items = visible.map(toSearchCard);
     const total = Math.min(Math.max(0, Math.floor(matched)), TOTAL_COUNT_CAP);

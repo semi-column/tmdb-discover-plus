@@ -123,6 +123,10 @@ function isPublicActive(entry: MarketplaceEntry): boolean {
   return entry.visibility === 'public' && entry.moderation === 'active';
 }
 
+function isMarketplaceSourceEnabled(entry: MarketplaceEntry): boolean {
+  return entry.source !== 'mal';
+}
+
 function matchesTypeFacet(entry: MarketplaceEntry, type: MarketplaceSearchQuery['type']): boolean {
   if (!type) return true;
   if (entry.type === type) return true;
@@ -178,9 +182,10 @@ describe('marketplaceService search visibility (Property 7 — Req 7.1-7.4)', ()
         for (const scenario of scenarios) {
           const result = await searchMarketplace(scenario);
 
-          // Expected = public+active entries satisfying all supplied facets.
+          // Expected = public+active entries from enabled sources satisfying all supplied facets.
           const expected = entries.filter((e) => {
             if (!isPublicActive(e)) return false;
+            if (!isMarketplaceSourceEnabled(e)) return false;
             if (scenario.source && e.source !== scenario.source) return false;
             if (!matchesTypeFacet(e, scenario.type)) return false;
             return true;
