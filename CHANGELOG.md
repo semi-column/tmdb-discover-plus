@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.3](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.2...v2.10.3) (2026-07-18)
+
+
+### Features
+
+* **anilist:** add detailed metadata endpoint and enhance discovery capabilities ([030999f](https://github.com/semi-column/tmdb-discover-plus/commit/030999f9588cffeced2e594d0f25079cf26ebbbc))
+* **anilist:** add detailed metadata endpoint and enhance discovery capabilities ([7ef7a72](https://github.com/semi-column/tmdb-discover-plus/commit/7ef7a724020ee1bbf83e08f898b848776831d36f))
+* **anilist:** add detailed metadata endpoint and enhance discovery capabilities ([6a7cac1](https://github.com/semi-column/tmdb-discover-plus/commit/6a7cac1346abcc96db4d3423a18f6d844dff731b))
+* **anilist:** add detailed metadata endpoint and enhance discovery capabilities ([79f5015](https://github.com/semi-column/tmdb-discover-plus/commit/79f5015fed74787d8ae306093a8beb36c2f3ec57))
+* **anilist:** add detailed metadata endpoint and enhance discovery capabilities ([96728af](https://github.com/semi-column/tmdb-discover-plus/commit/96728af820a24ef083042866cdc15c2da08724ef))
+* Introducing Marketplace ([030999f](https://github.com/semi-column/tmdb-discover-plus/commit/030999f9588cffeced2e594d0f25079cf26ebbbc))
+* Introducing Marketplace ([7ef7a72](https://github.com/semi-column/tmdb-discover-plus/commit/7ef7a724020ee1bbf83e08f898b848776831d36f))
+* Introducing Marketplace ([6a7cac1](https://github.com/semi-column/tmdb-discover-plus/commit/6a7cac1346abcc96db4d3423a18f6d844dff731b))
+* Introducing Marketplace ([79f5015](https://github.com/semi-column/tmdb-discover-plus/commit/79f5015fed74787d8ae306093a8beb36c2f3ec57))
+* Introducing Marketplace  ([#104](https://github.com/semi-column/tmdb-discover-plus/issues/104)) ([ee91504](https://github.com/semi-column/tmdb-discover-plus/commit/ee915046f4408f5f4c482f0507f6c24ecf9cb74e))
+* Prebuilt Docker Images ([030999f](https://github.com/semi-column/tmdb-discover-plus/commit/030999f9588cffeced2e594d0f25079cf26ebbbc))
+* Prebuilt Docker Images ([7ef7a72](https://github.com/semi-column/tmdb-discover-plus/commit/7ef7a724020ee1bbf83e08f898b848776831d36f))
+* Prebuilt Docker Images ([6a7cac1](https://github.com/semi-column/tmdb-discover-plus/commit/6a7cac1346abcc96db4d3423a18f6d844dff731b))
+* Prebuilt Docker Images ([79f5015](https://github.com/semi-column/tmdb-discover-plus/commit/79f5015fed74787d8ae306093a8beb36c2f3ec57))
+* Prebuilt Docker Images ([08f16ce](https://github.com/semi-column/tmdb-discover-plus/commit/08f16ce868954e11c46752f5daf2759fe905fad2)), closes [#84](https://github.com/semi-column/tmdb-discover-plus/issues/84)
+
+
+### Bug Fixes
+
+* Disabled MAL ([3d4ba97](https://github.com/semi-column/tmdb-discover-plus/commit/3d4ba97d82efcd216d52d6300bdc21888ddecccd))
+* Disabled MAL temporarily due to jikan issues ([030999f](https://github.com/semi-column/tmdb-discover-plus/commit/030999f9588cffeced2e594d0f25079cf26ebbbc))
+* Disabled MAL temporarily due to jikan issues ([7ef7a72](https://github.com/semi-column/tmdb-discover-plus/commit/7ef7a724020ee1bbf83e08f898b848776831d36f))
+* Disabled MAL temporarily due to jikan issues ([6a7cac1](https://github.com/semi-column/tmdb-discover-plus/commit/6a7cac1346abcc96db4d3423a18f6d844dff731b))
+* Disabled MAL temporarily due to jikan issues ([79f5015](https://github.com/semi-column/tmdb-discover-plus/commit/79f5015fed74787d8ae306093a8beb36c2f3ec57))
+* IMDb keyword exclusion persistence/behavior (excludeKeywords) ([030999f](https://github.com/semi-column/tmdb-discover-plus/commit/030999f9588cffeced2e594d0f25079cf26ebbbc))
+* IMDb keyword exclusion persistence/behavior (excludeKeywords) ([7ef7a72](https://github.com/semi-column/tmdb-discover-plus/commit/7ef7a724020ee1bbf83e08f898b848776831d36f))
+* IMDb keyword exclusion persistence/behavior (excludeKeywords) ([6a7cac1](https://github.com/semi-column/tmdb-discover-plus/commit/6a7cac1346abcc96db4d3423a18f6d844dff731b))
+* IMDb keyword exclusion persistence/behavior (excludeKeywords) ([79f5015](https://github.com/semi-column/tmdb-discover-plus/commit/79f5015fed74787d8ae306093a8beb36c2f3ec57))
+* IMDb keyword exclusion persistence/behavior (excludeKeywords) ([96728af](https://github.com/semi-column/tmdb-discover-plus/commit/96728af820a24ef083042866cdc15c2da08724ef))
+* package-lock mismatch ([84b6720](https://github.com/semi-column/tmdb-discover-plus/commit/84b67207541b3da132bd83a04072ccbe14bc985a))
+* Trakt search not appearing when enabled in preferences ([030999f](https://github.com/semi-column/tmdb-discover-plus/commit/030999f9588cffeced2e594d0f25079cf26ebbbc))
+* Trakt search not appearing when enabled in preferences ([7ef7a72](https://github.com/semi-column/tmdb-discover-plus/commit/7ef7a724020ee1bbf83e08f898b848776831d36f))
+* Trakt search not appearing when enabled in preferences ([6a7cac1](https://github.com/semi-column/tmdb-discover-plus/commit/6a7cac1346abcc96db4d3423a18f6d844dff731b))
+* Trakt search not appearing when enabled in preferences ([79f5015](https://github.com/semi-column/tmdb-discover-plus/commit/79f5015fed74787d8ae306093a8beb36c2f3ec57))
+* Trakt search not appearing when enabled in preferences ([96728af](https://github.com/semi-column/tmdb-discover-plus/commit/96728af820a24ef083042866cdc15c2da08724ef))
+
 ## [2.10.4](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.3...v2.10.4) (2026-07-18)
 
 
