@@ -33,9 +33,14 @@ const filterValueArb = fc.oneof(
 );
 
 // A realistic, flat-ish filters object with arbitrary keys/values.
-const filtersArb = fc.dictionary(fc.string({ minLength: 1, maxLength: 20 }), filterValueArb, {
-  maxKeys: 8,
-});
+// Exclude prototype-related keys that behave unexpectedly when reordered.
+const filtersArb = fc.dictionary(
+  fc
+    .string({ minLength: 1, maxLength: 20 })
+    .filter((k) => !['__proto__', 'constructor', 'prototype'].includes(k)),
+  filterValueArb,
+  { maxKeys: 8 }
+);
 
 const contentArb = fc.record({
   name: nameArb,
