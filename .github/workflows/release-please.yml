@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  packages: write
 
 jobs:
   release-please:
@@ -41,3 +42,90 @@ jobs:
           echo "**ElfHosted (Stable):** Will auto-deploy from this release" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Nightly:** Deploys automatically on every push to main via the nightly workflow" >> $GITHUB_STEP_SUMMARY
+
+  publish-container:
+    name: Publish Container Image
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract GitHub Container Registry metadata
+        id: ghcr-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
+            type=raw,value=latest
+
+      - name: Build and push GitHub Container Registry image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.docker
+          push: true
+          tags: ${{ steps.ghcr-meta.outputs.tags }}
+          labels: ${{ steps.ghcr-meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Extract Docker Hub metadata
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        id: dockerhub-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_USERNAME }}/tmdb-discover-plus
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
+            type=raw,value=latest
+
+      - name: Build and push Docker Hub image
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.docker
+          push: true
+          tags: ${{ steps.dockerhub-meta.outputs.tags }}
+          labels: ${{ steps.dockerhub-meta.outputs.labels }}
+          cache-from: type=gha
+
+      - name: Container image summary
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          echo "## Container Images" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${{ github.repository }}:$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${{ github.repository }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "- \`docker.io/$DOCKERHUB_USERNAME/tmdb-discover-plus:$VERSION\`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`docker.io/$DOCKERHUB_USERNAME/tmdb-discover-plus:latest\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Docker Hub publishing skipped; configure \`DOCKERHUB_USERNAME\` and \`DOCKERHUB_TOKEN\` repository secrets to enable it." >> $GITHUB_STEP_SUMMARY
+          fi

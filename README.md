@@ -202,6 +202,16 @@ docker-compose up -d
 
 The addon will be available at `http://localhost:7000`
 
+#### Pre-built Image
+
+Stable releases are published to the GitHub Container Registry, so you can pull an image without cloning or building the repository:
+
+```bash
+docker pull ghcr.io/semi-column/tmdb-discover-plus:latest
+```
+
+Use a specific release tag instead of `latest` when you need a pinned deployment. The same tags are mirrored to Docker Hub when the maintainers configure its publishing credentials.
+
 #### Docker Environment Variables
 
 | Variable          | Description                                     | Default               |
