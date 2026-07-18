@@ -100,7 +100,6 @@ export function TraktFilterPanel({
 
   useEffect(() => {
     if (traktHasKey) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- short-circuit when parent already confirmed key is present
       setKeyState('ready');
       return;
     }
@@ -119,7 +118,6 @@ export function TraktFilterPanel({
     };
   }, [traktHasKey]);
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- React Compiler cannot preserve memoization across the surrounding state-machine; manual useCallback is intentional
   const handleSaveKey = useCallback(async () => {
     if (!traktKey.trim()) return;
     setKeyValidating(true);
@@ -574,7 +572,6 @@ export function TraktFilterPanel({
   // Sync from prop if it arrives with data (e.g. after parent refresh)
   useEffect(() => {
     if (Array.isArray(traktNetworks) && traktNetworks.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional prop→state mirror for late-arriving networks
       setLocalNetworks(traktNetworks);
     }
   }, [traktNetworks]);
@@ -582,7 +579,6 @@ export function TraktFilterPanel({
   // Auto-fetch on mount if prop is empty
   useEffect(() => {
     if (!Array.isArray(traktNetworks) || traktNetworks.length === 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only fetch; fetchNetworks owns its own setState
       fetchNetworks();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only fetch
