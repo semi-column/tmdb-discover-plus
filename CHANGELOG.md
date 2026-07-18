@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.3](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.2...v2.10.3) (2026-07-18)
+
+
+### Features
+
+* **anilist:** add detailed metadata endpoint and enhance discovery capabilities ([96728af](https://github.com/semi-column/tmdb-discover-plus/commit/96728af820a24ef083042866cdc15c2da08724ef))
+* Introducing Marketplace  ([#104](https://github.com/semi-column/tmdb-discover-plus/issues/104)) ([ee91504](https://github.com/semi-column/tmdb-discover-plus/commit/ee915046f4408f5f4c482f0507f6c24ecf9cb74e))
+* Prebuilt Docker Images ([08f16ce](https://github.com/semi-column/tmdb-discover-plus/commit/08f16ce868954e11c46752f5daf2759fe905fad2)), closes [#84](https://github.com/semi-column/tmdb-discover-plus/issues/84)
+
+
+### Bug Fixes
+
+* Disabled MAL ([3d4ba97](https://github.com/semi-column/tmdb-discover-plus/commit/3d4ba97d82efcd216d52d6300bdc21888ddecccd))
+* IMDb keyword exclusion persistence/behavior (excludeKeywords) ([96728af](https://github.com/semi-column/tmdb-discover-plus/commit/96728af820a24ef083042866cdc15c2da08724ef))
+* Trakt search not appearing when enabled in preferences ([96728af](https://github.com/semi-column/tmdb-discover-plus/commit/96728af820a24ef083042866cdc15c2da08724ef))
+
 ## [2.10.2](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.1...v2.10.2) (2026-05-23)
 
 
