@@ -1,9 +1,9 @@
 name: Release (Stable)
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [Lint & Test]
+    types: [completed]
 
 permissions:
   contents: write
@@ -13,6 +13,9 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
