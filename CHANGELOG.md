@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.4](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.3...v2.10.4) (2026-07-18)
+
+
+### Bug Fixes
+
+* package-lock mismatch ([84b6720](https://github.com/semi-column/tmdb-discover-plus/commit/84b67207541b3da132bd83a04072ccbe14bc985a))
+
 ## [2.10.3](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.2...v2.10.3) (2026-07-18)
 
 
