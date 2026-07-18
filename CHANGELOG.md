@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.4](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.3...v2.10.4) (2026-07-18)
+
+
+### Bug Fixes
+
+* Reconcillation of Catalogs for Marketplace ([b4f6271](https://github.com/semi-column/tmdb-discover-plus/commit/b4f6271d3a7462fa72be87fcf9a9c67aefa29235))
+* Reconcillation of Catalogs for Marketplace ([79d5167](https://github.com/semi-column/tmdb-discover-plus/commit/79d516770b0ee4587fc0749c914deda5d6dc2ef1))
+
 ## [2.10.3](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.2...v2.10.3) (2026-07-18)
 
 
