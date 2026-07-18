@@ -522,6 +522,32 @@ async function start() {
 
     await initStorage();
 
+    // Auto-reconcile marketplace entries on startup (migrations from user configs)
+    // This ensures catalogs are indexed after deployments or schema fixes
+    try {
+      const storage = getStorage();
+      const configs = (await storage.getAllConfigs?.()) || [];
+      if (configs.length > 0) {
+        const { reconcileMarketplaceEntries } = await import('./services/marketplaceService.ts');
+        let reconciled = 0;
+        for (const cfg of configs) {
+          try {
+            await reconcileMarketplaceEntries(null, cfg);
+            reconciled++;
+          } catch {
+            // Skip configs that fail reconciliation
+          }
+        }
+        if (reconciled > 0) {
+          log.info(`Marketplace reconciliation completed on startup`, { reconciled });
+        }
+      }
+    } catch (err) {
+      log.warn('Marketplace startup reconciliation skipped (non-critical)', {
+        error: err instanceof Error ? err.message : 'unknown',
+      });
+    }
+
     serverStatus.healthy = true;
     serverStatus.startedAt = new Date().toISOString();
 

@@ -86,6 +86,11 @@ export class PostgresAdapter implements IStorageAdapter {
         );
       `);
 
+      // Migrate: add moderation column if it doesn't exist (for tables created before moderation field)
+      await client.query(`
+        ALTER TABLE IF EXISTS marketplace_entries ADD COLUMN IF NOT EXISTS moderation VARCHAR(16) NOT NULL DEFAULT 'active';
+      `);
+
       // pg_trgm powers fuzzy / typo-tolerant matching on name.
       await client.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
 
@@ -173,6 +178,18 @@ export class PostgresAdapter implements IStorageAdapter {
     return res.rows.map((row: Record<string, unknown>) => ({
       userId: row.user_id as string,
       apiKeyId: row.api_key_id as string,
+      ...(row.data as Record<string, unknown>),
+    })) as UserConfig[];
+  }
+
+  async getAllConfigs(): Promise<UserConfig[]> {
+    const res = await this.pool.query(
+      'SELECT user_id, api_key_id, data FROM user_configs ORDER BY updated_at DESC'
+    );
+
+    return res.rows.map((row: Record<string, unknown>) => ({
+      userId: row.user_id as string,
+      apiKeyId: (row.api_key_id as string) || undefined,
       ...(row.data as Record<string, unknown>),
     })) as UserConfig[];
   }

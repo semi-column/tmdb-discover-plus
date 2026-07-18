@@ -85,6 +85,10 @@ export class MemoryAdapter implements IStorageAdapter {
     return this.configs.get(apiKeyId) || [];
   }
 
+  async getAllConfigs(): Promise<UserConfig[]> {
+    return Array.from(this.users.values());
+  }
+
   async deleteUserConfig(userId: string): Promise<boolean> {
     const config = this.users.get(userId);
     if (!config) return false;

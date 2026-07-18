@@ -7,6 +7,7 @@ export interface IStorageAdapter {
   getUserConfig(userId: string): Promise<UserConfig | null>;
   saveUserConfig(config: UserConfig): Promise<UserConfig>;
   getConfigsByApiKeyId(apiKeyId: string): Promise<UserConfig[]>;
+  getAllConfigs?(): Promise<UserConfig[]>;
   deleteUserConfig(userId: string): Promise<boolean>;
   getPublicStats(): Promise<PublicStats>;
 

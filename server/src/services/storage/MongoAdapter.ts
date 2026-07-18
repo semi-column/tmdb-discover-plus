@@ -160,6 +160,10 @@ export class MongoAdapter implements IStorageAdapter {
       .exec();
   }
 
+  async getAllConfigs(): Promise<UserConfigType[]> {
+    return UserConfig.find({}).sort({ updatedAt: -1 }).lean<UserConfigType[]>().exec();
+  }
+
   async deleteUserConfig(userId: string): Promise<boolean> {
     if (!userId) return false;
     const res = await UserConfig.findOneAndDelete({ userId: String(userId) });
