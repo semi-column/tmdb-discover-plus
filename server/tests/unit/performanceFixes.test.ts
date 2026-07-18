@@ -52,8 +52,8 @@ describe('TTL constants', () => {
     expect(CACHE_TTLS.CATALOG_STALE_REVALIDATE).toBe(3_600);
   });
 
-  it('CATALOG_SERVER_DISCOVER is 24 hours', () => {
-    expect(CACHE_TTLS.CATALOG_SERVER_DISCOVER).toBe(86_400);
+  it('CATALOG_SERVER_DISCOVER is 3 hours', () => {
+    expect(CACHE_TTLS.CATALOG_SERVER_DISCOVER).toBe(10_800);
   });
 
   it('CATALOG_SERVER_TRENDING is 3 hours', () => {
