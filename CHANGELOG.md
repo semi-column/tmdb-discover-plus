@@ -5,13 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.10.5](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.4...v2.10.5) (2026-07-18)
-
-
-### Bug Fixes
-
-* Background Catalog Reconcillation ([f2d6ced](https://github.com/semi-column/tmdb-discover-plus/commit/f2d6ced58396e9a074976cb5b14e7fd01c02e62f))
-
 ## [2.10.4](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.3...v2.10.4) (2026-07-18)
 
 
