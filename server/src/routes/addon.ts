@@ -44,14 +44,8 @@ import {
 } from '../utils/validation.ts';
 import { buildCatalogExtraFromQuery, isNoSelectionGenre } from '../utils/catalogExtras.ts';
 import { sendError, ErrorCodes } from '../utils/AppError.ts';
-import {
-  CACHE_TTLS,
-  DISPLAY,
-  ERROR_DEDUP,
-  normalizeBaseUrl,
-  buildCatalogId,
-  catalogServerTtl,
-} from '../constants.ts';
+import { DISPLAY, normalizeBaseUrl, buildCatalogId } from '../constants.ts';
+import { CACHE_LIMITS, CACHE_TTLS, LOCAL_CACHE_TTLS, catalogServerTtl } from '../cacheTtls.ts';
 import { logSwallowedError } from '../utils/helpers.ts';
 import { getAllSources } from '../services/sources/registry.ts';
 import { getEntryByPrefixedId } from '../services/animeIdMap/index.ts';
@@ -69,7 +63,7 @@ import { buildArtworkOptions, getPlaceholderUrls } from './handlers/sharedHelper
 const log = createLogger('addon');
 
 const recentErrors = new Map<string, number>();
-const ERROR_DEDUP_TTL = ERROR_DEDUP.TTL_MS;
+const ERROR_DEDUP_TTL = LOCAL_CACHE_TTLS.ERROR_DEDUP;
 
 const recentErrorsCleanupTimer = setInterval(() => {
   const now = Date.now();
@@ -85,7 +79,7 @@ function shouldLogError(userId: string, errorMsg: string): boolean {
   const last = recentErrors.get(key);
   if (last && now - last < ERROR_DEDUP_TTL) return false;
   recentErrors.set(key, now);
-  if (recentErrors.size > ERROR_DEDUP.MAX_SIZE) {
+  if (recentErrors.size > CACHE_LIMITS.ERROR_DEDUP_MAX_SIZE) {
     for (const [k, ts] of recentErrors) {
       if (now - ts > ERROR_DEDUP_TTL) recentErrors.delete(k);
     }
@@ -580,7 +574,7 @@ async function handleCatalogRequest(
     } else {
       res.set(
         'Cache-Control',
-        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
       );
     }
 
@@ -844,14 +838,14 @@ async function handleMetaRequest(
 
     res.set(
       'Cache-Control',
-      `max-age=${CACHE_TTLS.META_HEADER}, stale-while-revalidate=${CACHE_TTLS.META_HEADER * 2}, stale-if-error=259200`
+      `max-age=${CACHE_TTLS.META_HEADER}, stale-while-revalidate=${CACHE_TTLS.META_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
     );
     res.etagJson(
       {
         meta: responseMeta,
         cacheMaxAge: CACHE_TTLS.META_HEADER,
-        staleRevalidate: CACHE_TTLS.META_HEADER * 2,
-        staleError: 259200,
+        staleRevalidate: CACHE_TTLS.META_STALE_REVALIDATE,
+        staleError: CACHE_TTLS.CATALOG_STALE_IF_ERROR,
       },
       { extra: `${userId}:${id}` }
     );

@@ -1,5 +1,6 @@
 import { createLogger } from '../../utils/logger.ts';
 import { trackCacheOperation } from '../../utils/requestContext.ts';
+import { CACHE_ERROR_TTLS, CACHE_STORAGE } from '../../cacheTtls.ts';
 import type {
   ICacheAdapter,
   CacheErrorType,
@@ -12,14 +13,7 @@ const log = createLogger('CacheWrapper');
 
 const MAX_IN_FLIGHT = 5000;
 const IN_FLIGHT_WARN_THRESHOLD = MAX_IN_FLIGHT * 0.8;
-const ERROR_TTLS: Record<CacheErrorType, number> = {
-  EMPTY_RESULT: 60, // 1 minute — might have data soon
-  RATE_LIMITED: 900, // 15 minutes — back off significantly
-  TEMPORARY_ERROR: 120, // 2 minutes — 5xx, network errors
-  PERMANENT_ERROR: 1800, // 30 minutes — 4xx (except 404/429)
-  NOT_FOUND: 3600, // 1 hour — resource doesn't exist
-  CACHE_CORRUPTED: 60, // 1 minute — retry quickly after cleanup
-};
+const ERROR_TTLS = CACHE_ERROR_TTLS;
 export function classifyError(
   error: { message?: string; code?: string; name?: string } | null | undefined,
   statusCode?: number
@@ -151,7 +145,7 @@ export class CacheWrapper {
         if (entry.__storedAt && entry.__ttl) {
           const age = (Date.now() - entry.__storedAt) / 1000;
           if (age > entry.__ttl) {
-            if (age < entry.__ttl * 2) {
+            if (age < entry.__ttl * CACHE_STORAGE.WRAPPER_STALE_MULTIPLIER) {
               this.stats.staleServed++;
               trackCacheOperation('hits');
               return { ...entry, __isStale: true };
@@ -220,7 +214,11 @@ export class CacheWrapper {
         __ttl: ttlSeconds,
         data: value,
       };
-      await this.adapter.set(storageKey, wrapped, Math.ceil(ttlSeconds * 2.5));
+      await this.adapter.set(
+        storageKey,
+        wrapped,
+        Math.ceil(ttlSeconds * CACHE_STORAGE.WRAPPER_RETENTION_MULTIPLIER)
+      );
       trackCacheOperation('writes');
     } catch (err) {
       this.stats.errors++;

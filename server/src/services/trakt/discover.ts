@@ -1,5 +1,6 @@
 import { createLogger } from '../../utils/logger.ts';
 import { traktFetch } from './client.ts';
+import { LOCAL_CACHE_TTLS } from '../../cacheTtls.ts';
 import type {
   TraktMovie,
   TraktShow,
@@ -60,8 +61,8 @@ const MAX_RECENTLY_AIRED_DAYS = 3650;
 const MAX_CALENDAR_EXPLICIT_RANGE_DAYS = 3650;
 const DEFAULT_CALENDAR_WINDOW_DAYS = 30;
 const CALENDAR_CHUNK_BATCH_SIZE = 6;
-const CALENDAR_CACHE_TTL_MS = 5 * 60 * 1000;
-const CALENDAR_IMMUTABLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CALENDAR_CACHE_TTL_MS = LOCAL_CACHE_TTLS.TRAKT_CALENDAR;
+const CALENDAR_IMMUTABLE_CACHE_TTL_MS = LOCAL_CACHE_TTLS.TRAKT_CALENDAR_IMMUTABLE;
 const MAX_CACHE_ENTRIES = 100;
 const MAX_RAW_CACHE_ENTRIES = 50;
 

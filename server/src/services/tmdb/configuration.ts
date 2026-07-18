@@ -1,6 +1,7 @@
 import { getCache } from '../cache/index.ts';
 import { tmdbFetch } from './client.ts';
 import { createLogger } from '../../utils/logger.ts';
+import { CACHE_TTLS } from '../../cacheTtls.ts';
 import type {
   TmdbLanguage,
   TmdbCountry,
@@ -48,7 +49,7 @@ export async function getLanguages(apiKey: string): Promise<TmdbLanguage[]> {
 
   if (sorted.length > 0) {
     try {
-      await cache.set(cacheKey, sorted, 86400 * 7);
+      await cache.set(cacheKey, sorted, CACHE_TTLS.TMDB_REFERENCE);
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }
@@ -75,7 +76,7 @@ export async function getOriginalLanguages(apiKey: string): Promise<TmdbLanguage
 
   if (sorted.length > 0) {
     try {
-      await cache.set(cacheKey, sorted, 86400 * 7);
+      await cache.set(cacheKey, sorted, CACHE_TTLS.TMDB_REFERENCE);
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }
@@ -100,7 +101,7 @@ export async function getCountries(apiKey: string): Promise<TmdbCountry[]> {
 
   if (sorted.length > 0) {
     try {
-      await cache.set(cacheKey, sorted, 86400 * 7);
+      await cache.set(cacheKey, sorted, CACHE_TTLS.TMDB_REFERENCE);
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }
@@ -131,7 +132,7 @@ export async function getCertifications(
 
   if (Object.keys(certs).length > 0) {
     try {
-      await cache.set(cacheKey, certs, 86400 * 7);
+      await cache.set(cacheKey, certs, CACHE_TTLS.TMDB_REFERENCE);
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }
@@ -159,7 +160,7 @@ export async function getWatchRegions(apiKey: string): Promise<TmdbWatchRegion[]
 
   if (sorted.length > 0) {
     try {
-      await cache.set(cacheKey, sorted, 86400 * 7);
+      await cache.set(cacheKey, sorted, CACHE_TTLS.TMDB_REFERENCE);
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }
@@ -193,7 +194,7 @@ export async function getWatchProviders(
 
   if (sorted.length > 0) {
     try {
-      await cache.set(cacheKey, sorted, 86400);
+      await cache.set(cacheKey, sorted, CACHE_TTLS.TMDB_WATCH_PROVIDERS);
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }

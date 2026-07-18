@@ -10,6 +10,7 @@ import {
 } from './types.ts';
 import { anilistFetch } from './client.ts';
 import { createLogger } from '../../utils/logger.ts';
+import { LOCAL_CACHE_TTLS } from '../../cacheTtls.ts';
 
 const log = createLogger('anilist:reference');
 
@@ -29,7 +30,7 @@ let cachedTags: { value: string; label: string; category: string }[] | null = nu
 let cachedTagsAdult: { value: string; label: string; category: string }[] | null = null;
 let cacheTime = 0;
 let cacheTimeAdult = 0;
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL_MS = LOCAL_CACHE_TTLS.ANILIST_TAGS;
 
 async function fetchTagCollection(
   includeAdult?: boolean

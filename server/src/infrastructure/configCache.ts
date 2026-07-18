@@ -1,4 +1,5 @@
 import { createLogger } from '../utils/logger.ts';
+import { LOCAL_CACHE_TTLS } from '../cacheTtls.ts';
 
 const log = createLogger('ConfigCache');
 
@@ -19,7 +20,7 @@ export class ConfigCache {
 
   constructor(options: { maxSize?: number; ttlMs?: number } = {}) {
     this.maxSize = options.maxSize || 1000;
-    this.ttlMs = options.ttlMs || 5 * 60 * 1000;
+    this.ttlMs = options.ttlMs || LOCAL_CACHE_TTLS.CONFIG;
 
     /** @type {Map<string, {value: any, timestamp: number}>} */
     this.cache = new Map();

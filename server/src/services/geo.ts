@@ -1,7 +1,8 @@
 import fetch from 'node-fetch';
 import { getCache } from './cache/index.ts';
 import { createLogger } from '../utils/logger.ts';
-import { TIMEOUTS, CACHE_TTLS } from '../constants.ts';
+import { TIMEOUTS } from '../constants.ts';
+import { CACHE_TTLS } from '../cacheTtls.ts';
 import { logSwallowedError } from '../utils/helpers.ts';
 
 const log = createLogger('geo');

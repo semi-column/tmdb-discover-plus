@@ -2,6 +2,7 @@ import fetch from 'node-fetch';
 import { createLogger } from '../utils/logger.ts';
 import { config as appConfig } from '../config.ts';
 import { TIMEOUTS, metahubUrl } from '../constants.ts';
+import { LOCAL_CACHE_TTLS } from '../cacheTtls.ts';
 import type {
   ContentType,
   PosterOptions,
@@ -58,8 +59,8 @@ const TOP_POSTERS_BASE_URL = 'https://api.top-streaming.stream';
 const TVDB_API_BASE_URL = 'https://api4.thetvdb.com/v4';
 const FANART_API_BASE_URL = 'https://webservice.fanart.tv/v3';
 
-const ARTWORK_CHECK_TTL_MS = 24 * 60 * 60 * 1000;
-const ARTWORK_CHECK_NEGATIVE_TTL_MS = 60 * 60 * 1000;
+const ARTWORK_CHECK_TTL_MS = LOCAL_CACHE_TTLS.ARTWORK_CHECK;
+const ARTWORK_CHECK_NEGATIVE_TTL_MS = LOCAL_CACHE_TTLS.ARTWORK_CHECK_NEGATIVE;
 const ARTWORK_CHECK_MAX_CACHE = 2000;
 const ALLOWED_CHECK_HOSTS = new Set([
   'api.ratingposterdb.com',
@@ -81,7 +82,7 @@ interface TvdbTokenEntry {
 }
 
 const tvdbTokenCache = new Map<string, TvdbTokenEntry>();
-const TVDB_TOKEN_TTL_MS = 25 * 24 * 60 * 60 * 1000;
+const TVDB_TOKEN_TTL_MS = LOCAL_CACHE_TTLS.TVDB_TOKEN;
 
 interface TvdbArtworkRecord {
   image?: string;

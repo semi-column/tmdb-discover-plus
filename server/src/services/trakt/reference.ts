@@ -11,6 +11,7 @@ import {
 import type { TraktGenre, TraktNetwork } from './types.ts';
 import { traktFetch } from './client.ts';
 import { createLogger } from '../../utils/logger.ts';
+import { LOCAL_CACHE_TTLS } from '../../cacheTtls.ts';
 
 const log = createLogger('trakt:reference');
 
@@ -37,7 +38,7 @@ function splitStaticGenresByType(): TraktGenresByType {
 }
 
 let genresCache: { data: TraktGenresByType; fetchedAt: number; isRemote: boolean } | null = null;
-const GENRES_TTL_MS = 24 * 60 * 60 * 1000;
+const GENRES_TTL_MS = LOCAL_CACHE_TTLS.TRAKT_REFERENCE;
 
 function normalizeGenreArray(raw: unknown): TraktGenre[] {
   if (!Array.isArray(raw)) return [];
@@ -123,7 +124,7 @@ export function getCommunityMetrics(): readonly { value: string; label: string }
 
 // ─── Networks (dynamic, cached) ──────────────────────────
 let networksCache: { data: TraktNetwork[]; fetchedAt: number } | null = null;
-const NETWORKS_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const NETWORKS_TTL_MS = LOCAL_CACHE_TTLS.TRAKT_REFERENCE;
 
 export async function getNetworks(clientId?: string): Promise<TraktNetwork[]> {
   if (networksCache && Date.now() - networksCache.fetchedAt < NETWORKS_TTL_MS) {

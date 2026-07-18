@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { createLogger } from './logger.ts';
 import { logSwallowedError } from './helpers.ts';
 import { config } from '../config.ts';
+import { LOCAL_CACHE_TTLS } from '../cacheTtls.ts';
 
 import type { Logger } from '../types/index.ts';
 
@@ -18,7 +19,7 @@ export const JWT_EXPIRY_REMEMBER_ME = '30d';
 export const JWT_EXPIRY_SESSION = '24h';
 
 const PBKDF2_CACHE_MAX = 1000;
-const PBKDF2_CACHE_TTL_MS = 60 * 60 * 1000;
+const PBKDF2_CACHE_TTL_MS = LOCAL_CACHE_TTLS.PBKDF2;
 const pbkdf2Cache = new Map<string, { value: string; expiresAt: number }>();
 
 function pbkdf2CacheKey(apiKey: string): string {

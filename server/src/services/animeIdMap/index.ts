@@ -1,12 +1,12 @@
 import { createLogger } from '../../utils/logger.ts';
 import { getCache } from '../cache/index.ts';
-import { CACHE_TTLS } from '../../constants.ts';
+import { CACHE_TTLS, LOCAL_CACHE_TTLS } from '../../cacheTtls.ts';
 
 const log = createLogger('animeIdMap');
 
 const ANIME_LISTS_URL =
   'https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json';
-const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const REFRESH_INTERVAL_MS = LOCAL_CACHE_TTLS.ANIME_ID_MAP_REFRESH;
 
 export interface AnimeIdEntry {
   anilist_id?: number;

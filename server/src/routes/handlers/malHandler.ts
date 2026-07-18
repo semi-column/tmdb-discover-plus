@@ -5,7 +5,8 @@ import { getUserConfig } from '../../services/configService.ts';
 import { getCache } from '../../services/cache/index.ts';
 import * as mal from '../../services/mal/index.ts';
 import { createLogger } from '../../utils/logger.ts';
-import { CACHE_TTLS, buildCatalogId, catalogServerTtl } from '../../constants.ts';
+import { buildCatalogId } from '../../constants.ts';
+import { CACHE_TTLS, catalogServerTtl } from '../../cacheTtls.ts';
 import {
   createArtworkOptions,
   resolveContentType,
@@ -97,7 +98,7 @@ export async function handleMalCatalogRequest(
       const resolvedMetas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
       res.set(
         'Cache-Control',
-        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
       );
       log.debug('MAL search results', {
         count: resolvedMetas.length,
@@ -150,7 +151,7 @@ export async function handleMalCatalogRequest(
     if (cached) {
       res.set(
         'Cache-Control',
-        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
       );
       res.json({
         ...cached,
@@ -176,7 +177,7 @@ export async function handleMalCatalogRequest(
 
     res.set(
       'Cache-Control',
-      `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+      `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
     );
 
     log.debug('MAL catalog response', {

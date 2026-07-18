@@ -34,7 +34,8 @@ import {
   setNoCacheHeaders,
   logSwallowedError,
 } from '../utils/helpers.ts';
-import { CACHE_TTLS, TIMEOUTS } from '../constants.ts';
+import { TIMEOUTS } from '../constants.ts';
+import { CACHE_TTLS } from '../cacheTtls.ts';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.ts';
 import { createLogger } from '../utils/logger.ts';
 import { strictRateLimit } from '../utils/rateLimit.ts';

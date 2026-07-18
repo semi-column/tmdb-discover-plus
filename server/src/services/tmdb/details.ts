@@ -6,7 +6,8 @@ import { TMDB_IMAGE_BASE } from './constants.ts';
 import { formatRuntime } from './stremioMeta.ts';
 import { generateEpisodeThumbnailUrl, isValidPosterConfig } from '../artworkService.ts';
 import * as imdb from '../imdb/index.ts';
-import { CONCURRENCY, CACHE_TTLS, DISPLAY } from '../../constants.ts';
+import { CONCURRENCY, DISPLAY } from '../../constants.ts';
+import { CACHE_TTLS } from '../../cacheTtls.ts';
 
 import type {
   ArtworkOptions,

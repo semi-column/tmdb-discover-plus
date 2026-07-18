@@ -2,6 +2,7 @@ import NodeCache from 'node-cache';
 import { CacheInterface } from './CacheInterface.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { config } from '../../config.ts';
+import { CACHE_STORAGE } from '../../cacheTtls.ts';
 
 const log = createLogger('MemoryAdapter');
 
@@ -14,8 +15,8 @@ export class MemoryAdapter extends CacheInterface {
   constructor(options: NodeCache.Options = {}) {
     super();
     this.cache = new NodeCache({
-      stdTTL: 3600,
-      checkperiod: 300,
+      stdTTL: CACHE_STORAGE.MEMORY_DEFAULT_TTL,
+      checkperiod: CACHE_STORAGE.MEMORY_CHECK_PERIOD,
       maxKeys: MAX_KEYS,
       useClones: false,
       ...options,

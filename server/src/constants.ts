@@ -12,40 +12,6 @@ export const TIMEOUTS = {
   SHUTDOWN_MS: 30_000,
 } as const;
 
-export const CACHE_TTLS = {
-  CATALOG_HEADER: 10_800,
-  CATALOG_STALE_REVALIDATE: 3_600,
-  META_HEADER: 86_400,
-  LOGO: 604_800,
-  DETAIL: 86_400,
-  DISCOVER_PAGE: 86_400,
-  FALLBACK: 604_800,
-  EXTERNAL_ID: 2_592_000,
-  NEGATIVE_LOOKUP: 3_600,
-  RPDB_NOT_FOUND: 86_400,
-  RPDB_RATING: 86_400,
-  CATALOG_SERVER_DISCOVER: 10_800,
-  CATALOG_SERVER_TRENDING: 10_800,
-  ANIME_DISCOVER: 86_400,
-  ANIME_TRENDING: 10_800,
-  ANIME_ID_MAP: 604_800,
-} as const;
-
-const TRENDING_LIST_TYPES = new Set([
-  'trending',
-  'now_playing',
-  'upcoming',
-  'on_the_air',
-  'popular',
-  'airing_today',
-]);
-
-export function catalogServerTtl(listType: string | undefined | null): number {
-  return listType && TRENDING_LIST_TYPES.has(listType)
-    ? CACHE_TTLS.CATALOG_SERVER_TRENDING
-    : CACHE_TTLS.CATALOG_SERVER_DISCOVER;
-}
-
 export const CONCURRENCY = {
   TMDB_DETAIL: 10,
   IMDB_SEASON: 5,
@@ -74,11 +40,6 @@ export const DISPLAY = {
 
 export const EXTERNAL_URLS = {
   METAHUB_BASE: 'https://images.metahub.space',
-} as const;
-
-export const ERROR_DEDUP = {
-  MAX_SIZE: 500,
-  TTL_MS: 300_000,
 } as const;
 
 export const HEAP_WARN_THRESHOLD_MB = 384;

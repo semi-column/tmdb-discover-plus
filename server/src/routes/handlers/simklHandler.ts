@@ -7,7 +7,8 @@ import * as simkl from '../../services/simkl/index.ts';
 import { config } from '../../config.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { shuffleArray } from '../../utils/helpers.ts';
-import { CACHE_TTLS, buildCatalogId, catalogServerTtl } from '../../constants.ts';
+import { buildCatalogId } from '../../constants.ts';
+import { CACHE_TTLS, catalogServerTtl } from '../../cacheTtls.ts';
 import {
   createArtworkOptions,
   resolveContentType,
@@ -121,7 +122,7 @@ export async function handleSimklCatalogRequest(
       const resolvedMetas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
       res.set(
         'Cache-Control',
-        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
       );
       log.debug('Simkl search results', {
         count: resolvedMetas.length,
@@ -171,7 +172,7 @@ export async function handleSimklCatalogRequest(
       if (cached) {
         res.set(
           'Cache-Control',
-          `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+          `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
         );
         res.json({
           ...cached,
@@ -228,7 +229,7 @@ export async function handleSimklCatalogRequest(
     } else {
       res.set(
         'Cache-Control',
-        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
       );
     }
 

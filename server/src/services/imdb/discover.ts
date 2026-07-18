@@ -3,6 +3,7 @@ import { imdbFetch } from './client.ts';
 import { getCache } from '../cache/index.ts';
 import { config } from '../../config.ts';
 import { DISPLAY } from '../../constants.ts';
+import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { stableStringify } from '../../utils/stableStringify.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
@@ -365,7 +366,7 @@ export async function getTopRanking(type: ContentType): Promise<ImdbRankingResul
     }
 
     try {
-      await cache.set(fallbackKey, data, 604800);
+      await cache.set(fallbackKey, data, CACHE_TTLS.FALLBACK);
     } catch (err) {
       logSwallowedError('imdb:discover:cache-set-top250-fallback', err);
     }
@@ -408,7 +409,7 @@ export async function getPopular(type: ContentType): Promise<ImdbRankingResult> 
     }
 
     try {
-      await cache.set(fallbackKey, data, 604800);
+      await cache.set(fallbackKey, data, CACHE_TTLS.FALLBACK);
     } catch (err) {
       logSwallowedError('imdb:discover:cache-set-popular-fallback', err);
     }

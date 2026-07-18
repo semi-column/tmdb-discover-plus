@@ -1,13 +1,14 @@
 import { createLogger } from '../utils/logger.ts';
+import { LOCAL_CACHE_TTLS } from '../cacheTtls.ts';
 
 const log = createLogger('MarketplaceCache');
 
 /** TTL for search result pages (`mkt:search:*`). */
-const SEARCH_TTL_MS = 60 * 1000;
+const SEARCH_TTL_MS = LOCAL_CACHE_TTLS.MARKETPLACE_SEARCH;
 /** TTL for entry detail records (`mkt:entry:*`). */
-const ENTRY_TTL_MS = 300 * 1000;
+const ENTRY_TTL_MS = LOCAL_CACHE_TTLS.MARKETPLACE_ENTRY;
 /** How long a waiting caller will block on an in-progress load before self-computing. */
-const WAIT_TIMEOUT_MS = 5 * 1000;
+const WAIT_TIMEOUT_MS = LOCAL_CACHE_TTLS.MARKETPLACE_WAIT;
 
 const SEARCH_PREFIX = 'mkt:search:';
 const ENTRY_PREFIX = 'mkt:entry:';

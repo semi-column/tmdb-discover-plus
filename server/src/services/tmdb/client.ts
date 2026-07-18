@@ -6,6 +6,7 @@ import { getTmdbThrottle } from '../../infrastructure/tmdbThrottle.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
 import { TIMEOUTS, CONCURRENCY, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
+import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { httpsAgent, TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
 
@@ -238,7 +239,7 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       recordCircuitSuccess();
 
       try {
-        await cache.set(cacheKey, data, 3600);
+        await cache.set(cacheKey, data, CACHE_TTLS.TMDB_API_RESPONSE);
       } catch (cacheErr) {
         log.warn('Failed to cache TMDB response', {
           key: cacheKey,
@@ -365,7 +366,7 @@ export async function tmdbWebsiteFetchJson(
   const data: unknown = trimmed ? JSON.parse(trimmed) : null;
 
   try {
-    await cache.set(cacheKey, data, 3600);
+    await cache.set(cacheKey, data, CACHE_TTLS.TMDB_API_RESPONSE);
   } catch (err) {
     log.warn('Failed to cache TMDB website response', {
       key: cacheKey,

@@ -8,7 +8,8 @@ import type {
   TmdbResult,
   ContentType,
 } from '../../types/index.ts';
-import { CACHE_TTLS, CONCURRENCY } from '../../constants.ts';
+import { CONCURRENCY } from '../../constants.ts';
+import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 
 const log = createLogger('tmdb:lookup');

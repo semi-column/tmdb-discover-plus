@@ -5,6 +5,7 @@ import { getImdbThrottle } from '../../infrastructure/imdbThrottle.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
 import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
+import { CACHE_STORAGE, IMDB_CACHE_TTL_DEFAULTS } from '../../cacheTtls.ts';
 
 import type { Logger } from '../../types/index.ts';
 
@@ -92,7 +93,7 @@ export function resetImdbCircuitBreaker(): void {
 export async function imdbFetch(
   endpoint: string,
   params: Record<string, string | number | boolean | string[] | undefined | null> = {},
-  cacheTtl: number = 3600,
+  cacheTtl: number = IMDB_CACHE_TTL_DEFAULTS.DEFAULT_REQUEST,
   retries: number = 3
 ): Promise<unknown> {
   const apiKey = config.imdbApi.apiKey;
@@ -259,7 +260,11 @@ async function executeImdbFetch(
       });
 
       try {
-        await cache.set(cacheKey, data, cacheTtl * 2);
+        await cache.set(
+          cacheKey,
+          data,
+          cacheTtl * CACHE_STORAGE.IMDB_RESPONSE_RETENTION_MULTIPLIER
+        );
         await cache.set(freshnessKey, 1, cacheTtl);
       } catch (cacheErr) {
         log.warn('Failed to cache IMDb response', {

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { IMDB_CACHE_TTL_DEFAULTS } from './cacheTtls.ts';
 
 const env = (key: string, fallback?: string): string => process.env[key] ?? fallback ?? '';
 
@@ -102,12 +103,12 @@ export const config = Object.freeze({
       if (explicit) return explicit === 'true' || explicit === '1';
       return !!process.env['IMDB_DATA_KEY'];
     },
-    cacheTtlSearch: envInt('IMDB_CACHE_TTL_SEARCH', 86400),
-    cacheTtlDetail: envInt('IMDB_CACHE_TTL_DETAIL', 604800),
-    cacheTtlRanking: envInt('IMDB_CACHE_TTL_RANKING', 86400),
-    cacheTtlPopular: envInt('IMDB_CACHE_TTL_POPULAR', 21600),
-    cacheTtlList: envInt('IMDB_CACHE_TTL_LIST', 21600),
-    cacheTtlReference: envInt('IMDB_CACHE_TTL_REFERENCE', 2592000),
+    cacheTtlSearch: envInt('IMDB_CACHE_TTL_SEARCH', IMDB_CACHE_TTL_DEFAULTS.SEARCH),
+    cacheTtlDetail: envInt('IMDB_CACHE_TTL_DETAIL', IMDB_CACHE_TTL_DEFAULTS.DETAIL),
+    cacheTtlRanking: envInt('IMDB_CACHE_TTL_RANKING', IMDB_CACHE_TTL_DEFAULTS.RANKING),
+    cacheTtlPopular: envInt('IMDB_CACHE_TTL_POPULAR', IMDB_CACHE_TTL_DEFAULTS.POPULAR),
+    cacheTtlList: envInt('IMDB_CACHE_TTL_LIST', IMDB_CACHE_TTL_DEFAULTS.LIST),
+    cacheTtlReference: envInt('IMDB_CACHE_TTL_REFERENCE', IMDB_CACHE_TTL_DEFAULTS.REFERENCE),
   }),
 
   rpdb: Object.freeze({

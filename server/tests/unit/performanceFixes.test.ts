@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CACHE_TTLS, TIMEOUTS, catalogServerTtl } from '../../src/constants.ts';
+import { TIMEOUTS } from '../../src/constants.ts';
+import { CACHE_TTLS, catalogServerTtl } from '../../src/cacheTtls.ts';
 
 describe('catalogServerTtl', () => {
   it('returns trending TTL for trending list type', () => {

@@ -15,7 +15,8 @@ import { applyArtworkOverridesToMetaPreviews } from '../../services/artworkServi
 import { sanitizeImdbFilters, sanitizeFiltersForSource } from '../../utils/validation.ts';
 import { isNoSelectionGenre } from '../../utils/catalogExtras.ts';
 import { getBaseUrl, logSwallowedError } from '../../utils/helpers.ts';
-import { CACHE_TTLS, DISPLAY, normalizeBaseUrl, buildCatalogId } from '../../constants.ts';
+import { DISPLAY, normalizeBaseUrl, buildCatalogId } from '../../constants.ts';
+import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { buildArtworkOptions, getPlaceholderUrls } from './sharedHelpers.ts';
 
@@ -127,7 +128,7 @@ export async function handleImdbCatalogRequest(
       }
       res.set(
         'Cache-Control',
-        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+        `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
       );
       log.debug('Returning IMDb search results', {
         count: metas.length,
@@ -271,7 +272,7 @@ export async function handleImdbCatalogRequest(
 
     res.set(
       'Cache-Control',
-      `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=259200`
+      `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
     );
     log.debug('Returning IMDb catalog results', {
       count: metas.length,

@@ -3,6 +3,7 @@ import { shuffleArray, logSwallowedError } from '../../utils/helpers.ts';
 import { getCache } from '../cache/index.ts';
 import { stableStringify } from '../../utils/stableStringify.ts';
 import { createLogger } from '../../utils/logger.ts';
+import { CACHE_TTLS } from '../../cacheTtls.ts';
 
 const log = createLogger('tmdb:discover');
 
@@ -390,7 +391,7 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
       };
       maxPage = Math.min(discoverResult.total_pages || 1, 500);
       try {
-        await cache.set(totalPagesCacheKey, maxPage, 86400);
+        await cache.set(totalPagesCacheKey, maxPage, CACHE_TTLS.TMDB_DISCOVER_TOTAL_PAGES);
       } catch (e) {
         log.debug('Failed to cache total_pages for discover', { error: (e as Error).message });
       }
@@ -506,7 +507,7 @@ export async function fetchSpecialList(
       };
       maxPage = Math.min(discoverResult.total_pages || 1, 500);
       try {
-        await cache.set(totalPagesCacheKey, maxPage, 86400);
+        await cache.set(totalPagesCacheKey, maxPage, CACHE_TTLS.TMDB_DISCOVER_TOTAL_PAGES);
       } catch (e) {
         log.debug('Failed to cache total_pages for special list', { error: (e as Error).message });
       }
