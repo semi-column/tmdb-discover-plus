@@ -1,4 +1,3 @@
-import { StorageInterface } from './StorageInterface.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { MARKETPLACE_RANKING, MARKETPLACE_PAGINATION } from '../../constants.ts';
 import {
@@ -13,6 +12,7 @@ import type {
   PublicStats,
   MarketplaceEntry,
   MarketplaceSearchParams,
+  IStorageAdapter,
 } from '../../types/index.ts';
 
 const log = createLogger('MemoryAdapter');
@@ -33,7 +33,7 @@ function originKey(originUserId: string, originCatalogId: string): string {
   return `${originUserId}\u0000${originCatalogId}`;
 }
 
-export class MemoryAdapter extends StorageInterface {
+export class MemoryAdapter implements IStorageAdapter {
   private users: Map<string, UserConfig>;
   private configs: Map<string, UserConfig[]>;
   // Marketplace state
@@ -42,7 +42,6 @@ export class MemoryAdapter extends StorageInterface {
   private likes: Map<string, Set<string>>; // marketplaceId -> set of actorUserId
 
   constructor() {
-    super();
     this.users = new Map();
     this.configs = new Map();
     this.entries = new Map();

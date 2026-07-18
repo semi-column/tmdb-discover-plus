@@ -26,12 +26,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## TMDB
 
-| Variable             | Description                                                                                                                           | Default   |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `TMDB_API_KEY`       | Server-side default TMDB API key. Per-user keys are stored encrypted in the database; this is a fallback when no per-user key exists. | _(empty)_ |
-| `TMDB_RATE_LIMIT`    | Max TMDB API requests per second (token bucket capacity)                                                                              | `35`      |
-| `DISABLE_TLS_VERIFY` | Disable TLS certificate verification for TMDB requests. **Never enable in production.**                                               | `false`   |
-| `DEBUG_TMDB`         | Enable verbose logging of outbound TMDB API calls                                                                                     | `false`   |
+| Variable          | Description                                                                                                                           | Default   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `TMDB_API_KEY`    | Server-side default TMDB API key. Per-user keys are stored encrypted in the database; this is a fallback when no per-user key exists. | _(empty)_ |
+| `TMDB_RATE_LIMIT` | Max TMDB API requests per second (token bucket capacity)                                                                              | `35`      |
+| `DEBUG_TMDB`      | Enable verbose logging of outbound TMDB API calls                                                                                     | `false`   |
 
 ## Database
 

@@ -82,7 +82,6 @@ export const config = Object.freeze({
   tmdb: Object.freeze({
     apiKey: env('TMDB_API_KEY'),
     rateLimit: envIntWithNightlyDefault('TMDB_RATE_LIMIT', 35, 12),
-    disableTlsVerify: envBool('DISABLE_TLS_VERIFY'),
     debug: envBool('DEBUG_TMDB'),
   }),
 

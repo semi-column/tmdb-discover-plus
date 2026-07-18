@@ -1,16 +1,7 @@
-import https from 'node:https';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { config } from '../../config.ts';
 
 export const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
-
-export const httpsAgent: https.Agent = new https.Agent({
-  keepAlive: true,
-  rejectUnauthorized: !(
-    config.tmdb.disableTlsVerify && ['development', 'test'].includes(config.nodeEnv)
-  ),
-});
 
 export const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 export const TMDB_WEBSITE_BASE_URL = 'https://www.themoviedb.org';

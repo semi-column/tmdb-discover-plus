@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { MemoryAdapter } from '../../../src/services/storage/MemoryAdapter.ts';
 import { MongoAdapter } from '../../../src/services/storage/MongoAdapter.ts';
 import { PostgresAdapter } from '../../../src/services/storage/PostgresAdapter.ts';
-import type { StorageInterface } from '../../../src/services/storage/StorageInterface.ts';
+import type { IStorageAdapter } from '../../../src/types/storage.ts';
 import type { MarketplaceEntry, MarketplaceSearchParams } from '../../../src/types/marketplace.ts';
 
 /**
@@ -241,15 +241,15 @@ function buildEntry(spec: SeedSpec): MarketplaceEntry {
 
 interface AdapterUnderTest {
   label: string;
-  adapter: StorageInterface;
+  adapter: IStorageAdapter;
 }
 
 const adapters: AdapterUnderTest[] = [];
 let setupError: string | null = null;
 
 /** Attempt to connect + seed a DB adapter; on any failure, skip it cleanly. */
-async function tryAddDbAdapter(label: string, factory: () => StorageInterface): Promise<void> {
-  let adapter: StorageInterface;
+async function tryAddDbAdapter(label: string, factory: () => IStorageAdapter): Promise<void> {
+  let adapter: IStorageAdapter;
   try {
     adapter = factory();
     await adapter.connect();
@@ -280,13 +280,13 @@ async function tryAddDbAdapter(label: string, factory: () => StorageInterface): 
   }
 }
 
-async function seedAdapter(adapter: StorageInterface): Promise<void> {
+async function seedAdapter(adapter: IStorageAdapter): Promise<void> {
   for (const spec of SEED_SPECS) {
     await adapter.upsertMarketplaceEntry(buildEntry(spec));
   }
 }
 
-async function cleanupAdapter(adapter: StorageInterface): Promise<void> {
+async function cleanupAdapter(adapter: IStorageAdapter): Promise<void> {
   for (const spec of SEED_SPECS) {
     await adapter.deleteMarketplaceEntryByOrigin(specOriginUserId(spec), spec.catalogId);
   }
@@ -298,7 +298,7 @@ async function cleanupAdapter(adapter: StorageInterface): Promise<void> {
  * defense even though the scope-genre facet already isolates our rows.
  */
 async function runQuery(
-  adapter: StorageInterface,
+  adapter: IStorageAdapter,
   params: MarketplaceSearchParams
 ): Promise<{ originIds: Set<string>; count: number }> {
   const results = await adapter.searchMarketplaceEntries(params);

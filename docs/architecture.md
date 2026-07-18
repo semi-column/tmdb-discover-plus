@@ -77,7 +77,7 @@ TMDB Discover+ is a Stremio addon that lets users create custom content catalogs
 
 ## Storage Layer
 
-Abstract `StorageInterface` with three concrete adapters, selected by `DATABASE_DRIVER` env var or auto-detected from connection URIs.
+`IStorageAdapter` with three concrete adapters, selected by `DATABASE_DRIVER` env var or auto-detected from connection URIs.
 
 | Adapter           | Backend              | Use Case                  |
 | ----------------- | -------------------- | ------------------------- |

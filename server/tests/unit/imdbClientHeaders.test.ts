@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockFetch, mockConfig, cacheGet, cacheSet, cacheSetError, throttleAcquire } = vi.hoisted(
   () => ({
@@ -24,10 +24,6 @@ const { mockFetch, mockConfig, cacheGet, cacheSet, cacheSetError, throttleAcquir
     throttleAcquire: vi.fn(),
   })
 );
-
-vi.mock('node-fetch', () => ({
-  default: mockFetch,
-}));
 
 vi.mock('../../src/config.ts', () => ({
   config: mockConfig,
@@ -56,6 +52,7 @@ import { imdbFetch, resetImdbCircuitBreaker } from '../../src/services/imdb/clie
 describe('imdb client outbound caller headers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('fetch', mockFetch);
     resetImdbCircuitBreaker();
     cacheGet.mockResolvedValue(null);
     cacheSet.mockResolvedValue(undefined);
@@ -69,6 +66,8 @@ describe('imdb client outbound caller headers', () => {
       json: async () => ({ ok: true }),
     });
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('sends attribution headers with nightly variant and host label', async () => {
     await imdbFetch('/api/imdb/genres', {}, 120, 0);

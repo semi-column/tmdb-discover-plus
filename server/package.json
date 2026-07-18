@@ -29,9 +29,7 @@
     "express-rate-limit": "^8.5.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.22.1",
-    "nanoid": "^5.0.4",
     "node-cache": "^5.1.2",
-    "node-fetch": "^3.3.2",
     "pg": "^8.17.2",
     "rate-limit-redis": "^4.3.1",
     "redis": "^5.10.0"

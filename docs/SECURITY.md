@@ -64,7 +64,7 @@ API endpoints are rate-limited to 100 requests per minute per IP. This can be di
 
 ### TLS Verification
 
-TLS certificate verification is enabled by default. Only disable (`DISABLE_TLS_VERIFY=true`) if behind a corporate proxy with SSL inspection.
+TLS certificate verification is always enabled. Configure trusted corporate proxy certificates with Node's `NODE_EXTRA_CA_CERTS` when needed.
 
 ### Debug Endpoint
 

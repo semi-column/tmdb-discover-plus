@@ -1,5 +1,4 @@
 import pg from 'pg';
-import { StorageInterface } from './StorageInterface.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { MARKETPLACE_RANKING, MARKETPLACE_PAGINATION } from '../../constants.ts';
 import { resolveSort, clampLimit, LEGACY_ANIME_SOURCES } from './searchHelpers.ts';
@@ -9,6 +8,7 @@ import type {
   MarketplaceEntry,
   MarketplaceSearchParams,
   MarketplaceSort,
+  IStorageAdapter,
 } from '../../types/index.ts';
 
 const log = createLogger('PostgresAdapter');
@@ -35,11 +35,10 @@ const COUNTER_COLUMNS: Record<'installs' | 'likes' | 'views', string> = {
 // (which Postgres would reject for a UUID column) and instead return "not found".
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export class PostgresAdapter extends StorageInterface {
+export class PostgresAdapter implements IStorageAdapter {
   private pool: InstanceType<typeof Pool>;
 
   constructor(uri: string) {
-    super();
     this.pool = new Pool({ connectionString: uri });
   }
 

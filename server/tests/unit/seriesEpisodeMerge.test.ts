@@ -11,7 +11,7 @@ vi.mock('../../src/services/cache/index.ts', () => ({
 vi.mock('../../src/config.ts', () => ({
   config: {
     logging: { level: 'error', format: 'text' },
-    tmdb: { disableTlsVerify: false, debug: false, apiKey: '', rateLimit: 35 },
+    tmdb: { debug: false, apiKey: '', rateLimit: 35 },
     nodeEnv: 'test',
     imdbApi: { enabled: false },
     imdbRatings: { disabled: true, updateIntervalHours: 24, minVotes: 100 },

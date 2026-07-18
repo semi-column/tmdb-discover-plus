@@ -577,7 +577,7 @@ tmdb-discover-plus/
 - **Framework:** Express.js
 - **Databases:** PostgreSQL / MongoDB (with in-memory fallback)
 - **Caching:** Redis / Memory
-- **HTTP Client:** node-fetch
+- **HTTP Client:** Node.js built-in fetch
 
 **Frontend:**
 

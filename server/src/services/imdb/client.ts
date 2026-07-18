@@ -1,4 +1,3 @@
-import fetch, { type RequestInit } from 'node-fetch';
 import { getCache } from '../cache/index.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { getImdbThrottle } from '../../infrastructure/imdbThrottle.ts';

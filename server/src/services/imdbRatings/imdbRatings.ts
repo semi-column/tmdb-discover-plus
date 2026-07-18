@@ -1,6 +1,6 @@
 import { createGunzip } from 'zlib';
 import { createInterface } from 'readline';
-import fetch from 'node-fetch';
+import { Readable } from 'node:stream';
 import { createLogger } from '../../utils/logger.ts';
 import { config } from '../../config.ts';
 import type { IImdbRatingsAdapter } from '../../types/index.ts';
@@ -94,7 +94,7 @@ async function downloadAndCacheRatings(): Promise<boolean> {
     const body = response.body;
     if (!body) throw new Error('Response body is null');
     const rl = createInterface({
-      input: body.pipe(gunzip),
+      input: Readable.fromWeb(body).pipe(gunzip),
       crlfDelay: Infinity,
     });
 

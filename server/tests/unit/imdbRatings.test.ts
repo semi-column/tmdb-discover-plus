@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IImdbRatingsAdapter } from '../../src/types/index.ts';
 
-vi.mock('node-fetch', () => ({ default: vi.fn() }));
+const fetchMock = vi.fn();
 vi.mock('../../src/utils/logger.ts', () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -78,12 +78,14 @@ describe('imdbRatings', () => {
   let adapter: IImdbRatingsAdapter;
 
   beforeEach(async () => {
+    vi.stubGlobal('fetch', fetchMock);
     await destroyRatings();
     adapter = createMockAdapter();
   });
 
   afterEach(async () => {
     await destroyRatings();
+    vi.unstubAllGlobals();
   });
 
   describe('getImdbRating', () => {

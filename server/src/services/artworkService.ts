@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { createLogger } from '../utils/logger.ts';
 import { config as appConfig } from '../config.ts';
 import { TIMEOUTS, metahubUrl } from '../constants.ts';

@@ -1,4 +1,3 @@
-import fetch, { type RequestInit } from 'node-fetch';
 import { getCache } from '../cache/index.ts';
 import { CachedError, classifyError } from '../cache/CacheWrapper.ts';
 import { createLogger } from '../../utils/logger.ts';
@@ -8,7 +7,7 @@ import { getRequestId } from '../../utils/requestContext.ts';
 import { TIMEOUTS, CONCURRENCY, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
-import { httpsAgent, TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
+import { TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
 
 import type { ApiKeyValidationResult, CacheErrorType, Logger } from '../../types/index.ts';
 
@@ -205,7 +204,6 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       let response;
       try {
         response = await fetch(url.toString(), {
-          agent: httpsAgent,
           signal: abortController.signal as RequestInit['signal'],
         });
       } finally {
@@ -349,7 +347,6 @@ export async function tmdbWebsiteFetchJson(
   await throttle.acquire();
 
   const response = await fetch(url.toString(), {
-    agent: httpsAgent,
     headers: {
       Accept: 'application/json, text/plain, */*',
       'X-Requested-With': 'XMLHttpRequest',

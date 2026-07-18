@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { getCache } from './cache/index.ts';
 import { createLogger } from '../utils/logger.ts';
 import { TIMEOUTS } from '../constants.ts';

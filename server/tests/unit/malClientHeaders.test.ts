@@ -20,7 +20,7 @@ describe('mal client outbound headers', () => {
     mockedFetchWithRetry.mockResolvedValue({ data: [] });
   });
 
-  it('uses node-fetch with a user agent and accept header for Jikan', async () => {
+  it('uses fetch with a user agent and accept header for Jikan', async () => {
     await jikanFetch('/top/anime?page=1');
 
     expect(mockedFetchWithRetry).toHaveBeenCalledTimes(1);

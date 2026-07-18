@@ -1,6 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const acquireSpy = vi.fn(async () => {});
+const fetchMock = vi.fn(async () => ({
+  ok: true,
+  text: async () => '{"results":[]}',
+}));
 
 vi.mock('../../src/services/cache/index.ts', () => ({
   getCache: vi.fn(() => ({
@@ -17,19 +21,15 @@ vi.mock('../../src/infrastructure/tmdbThrottle.ts', () => ({
   })),
 }));
 
-vi.mock('node-fetch', () => ({
-  default: vi.fn(async () => ({
-    ok: true,
-    text: async () => '{"results":[]}',
-  })),
-}));
-
 import { tmdbWebsiteFetchJson } from '../../src/services/tmdb/client.ts';
 
 describe('tmdbWebsiteFetchJson', () => {
   beforeEach(() => {
     acquireSpy.mockClear();
+    vi.stubGlobal('fetch', fetchMock);
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('calls throttle.acquire before fetching', async () => {
     await tmdbWebsiteFetchJson('/search/keyword', { query: 'test' });

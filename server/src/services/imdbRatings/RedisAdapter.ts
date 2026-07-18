@@ -1,6 +1,6 @@
 import { createClient, type RedisClientType } from 'redis';
-import { ImdbRatingsAdapter } from './ImdbRatingsAdapter.ts';
 import { createLogger } from '../../utils/logger.ts';
+import type { IImdbRatingsAdapter } from '../../types/index.ts';
 
 const log = createLogger('ImdbRatings:Redis');
 
@@ -8,11 +8,10 @@ const RATINGS_HASH = 'imdb:ratings';
 const META_PREFIX = 'imdb:meta:';
 const PIPELINE_BATCH = 10000;
 
-export class RedisAdapter extends ImdbRatingsAdapter {
+export class RedisAdapter implements IImdbRatingsAdapter {
   private client: RedisClientType;
 
   constructor(redisUrl: string) {
-    super();
     this.client = createClient({ url: redisUrl });
     this.client.on('error', (err: Error) =>
       log.error('Redis client error', { error: err.message })

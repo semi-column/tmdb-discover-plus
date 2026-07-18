@@ -1,19 +1,18 @@
 import NodeCache from 'node-cache';
-import { CacheInterface } from './CacheInterface.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { config } from '../../config.ts';
 import { CACHE_STORAGE } from '../../cacheTtls.ts';
+import type { ICacheAdapter } from '../../types/index.ts';
 
 const log = createLogger('MemoryAdapter');
 
 const MAX_KEYS = config.cache.maxKeys;
 
-export class MemoryAdapter extends CacheInterface {
+export class MemoryAdapter implements ICacheAdapter {
   private cache: NodeCache;
   private evictions: number;
 
   constructor(options: NodeCache.Options = {}) {
-    super();
     this.cache = new NodeCache({
       stdTTL: CACHE_STORAGE.MEMORY_DEFAULT_TTL,
       checkperiod: CACHE_STORAGE.MEMORY_CHECK_PERIOD,

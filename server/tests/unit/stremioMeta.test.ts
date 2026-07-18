@@ -65,7 +65,7 @@ vi.mock('../../src/config.ts', () => ({
   config: {
     rpdb: { apiKey: '' },
     logging: { level: 'error', format: 'text' },
-    tmdb: { disableTlsVerify: false, debug: false, apiKey: '', rateLimit: 35 },
+    tmdb: { debug: false, apiKey: '', rateLimit: 35 },
     nodeEnv: 'test',
     imdbRatings: { disabled: true, updateIntervalHours: 24, minVotes: 100 },
     cache: { driver: '', redisUrl: '', maxKeys: 1000, versionOverride: '', warmRegions: [] },

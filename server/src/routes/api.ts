@@ -1,4 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
+import { randomBytes } from 'node:crypto';
 import type {
   ContentType,
   CatalogFilters,
@@ -7,7 +8,6 @@ import type {
   PosterServiceType,
 } from '../types/index.ts';
 import type { StremioMetaPreview } from '../types/stremio.ts';
-import { nanoid } from 'nanoid';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -2446,7 +2446,7 @@ router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, 
 
     log.info('Create config request', { catalogCount: catalogs?.length || 0 });
 
-    const newUserId = nanoid(10);
+    const newUserId = randomBytes(8).toString('base64url').slice(0, 10);
 
     const savedConfig = await saveUserConfig({
       userId: newUserId,

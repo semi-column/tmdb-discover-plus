@@ -1,14 +1,13 @@
-import { ImdbRatingsAdapter } from './ImdbRatingsAdapter.ts';
 import { createLogger } from '../../utils/logger.ts';
+import type { IImdbRatingsAdapter } from '../../types/index.ts';
 
 const log = createLogger('ImdbRatings:Memory');
 
-export class MemoryAdapter extends ImdbRatingsAdapter {
+export class MemoryAdapter implements IImdbRatingsAdapter {
   private ratings: Map<string, string>;
   private meta: Map<string, string>;
 
   constructor() {
-    super();
     this.ratings = new Map();
     this.meta = new Map();
   }

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { nanoid } from 'nanoid';
+import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
 
 export interface RequestCacheStats {
@@ -73,7 +73,7 @@ export function requestIdMiddleware() {
     const requestId =
       incoming && incoming.length <= MAX_REQUEST_ID_LENGTH && VALID_REQUEST_ID.test(incoming)
         ? incoming
-        : nanoid(12);
+        : randomBytes(9).toString('base64url');
     res.setHeader('X-Request-Id', requestId);
     asyncLocalStorage.run(
       {

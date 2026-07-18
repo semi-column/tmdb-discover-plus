@@ -1,14 +1,13 @@
 import { createClient, type RedisClientType } from 'redis';
-import { CacheInterface } from './CacheInterface.ts';
 import { createLogger } from '../../utils/logger.ts';
+import type { ICacheAdapter } from '../../types/index.ts';
 
 const log = createLogger('RedisAdapter');
 
-export class RedisAdapter extends CacheInterface {
+export class RedisAdapter implements ICacheAdapter {
   private client: RedisClientType;
 
   constructor(url: string) {
-    super();
     this.client = createClient({ url });
     this.client.on('error', (err: Error) =>
       log.error('Redis Client Error', { error: err.message })

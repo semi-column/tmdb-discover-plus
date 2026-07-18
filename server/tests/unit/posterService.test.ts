@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   generatePosterUrl,
   generateBackdropUrl,
@@ -401,20 +401,16 @@ describe('applyArtworkOverridesToMetaPreviews', () => {
   });
 });
 
-vi.mock('node-fetch', () => {
-  const fn = vi.fn();
-  return { default: fn, __esModule: true };
-});
-
 describe('checkPosterExists', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+  const fetchMock = vi.fn();
   const trustedPosterBase = 'https://api.ratingposterdb.com';
 
-  beforeEach(async () => {
-    const mod = await import('node-fetch');
-    fetchMock = mod.default as unknown as ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockReset();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('returns true for a valid image response', async () => {
     fetchMock.mockResolvedValueOnce({
@@ -492,13 +488,14 @@ describe('checkPosterExists', () => {
 });
 
 describe('validateTvdbApiKeyAuthorization', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+  const fetchMock = vi.fn();
 
-  beforeEach(async () => {
-    const mod = await import('node-fetch');
-    fetchMock = mod.default as unknown as ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockReset();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('returns valid true when TVDB login succeeds with token', async () => {
     fetchMock.mockResolvedValueOnce({

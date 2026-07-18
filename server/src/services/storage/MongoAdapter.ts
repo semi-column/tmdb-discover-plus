@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
-import { StorageInterface } from './StorageInterface.ts';
 import { UserConfig } from '../../models/UserConfig.ts';
 import { MarketplaceEntryModel, MarketplaceLikeModel } from '../../models/MarketplaceEntry.ts';
 import { createLogger } from '../../utils/logger.ts';
@@ -22,6 +21,7 @@ import type {
   SourceType,
   CatalogFilters,
   CatalogFormState,
+  IStorageAdapter,
 } from '../../types/index.ts';
 
 const log = createLogger('MongoAdapter');
@@ -110,11 +110,10 @@ function toEntry(doc: MarketplaceEntryDoc): MarketplaceEntry {
   };
 }
 
-export class MongoAdapter extends StorageInterface {
+export class MongoAdapter implements IStorageAdapter {
   private uri: string;
 
   constructor(uri: string) {
-    super();
     this.uri = uri;
   }
 

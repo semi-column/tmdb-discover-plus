@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/services/cache/index.ts', () => ({
   getCache: vi.fn(() => ({
@@ -15,24 +15,22 @@ vi.mock('../../src/infrastructure/tmdbThrottle.ts', () => ({
   })),
 }));
 
-vi.mock('node-fetch', () => ({
-  default: vi.fn(),
-}));
-
-import fetch from 'node-fetch';
 import {
   tmdbFetch,
   getCircuitBreakerState,
   resetCircuitBreaker,
 } from '../../src/services/tmdb/client.ts';
 
-const mockFetch = vi.mocked(fetch);
+const mockFetch = vi.fn();
 
 describe('TMDB Circuit Breaker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('fetch', mockFetch);
     resetCircuitBreaker();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('starts in closed state', () => {
     expect(getCircuitBreakerState().state).toBe('closed');

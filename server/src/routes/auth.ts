@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
+import { randomBytes } from 'node:crypto';
 import { generateToken, verifyToken } from '../utils/security.ts';
 import { revokeToken } from '../utils/security.ts';
 import { encrypt } from '../utils/encryption.ts';
@@ -106,7 +106,7 @@ router.post('/login', strictRateLimit, async (req, res) => {
       });
     }
 
-    const newUserId = nanoid(10);
+    const newUserId = randomBytes(8).toString('base64url').slice(0, 10);
     const encryptedKey = encrypt(apiKey) ?? undefined;
 
     await saveUserConfig({
