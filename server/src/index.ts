@@ -522,34 +522,64 @@ async function start() {
 
     await initStorage();
 
-    // Auto-reconcile marketplace entries on startup (migrations from user configs)
-    // This ensures catalogs are indexed after deployments or schema fixes
-    try {
-      const storage = getStorage();
-      const configs = (await storage.getAllConfigs?.()) || [];
-      if (configs.length > 0) {
-        const { reconcileMarketplaceEntries } = await import('./services/marketplaceService.ts');
-        let reconciled = 0;
-        for (const cfg of configs) {
-          try {
-            await reconcileMarketplaceEntries(null, cfg);
-            reconciled++;
-          } catch {
-            // Skip configs that fail reconciliation
-          }
-        }
-        if (reconciled > 0) {
-          log.info(`Marketplace reconciliation completed on startup`, { reconciled });
-        }
-      }
-    } catch (err) {
-      log.warn('Marketplace startup reconciliation skipped (non-critical)', {
-        error: err instanceof Error ? err.message : 'unknown',
-      });
-    }
-
     serverStatus.healthy = true;
     serverStatus.startedAt = new Date().toISOString();
+
+    // Auto-reconcile marketplace entries in background (non-blocking)
+    // Ensures catalogs are indexed after deployments or schema fixes
+    // Runs after server starts to avoid blocking container health checks
+    const reconcileMarketplaceOnStartup = async () => {
+      try {
+        const storage = getStorage();
+        const configs = (await storage.getAllConfigs?.()) || [];
+        if (configs.length === 0) {
+          log.info('No user configs found for marketplace reconciliation');
+          return;
+        }
+
+        log.info(`Starting marketplace reconciliation for ${configs.length} configs`);
+        const { reconcileMarketplaceEntries } = await import('./services/marketplaceService.ts');
+        let reconciled = 0;
+        let failed = 0;
+        const batchSize = 50;
+
+        for (let i = 0; i < configs.length; i += batchSize) {
+          const batch = configs.slice(i, i + batchSize);
+          const results = await Promise.allSettled(
+            batch.map((cfg) => reconcileMarketplaceEntries(null, cfg))
+          );
+
+          const batchReconciled = results.filter((r) => r.status === 'fulfilled').length;
+          reconciled += batchReconciled;
+          failed += results.filter((r) => r.status === 'rejected').length;
+
+          log.debug(`Marketplace reconciliation progress`, {
+            processed: Math.min(i + batchSize, configs.length),
+            total: configs.length,
+            reconciled,
+            failed,
+          });
+        }
+
+        log.info(`Marketplace reconciliation finished on startup`, {
+          total: configs.length,
+          reconciled,
+          failed,
+          percentage: ((reconciled / configs.length) * 100).toFixed(1),
+        });
+      } catch (err) {
+        log.warn('Marketplace startup reconciliation failed (non-critical)', {
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+    };
+
+    // Start reconciliation in background after server is listening
+    Promise.resolve()
+      .then(() => reconcileMarketplaceOnStartup())
+      .catch(() => {
+        // Catch-all, shouldn't happen but prevents unhandled rejections
+      });
 
     server = app.listen(PORT, '0.0.0.0', () => {
       log.info(`TMDB Discover+ running at http://0.0.0.0:${PORT}`);
