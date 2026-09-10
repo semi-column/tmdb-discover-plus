@@ -5,7 +5,7 @@ import type { ArtworkOptions, ContentType, PosterOptions } from '../../types/ind
 const CACHE_KEY_HMAC_KEY = 'tmdb-discover-plus-cache-key-v1';
 
 function cacheKeyDigest(value: string, length: number): string {
-  // codeql[js/insufficient-password-hash] This is a deterministic cache-key fingerprint, not password storage.
+  // lgtm[js/insufficient-password-hash] This is a deterministic cache-key fingerprint, not password storage.
   return crypto
     .createHmac('sha256', CACHE_KEY_HMAC_KEY)
     .update(value)

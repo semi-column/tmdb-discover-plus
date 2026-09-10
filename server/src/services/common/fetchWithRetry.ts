@@ -69,6 +69,7 @@ export async function fetchWithRetry<T>(
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
+      // lgtm[js/request-forgery] URL is parsed above, restricted to HTTPS, stripped of credentials, and checked against caller-provided allowed origins.
       const response = await fetchImplementation(requestUrl.toString(), {
         ...init,
         signal: AbortSignal.timeout(timeoutMs),

@@ -198,7 +198,7 @@ export function computeContentHash(input: {
     source: input.source,
     filters: input.filters,
   });
-  // codeql[js/insufficient-password-hash] This is a deterministic content fingerprint, not password storage.
+  // lgtm[js/insufficient-password-hash] This is a deterministic content fingerprint, not password storage.
   return crypto.createHmac('sha256', CONTENT_HASH_HMAC_KEY).update(canonical).digest('hex');
 }
 

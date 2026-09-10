@@ -191,6 +191,7 @@ jobs:
           set -euo pipefail
 
           cd /opt/tmdb-discover-plus
+          git config --global --add safe.directory /opt/tmdb-discover-plus
           git fetch origin main
           git reset --hard "$DEPLOY_SHA"
           git clean -fd -e .env -e .env.pre-supplied-config
