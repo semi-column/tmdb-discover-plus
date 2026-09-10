@@ -15,6 +15,8 @@ export interface FetchWithRetryConfig {
   onRateLimited?: (response: Response, attempt: number) => void;
   /** Include the response body text in the thrown error message (default false). */
   includeResponseBodyInError?: boolean;
+  /** Optional allowlist for outbound request origins, e.g. ['https://api.example.com']. */
+  allowedOrigins?: readonly string[];
   /** Optional fetch implementation for providers that require a specific HTTP client. */
   fetchImplementation?: typeof fetch;
 }
@@ -44,8 +46,24 @@ export async function fetchWithRetry<T>(
     getRetryDelayMs,
     onRateLimited,
     includeResponseBodyInError = false,
+    allowedOrigins,
     fetchImplementation = fetch,
   } = config;
+
+  const requestUrl = new URL(url);
+  if (requestUrl.protocol !== 'https:') {
+    throw Object.assign(new Error(`${providerName} API URL must use HTTPS`), { statusCode: 400 });
+  }
+  if (requestUrl.username || requestUrl.password) {
+    throw Object.assign(new Error(`${providerName} API URL must not include credentials`), {
+      statusCode: 400,
+    });
+  }
+  if (allowedOrigins && !allowedOrigins.includes(requestUrl.origin)) {
+    throw Object.assign(new Error(`Disallowed ${providerName} API URL origin`), {
+      statusCode: 400,
+    });
+  }
 
   let lastError: Error | null = null;
 

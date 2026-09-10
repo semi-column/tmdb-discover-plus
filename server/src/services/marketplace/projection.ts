@@ -26,6 +26,7 @@ const GENRE_MAX_LENGTH = 60;
 const GENRE_MAX_COUNT = 50;
 const CONFIG_NAME_MAX = 100;
 const SCHEMA_VERSION = 1;
+const CONTENT_HASH_HMAC_KEY = 'tmdb-discover-plus-marketplace-content-v1';
 
 /**
  * Strip HTML/markup tags and decode the most common entities, then delegate to
@@ -52,8 +53,6 @@ function stripMarkup(input: unknown, maxLength: number): string {
   const decoded = out
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
     .replace(/&#39;/g, "'")
     .replace(/&quot;/g, '"');
 
@@ -199,7 +198,7 @@ export function computeContentHash(input: {
     source: input.source,
     filters: input.filters,
   });
-  return crypto.createHash('sha256').update(canonical).digest('hex');
+  return crypto.createHmac('sha256', CONTENT_HASH_HMAC_KEY).update(canonical).digest('hex');
 }
 
 /**

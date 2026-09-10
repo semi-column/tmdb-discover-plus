@@ -83,6 +83,7 @@ export async function jikanFetch<T>(path: string): Promise<T> {
       {
         providerName: 'Jikan',
         timeoutMs: TIMEOUTS.MAL_FETCH_MS,
+        allowedOrigins: [JIKAN_API_ORIGIN],
         onRateLimited: (_response, attempt) => log.warn('Jikan rate limited', { attempt }),
         getRetryDelayMs: (_response, attempt) => 2000 * Math.pow(2, attempt),
       }

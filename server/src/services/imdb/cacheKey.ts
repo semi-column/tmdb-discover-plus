@@ -2,16 +2,22 @@ import crypto from 'crypto';
 import { stableStringify } from '../../utils/stableStringify.ts';
 import type { ArtworkOptions, ContentType, PosterOptions } from '../../types/index.ts';
 
+const CACHE_KEY_HMAC_KEY = 'tmdb-discover-plus-cache-key-v1';
+
+function cacheKeyDigest(value: string, length: number): string {
+  return crypto
+    .createHmac('sha256', CACHE_KEY_HMAC_KEY)
+    .update(value)
+    .digest('hex')
+    .slice(0, length);
+}
+
 function buildSingleArtworkScope(option: PosterOptions | null | undefined): string {
   const service = option?.service || 'none';
   const fingerprintSource = option?.apiKey || option?.customUrlPattern;
   if (!fingerprintSource) return `${service}:none`;
 
-  const keyHash = crypto
-    .createHash('sha256')
-    .update(`${service}:${fingerprintSource}`)
-    .digest('hex')
-    .slice(0, 16);
+  const keyHash = cacheKeyDigest(`${service}:${fingerprintSource}`, 16);
   return `${service}:${keyHash}`;
 }
 
@@ -56,10 +62,6 @@ export function buildImdbEnrichmentCacheKey(
     const listId = String(filters.imdbListId).slice(0, 40);
     return `catalog-imdb:imdb_list:${listId}:${skip}:${posterIntegrationScope}`;
   }
-  const filterHash = crypto
-    .createHash('sha256')
-    .update(stableStringify(searchParams))
-    .digest('hex')
-    .slice(0, 20);
+  const filterHash = cacheKeyDigest(stableStringify(searchParams), 20);
   return `catalog-imdb:${type}:discover:${filterHash}:${skip}:${genreSlug}:${posterIntegrationScope}`;
 }

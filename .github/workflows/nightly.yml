@@ -35,8 +35,10 @@ jobs:
     steps:
       - name: Check commit message
         id: check
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          if [[ "${{ github.event.head_commit.message }}" =~ ^(chore:|docs:|ci:) ]]; then
+          if [[ "$COMMIT_MESSAGE" =~ ^(chore:|docs:|ci:) ]]; then
             echo "should_run=false" >> $GITHUB_OUTPUT
             echo "Skipping nightly build for chore/docs/ci commit"
           else

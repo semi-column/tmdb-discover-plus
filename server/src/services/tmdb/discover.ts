@@ -27,6 +27,10 @@ async function fetchCompanyFilmographyList(
   companyId: string,
   page: number
 ): Promise<CompanyFilmographyListResult> {
+  if (!/^\d+$/.test(companyId)) {
+    throw new Error('Invalid TMDB company id');
+  }
+
   const url = new URL(`https://www.themoviedb.org/company/${companyId}/movie`);
   url.searchParams.set('page', String(page));
 

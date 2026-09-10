@@ -6,6 +6,7 @@ import { fetchWithRetry } from '../common/fetchWithRetry.ts';
 const log = createLogger('anilist:client');
 
 const ANILIST_API_URL = 'https://graphql.anilist.co';
+const ANILIST_API_ORIGIN = new URL(ANILIST_API_URL).origin;
 
 // Rate limiting: AniList allows 30 req/min (degraded from 90)
 const MIN_INTERVAL_MS = 2100; // ~28 req/min to stay safely under 30
@@ -66,6 +67,7 @@ export async function anilistFetch<T>(
       {
         providerName: 'AniList',
         timeoutMs: TIMEOUTS.ANILIST_FETCH_MS,
+        allowedOrigins: [ANILIST_API_ORIGIN],
         includeResponseBodyInError: true,
         onRateLimited: (response, attempt) => {
           const retryAfter = parseInt(response.headers.get('retry-after') || '60', 10);

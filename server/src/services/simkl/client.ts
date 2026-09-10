@@ -113,6 +113,7 @@ export async function simklFetch<T>(path: string, apiKey?: string): Promise<T> {
       {
         providerName: 'Simkl',
         timeoutMs: TIMEOUTS.SIMKL_FETCH_MS,
+        allowedOrigins: [SIMKL_API_ORIGIN],
         isRateLimited: (status) => status === 429 || status === 503,
         onRateLimited: (response, attempt) =>
           log.warn('Simkl rate limited', { status: response.status, attempt }),

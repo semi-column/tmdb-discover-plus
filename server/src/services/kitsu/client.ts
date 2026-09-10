@@ -84,6 +84,7 @@ export async function kitsuFetch<T>(path: string): Promise<T> {
       {
         providerName: 'Kitsu',
         timeoutMs: TIMEOUTS.KITSU_FETCH_MS,
+        allowedOrigins: [KITSU_API_ORIGIN],
         onRateLimited: (_response, attempt) => log.warn('Kitsu rate limited', { attempt }),
         getRetryDelayMs: (_response, attempt) => 2000 * Math.pow(2, attempt),
       }
