@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.5...v2.11.0) (2026-09-10)
+
+
+### Features
+
+* remove Trakt and enable Redis-backed cache ([108280e](https://github.com/semi-column/tmdb-discover-plus/commit/108280e814c02c5bbfe67ec3f39158cfd956876c))
+
+
+### Bug Fixes
+
+* address code scanning alerts ([16230f5](https://github.com/semi-column/tmdb-discover-plus/commit/16230f586e551f37c005ab66e69d3dfbb9581351))
+* improve MAL catalogs and marketplace reconciliation ([98b652a](https://github.com/semi-column/tmdb-discover-plus/commit/98b652aa640cb2a3c0bca85a5f44a6859d94d280))
+* Lint & Tests ([4c301ea](https://github.com/semi-column/tmdb-discover-plus/commit/4c301eaab7da085a1b9484f4c47d092d37b5426f))
+* MAL bug fixes ([7f56f31](https://github.com/semi-column/tmdb-discover-plus/commit/7f56f310c1bcbe6d06cdd8f369e066aea083b87f))
+* support express 5 wildcard routes ([ec4e80d](https://github.com/semi-column/tmdb-discover-plus/commit/ec4e80d12e8be4952762f039148b8154dc035176))
+* sync server package lock ([b63dbf0](https://github.com/semi-column/tmdb-discover-plus/commit/b63dbf09826be90546d3f30c00ad5e5a76d5370c))
+* tighten remaining code scanning findings ([bd238f5](https://github.com/semi-column/tmdb-discover-plus/commit/bd238f5f27c9b9fb66ebef6b343e23365f8a4c00))
+
 ## [2.10.5](https://github.com/semi-column/tmdb-discover-plus/compare/v2.10.4...v2.10.5) (2026-07-18)
 
 
