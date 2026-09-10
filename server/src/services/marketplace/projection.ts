@@ -52,9 +52,9 @@ function stripMarkup(input: unknown, maxLength: number): string {
 
   const decoded = out
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"');
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
 
   return sanitizeString(decoded, maxLength);
 }
@@ -198,6 +198,7 @@ export function computeContentHash(input: {
     source: input.source,
     filters: input.filters,
   });
+  // codeql[js/insufficient-password-hash] This is a deterministic content fingerprint, not password storage.
   return crypto.createHmac('sha256', CONTENT_HASH_HMAC_KEY).update(canonical).digest('hex');
 }
 

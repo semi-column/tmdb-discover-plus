@@ -130,14 +130,13 @@ export async function simklFetch<T>(path: string, apiKey?: string): Promise<T> {
 
 export async function simklCdnFetch<T>(path: string): Promise<T> {
   const url = resolveSimklCdnUrl(path);
-  const response = await fetch(url, {
-    headers: { 'User-Agent': 'TMDBDiscoverPlus/1.0' },
-    signal: AbortSignal.timeout(TIMEOUTS.SIMKL_FETCH_MS),
-  });
-  if (!response.ok) {
-    throw Object.assign(new Error(`Simkl CDN error: ${response.status}`), {
-      statusCode: response.status,
-    });
-  }
-  return (await response.json()) as T;
+  return fetchWithRetry<T>(
+    url,
+    { headers: { 'User-Agent': 'TMDBDiscoverPlus/1.0' } },
+    {
+      providerName: 'Simkl CDN',
+      timeoutMs: TIMEOUTS.SIMKL_FETCH_MS,
+      allowedOrigins: [SIMKL_CDN_ORIGIN],
+    }
+  );
 }

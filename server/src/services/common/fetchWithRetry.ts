@@ -69,7 +69,7 @@ export async function fetchWithRetry<T>(
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const response = await fetchImplementation(url, {
+      const response = await fetchImplementation(requestUrl.toString(), {
         ...init,
         signal: AbortSignal.timeout(timeoutMs),
       });

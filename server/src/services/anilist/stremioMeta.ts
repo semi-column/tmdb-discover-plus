@@ -32,9 +32,9 @@ function stripHtml(text: string): string {
 
   return out
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&#39;/g, "'")
     .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
     .replace(/\n{2,}/g, '\n')
     .trim();
 }
