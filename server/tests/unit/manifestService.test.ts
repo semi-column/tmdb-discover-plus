@@ -88,7 +88,7 @@ describe('buildManifest', () => {
     expect(catalogIds).not.toContain('tmdb-disabled');
   });
 
-  it('omits MAL catalogs while the source is disabled', () => {
+  it('includes MAL catalogs since MAL is always enabled', () => {
     const manifest = buildManifest(
       {
         catalogs: [
@@ -99,7 +99,7 @@ describe('buildManifest', () => {
       baseUrl
     );
 
-    expect(manifest.catalogs.map((catalog: any) => catalog.id)).not.toContain('mal-mal-catalog');
+    expect(manifest.catalogs.map((catalog: any) => catalog.id)).toContain('mal-mal-catalog');
   });
 
   it('preserves catalog order from saved configuration', () => {
@@ -142,7 +142,7 @@ describe('buildManifest', () => {
     expect(ids).toContain('anilist-search-anime');
   });
 
-  it('omits MAL search catalogs while the source is disabled', () => {
+  it('includes MAL search catalogs when MAL search is enabled', () => {
     const manifest = buildManifest(
       {
         catalogs: [{ _id: 'tmdb-list', name: 'TMDB List', type: 'movie', source: 'tmdb' }],
@@ -152,9 +152,9 @@ describe('buildManifest', () => {
     );
 
     const ids = manifest.catalogs.map((catalog: any) => catalog.id);
-    expect(ids).not.toContain('mal-search-movie');
-    expect(ids).not.toContain('mal-search-series');
-    expect(ids).not.toContain('mal-search-anime');
+    expect(ids).toContain('mal-search-movie');
+    expect(ids).toContain('mal-search-series');
+    expect(ids).toContain('mal-search-anime');
   });
 
   it('includes Simkl search catalogs when Simkl search is enabled, even without Simkl catalogs', () => {

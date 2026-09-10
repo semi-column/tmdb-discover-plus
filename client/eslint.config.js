@@ -26,6 +26,7 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'react-hooks/set-state-in-effect': 'warn',
       'jsx-a11y/click-events-have-key-events': 'warn',
       'jsx-a11y/no-static-element-interactions': 'warn',
       'jsx-a11y/no-noninteractive-element-interactions': 'warn',

@@ -8,8 +8,8 @@ describe('ApiService', () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    globalThis.localStorage = createStorage();
-    globalThis.sessionStorage = createStorage();
+    vi.stubGlobal('localStorage', createStorage());
+    vi.stubGlobal('sessionStorage', createStorage());
     const mod = await import('./api.js');
     ApiService = mod.api.constructor;
     api = new ApiService();
@@ -18,6 +18,7 @@ describe('ApiService', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    vi.unstubAllGlobals();
   });
 
   it('includes auth header when session token is set', async () => {

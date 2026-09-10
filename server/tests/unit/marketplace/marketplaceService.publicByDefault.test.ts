@@ -108,9 +108,9 @@ describe('reconcileMarketplaceEntries — public by default (opt-out)', () => {
     const invalid = makeCatalog({ name: '   ' });
     const valid = makeCatalog({ name: 'Valid Catalog' });
 
-    await expect(
-      reconcileMarketplaceEntries(null, makeConfig([invalid, valid]))
-    ).resolves.toBeUndefined();
+    await expect(reconcileMarketplaceEntries(null, makeConfig([invalid, valid]))).resolves.toEqual(
+      expect.objectContaining({ eligible: 2, published: 1 })
+    );
 
     expect(await indexedOriginIds()).toEqual([valid._id]);
   });

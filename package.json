@@ -42,10 +42,10 @@
     "url": "https://github.com/semi-column/tmdb-discover-plus/issues"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
+    "concurrently": "^10.0.5",
     "husky": "^9.1.7",
-    "lint-staged": "^15.3.0",
-    "prettier": "^3.8.0"
+    "lint-staged": "^17.5.1",
+    "prettier": "^3.9.6"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,css,md}": "npx prettier --write",

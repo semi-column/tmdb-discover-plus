@@ -11,7 +11,7 @@ import { SearchableSelect } from '../forms/SearchableSelect';
 
 const SOURCE_ATTRIBUTION = {
   tmdb: { label: 'TMDB', url: 'https://www.themoviedb.org/' },
-  imdb: { label: 'Sleeyax', url: 'https://sleeyax.dev/' },
+  imdb: { label: 'IMDB', url: 'https://www.imdb.com' },
   anilist: { label: 'AniList', url: 'https://anilist.co/' },
   mal: { label: 'MyAnimeList', url: 'https://myanimelist.net/' },
   kitsu: { label: 'Kitsu', url: 'https://kitsu.io/' },

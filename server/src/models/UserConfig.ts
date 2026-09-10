@@ -182,9 +182,8 @@ const userConfigSchema = new mongoose.Schema({
 });
 
 // Update timestamp on save
-userConfigSchema.pre('save', function (next) {
+userConfigSchema.pre('save', function () {
   this.updatedAt = new Date();
-  next();
 });
 
 export const UserConfig = mongoose.model('UserConfig', userConfigSchema);

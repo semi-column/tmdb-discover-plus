@@ -38,6 +38,11 @@ vi.mock('../../src/utils/encryption.ts', () => ({
 
 vi.mock('../../src/constants.ts', () => ({
   buildCatalogId: vi.fn(() => 'mal-test'),
+  CIRCUIT_BREAKER_DEFAULTS: {
+    THRESHOLD: 10,
+    WINDOW_MS: 60_000,
+    COOLDOWN_MS: 30_000,
+  },
 }));
 
 import { handleMalCatalogRequest } from '../../src/routes/handlers/malHandler.ts';

@@ -7,7 +7,7 @@ FROM node:22.16-alpine AS client-builder
 WORKDIR /app/client
 
 # Copy client package files
-COPY client/package*.json ./
+COPY client/package*.json client/.npmrc* ./
 
 # Install client dependencies
 RUN npm ci
@@ -34,10 +34,10 @@ RUN addgroup -g 1001 -S nodejs && \
 WORKDIR /app
 
 # Copy root package files
-COPY package*.json ./
+COPY package*.json .npmrc* ./
 
 # Copy server package files
-COPY server/package*.json ./server/
+COPY server/package*.json server/.npmrc* ./server/
 
 # Install production dependencies only (skip postinstall which builds client - already done)
 RUN npm ci --omit=dev --ignore-scripts && \
