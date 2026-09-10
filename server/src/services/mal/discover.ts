@@ -13,7 +13,14 @@ export interface MalDiscoverResult {
   anime: MalAnime[];
   hasMore: boolean;
   total: number;
+  lastPage?: number;
   upstreamUnavailable?: true;
+}
+
+export function randomPageWithin(lastPage: number | undefined, randomValue = Math.random): number {
+  const safeLastPage = Number.isFinite(lastPage) ? Math.max(1, Math.floor(lastPage as number)) : 1;
+  const safeRandomValue = Math.min(0.999999999, Math.max(0, randomValue()));
+  return Math.floor(safeRandomValue * safeLastPage) + 1;
 }
 
 function isRecoverableJikanError(error: unknown): boolean {
@@ -138,6 +145,7 @@ export async function getRanking(
     anime,
     hasMore: response?.pagination?.has_next_page || false,
     total: response?.pagination?.items?.total || anime.length,
+    lastPage: response?.pagination?.last_visible_page || 1,
   };
 }
 
@@ -170,6 +178,7 @@ export async function getSeasonal(
     anime,
     hasMore: response.pagination.has_next_page,
     total: response.pagination.items.total,
+    lastPage: response.pagination.last_visible_page,
   };
 }
 
@@ -199,6 +208,7 @@ export async function searchAnime(
     anime,
     hasMore: response.pagination.has_next_page,
     total: response.pagination.items.total,
+    lastPage: response.pagination.last_visible_page,
   };
 }
 
@@ -311,6 +321,7 @@ export async function browseAnime(
     anime,
     hasMore: response.pagination.has_next_page,
     total: response.pagination.items.total,
+    lastPage: response.pagination.last_visible_page,
   };
 }
 

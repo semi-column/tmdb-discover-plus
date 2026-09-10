@@ -477,6 +477,14 @@ class ApiService {
     return this.request('/source-keys');
   }
 
+  async startMarketplaceReconciliation() {
+    return this.request('/marketplace/reconcile', { method: 'POST' });
+  }
+
+  async getMarketplaceReconciliationStatus() {
+    return this.request('/marketplace/reconcile/status');
+  }
+
   async searchImdb(query, type, limit = 20) {
     const params = { query };
     if (type) params.type = type;

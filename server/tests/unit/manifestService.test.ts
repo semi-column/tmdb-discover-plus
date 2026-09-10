@@ -180,6 +180,20 @@ describe('buildManifest', () => {
     expect(manifest.catalogs[0].id).toBe('tmdb-my-custom-list');
   });
 
+  it('advertises MAL anime catalogs as anime for custom-type clients', () => {
+    const manifest = buildManifest(
+      {
+        catalogs: [{ _id: 'mal-anime', name: 'MAL Anime', type: 'anime', source: 'mal' }],
+        preferences: { disableSearch: true },
+      },
+      baseUrl
+    );
+
+    expect(manifest.catalogs.find((catalog: any) => catalog.id === 'mal-mal-anime')?.type).toBe(
+      'anime'
+    );
+  });
+
   it('has correct behaviorHints', () => {
     const manifest = buildManifest({ catalogs: [] }, baseUrl);
     expect(manifest.behaviorHints.configurable).toBe(true);

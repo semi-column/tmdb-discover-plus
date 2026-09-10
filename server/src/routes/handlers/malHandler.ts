@@ -4,6 +4,7 @@ import type { StremioMetaPreview, CatalogConfig, ArtworkOptions } from '../../ty
 import { getUserConfig } from '../../services/configService.ts';
 import { getCache } from '../../services/cache/index.ts';
 import * as mal from '../../services/mal/index.ts';
+import { randomPageWithin } from '../../services/mal/discover.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { buildCatalogId } from '../../constants.ts';
 import { CACHE_TTLS, catalogServerTtl } from '../../cacheTtls.ts';
@@ -28,7 +29,8 @@ async function fetchWithBackfill(
   ) => Promise<{ anime: import('../../services/mal/types.ts').MalAnime[]; hasMore: boolean }>,
   type: ContentType,
   startPage: number,
-  artworkOptions: ArtworkOptions | null = null
+  artworkOptions: ArtworkOptions | null = null,
+  metaType: ContentType = type
 ): Promise<StremioMetaPreview[]> {
   const metas: StremioMetaPreview[] = [];
   let currentPage = startPage;
@@ -36,7 +38,7 @@ async function fetchWithBackfill(
 
   while (metas.length < PAGE_SIZE && pagesChecked < MAX_BACKFILL_PAGES) {
     const result = await fetchPage(currentPage);
-    const batch = mal.batchConvertToStremioMeta(result.anime, type, artworkOptions);
+    const batch = mal.batchConvertToStremioMeta(result.anime, metaType, artworkOptions);
     metas.push(...batch);
     pagesChecked++;
 
@@ -67,6 +69,13 @@ export async function handleMalCatalogRequest(
       return;
     }
 
+    const catalogConfig = userConfig.catalogs.find((c: CatalogConfig) => {
+      return buildCatalogId('mal', c) === catalogId;
+    });
+    const isAnimeCatalog = catalogId === 'mal-search-anime' || catalogConfig?.type === 'anime';
+    const discoveryType: ContentType = isAnimeCatalog ? 'anime' : type;
+    const metaType: ContentType = type;
+
     const artworkOptions: ArtworkOptions | null = createArtworkOptions(
       userConfig.preferences || null,
       (encrypted) => {
@@ -90,10 +99,11 @@ export async function handleMalCatalogRequest(
         return;
       }
       const metas = await fetchWithBackfill(
-        (p) => mal.searchAnime(searchQuery, type, p),
-        type,
+        (p) => mal.searchAnime(searchQuery, discoveryType, p),
+        discoveryType,
         page,
-        artworkOptions
+        artworkOptions,
+        metaType
       );
       const resolvedMetas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
       res.set(
@@ -114,10 +124,6 @@ export async function handleMalCatalogRequest(
     }
 
     // Find catalog config
-    const catalogConfig = userConfig.catalogs.find((c: CatalogConfig) => {
-      return buildCatalogId('mal', c) === catalogId;
-    });
-
     if (!catalogConfig) {
       log.debug('MAL catalog config not found', { catalogId });
       res.json({ metas: [] });
@@ -125,6 +131,7 @@ export async function handleMalCatalogRequest(
     }
 
     const filters = catalogConfig.filters || {};
+    const randomize = Boolean(filters.randomize);
     const selectedExtraGenre =
       typeof extra.genre === 'string' && extra.genre !== 'All' ? extra.genre : null;
     const effectiveFilters = { ...filters };
@@ -147,7 +154,7 @@ export async function handleMalCatalogRequest(
     const cache = getCache();
     const cacheKey = `mal:catalog:${catalogId}:${type}:${page}:${selectedExtraGenre || ''}`;
 
-    const cached = await cache.get(cacheKey);
+    const cached = randomize ? null : await cache.get(cacheKey);
     if (cached) {
       res.set(
         'Cache-Control',
@@ -161,11 +168,24 @@ export async function handleMalCatalogRequest(
       return;
     }
 
+    let startPage = page;
+    if (randomize) {
+      const probe = await mal.discover(effectiveFilters, discoveryType, 1);
+      startPage = randomPageWithin(probe.lastPage);
+      log.debug('MAL random page selected', {
+        catalogId,
+        requestedPage: page,
+        selectedPage: startPage,
+        lastPage: probe.lastPage,
+      });
+    }
+
     let metas = await fetchWithBackfill(
-      (p) => mal.discover(effectiveFilters, type, p),
-      type,
-      page,
-      artworkOptions
+      (p) => mal.discover(effectiveFilters, discoveryType, p),
+      discoveryType,
+      startPage,
+      artworkOptions,
+      metaType
     );
 
     metas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
@@ -186,8 +206,10 @@ export async function handleMalCatalogRequest(
 
     const response = { metas };
 
-    const ttl = catalogServerTtl('discover');
-    cache.set(cacheKey, response, ttl).catch(() => {});
+    if (!randomize) {
+      const ttl = catalogServerTtl('discover');
+      cache.set(cacheKey, response, ttl).catch(() => {});
+    }
 
     res.set(
       'Cache-Control',

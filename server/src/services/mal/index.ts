@@ -1,5 +1,12 @@
 export { jikanFetch } from './client.ts';
-export { getRanking, getSeasonal, searchAnime, browseAnime, discover } from './discover.ts';
+export {
+  getRanking,
+  getSeasonal,
+  searchAnime,
+  browseAnime,
+  discover,
+  randomPageWithin,
+} from './discover.ts';
 export { malToStremioMeta, batchConvertToStremioMeta } from './stremioMeta.ts';
 export * from './reference.ts';
 export type { MalAnime, JikanAnime, JikanResponse } from './types.ts';

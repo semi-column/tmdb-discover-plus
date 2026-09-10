@@ -507,43 +507,9 @@ async function start() {
     // Runs after server starts to avoid blocking container health checks
     const reconcileMarketplaceOnStartup = async () => {
       try {
-        const storage = getStorage();
-        const configs = (await storage.getAllConfigs?.()) || [];
-        if (configs.length === 0) {
-          log.info('No user configs found for marketplace reconciliation');
-          return;
-        }
-
-        log.info(`Starting marketplace reconciliation for ${configs.length} configs`);
-        const { reconcileMarketplaceEntries } = await import('./services/marketplaceService.ts');
-        let reconciled = 0;
-        let failed = 0;
-        const batchSize = 50;
-
-        for (let i = 0; i < configs.length; i += batchSize) {
-          const batch = configs.slice(i, i + batchSize);
-          const results = await Promise.allSettled(
-            batch.map((cfg) => reconcileMarketplaceEntries(null, cfg))
-          );
-
-          const batchReconciled = results.filter((r) => r.status === 'fulfilled').length;
-          reconciled += batchReconciled;
-          failed += results.filter((r) => r.status === 'rejected').length;
-
-          log.debug(`Marketplace reconciliation progress`, {
-            processed: Math.min(i + batchSize, configs.length),
-            total: configs.length,
-            reconciled,
-            failed,
-          });
-        }
-
-        log.info(`Marketplace reconciliation finished on startup`, {
-          total: configs.length,
-          reconciled,
-          failed,
-          percentage: ((reconciled / configs.length) * 100).toFixed(1),
-        });
+        const { startMarketplaceReconciliation } = await import('./services/marketplaceService.ts');
+        startMarketplaceReconciliation();
+        log.info('Marketplace reconciliation scheduled on startup');
       } catch (err) {
         log.warn('Marketplace startup reconciliation failed (non-critical)', {
           error: err instanceof Error ? err.message : 'unknown',

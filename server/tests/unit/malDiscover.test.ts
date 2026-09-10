@@ -8,7 +8,13 @@ vi.mock('../../src/services/mal/client.ts', () => ({
   jikanFetch: mockedJikanFetch,
 }));
 
-import { browseAnime, discover, getRanking, getSeasonal } from '../../src/services/mal/discover.ts';
+import {
+  browseAnime,
+  discover,
+  getRanking,
+  getSeasonal,
+  randomPageWithin,
+} from '../../src/services/mal/discover.ts';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -24,6 +30,29 @@ beforeEach(() => {
 });
 
 describe('mal discover ranking query mapping', () => {
+  it('selects random pages inclusively within the reported last page', () => {
+    expect(randomPageWithin(10, () => 0)).toBe(1);
+    expect(randomPageWithin(10, () => 0.999999)).toBe(10);
+    expect(randomPageWithin(0, () => 0.5)).toBe(1);
+    expect(randomPageWithin(undefined, () => 0.5)).toBe(1);
+  });
+
+  it('exposes Jikan last_visible_page for bounded randomization', async () => {
+    mockedJikanFetch.mockResolvedValueOnce({
+      pagination: {
+        last_visible_page: 37,
+        has_next_page: true,
+        current_page: 1,
+        items: { count: 25, total: 905, per_page: 25 },
+      },
+      data: [],
+    });
+
+    const result = await browseAnime({}, 'movie', 1);
+
+    expect(result.lastPage).toBe(37);
+  });
+
   it('adds movie type param for rankingType all on movie', async () => {
     mockedJikanFetch.mockResolvedValueOnce({
       pagination: {

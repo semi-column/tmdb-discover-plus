@@ -240,6 +240,14 @@ export const MAL_SOURCE = {
       });
     }
 
+    if (filters.randomize) {
+      active.push({
+        key: 'randomize',
+        label: 'Randomized results',
+        section: 'score',
+      });
+    }
+
     if (filters.malSort) {
       active.push({
         key: 'malSort',

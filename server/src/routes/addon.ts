@@ -340,10 +340,6 @@ async function handleCatalogRequest(
   res: Response,
   req: Request
 ) {
-  if (catalogId.startsWith('mal-')) {
-    return res.json({ metas: [] });
-  }
-
   // Route to a registered source handler when the catalogId is prefixed
   // with a known source id. TMDB has no prefix and is the default
   // fallback below.

@@ -139,6 +139,7 @@ export function MalFilterPanel({
     if (filters.malScoreMin) count++;
     if (filters.malScoreMax) count++;
     if (filters.malOrderBy) count++;
+    if (filters.randomize) count++;
     return count;
   };
 
@@ -179,6 +180,15 @@ export function MalFilterPanel({
               />
             </div>
           )}
+
+          <div className="filter-group">
+            <Checkbox
+              checked={Boolean(filters.randomize)}
+              onChange={(checked) => onFiltersChange('randomize', checked || undefined)}
+              label="Randomize Results"
+              tooltip="Choose a random page from the matching Jikan results, then shuffle the returned titles."
+            />
+          </div>
         </FilterSection>
       )}
 

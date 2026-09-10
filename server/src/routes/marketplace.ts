@@ -46,6 +46,8 @@ import {
   installEntry,
   likeEntry,
   unlikeEntry,
+  getMarketplaceReconciliationStatus,
+  startMarketplaceReconciliation,
 } from '../services/marketplaceService.ts';
 import type { MarketplaceSearchQuery } from '../types/marketplace.ts';
 
@@ -133,6 +135,19 @@ router.get('/search', optionalAuth, async (req: Request, res: Response) => {
   } catch (error) {
     handleRouteError(res, 'GET /search', error);
   }
+});
+
+/**
+ * POST /marketplace/reconcile — start a non-blocking full-config reconciliation.
+ * A second trigger while running is idempotent and returns the current status.
+ */
+router.post('/reconcile', requireAuth, strictRateLimit, async (_req: Request, res: Response) => {
+  res.status(202).json(startMarketplaceReconciliation());
+});
+
+/** Return progress for the current/last reconciliation run. */
+router.get('/reconcile/status', requireAuth, async (_req: Request, res: Response) => {
+  res.json(getMarketplaceReconciliationStatus());
 });
 
 /**

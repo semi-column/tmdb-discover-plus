@@ -40,6 +40,126 @@ import type {
 
 const log = createLogger('marketplaceService');
 
+export interface MarketplaceReconciliationStatus {
+  running: boolean;
+  startedAt: string | null;
+  finishedAt: string | null;
+  totalConfigs: number;
+  processedConfigs: number;
+  remainingConfigs: number;
+  progressPercent: number;
+  succeededConfigs: number;
+  failedConfigs: number;
+  eligibleCatalogs: number;
+  publishedCatalogs: number;
+  errors: Array<{ userId: string; message: string }>;
+}
+
+export interface MarketplaceReconciliationResult {
+  eligible: number;
+  published: number;
+  mutated: boolean;
+}
+
+let marketplaceReconciliationStatus: MarketplaceReconciliationStatus = {
+  running: false,
+  startedAt: null,
+  finishedAt: null,
+  totalConfigs: 0,
+  processedConfigs: 0,
+  remainingConfigs: 0,
+  progressPercent: 0,
+  succeededConfigs: 0,
+  failedConfigs: 0,
+  eligibleCatalogs: 0,
+  publishedCatalogs: 0,
+  errors: [],
+};
+
+export function getMarketplaceReconciliationStatus(): MarketplaceReconciliationStatus {
+  return structuredClone(marketplaceReconciliationStatus);
+}
+
+export function startMarketplaceReconciliation(): MarketplaceReconciliationStatus {
+  if (marketplaceReconciliationStatus.running) {
+    return getMarketplaceReconciliationStatus();
+  }
+
+  marketplaceReconciliationStatus = {
+    running: true,
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    totalConfigs: 0,
+    processedConfigs: 0,
+    remainingConfigs: 0,
+    progressPercent: 0,
+    succeededConfigs: 0,
+    failedConfigs: 0,
+    eligibleCatalogs: 0,
+    publishedCatalogs: 0,
+    errors: [],
+  };
+
+  void runMarketplaceReconciliation();
+  return getMarketplaceReconciliationStatus();
+}
+
+async function runMarketplaceReconciliation(): Promise<void> {
+  try {
+    const configs = (await getStorage().getAllConfigs?.()) || [];
+    marketplaceReconciliationStatus.totalConfigs = configs.length;
+    marketplaceReconciliationStatus.remainingConfigs = configs.length;
+
+    const batchSize = 25;
+    for (let index = 0; index < configs.length; index += batchSize) {
+      const batch = configs.slice(index, index + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(async (config) => ({
+          userId: config.userId,
+          result: await reconcileMarketplaceEntries(null, config),
+        }))
+      );
+
+      for (let resultIndex = 0; resultIndex < results.length; resultIndex++) {
+        const result = results[resultIndex];
+        const userId = batch[resultIndex]?.userId || 'unknown';
+        marketplaceReconciliationStatus.processedConfigs++;
+        marketplaceReconciliationStatus.remainingConfigs = Math.max(
+          0,
+          marketplaceReconciliationStatus.totalConfigs -
+            marketplaceReconciliationStatus.processedConfigs
+        );
+        marketplaceReconciliationStatus.progressPercent =
+          marketplaceReconciliationStatus.totalConfigs === 0
+            ? 100
+            : Math.round(
+                (marketplaceReconciliationStatus.processedConfigs /
+                  marketplaceReconciliationStatus.totalConfigs) *
+                  100
+              );
+        if (result.status === 'fulfilled') {
+          marketplaceReconciliationStatus.succeededConfigs++;
+          marketplaceReconciliationStatus.eligibleCatalogs += result.value.result.eligible;
+          marketplaceReconciliationStatus.publishedCatalogs += result.value.result.published;
+        } else {
+          marketplaceReconciliationStatus.failedConfigs++;
+          const message =
+            result.reason instanceof Error ? result.reason.message : String(result.reason);
+          marketplaceReconciliationStatus.errors.push({ userId, message });
+        }
+      }
+    }
+  } catch (error) {
+    marketplaceReconciliationStatus.errors.push({
+      userId: 'migration',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    marketplaceReconciliationStatus.running = false;
+    marketplaceReconciliationStatus.finishedAt = new Date().toISOString();
+  }
+}
+
 /**
  * Options accepted by {@link publishCatalog}. Author-supplied description/tags
  * are merged onto the catalog before the public projection is built so they
@@ -275,7 +395,7 @@ function shouldAutoIndex(catalog: CatalogConfig): boolean {
 export async function reconcileMarketplaceEntries(
   prev: UserConfig | null,
   next: UserConfig
-): Promise<void> {
+): Promise<MarketplaceReconciliationResult> {
   if (!next || !isValidUserId(next.userId)) {
     throw new AppError(
       400,
@@ -308,6 +428,7 @@ export async function reconcileMarketplaceEntries(
   }
 
   let mutated = false;
+  let publishedCount = 0;
   try {
     // Upsert published catalogs that were newly published or whose content
     // changed. Unchanged catalogs (matching hash) are skipped entirely.
@@ -336,6 +457,7 @@ export async function reconcileMarketplaceEntries(
       if (!wasPublished || prevHash !== entry.contentHash) {
         await storage.upsertMarketplaceEntry(entry);
         mutated = true;
+        publishedCount++;
       }
     }
 
@@ -378,6 +500,8 @@ export async function reconcileMarketplaceEntries(
     published: nextPublished.size,
     mutated,
   });
+
+  return { eligible: nextPublished.size, published: publishedCount, mutated };
 }
 
 // ---------------------------------------------------------------------------

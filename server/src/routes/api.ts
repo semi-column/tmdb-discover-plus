@@ -1777,6 +1777,7 @@ router.post('/mal/preview', requireAuth, async (req, res) => {
     const previewPosterProvider = resolvePreviewPosterProvider(req);
     const safeFilters = filters || {};
     const contentType = normalizePreviewContentType(type);
+    const randomize = Boolean(safeFilters.randomize);
 
     const fetchPage = async (p: number) => {
       const r = await mal.discover(safeFilters, contentType, p);
@@ -1793,10 +1794,31 @@ router.post('/mal/preview', requireAuth, async (req, res) => {
       };
     };
 
+    let startPage = 1;
+    let firstPageResult: { metas: StremioMetaPreview[]; hasMore: boolean } | undefined;
+    if (randomize) {
+      const firstPage = await mal.discover(safeFilters, contentType, 1);
+      if (firstPage.upstreamUnavailable) {
+        throw new AppError(
+          503,
+          ErrorCodes.INTERNAL_ERROR,
+          'MyAnimeList results are temporarily unavailable because Jikan cannot reach its upstream service. Please try again later.'
+        );
+      }
+      startPage = mal.randomPageWithin(firstPage.lastPage);
+      if (startPage === 1) {
+        firstPageResult = {
+          metas: mal.batchConvertToStremioMeta(firstPage.anime, contentType),
+          hasMore: firstPage.hasMore && firstPage.anime.length > 0,
+        };
+      }
+    }
+
     const metasWithPreviewPoster = await runPreviewBackfill({
       fetchPage,
-      startPage: 1,
-      randomize: false,
+      startPage,
+      firstPageResult,
+      randomize,
       previewPosterProvider,
       req,
     });
