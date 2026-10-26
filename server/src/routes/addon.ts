@@ -51,6 +51,7 @@ import { getAllSources } from '../services/sources/registry.ts';
 import { getEntryByPrefixedId } from '../services/animeIdMap/index.ts';
 import { resolveRequestedMetaId } from '../utils/metaIdResolution.ts';
 import { decrypt } from '../utils/encryption.ts';
+import { filterUnknownGenreMetas } from '../utils/catalogGenreFilter.ts';
 import {
   createArtworkOptions,
   resolveContentType,
@@ -584,8 +585,12 @@ async function handleCatalogRequest(
     ) as StremioMetaPreview[];
 
     const baseUrl = normalizeBaseUrl(config.baseUrl || getBaseUrl(req));
+    const filteredMetas = filterUnknownGenreMetas(
+      metas,
+      !!config.preferences?.excludeUnknownGenres
+    );
     const { posterPlaceholder } = getPlaceholderUrls(baseUrl);
-    for (const m of metas) {
+    for (const m of filteredMetas) {
       if (!m.poster) m.poster = posterPlaceholder;
     }
 
@@ -602,7 +607,7 @@ async function handleCatalogRequest(
     }
 
     log.debug('Returning catalog results', {
-      count: metas.length,
+      count: filteredMetas.length,
       page,
       skip,
       randomize,
@@ -612,7 +617,7 @@ async function handleCatalogRequest(
 
     res.etagJson(
       {
-        metas,
+        metas: filteredMetas,
         cacheMaxAge: randomize ? 0 : CACHE_TTLS.CATALOG_HEADER,
         staleRevalidate: randomize ? 0 : CACHE_TTLS.CATALOG_STALE_REVALIDATE,
       },

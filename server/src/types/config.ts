@@ -52,6 +52,7 @@ export interface UserPreferences {
   apiKeysEncrypted?: Record<string, string>;
 
   showAdultContent?: boolean;
+  excludeUnknownGenres?: boolean;
   defaultLanguage?: string;
   shuffleCatalogs?: boolean;
   // Artwork settings: v2 per-content-type or legacy flat Record
