@@ -30,10 +30,79 @@ describe('TMDB Circuit Breaker', () => {
     resetCircuitBreaker();
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it('starts in closed state', () => {
     expect(getCircuitBreakerState().state).toBe('closed');
+  });
+
+  it.each([
+    new TypeError('fetch failed', {
+      cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
+    }),
+    new TypeError('fetch failed', {
+      cause: Object.assign(new Error('Connect timeout'), { code: 'UND_ERR_CONNECT_TIMEOUT' }),
+    }),
+    Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }),
+  ])('retries a transient native fetch failure: %s', async (error) => {
+    vi.useFakeTimers();
+    const data = { results: [{ id: 1 }] };
+    mockFetch
+      .mockReset()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValue({
+        ok: true,
+        json: async () => data,
+      });
+
+    const result = tmdbFetch('/movie/popular', 'test-key', {}, 1).catch((failure) => failure);
+    await vi.runAllTimersAsync();
+
+    expect(await result).toEqual(data);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(getCircuitBreakerState().recentFailures).toBe(0);
+  });
+
+  it('stops after the retry budget and records one circuit failure', async () => {
+    vi.useFakeTimers();
+    const error = new TypeError('fetch failed', {
+      cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
+    });
+    mockFetch.mockReset().mockRejectedValue(error);
+
+    const result = tmdbFetch('/movie/popular', 'test-key', {}, 2).catch((failure) => failure);
+    await vi.runAllTimersAsync();
+
+    expect(await result).toBe(error);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(getCircuitBreakerState().recentFailures).toBe(1);
+  });
+
+  it.each([401, 403, 404])('does not retry HTTP %s', async (status) => {
+    mockFetch.mockReset().mockResolvedValue({
+      ok: false,
+      status,
+      json: async () => ({ status_message: 'Request rejected' }),
+    });
+
+    await expect(tmdbFetch('/movie/popular', 'test-key', {}, 2)).rejects.toMatchObject({
+      statusCode: status,
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(getCircuitBreakerState().recentFailures).toBe(0);
+  });
+
+  it('does not retry a fetch failure caused by an invalid certificate', async () => {
+    const error = new TypeError('fetch failed', {
+      cause: Object.assign(new Error('Certificate expired'), { code: 'CERT_HAS_EXPIRED' }),
+    });
+    mockFetch.mockReset().mockRejectedValue(error);
+
+    await expect(tmdbFetch('/movie/popular', 'test-key', {}, 2)).rejects.toBe(error);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it('opens after threshold failures', async () => {

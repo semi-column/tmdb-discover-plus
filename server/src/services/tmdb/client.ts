@@ -253,12 +253,21 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
     } catch (err) {
       const error = err as TmdbFetchError;
       lastError = error;
+      const networkCode = error.code ?? (error.cause as { code?: string } | undefined)?.code;
       const isNetworkError =
-        error.code === 'ECONNREFUSED' ||
-        error.code === 'ECONNRESET' ||
-        error.code === 'ETIMEDOUT' ||
+        [
+          'ECONNREFUSED',
+          'ECONNRESET',
+          'ETIMEDOUT',
+          'UND_ERR_CONNECT_TIMEOUT',
+          'UND_ERR_HEADERS_TIMEOUT',
+          'UND_ERR_BODY_TIMEOUT',
+          'UND_ERR_SOCKET',
+        ].includes(networkCode ?? '') ||
         error.message.includes('retryable error') ||
-        error.name === 'FetchError';
+        error.name === 'FetchError' ||
+        error.name === 'AbortError' ||
+        error.name === 'TimeoutError';
 
       if (attempt < retries && isNetworkError) {
         const delay = 300 * Math.pow(2, attempt);
