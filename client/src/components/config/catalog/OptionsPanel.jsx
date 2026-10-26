@@ -30,6 +30,13 @@ export const OptionsPanel = memo(function OptionsPanel({ localCatalog, onFilters
       />
 
       <Checkbox
+        checked={!!filters.excludeUnknownGenres}
+        onChange={(checked) => onFiltersChange('excludeUnknownGenres', checked || undefined)}
+        label="Hide items without genres"
+        tooltip="Remove catalog items that have no usable genre metadata."
+      />
+
+      <Checkbox
         checked={!!filters.discoverOnly}
         onChange={(checked) => onFiltersChange('discoverOnly', checked || undefined)}
         label="Discover Only"

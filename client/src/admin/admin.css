@@ -553,7 +553,7 @@
 
 .adm-trace-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
   gap: 10px 16px;
   margin-bottom: 12px;
 }
@@ -563,7 +563,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .adm-waterfall {
@@ -574,9 +574,10 @@
 
 .adm-waterfall-row {
   display: grid;
-  grid-template-columns: minmax(200px, 40%) 1fr 60px;
+  grid-template-columns: minmax(0, 40%) minmax(0, 1fr) 60px;
   gap: 8px;
   align-items: center;
+  min-width: 0;
   font-size: 12px;
 }
 
@@ -589,6 +590,8 @@
 .adm-waterfall-track {
   position: relative;
   height: 10px;
+  min-width: 0;
+  overflow: hidden;
   background: var(--bg-tertiary);
   border-radius: 3px;
 }

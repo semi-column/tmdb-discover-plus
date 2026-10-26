@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ChevronDown, KeyRound } from 'lucide-react';
 import { useCatalog, useTMDBData, useAppActions } from '../../context/AppContext';
 import { SearchableSelect } from '../forms/SearchableSelect';
-import { Checkbox } from '../forms/Checkbox';
 
 export function GeneralSettingsSection() {
   const { preferences, setPreferences: onPreferencesChange } = useCatalog();
@@ -79,20 +78,6 @@ export function GeneralSettingsSection() {
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
               Overrides language for all catalogs.
             </p>
-          </div>
-
-          <div className="input-group" style={{ marginTop: '12px' }}>
-            <Checkbox
-              checked={!!preferences?.excludeUnknownGenres}
-              onChange={(checked) =>
-                onPreferencesChange({
-                  ...preferences,
-                  excludeUnknownGenres: checked || undefined,
-                })
-              }
-              label="Hide items without genres"
-              tooltip="Remove catalog items that have no usable genre metadata. Applies across all catalog sources."
-            />
           </div>
 
           <div

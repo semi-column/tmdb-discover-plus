@@ -65,7 +65,10 @@ export function SimklFilterPanel({
     return filters.simklType && filters.simklType !== 'all' ? 1 : 0;
   };
 
-  const getOptionsBadge = () => (filters.randomize ? 1 : 0) + (filters.includeAdult ? 1 : 0);
+  const getOptionsBadge = () =>
+    (filters.randomize ? 1 : 0) +
+    (filters.includeAdult ? 1 : 0) +
+    (filters.excludeUnknownGenres ? 1 : 0);
 
   return (
     <>
@@ -206,6 +209,12 @@ export function SimklFilterPanel({
             onChange={(checked) => onFiltersChange('includeAdult', checked || undefined)}
             label="Include adult content"
             tooltip="Include adult/18+ anime where available."
+          />
+          <Checkbox
+            checked={!!filters.excludeUnknownGenres}
+            onChange={(checked) => onFiltersChange('excludeUnknownGenres', checked || undefined)}
+            label="Hide items without genres"
+            tooltip="Remove catalog items that have no usable genre metadata."
           />
 
           <label className="checkbox-label-row" style={{ cursor: 'pointer' }}>

@@ -13,9 +13,14 @@ describe('sanitizeImdbFilters', () => {
   });
 
   it('preserves allowed string keys', () => {
-    const result = sanitizeImdbFilters({ sortBy: 'POPULARITY', sortOrder: 'ASC' });
+    const result = sanitizeImdbFilters({
+      sortBy: 'POPULARITY',
+      sortOrder: 'ASC',
+      excludeUnknownGenres: true,
+    });
     expect(result.sortBy).toBe('POPULARITY');
     expect(result.sortOrder).toBe('ASC');
+    expect(result.excludeUnknownGenres).toBe(true);
   });
 
   it('strips unknown keys', () => {

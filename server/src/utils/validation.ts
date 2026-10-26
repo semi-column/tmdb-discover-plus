@@ -104,6 +104,7 @@ export function sanitizeFilters(filters: unknown): Record<string, unknown> {
     'type',
     'imdbOnly',
     'includeAdult',
+    'excludeUnknownGenres',
     'includeVideo',
     'datePreset',
     'releaseDateFrom',
@@ -190,6 +191,7 @@ const IMDB_ALLOWED_KEYS = [
   'awardsWon',
   'awardsNominated',
   'types',
+  'excludeUnknownGenres',
   // Phase 1: Companies, People, In Theatres, Certificates
   'companies',
   'excludeCompanies',

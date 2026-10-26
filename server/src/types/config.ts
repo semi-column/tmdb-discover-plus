@@ -1,14 +1,7 @@
 import type { ContentType } from './common.ts';
 
 export type PosterServiceType =
-  | 'none'
-  | 'rpdb'
-  | 'topPosters'
-  | 'customUrl'
-  | 'tmdb'
-  | 'imdb'
-  | 'tvdb'
-  | 'fanart';
+  'none' | 'rpdb' | 'topPosters' | 'customUrl' | 'tmdb' | 'imdb' | 'tvdb' | 'fanart';
 
 export interface ArtworkSourceConfig {
   provider?: PosterServiceType;
@@ -52,7 +45,6 @@ export interface UserPreferences {
   apiKeysEncrypted?: Record<string, string>;
 
   showAdultContent?: boolean;
-  excludeUnknownGenres?: boolean;
   defaultLanguage?: string;
   shuffleCatalogs?: boolean;
   // Artwork settings: v2 per-content-type or legacy flat Record
@@ -87,6 +79,7 @@ export interface BaseCatalogFilters {
   certificationCountry?: string;
   excludeKeywords?: string | string[];
   includeAdult?: boolean;
+  excludeUnknownGenres?: boolean;
   randomize?: boolean;
   discoverOnly?: boolean;
   query?: string;

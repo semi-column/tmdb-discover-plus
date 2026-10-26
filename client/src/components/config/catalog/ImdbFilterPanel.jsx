@@ -22,6 +22,7 @@ import { CertificationCountryFilter } from '../../forms/CertificationCountryFilt
 import { SearchableSelect } from '../../forms/SearchableSelect';
 import { SearchInput } from '../../forms/SearchInput';
 import { RangeSlider, SingleSlider } from '../../forms/RangeSlider';
+import { Checkbox } from '../../forms/Checkbox';
 import { LabelWithTooltip } from '../../forms/Tooltip';
 import { StremioExtras } from './StremioExtras';
 import { RUNTIME_MAX_MINUTES } from '../../../constants/filterLimits';
@@ -71,6 +72,7 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
     rankedLists: false,
     textSearch: false,
     advanced: false,
+    options: false,
     extras: false,
   });
 
@@ -1322,6 +1324,23 @@ export const ImdbFilterPanel = memo(function ImdbFilterPanel({
           </div>
         </FilterSection>
       )}
+
+      <FilterSection
+        id="options"
+        title="Options"
+        description="Additional catalog options"
+        icon={Eye}
+        isOpen={localExpandedSections.options}
+        onToggle={toggleSection}
+        badgeCount={filters.excludeUnknownGenres ? 1 : 0}
+      >
+        <Checkbox
+          checked={!!filters.excludeUnknownGenres}
+          onChange={(checked) => onFiltersChange('excludeUnknownGenres', checked || undefined)}
+          label="Hide items without genres"
+          tooltip="Remove catalog items that have no usable genre metadata."
+        />
+      </FilterSection>
 
       <FilterSection
         id="extras"

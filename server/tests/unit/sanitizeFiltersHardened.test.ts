@@ -14,6 +14,7 @@ describe('sanitizeFilters — hardened allowlist', () => {
       primaryReleaseYear: 2024,
       includeVideo: true,
       includeNullFirstAirDates: true,
+      excludeUnknownGenres: true,
       screenedTheatrically: true,
       excludeCompanies: '100,200',
       excludeKeywords: '50,60',
@@ -40,6 +41,7 @@ describe('sanitizeFilters — hardened allowlist', () => {
     expect(result.primaryReleaseYear).toBe(2024);
     expect(result.includeVideo).toBe(true);
     expect(result.includeNullFirstAirDates).toBe(true);
+    expect(result.excludeUnknownGenres).toBe(true);
     expect(result.screenedTheatrically).toBe(true);
     expect(result.excludeCompanies).toBe('100,200');
     expect(result.excludeKeywords).toBe('50,60');

@@ -156,7 +156,6 @@ const userConfigSchema = new mongoose.Schema({
   // Preferences
   preferences: {
     showAdultContent: { type: Boolean, default: false },
-    excludeUnknownGenres: { type: Boolean, default: false },
     defaultLanguage: { type: String, default: 'en' },
     shuffleCatalogs: { type: Boolean, default: false },
     apiKeysEncrypted: {

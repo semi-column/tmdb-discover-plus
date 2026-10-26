@@ -141,7 +141,8 @@ export function KitsuFilterPanel({
     return count;
   };
 
-  const getOptionsBadge = () => (filters.randomize ? 1 : 0);
+  const getOptionsBadge = () =>
+    (filters.randomize ? 1 : 0) + (filters.excludeUnknownGenres ? 1 : 0);
 
   const handleIncludeCategory = useCallback(
     (slug) => {
@@ -352,6 +353,12 @@ export function KitsuFilterPanel({
             checked={!!filters.randomize}
             onChange={(checked) => onFiltersChange('randomize', checked || undefined)}
             label="Randomize results"
+          />
+          <Checkbox
+            checked={!!filters.excludeUnknownGenres}
+            onChange={(checked) => onFiltersChange('excludeUnknownGenres', checked || undefined)}
+            label="Hide items without genres"
+            tooltip="Remove catalog items that have no usable genre metadata."
           />
         </div>
       </FilterSection>

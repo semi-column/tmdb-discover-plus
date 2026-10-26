@@ -36,6 +36,7 @@ import {
 import { TIMEOUTS } from '../constants.ts';
 import { CACHE_TTLS } from '../cacheTtls.ts';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.ts';
+import { filterUnknownGenreMetas } from '../utils/catalogGenreFilter.ts';
 import { createLogger } from '../utils/logger.ts';
 import { strictRateLimit } from '../utils/rateLimit.ts';
 import {
@@ -1392,7 +1393,10 @@ router.post('/imdb/preview', requireAuth, async (req, res) => {
       (item) => imdb.imdbToStremioMeta(item, type) as StremioMetaPreview | null
     );
     const metas = mappedMetas.filter((meta): meta is StremioMetaPreview => Boolean(meta));
-    const previewMetas = await applyPreviewPosterProvider(metas, previewPosterProvider, req);
+    const previewMetas = filterUnknownGenreMetas(
+      await applyPreviewPosterProvider(metas, previewPosterProvider, req),
+      !!filters.excludeUnknownGenres
+    );
 
     res.json({
       metas: previewMetas,
@@ -1749,7 +1753,7 @@ router.post('/anilist/preview', requireAuth, async (req, res) => {
     }
 
     res.json({
-      metas: metasWithPreviewPoster,
+      metas: filterUnknownGenreMetas(metasWithPreviewPoster, !!safeFilters.excludeUnknownGenres),
       totalResults: null,
     });
   } catch (error) {
@@ -1824,7 +1828,10 @@ router.post('/mal/preview', requireAuth, async (req, res) => {
       req,
     });
 
-    res.json({ metas: metasWithPreviewPoster, totalResults: null });
+    res.json({
+      metas: filterUnknownGenreMetas(metasWithPreviewPoster, !!safeFilters.excludeUnknownGenres),
+      totalResults: null,
+    });
   } catch (error) {
     log.error('POST /mal/preview error', { error: (error as Error).message });
     if (error instanceof AppError) {
@@ -1863,7 +1870,10 @@ router.post('/kitsu/preview', requireAuth, async (req, res) => {
       previewPosterProvider,
       req,
     });
-    res.json({ metas: metasWithPreviewPoster, totalResults: null });
+    res.json({
+      metas: filterUnknownGenreMetas(metasWithPreviewPoster, !!safeFilters.excludeUnknownGenres),
+      totalResults: null,
+    });
   } catch (error) {
     log.error('POST /mal/preview error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
@@ -1938,7 +1948,13 @@ router.post('/simkl/preview', requireAuth, async (req, res) => {
           previewPosterProvider,
           req
         );
-        return res.json({ metas: metasWithPreviewPoster, totalResults: null });
+        return res.json({
+          metas: filterUnknownGenreMetas(
+            metasWithPreviewPoster,
+            !!safeFilters.excludeUnknownGenres
+          ),
+          totalResults: null,
+        });
       }
       const maxPage = probe.hasMore ? 5 : 1;
       startPage = Math.floor(Math.random() * maxPage) + 1;
@@ -1957,7 +1973,10 @@ router.post('/simkl/preview', requireAuth, async (req, res) => {
       previewPosterProvider,
       req,
     });
-    res.json({ metas: metasWithPreviewPoster, totalResults: null });
+    res.json({
+      metas: filterUnknownGenreMetas(metasWithPreviewPoster, !!safeFilters.excludeUnknownGenres),
+      totalResults: null,
+    });
   } catch (error) {
     log.error('POST /simkl/preview error', { error: (error as Error).message });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
@@ -2122,19 +2141,23 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
       previewPosterProvider,
       req
     );
+    const filteredPreviewMetas = filterUnknownGenreMetas(
+      metasWithPreviewPoster,
+      !!resolvedFilters?.excludeUnknownGenres
+    );
 
     log.debug('Preview results', {
       fetchedCount: allResults.length,
-      filteredCount: metasWithPreviewPoster.length,
+      filteredCount: filteredPreviewMetas.length,
       companyFilmographyIdsOnly: isCompanyFilmographyIdsOnly,
     });
 
     res.json({
-      metas: metasWithPreviewPoster,
+      metas: filteredPreviewMetas,
       totalResults: results?.total_results ?? 0,
       totalPages: results?.total_pages ?? 0,
       page: results?.page ?? 1,
-      previewEmpty: metasWithPreviewPoster.length === 0,
+      previewEmpty: filteredPreviewMetas.length === 0,
     });
   } catch (error) {
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));

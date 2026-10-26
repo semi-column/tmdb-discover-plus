@@ -188,7 +188,7 @@ export function AnilistFilterPanel({
     return count;
   };
 
-  const getOptionsBadge = () => (filters.isAdult ? 1 : 0);
+  const getOptionsBadge = () => (filters.isAdult ? 1 : 0) + (filters.excludeUnknownGenres ? 1 : 0);
 
   return (
     <>
@@ -463,6 +463,12 @@ export function AnilistFilterPanel({
             onChange={(checked) => onFiltersChange('isAdult', checked || undefined)}
             label="Include adult content"
             tooltip="Include adult/18+ rated anime in results."
+          />
+          <Checkbox
+            checked={!!filters.excludeUnknownGenres}
+            onChange={(checked) => onFiltersChange('excludeUnknownGenres', checked || undefined)}
+            label="Hide items without genres"
+            tooltip="Remove catalog items that have no usable genre metadata."
           />
         </div>
       </FilterSection>

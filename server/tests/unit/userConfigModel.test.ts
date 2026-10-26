@@ -29,16 +29,6 @@ describe('UserConfig preferences schema', () => {
     expect(doc.preferences.disableSimklSearch).toBe(true);
   });
 
-  it('defaults unknown-genre filtering to disabled', () => {
-    const doc = new UserConfig({
-      userId: 'schema-genre-filter-user',
-      catalogs: [],
-      preferences: {},
-    });
-
-    expect(doc.preferences.excludeUnknownGenres).toBe(false);
-  });
-
   it('accepts kitsu as a valid catalog source', () => {
     const doc = new UserConfig({
       userId: 'schema-kitsu-source-user',

@@ -140,6 +140,7 @@ export function MalFilterPanel({
     if (filters.malScoreMax) count++;
     if (filters.malOrderBy) count++;
     if (filters.randomize) count++;
+    if (filters.excludeUnknownGenres) count++;
     return count;
   };
 
@@ -187,6 +188,12 @@ export function MalFilterPanel({
               onChange={(checked) => onFiltersChange('randomize', checked || undefined)}
               label="Randomize Results"
               tooltip="Choose a random page from the matching Jikan results, then shuffle the returned titles."
+            />
+            <Checkbox
+              checked={!!filters.excludeUnknownGenres}
+              onChange={(checked) => onFiltersChange('excludeUnknownGenres', checked || undefined)}
+              label="Hide items without genres"
+              tooltip="Remove catalog items that have no usable genre metadata."
             />
           </div>
         </FilterSection>

@@ -101,21 +101,17 @@ export async function handleAnilistCatalogRequest(
         artworkOptions
       );
       const resolvedMetas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
-      const filteredMetas = filterUnknownGenreMetas(
-        resolvedMetas,
-        !!userConfig.preferences?.excludeUnknownGenres
-      );
       res.set(
         'Cache-Control',
         `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
       );
       log.debug('AniList search results', {
-        count: filteredMetas.length,
+        count: resolvedMetas.length,
         query: searchQuery,
         durationMs: Date.now() - startTime,
       });
       res.json({
-        metas: filteredMetas,
+        metas: resolvedMetas,
         cacheMaxAge: CACHE_TTLS.CATALOG_HEADER,
         staleRevalidate: CACHE_TTLS.CATALOG_STALE_REVALIDATE,
       });
@@ -160,10 +156,7 @@ export async function handleAnilistCatalogRequest(
         );
         res.json({
           ...cached,
-          metas: filterUnknownGenreMetas(
-            cached.metas,
-            !!userConfig.preferences?.excludeUnknownGenres
-          ),
+          metas: filterUnknownGenreMetas(cached.metas, !!filters.excludeUnknownGenres),
           cacheMaxAge: CACHE_TTLS.CATALOG_HEADER,
           staleRevalidate: CACHE_TTLS.CATALOG_STALE_REVALIDATE,
         });
@@ -223,7 +216,7 @@ export async function handleAnilistCatalogRequest(
 
     res.json({
       ...response,
-      metas: filterUnknownGenreMetas(metas, !!userConfig.preferences?.excludeUnknownGenres),
+      metas: filterUnknownGenreMetas(metas, !!filters.excludeUnknownGenres),
       cacheMaxAge: randomize ? 0 : CACHE_TTLS.CATALOG_HEADER,
       staleRevalidate: randomize ? 0 : CACHE_TTLS.CATALOG_STALE_REVALIDATE,
     });

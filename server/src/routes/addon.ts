@@ -585,10 +585,7 @@ async function handleCatalogRequest(
     ) as StremioMetaPreview[];
 
     const baseUrl = normalizeBaseUrl(config.baseUrl || getBaseUrl(req));
-    const filteredMetas = filterUnknownGenreMetas(
-      metas,
-      !!config.preferences?.excludeUnknownGenres
-    );
+    const filteredMetas = filterUnknownGenreMetas(metas, !!resolvedFilters?.excludeUnknownGenres);
     const { posterPlaceholder } = getPlaceholderUrls(baseUrl);
     for (const m of filteredMetas) {
       if (!m.poster) m.poster = posterPlaceholder;

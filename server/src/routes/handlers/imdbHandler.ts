@@ -122,13 +122,9 @@ export async function handleImdbCatalogRequest(
       const searchResult = await imdb.search(searchQuery, imdbTypes, IMDB_PAGE_SIZE);
       const searchTitles = (searchResult.titles || []) as ImdbTitle[];
       const metas = await computeEnrichedMetas(searchTitles);
-      const filteredMetas = filterUnknownGenreMetas(
-        metas,
-        !!userConfig.preferences?.excludeUnknownGenres
-      );
       const baseUrl = normalizeBaseUrl(userConfig.baseUrl || getBaseUrl(req));
       const { posterPlaceholder } = getPlaceholderUrls(baseUrl);
-      for (const m of filteredMetas) {
+      for (const m of metas) {
         if (!m.poster) m.poster = posterPlaceholder;
       }
       res.set(
@@ -136,13 +132,13 @@ export async function handleImdbCatalogRequest(
         `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
       );
       log.debug('Returning IMDb search results', {
-        count: filteredMetas.length,
+        count: metas.length,
         catalogId,
         durationMs: Date.now() - startTime,
       });
       res.etagJson(
         {
-          metas: filteredMetas,
+          metas,
           cacheMaxAge: CACHE_TTLS.CATALOG_HEADER,
           staleRevalidate: CACHE_TTLS.CATALOG_STALE_REVALIDATE,
         },
@@ -269,10 +265,7 @@ export async function handleImdbCatalogRequest(
       { allowStale: true }
     )) as StremioMetaPreview[];
 
-    const filteredMetas = filterUnknownGenreMetas(
-      metas,
-      !!userConfig.preferences?.excludeUnknownGenres
-    );
+    const filteredMetas = filterUnknownGenreMetas(metas, !!filters.excludeUnknownGenres);
     const baseUrl = normalizeBaseUrl(userConfig.baseUrl || getBaseUrl(req));
     const { posterPlaceholder } = getPlaceholderUrls(baseUrl);
     for (const m of filteredMetas) {
