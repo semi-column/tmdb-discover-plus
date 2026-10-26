@@ -103,6 +103,34 @@ available on nightly deployments when these values are set.
 | -------------------- | --------------------------------------------------------------------------------------------------------- | ------- |
 | `DISABLE_RATE_LIMIT` | Disable API rate limiting. Only effective in `development` or `test` environments; ignored in production. | `false` |
 
+## Admin Dashboard & Observability
+
+The admin dashboard lives at `/admin`. It returns 404 unless `ADMIN_USERNAME` and either `ADMIN_PASSWORD` or `ADMIN_PASSWORD_HASH` are set. Nothing is collected or written until then.
+
+It uses whatever the app already runs on, with no extra services:
+
+| Your setup     | Request / error history                                             | Live counters and live tail                            |
+| -------------- | ------------------------------------------------------------------- | ------------------------------------------------------ |
+| Postgres       | `obs_*` tables, one partition per day                               |                                                        |
+| MongoDB (4.4+) | `obs_*` collections with TTL indexes                                |                                                        |
+| No database    | In memory: last 10,000 requests (3,000 on nightly), lost on restart |                                                        |
+| Redis          |                                                                     | `obs:*` keys, shared by all instances                  |
+| No Redis       |                                                                     | In memory, this instance only (fine for one container) |
+
+| Variable                   | Description                                                                                                                                                                                            | Default      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| `ADMIN_USERNAME`           | Admin login name                                                                                                                                                                                       | _(disabled)_ |
+| `ADMIN_PASSWORD`           | Admin password, at least 16 characters. Set it like any other secret env var. Changing it signs out every admin session                                                                                | _(disabled)_ |
+| `ADMIN_PASSWORD_HASH`      | Optional alternative to `ADMIN_PASSWORD` if you prefer not to keep the plain password in env (from `npm run admin:hash`). Takes precedence                                                             | _(unset)_    |
+| `ADMIN_TOTP_SECRET`        | Optional base32 secret to require an authenticator code. Generate it in the dashboard under **Security** after signing in                                                                              | _(off)_      |
+| `ADMIN_ALLOWED_IPS`        | Optional comma-separated IPs/CIDRs allowed to reach the admin                                                                                                                                          | _(any)_      |
+| `TRUST_CLOUDFLARE_HEADERS` | Set to `true` only when Cloudflare proxies the app. Enables real visitor IP (`CF-Connecting-IP`), country and edge-location data. When off, those headers are ignored because clients could forge them | `false`      |
+| `OBS_SAMPLE_RATE`          | Fraction (0–1) of successful requests stored as history. 5xx, slow (≥1.5s) and error-logging requests are always stored; live counters always count 100%                                               | `1`          |
+| `OBS_RETENTION_DAYS`       | Days of request/upstream/error history kept (1–90)                                                                                                                                                     | `7`          |
+| `OBS_MAX_STORAGE_MB`       | Upper bound for dashboard data in Postgres/MongoDB. Oldest days are deleted early; if today alone exceeds it, new request history pauses until it fits. `0` disables the cap. Never touches app data   | `1024`       |
+
+Collection runs only when the admin is configured. Admin sessions last 8 hours.
+
 ## Addon Identity
 
 | Variable        | Description                                                                                                                                   | Default    |
@@ -158,6 +186,9 @@ CACHE_DRIVER=redis
 REDIS_URL=redis://...
 JWT_SECRET=<random-64-hex>
 ENCRYPTION_KEY=<random-64-hex>
+ADMIN_USERNAME=<admin-name>
+ADMIN_PASSWORD=<at-least-16-characters>
+TRUST_CLOUDFLARE_HEADERS=true
 ```
 
 ### Local Development

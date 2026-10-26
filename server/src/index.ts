@@ -12,6 +12,13 @@ import { addonRouter } from './routes/addon.ts';
 import { apiRouter } from './routes/api.ts';
 import { authRouter } from './routes/auth.ts';
 import marketplaceRouter from './routes/marketplace.ts';
+import { adminRouter } from './routes/admin.ts';
+import { adminConfigProblem, isAdminEnabled } from './services/admin/auth.ts';
+import {
+  observabilityMiddleware,
+  initObservability,
+  stopObservability,
+} from './services/observability/index.ts';
 import { createLogger } from './utils/logger.ts';
 import { getBaseUrl, logSwallowedError } from './utils/helpers.ts';
 import { apiRateLimit } from './utils/rateLimit.ts';
@@ -158,6 +165,7 @@ app.use((req, res, next) => {
 });
 
 app.use(requestIdMiddleware());
+app.use(observabilityMiddleware());
 
 const REQUEST_LOG_IGNORED_PREFIXES = ['/health', '/ready'];
 const REQUEST_LOG_IGNORED_EXTENSIONS = /\.(?:js|css|map|png|jpg|jpeg|gif|svg|ico|webp|woff2?)$/i;
@@ -274,6 +282,16 @@ app.get('/manifest.json', (req, res) => {
   }
 });
 
+app.get(['/admin', '/admin.html'], (req, res) => {
+  const adminPath = path.join(clientDistPath, 'admin.html');
+  if (req.path !== '/admin' || !isAdminEnabled() || !fs.existsSync(adminPath)) {
+    return res.status(404).send('Not Found');
+  }
+  res.set('Cache-Control', 'no-store, must-revalidate');
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.sendFile(adminPath);
+});
+
 app.use(
   express.static(clientDistPath, {
     setHeaders: (res, filePath) => {
@@ -384,6 +402,8 @@ app.get('/health', monitoringRateLimit, (req, res) => {
 
 app.use('/api/auth', authRouter);
 
+app.use('/api/admin', adminRouter);
+
 app.use('/api/marketplace', marketplaceRouter);
 
 app.use('/api', apiRouter);
@@ -434,6 +454,7 @@ function gracefulShutdown(signal: string) {
 
   if (server) {
     server.close(async (err) => {
+      await stopObservability().catch((e) => logSwallowedError('shutdown:observability', e));
       try {
         const storage = getStorage();
         if (storage) await storage.disconnect();
@@ -503,6 +524,14 @@ async function start() {
     }
 
     await initStorage();
+
+    const adminProblem = adminConfigProblem();
+    if (adminProblem) log.error(`Admin dashboard disabled: ${adminProblem}`);
+
+    // Non-blocking: observability must never delay startup or health checks.
+    initObservability().catch((err) =>
+      log.warn('Observability failed to start (non-critical)', { error: (err as Error).message })
+    );
 
     serverStatus.healthy = true;
     serverStatus.startedAt = new Date().toISOString();

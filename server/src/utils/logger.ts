@@ -106,6 +106,39 @@ function formatMessage(
   return `${prefix} ${message}`;
 }
 
+export type LogSink = (
+  level: 'warn' | 'error',
+  context: string,
+  message: string,
+  safeData: Record<string, unknown> | null
+) => void;
+
+let logSink: LogSink | null = null;
+
+/** Receives every warn/error (already redacted), regardless of LOG_LEVEL. */
+export function setLogSink(sink: LogSink | null): void {
+  logSink = sink;
+}
+
+function emitToSink(
+  level: 'warn' | 'error',
+  context: string,
+  message: string,
+  data: Record<string, unknown> | null
+): void {
+  if (!logSink) return;
+  try {
+    logSink(
+      level,
+      context,
+      message,
+      data ? (sanitizeValue(data) as Record<string, unknown>) : null
+    );
+  } catch {
+    // A broken sink must never break logging.
+  }
+}
+
 export function createLogger(context: string): Logger {
   return {
     debug(message: string, data: Record<string, unknown> | null = null): void {
@@ -123,6 +156,7 @@ export function createLogger(context: string): Logger {
     },
 
     warn(message: string, data: Record<string, unknown> | null = null): void {
+      emitToSink('warn', context, message, data);
       if (currentLevel <= LOG_LEVELS.warn) {
         const safeData = data ? sanitizeValue(data) : null;
         output('warn', formatMessage('warn', context, message, safeData));
@@ -130,6 +164,7 @@ export function createLogger(context: string): Logger {
     },
 
     error(message: string, data: Record<string, unknown> | null = null): void {
+      emitToSink('error', context, message, data);
       if (currentLevel <= LOG_LEVELS.error) {
         const safeData = data ? sanitizeValue(data) : null;
         output('error', formatMessage('error', context, message, safeData));

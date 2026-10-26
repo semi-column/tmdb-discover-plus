@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "node tests/run-integration.js"
+    "test:integration": "node tests/run-integration.js",
+    "admin:hash": "node --experimental-strip-types src/scripts/adminSetup.ts"
   },
   "keywords": [
     "stremio",

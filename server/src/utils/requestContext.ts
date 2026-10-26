@@ -18,12 +18,19 @@ export interface RequestContextSnapshot {
   cache: RequestCacheStats;
 }
 
+export interface RequestObsState {
+  upstreamCalls: number;
+  upstreamMs: number;
+  errorFingerprint: string;
+}
+
 interface RequestStore {
   requestId: string;
   method: string;
   path: string;
   startedAt: number;
   cache: RequestCacheStats;
+  obs: RequestObsState;
 }
 
 const asyncLocalStorage = new AsyncLocalStorage<RequestStore>();
@@ -58,6 +65,12 @@ export function getRequestCacheStats(): RequestCacheStats | undefined {
   return { ...store.cache };
 }
 
+/** Live (mutable) references, safe to hold past the async context, e.g. in res 'finish'. */
+export function getRequestLiveState():
+  { requestId: string; path: string; cache: RequestCacheStats; obs: RequestObsState } | undefined {
+  return asyncLocalStorage.getStore();
+}
+
 export function trackCacheOperation(op: keyof RequestCacheStats): void {
   const store = asyncLocalStorage.getStore();
   if (!store) return;
@@ -82,6 +95,7 @@ export function requestIdMiddleware() {
         path: req.originalUrl || req.url,
         startedAt: Date.now(),
         cache: buildEmptyCacheStats(),
+        obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
       },
       next
     );

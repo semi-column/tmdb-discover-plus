@@ -19,7 +19,8 @@
     "jwt-decode": "^4.0.0",
     "lucide-react": "^1.44.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "uplot": "^1.6.32"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

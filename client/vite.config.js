@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -21,6 +22,10 @@ export default defineConfig({
     outDir: 'dist',
     target: 'es2020',
     rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        admin: fileURLToPath(new URL('./admin.html', import.meta.url)),
+      },
       output: {
         // Prevent aggressive chunk merging that can cause hoisting issues
         manualChunks: (id) => {

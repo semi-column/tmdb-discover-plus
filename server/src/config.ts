@@ -16,6 +16,11 @@ const envBool = (key: string, fallback = false): boolean => {
   return raw === 'true' || raw === '1';
 };
 
+const envFloat = (key: string, fallback: number): number => {
+  const parsed = parseFloat(process.env[key] ?? '');
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
+
 const requireEnv = (key: string): string => {
   const value = process.env[key];
   if (!value) throw new Error(`Required environment variable ${key} is not set`);
@@ -36,6 +41,13 @@ const envCsv = (key: string, fallback: string): string[] =>
     .split(',')
     .map((s: string) => s.trim())
     .filter(Boolean);
+
+const ADMIN_MIN_PASSWORD_LENGTH = 16;
+
+const isAdminConfigured = (): boolean =>
+  !!process.env['ADMIN_USERNAME'] &&
+  (!!process.env['ADMIN_PASSWORD_HASH'] ||
+    (process.env['ADMIN_PASSWORD'] ?? '').length >= ADMIN_MIN_PASSWORD_LENGTH);
 
 export const config = Object.freeze({
   port: envInt('PORT', 7000),
@@ -150,6 +162,35 @@ export const config = Object.freeze({
   }),
 
   trustProxy: env('TRUST_PROXY', '1'),
+
+  // Only honour CF-* headers when Cloudflare is really in front; otherwise clients could spoof them.
+  trustCloudflareHeaders: envBool('TRUST_CLOUDFLARE_HEADERS'),
+
+  admin: Object.freeze({
+    username: env('ADMIN_USERNAME'),
+    password: env('ADMIN_PASSWORD'),
+    passwordHash: env('ADMIN_PASSWORD_HASH'),
+    minPasswordLength: ADMIN_MIN_PASSWORD_LENGTH,
+    totpSecret: env('ADMIN_TOTP_SECRET'),
+    allowedIps: envCsv('ADMIN_ALLOWED_IPS', ''),
+    sessionHours: 8,
+    get enabled(): boolean {
+      return isAdminConfigured();
+    },
+  }),
+
+  observability: Object.freeze({
+    // On only when the admin dashboard is configured, so other self-hosters see no new writes.
+    get enabled(): boolean {
+      return isAdminConfigured();
+    },
+    sampleRate: Math.min(Math.max(envFloat('OBS_SAMPLE_RATE', 1), 0), 1),
+    slowMs: 1500,
+    retentionDays: Math.min(Math.max(envInt('OBS_RETENTION_DAYS', 7), 1), 90),
+    maxBuffer: 20000,
+    maxStorageMb: Math.max(envInt('OBS_MAX_STORAGE_MB', 1024), 0),
+    memoryEvents: isNightlyVariant ? 3000 : 10000,
+  }),
 
   addon: Object.freeze({
     variant: addonVariant,
