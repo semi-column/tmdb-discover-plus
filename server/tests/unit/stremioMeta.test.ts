@@ -252,6 +252,68 @@ describe('toStremioFullMeta — poster fallbacks', () => {
   });
 });
 
+describe('preview and full metadata consistency', () => {
+  it.each([
+    {
+      type: 'movie' as const,
+      details: {
+        id: 301,
+        title: 'German Movie',
+        release_date: '2026-01-02',
+        release_dates: {
+          results: [
+            {
+              iso_3166_1: 'DE',
+              release_dates: [{ certification: '12', type: 3 }],
+            },
+          ],
+        },
+      },
+      expectedReleaseInfo: '2026\u2003\u200312',
+    },
+    {
+      type: 'series' as const,
+      details: {
+        id: 302,
+        name: 'German Series',
+        first_air_date: '2020-01-02',
+        last_air_date: '2022-01-02',
+        status: 'Ended',
+        content_ratings: {
+          results: [{ iso_3166_1: 'DE', rating: '12' }],
+        },
+      },
+      expectedReleaseInfo: '2020-2022\u2003\u200312',
+    },
+  ])(
+    'keeps $type preview and full metadata consistent',
+    async ({ type, details, expectedReleaseInfo }) => {
+      const shared = {
+        overview: 'desc',
+        poster_path: '/poster.jpg',
+        backdrop_path: '/backdrop.jpg',
+        genres: [],
+        credits: { cast: [], crew: [] },
+        external_ids: {},
+        images: {},
+      };
+      const tmdbDetails = { ...shared, ...details } as any;
+
+      const preview = await toStremioMetaPreview(tmdbDetails, type, null, 'de-DE', null, 'DE');
+      const full = await toStremioFullMeta(tmdbDetails, type, null, null, null, null, 'de-DE', {
+        userRegion: 'DE',
+      });
+
+      expect(preview?.poster).toBe(full.poster);
+      expect(preview?.background).toBe(full.background);
+      expect(preview?.fanart).toBe(full.fanart);
+      expect(preview?.landscapePoster).toBe(full.landscapePoster);
+      expect(preview?.releaseInfo).toBe(expectedReleaseInfo);
+      expect(full.releaseInfo).toBe(expectedReleaseInfo);
+    }
+  );
+});
+
 describe('toStremioMeta — poster fallbacks', () => {
   it('uses poster_path when available', () => {
     const item = {

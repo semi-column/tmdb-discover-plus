@@ -62,6 +62,26 @@ import { buildArtworkOptions, getPlaceholderUrls } from './handlers/sharedHelper
 
 const log = createLogger('addon');
 
+function resolveUserRegion(userConfig: UserConfig): string | null {
+  let region = userConfig.preferences?.region || userConfig.preferences?.countries || null;
+
+  if (!region && Array.isArray(userConfig.catalogs)) {
+    const certCatalog = userConfig.catalogs.find(
+      (catalog) =>
+        catalog.filters?.certificationCountry && catalog.filters.certificationCountry !== 'US'
+    );
+    if (certCatalog) {
+      region = certCatalog.filters.certificationCountry ?? null;
+    } else {
+      const originCatalog = userConfig.catalogs.find((catalog) => catalog.filters?.countries);
+      if (originCatalog) region = originCatalog.filters.countries ?? null;
+    }
+  }
+
+  if (!region) return null;
+  return typeof region === 'string' ? region : String(Array.isArray(region) ? region[0] : region);
+}
+
 const recentErrors = new Map<string, number>();
 const ERROR_DEDUP_TTL = LOCAL_CACHE_TTLS.ERROR_DEDUP;
 
@@ -441,6 +461,7 @@ async function handleCatalogRequest(
       resolvedFilters?.displayLanguage ||
       catalogConfig.filters?.displayLanguage ||
       config.preferences?.defaultLanguage;
+    const userRegion = resolveUserRegion(config);
 
     const cache = getCache();
     const configVersion = config.updatedAt ? new Date(config.updatedAt).getTime() : 0;
@@ -546,7 +567,8 @@ async function handleCatalogRequest(
               type,
               artworkOptions,
               displayLanguage || null,
-              ratingsMap
+              ratingsMap,
+              userRegion
             );
           })
         )
@@ -729,25 +751,7 @@ async function handleMetaRequest(
           )
           .map((c) => buildCatalogId('tmdb', c))[0] || null;
 
-      let userRegion = config.preferences?.region || config.preferences?.countries || null;
-
-      if (!userRegion && Array.isArray(config.catalogs)) {
-        const certCatalog = config.catalogs.find(
-          (c) => c.filters?.certificationCountry && c.filters.certificationCountry !== 'US'
-        );
-        if (certCatalog) {
-          userRegion = certCatalog.filters.certificationCountry ?? null;
-        } else {
-          const originCatalog = config.catalogs.find((c) => c.filters?.countries);
-          if (originCatalog) {
-            userRegion = originCatalog.filters.countries ?? null;
-          }
-        }
-      }
-
-      if (userRegion && typeof userRegion !== 'string') {
-        userRegion = Array.isArray(userRegion) ? String(userRegion[0]) : String(userRegion);
-      }
+      const userRegion = resolveUserRegion(config);
 
       const fullMeta = await tmdb.toStremioFullMeta(
         details,

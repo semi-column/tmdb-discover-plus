@@ -135,6 +135,72 @@ function buildCertification(
   return certification;
 }
 
+function buildReleaseInfo(
+  details: AnyTmdbDetails,
+  isMovie: boolean,
+  targetLanguage: string | null,
+  userRegion: string | null
+): string {
+  const releaseDate = isMovie ? details.release_date : details.first_air_date;
+  const year = releaseDate ? String(releaseDate).split('-')[0] : '';
+  let releaseInfo = year;
+
+  if (!isMovie) {
+    const endYear = details.last_air_date ? String(details.last_air_date).split('-')[0] : null;
+    if (details.status === 'Ended' && endYear && endYear !== year) {
+      releaseInfo = `${year}-${endYear}`;
+    } else if (
+      details.status === 'Returning Series' ||
+      details.status === 'In Production' ||
+      !details.last_air_date
+    ) {
+      releaseInfo = `${year}-`;
+    }
+  }
+
+  const certification = buildCertification(details, isMovie, targetLanguage, userRegion);
+  return certification
+    ? releaseInfo
+      ? `${releaseInfo}\u2003\u2003${certification}`
+      : certification
+    : releaseInfo;
+}
+
+function buildNativeArtworkUrls(
+  details: AnyTmdbDetails,
+  targetLanguage: string | null,
+  allLogos: TmdbImage[] | null = null
+): NativeArtworkUrls {
+  const logoSources = details.images?.logos?.length
+    ? details.images.logos
+    : allLogos?.length
+      ? allLogos
+      : [];
+  const language = targetLanguage ? targetLanguage.split('-')[0] : 'en';
+  const originalLanguage = details.original_language || null;
+  const logo =
+    logoSources.find((image) => image.iso_639_1 === language) ||
+    (language !== 'en' ? logoSources.find((image) => image.iso_639_1 === 'en') : null) ||
+    (originalLanguage && originalLanguage !== language && originalLanguage !== 'en'
+      ? logoSources.find((image) => image.iso_639_1 === originalLanguage)
+      : null) ||
+    logoSources.find((image) => image.iso_639_1 === null) ||
+    [...logoSources].sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))[0];
+
+  const posterPath =
+    localizedPosterPath(details, targetLanguage) ||
+    details.poster_path ||
+    details.images?.posters?.[0]?.file_path;
+  const backdropPath = details.backdrop_path || details.images?.backdrops?.[0]?.file_path;
+
+  return {
+    poster: posterPath ? `${TMDB_IMAGE_BASE}/${POSTER_SIZE}${posterPath}` : null,
+    backdrop: backdropPath ? `${TMDB_IMAGE_BASE}/${BACKDROP_SIZE}${backdropPath}` : null,
+    logo: logo ? `${TMDB_IMAGE_BASE}/original${logo.file_path}` : null,
+    landscape: backdropPath ? `${TMDB_IMAGE_BASE}/${BACKDROP_SIZE}${backdropPath}` : null,
+  };
+}
+
 function buildTrailers(details: AnyTmdbDetails, targetLanguage: string | null) {
   const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
 
@@ -377,25 +443,8 @@ export async function toStremioFullMeta(
   const effectiveImdbId = imdbId || details?.external_ids?.imdb_id || null;
   const status = details.status || null;
 
+  const releaseInfo = buildReleaseInfo(details, isMovie, targetLanguage, userRegion);
   const certification = buildCertification(details, isMovie, targetLanguage, userRegion);
-
-  let releaseInfo = year;
-  if (!isMovie) {
-    const endYear = details.last_air_date ? String(details.last_air_date).split('-')[0] : null;
-    if (status === 'Ended' && endYear && endYear !== year) {
-      releaseInfo = `${year}-${endYear}`;
-    } else if (
-      status === 'Returning Series' ||
-      status === 'In Production' ||
-      !details.last_air_date
-    ) {
-      releaseInfo = `${year}-`;
-    }
-  }
-
-  if (certification) {
-    releaseInfo = releaseInfo ? `${releaseInfo}\u2003\u2003${certification}` : certification;
-  }
 
   const { trailer, trailerStreams, trailers } = buildTrailers(details, targetLanguage);
   const posterOptions = artworkOptions?.poster || null;
@@ -443,67 +492,19 @@ export async function toStremioFullMeta(
     defaultVideoId: isMovie ? effectiveImdbId || `tmdb:${details.id}` : null,
     hasScheduledVideos: !isMovie && (status === 'Returning Series' || status === 'In Production'),
   };
-  const localizedPoster = localizedPosterPath(details, targetLanguage);
-  let poster = localizedPoster
-    ? `${TMDB_IMAGE_BASE}/w780${localizedPoster}`
-    : details.poster_path
-      ? `${TMDB_IMAGE_BASE}/w780${details.poster_path}`
-      : null;
-  let background = details.backdrop_path
-    ? `${TMDB_IMAGE_BASE}/original${details.backdrop_path}`
-    : null;
-
-  let logo: string | null = null;
-  const logoSources =
-    details.images && details.images.logos && details.images.logos.length > 0
-      ? details.images.logos
-      : Array.isArray(allLogos) && allLogos.length > 0
-        ? allLogos
-        : [];
-
-  if (logoSources.length > 0) {
-    const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
-    const originalLang = details.original_language || null;
-
-    const candidates = [
-      logoSources.find((l) => l.iso_639_1 === lang),
-      lang !== 'en' ? logoSources.find((l) => l.iso_639_1 === 'en') : null,
-      originalLang && originalLang !== lang && originalLang !== 'en'
-        ? logoSources.find((l) => l.iso_639_1 === originalLang)
-        : null,
-      logoSources.find((l) => l.iso_639_1 === null),
-      [...logoSources].sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))[0],
-    ];
-
-    const best = candidates.find(Boolean);
-    if (best) logo = `${TMDB_IMAGE_BASE}/original${best.file_path}`;
-  }
-
-  if (!poster && details.images?.posters && details.images.posters.length > 0) {
-    poster = `${TMDB_IMAGE_BASE}/w780${details.images.posters[0].file_path}`;
-  }
-  if (!background && details.images?.backdrops && details.images.backdrops.length > 0) {
-    background = `${TMDB_IMAGE_BASE}/original${details.images.backdrops[0].file_path}`;
-  }
-
   const artworkContext: ArtworkContext = {
     tmdbId: details.id,
     imdbId: effectiveImdbId ?? undefined,
     type,
     language: targetLanguage,
   };
-  const nativeUrls: NativeArtworkUrls = {
-    poster,
-    backdrop: background,
-    logo,
-    landscape: background,
-  };
+  const nativeUrls = buildNativeArtworkUrls(details, targetLanguage, allLogos);
   const resolved = await applyArtworkOverrides(artworkContext, nativeUrls, artworkOptions, {
     checkExistence: true,
   });
-  poster = resolved.poster;
-  background = resolved.backdrop;
-  logo = resolved.logo;
+  const poster = resolved.poster;
+  const background = resolved.backdrop;
+  const logo = resolved.logo;
 
   const responseId = requestedId || `tmdb:${details.id}`;
 
@@ -663,14 +664,13 @@ export async function toStremioMetaPreview(
   type: ContentType,
   artworkOptions: ArtworkOptions | null = null,
   targetLanguage: string | null = null,
-  ratingsMap: Map<string, string> | null = null
+  ratingsMap: Map<string, string> | null = null,
+  userRegion: string | null = null
 ): Promise<StremioMetaPreview | null> {
   if (!rawDetails) return null;
   const details = rawDetails as AnyTmdbDetails;
   const isMovie = type === 'movie' || type === 'collection';
   const title = (isMovie ? details.title : details.name) || '';
-  const releaseDate = isMovie ? details.release_date : details.first_air_date;
-  const year = releaseDate ? String(releaseDate).split('-')[0] : '';
 
   const genres = Array.isArray(details.genres)
     ? details.genres.map((g) => g?.name).filter(Boolean)
@@ -693,51 +693,13 @@ export async function toStremioMetaPreview(
 
   const effectiveImdbId = details?.external_ids?.imdb_id || null;
 
-  let nativeLogo: string | null = null;
-  const logoList = details.images?.logos;
-  if (logoList && logoList.length > 0) {
-    const lang = targetLanguage ? targetLanguage.split('-')[0] : 'en';
-    const originalLang = details.original_language || null;
-
-    const candidates = [
-      logoList.find((l) => l.iso_639_1 === lang),
-      lang !== 'en' ? logoList.find((l) => l.iso_639_1 === 'en') : null,
-      originalLang && originalLang !== lang && originalLang !== 'en'
-        ? logoList.find((l) => l.iso_639_1 === originalLang)
-        : null,
-      logoList.find((l) => l.iso_639_1 === null),
-      [...logoList].sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))[0],
-    ];
-    const best = candidates.find(Boolean);
-    if (best) nativeLogo = `${TMDB_IMAGE_BASE}/original${best.file_path}`;
-  }
-
-  const localizedPoster = localizedPosterPath(details, targetLanguage);
-  let nativePoster = localizedPoster
-    ? `${TMDB_IMAGE_BASE}/${POSTER_SIZE}${localizedPoster}`
-    : details.poster_path
-      ? `${TMDB_IMAGE_BASE}/${POSTER_SIZE}${details.poster_path}`
-      : null;
-  let nativeBackground = details.backdrop_path
-    ? `${TMDB_IMAGE_BASE}/${BACKDROP_SIZE}${details.backdrop_path}`
-    : null;
-
-  if (!nativePoster && details.images?.posters && details.images.posters.length > 0) {
-    nativePoster = `${TMDB_IMAGE_BASE}/${POSTER_SIZE}${details.images.posters[0].file_path}`;
-  }
-
   const artworkContext: ArtworkContext = {
     tmdbId: details.id,
     imdbId: effectiveImdbId ?? undefined,
     type,
     language: targetLanguage,
   };
-  const nativeUrls: NativeArtworkUrls = {
-    poster: nativePoster,
-    backdrop: nativeBackground,
-    logo: nativeLogo,
-    landscape: nativeBackground,
-  };
+  const nativeUrls = buildNativeArtworkUrls(details, targetLanguage);
   const resolved = await applyArtworkOverrides(artworkContext, nativeUrls, artworkOptions, {
     checkExistence: true,
   });
@@ -815,7 +777,7 @@ export async function toStremioMetaPreview(
     landscapePoster: resolved.landscape || background,
     logo,
     description: details.overview || '',
-    releaseInfo: year,
+    releaseInfo: buildReleaseInfo(details, isMovie, targetLanguage, userRegion),
     imdbRating,
     genres,
     cast: cast.length > 0 ? cast : undefined,
