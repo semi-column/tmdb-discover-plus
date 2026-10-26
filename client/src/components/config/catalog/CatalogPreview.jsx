@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { PreviewGridSkeleton } from '../../layout/Skeleton';
+import { DiscordHelpLink } from '../../social/DiscordHelpLink.jsx';
 
 export const CatalogPreview = memo(function CatalogPreview({
   loading,
@@ -122,6 +123,7 @@ export const CatalogPreview = memo(function CatalogPreview({
                   Retry
                 </button>
               </div>
+              <DiscordHelpLink text="Still failing? Ask on Discord" />
             </div>
           )}
 
@@ -131,6 +133,7 @@ export const CatalogPreview = memo(function CatalogPreview({
               <p style={{ margin: 0, fontSize: '0.875rem' }}>
                 No results found for the current filters.
               </p>
+              <DiscordHelpLink text="Not sure why? Ask on Discord" />
             </div>
           )}
 

@@ -15,7 +15,6 @@ import { DonateModal } from './components/modals/DonateModal';
 import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
 import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
 import { CreditsBanner } from './components/layout/CreditsBanner';
-import { SocialButtons } from './components/social/SocialButtons.jsx';
 import { AppProviders } from './context/AppContext';
 
 import './styles/globals.css';
@@ -245,11 +244,6 @@ function App() {
                   </div>
                 )}
               </div>
-
-              <SocialButtons
-                onDonateClick={() => setIsDonateModalOpen(true)}
-                className="mobile-support-under-actions"
-              />
             </div>
 
             <div className="builder-layout">

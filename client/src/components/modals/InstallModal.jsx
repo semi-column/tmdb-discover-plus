@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { X, Copy, Check, ExternalLink, Download } from 'lucide-react';
 import { useModalA11y } from '../../hooks/useModalA11y';
 import { logger } from '../../utils/logger';
-import { SocialButtons } from '../social/SocialButtons.jsx';
+import { DiscordIcon } from '../social/DiscordButton.jsx';
+import { DISCORD_URL } from '../../constants/links';
 
 export function InstallModal({ isOpen, onClose, installUrl, stremioUrl, onDonateClick }) {
   const [copied, setCopied] = useState(false);
@@ -112,9 +113,27 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl, onDonate
               page or restart Stremio.
             </p>
           </div>
-          <div className="setup-support-row" style={{ marginTop: '24px' }}>
-            <SocialButtons onDonateClick={onDonateClick} />
+          <div className="install-community-callout">
+            <div className="install-community-text">
+              <strong>Join the community on Discord</strong>
+              <span>Get help, hear about updates first, and request features.</span>
+            </div>
+            <a
+              href={DISCORD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="header-community-btn install-community-btn"
+            >
+              <DiscordIcon className="sidebar-support-icon" />
+              Join Discord
+            </a>
           </div>
+          <p className="install-support-note">
+            Enjoying the addon?{' '}
+            <button type="button" className="install-support-link" onClick={onDonateClick}>
+              Support the project
+            </button>
+          </p>
         </div>
 
         <div className="modal-footer">

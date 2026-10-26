@@ -7,15 +7,6 @@
   border-top: 1px solid var(--border-color);
 }
 
-.sidebar-support--top {
-  margin-top: 0;
-  margin-bottom: 4px;
-  padding-top: 0;
-  padding-bottom: 12px;
-  border-top: none;
-  border-bottom: 1px solid var(--border-color);
-}
-
 .sidebar-support-links {
   display: flex;
   flex-wrap: wrap;
@@ -216,9 +207,143 @@
 .setup-support-row .social-btn-wrapper {
   flex: 1;
 }
-.mobile-support-under-actions .social-btn-wrapper,
-.sidebar-support--top .social-btn-wrapper {
-  flex: 1;
+
+/* Header community & support */
+.header-community-btn,
+.header-support-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.header-community-btn {
+  background: #5865f2;
+  color: #fff;
+  border: 1px solid #5865f2;
+}
+
+.header-community-btn:hover {
+  background: #4752c4;
+  color: #fff;
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(88, 101, 242, 0.4);
+}
+
+.header-support-btn {
+  background: transparent;
+  color: #ff69b4;
+  border: 1px solid rgba(255, 105, 180, 0.4);
+}
+
+.header-support-btn:hover {
+  background: rgba(255, 105, 180, 0.12);
+  border-color: rgba(255, 105, 180, 0.7);
+}
+
+/* Post-install community callout */
+.install-community-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: rgba(88, 101, 242, 0.12);
+  border: 1px solid rgba(88, 101, 242, 0.45);
+}
+
+.install-community-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.install-community-text strong {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.install-community-btn {
+  flex-shrink: 0;
+}
+
+.install-support-note {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.install-support-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #ff69b4;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.install-support-link:hover {
+  text-decoration: underline;
+}
+
+/* Contextual help link */
+.discord-help-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 0.8125rem;
+  color: #a4b0ff;
+  text-decoration: none;
+}
+
+.discord-help-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.sac-icon-discord {
+  background: rgba(88, 101, 242, 0.15);
+  color: #a4b0ff;
+}
+
+.sac-icon-donate {
+  background: rgba(255, 105, 180, 0.12);
+  color: #ff69b4;
+}
+
+@media (max-width: 767px) {
+  .install-community-callout {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .header-community-btn,
+  .header-support-btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 0.75rem;
+  }
 }
 
 @media (max-width: 767px) {

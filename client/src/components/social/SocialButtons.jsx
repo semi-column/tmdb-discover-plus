@@ -1,12 +1,13 @@
 import { Heart } from 'lucide-react';
 import { DiscordIcon } from './DiscordButton.jsx';
+import { DISCORD_URL } from '../../constants/links';
 
 export function SocialButtons({ onDonateClick, className = '' }) {
   return (
     <div className={`sidebar-support-links ${className}`}>
       <div className="social-btn-wrapper">
         <a
-          href="https://discord.gg/X2N3btmEG2"
+          href={DISCORD_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="sidebar-support-btn sidebar-support-discord"

@@ -39,10 +39,6 @@
 }
 
 /* Mobile Container */
-.mobile-support-under-actions {
-  display: none;
-}
-
 .mobile-marketplace-toggle {
   display: none;
 }
@@ -50,22 +46,6 @@
 @media (max-width: 767px) {
   .container {
     padding: 0 var(--space-4);
-  }
-
-  .mobile-support-under-actions {
-    display: flex;
-    width: 100%;
-    gap: var(--space-2);
-    margin-block-start: var(--space-2);
-  }
-
-  .mobile-support-under-actions .sidebar-support-btn {
-    flex: 1;
-    justify-content: center;
-  }
-
-  .sidebar-support--top {
-    display: none;
   }
 }
 

@@ -15,7 +15,6 @@ import {
   Settings,
   Heart,
 } from 'lucide-react';
-import { SocialButtons } from '../social/SocialButtons.jsx';
 import { useState, useEffect, lazy, Suspense, memo } from 'react';
 
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -171,10 +170,6 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
             <span className="settings-text">Preferences</span>
           </button>
         </div>
-      </div>
-
-      <div className="sidebar-support sidebar-support--top">
-        <SocialButtons onDonateClick={() => setIsDonateOpen(true)} />
       </div>
 
       <div className="catalog-list">
@@ -399,6 +394,7 @@ export const CatalogSidebar = memo(function CatalogSidebar() {
           onClose={() => setShowSettingsModal(false)}
           onShowExport={setShowExportModal}
           initialSection={settingsInitialSection}
+          onDonateClick={() => setIsDonateOpen(true)}
           onImportData={(data) => {
             setImportData(data);
             setShowImportModal(true);

@@ -1,7 +1,39 @@
-import { ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, Heart } from 'lucide-react';
+import { DiscordIcon } from '../social/DiscordButton.jsx';
+import { DonateModal } from '../modals/DonateModal';
+import { DISCORD_URL } from '../../constants/links';
+
+function CommunityActions({ onSupportClick }) {
+  return (
+    <>
+      <a
+        href={DISCORD_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="header-community-btn"
+        title="Get help, updates and request features"
+      >
+        <DiscordIcon className="sidebar-support-icon" />
+        <span>Join Discord</span>
+      </a>
+      <button
+        type="button"
+        className="header-support-btn"
+        onClick={onSupportClick}
+        title="Support the project"
+      >
+        <Heart size={14} />
+        <span>Support</span>
+      </button>
+    </>
+  );
+}
 
 export function Header({ stats }) {
   const isNightly = stats?.addonVariant === 'nightly';
+  const [isDonateOpen, setIsDonateOpen] = useState(false);
+  const openDonate = () => setIsDonateOpen(true);
 
   return (
     <header className="header">
@@ -42,6 +74,7 @@ export function Header({ stats }) {
                   Switch to Stable <ArrowRight size={14} />
                 </a>
               )}
+              <CommunityActions onSupportClick={openDonate} />
             </div>
 
             <div className="mobile-actions">
@@ -53,10 +86,12 @@ export function Header({ stats }) {
                   Switch to Stable
                 </a>
               )}
+              <CommunityActions onSupportClick={openDonate} />
             </div>
           </div>
         </div>
       </div>
+      <DonateModal isOpen={isDonateOpen} onClose={() => setIsDonateOpen(false)} />
     </header>
   );
 }

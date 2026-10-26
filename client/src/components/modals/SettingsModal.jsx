@@ -11,12 +11,17 @@ import {
   ExternalLink,
   Eye,
   ChevronDown,
+  Heart,
+  LifeBuoy,
+  Bug,
 } from 'lucide-react';
 import { useModalA11y } from '../../hooks/useModalA11y';
 import { useCatalog, useAppActions, useTMDBData } from '../../context/AppContext';
 import { SearchableSelect } from '../forms/SearchableSelect';
 import { ArtworkSettingsPanel } from '../config/ArtworkSettingsSection';
 import { ApiKeysSection } from '../config/ApiKeysSection';
+import { DiscordIcon } from '../social/DiscordButton.jsx';
+import { DISCORD_URL, ISSUES_URL } from '../../constants/links';
 
 function CollapsibleSection({ title, icon, isExpanded, onToggle, children }) {
   return (
@@ -67,6 +72,7 @@ export function SettingsModal({
   onClose,
   onShowExport,
   onImportData,
+  onDonateClick,
   initialSection = 'data',
 }) {
   const modalRef = useModalA11y(isOpen, onClose);
@@ -357,6 +363,57 @@ export function SettingsModal({
               style={{ padding: '16px 20px 20px 20px', overflow: 'visible' }}
             >
               <ArtworkSettingsPanel preferences={preferences} onChange={onPreferencesChange} />
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Help & Support"
+            icon={LifeBuoy}
+            isExpanded={expandedSection === 'support'}
+            onToggle={() => toggleSection('support')}
+          >
+            <div className="settings-action-grid">
+              <a
+                className="btn settings-action-card"
+                href={DISCORD_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div className="sac-icon sac-icon-discord">
+                  <DiscordIcon className="sidebar-support-icon" />
+                </div>
+                <div className="sac-text">
+                  <span className="sac-title">Discord</span>
+                  <span className="sac-desc">Help, updates and feature requests</span>
+                </div>
+              </a>
+
+              <a
+                className="btn settings-action-card"
+                href={ISSUES_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div className="sac-icon">
+                  <Bug size={18} />
+                </div>
+                <div className="sac-text">
+                  <span className="sac-title">Report an Issue</span>
+                  <span className="sac-desc">Open a bug report on GitHub</span>
+                </div>
+              </a>
+
+              {onDonateClick && (
+                <button className="btn settings-action-card" onClick={onDonateClick}>
+                  <div className="sac-icon sac-icon-donate">
+                    <Heart size={18} />
+                  </div>
+                  <div className="sac-text">
+                    <span className="sac-title">Support the Project</span>
+                    <span className="sac-desc">Help cover hosting and development</span>
+                  </div>
+                </button>
+              )}
             </div>
           </CollapsibleSection>
         </div>
