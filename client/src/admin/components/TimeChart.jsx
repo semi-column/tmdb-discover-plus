@@ -31,7 +31,7 @@ export function TimeChart({ data, series, height = 220, yLabel }) {
       scales: {
         x: {
           time: true,
-          ...(single ? { range: (u, min, max) => [min - 43200, max + 43200] } : {}),
+          ...(single ? { range: () => [data[0][0] - 43200, data[0][0] + 43200] } : {}),
         },
       },
       axes: [

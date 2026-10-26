@@ -62,7 +62,7 @@ export function Overview({ range }) {
       )}
       <div className="adm-stats">
         <StatCard
-          label="Requests"
+          label="HTTP requests (all routes)"
           value={fmtInt(totals.requests)}
           sub={<Trend current={totals.requests} previous={previous?.requests} invert />}
         />
@@ -87,7 +87,7 @@ export function Overview({ range }) {
           value={fmtInt(totals.uniqueUsers)}
           sub="approx. (HyperLogLog)"
         />
-        <StatCard label="Cache hit rate" value={fmtPct(totals.cacheHitRate, 1)} />
+        <StatCard label="Cache lookup hit rate" value={fmtPct(totals.cacheHitRate, 1)} />
         <StatCard
           label="Logged errors / warnings"
           value={`${fmtInt(totals.logErrors)} / ${fmtInt(totals.logWarnings)}`}
@@ -134,7 +134,9 @@ export function Overview({ range }) {
                   className="adm-clickable"
                   onClick={() => navigate('requests', { range, route: r.route })}
                 >
-                  <td className="mono">{r.route}</td>
+                  <td className="mono">
+                    {r.route === '(unmatched)' ? '(unmatched / SPA fallback)' : r.route}
+                  </td>
                   <td className="num">{fmtInt(r.count)}</td>
                   <td className={`num ${r.errors5xx ? 'adm-text-bad' : ''}`}>
                     {fmtInt(r.errors5xx)}

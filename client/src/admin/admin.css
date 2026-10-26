@@ -113,11 +113,11 @@
 }
 
 .adm-grid-2 {
-  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
 }
 
 .adm-grid-3 {
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
 }
 
 .adm-panel {
@@ -166,6 +166,7 @@
 
 .adm-stat {
   display: block;
+  min-width: 0;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -183,7 +184,8 @@
   color: var(--text-secondary);
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .adm-stat-value {
@@ -195,6 +197,7 @@
 .adm-stat-sub {
   font-size: 12px;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .adm-stat.adm-tone-bad {
@@ -209,6 +212,7 @@
   all: unset;
   cursor: pointer;
   display: block;
+  min-width: 0;
   border-radius: var(--radius-lg);
 }
 

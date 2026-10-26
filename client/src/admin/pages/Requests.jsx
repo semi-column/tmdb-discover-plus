@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { adminApi, downloadExport } from '../api.js';
 import { useAsync, navigate } from '../hooks.js';
 import { Badge, ErrorNote, Loading, Panel } from '../components/ui.jsx';
-import { fmtInt, fmtMs, fmtTime, statusTone } from '../format.js';
+import { fmtBucketMs, fmtInt, fmtMs, fmtTime, statusTone } from '../format.js';
 
 const FILTER_KEYS = [
   'route',
@@ -60,7 +60,8 @@ function TextFilter({ label, name, value, onChange, placeholder, type = 'text' }
   );
 }
 
-function RoutePerformance({ range }) {
+function RoutePerformance({ range, approximatePercentiles }) {
+  const formatPercentile = approximatePercentiles ? fmtBucketMs : fmtMs;
   const { data, error, loading } = useAsync(() => adminApi.routes({ range }), [range]);
   if (loading && !data) return <Loading />;
   return (
@@ -96,9 +97,9 @@ function RoutePerformance({ range }) {
                 </td>
                 <td className="num">{fmtInt(r.errors4xx ?? 0)}</td>
                 <td className="num">{fmtMs(r.avg_ms)}</td>
-                <td className="num">{fmtMs(r.p50_ms)}</td>
-                <td className="num">{fmtMs(r.p95_ms)}</td>
-                <td className="num">{fmtMs(r.p99_ms)}</td>
+                <td className="num">{formatPercentile(r.p50_ms)}</td>
+                <td className="num">{formatPercentile(r.p95_ms)}</td>
+                <td className="num">{formatPercentile(r.p99_ms)}</td>
                 <td className="num">{fmtMs(r.max_ms)}</td>
                 <td className="num">{r.avg_upstream_calls}</td>
               </tr>
@@ -248,7 +249,7 @@ export function Requests({ range, params, onOpenTrace, meta }) {
               : 'Route performance (exact percentiles from stored requests)'
           }
         >
-          <RoutePerformance range={range} />
+          <RoutePerformance range={range} approximatePercentiles={caps?.approximatePercentiles} />
         </Panel>
       ) : (
         <>

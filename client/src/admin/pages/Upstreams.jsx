@@ -5,7 +5,8 @@ import { TimeChart } from '../components/TimeChart.jsx';
 import { Badge, ErrorNote, Loading, Panel, StatCard } from '../components/ui.jsx';
 import { fmtBucketMs, fmtInt, fmtMs, fmtPct, fmtTime, statusTone } from '../format.js';
 
-export function Upstreams({ range, params, onOpenTrace }) {
+export function Upstreams({ range, params, onOpenTrace, meta }) {
+  const formatPercentile = meta?.capabilities?.approximatePercentiles ? fmtBucketMs : fmtMs;
   const provider = params.provider || '';
   const { data, error, loading } = useAsync(
     () => adminApi.upstreams({ range, provider }),
@@ -105,7 +106,7 @@ export function Upstreams({ range, params, onOpenTrace }) {
                       <td className="num">{fmtInt(e.rate_limited)}</td>
                       <td className="num">{fmtInt(e.timeouts)}</td>
                       <td className="num">{fmtMs(e.avg_ms)}</td>
-                      <td className="num">{fmtMs(e.p95_ms)}</td>
+                      <td className="num">{formatPercentile(e.p95_ms)}</td>
                       <td className="num">{fmtMs(e.max_ms)}</td>
                     </tr>
                   ))}

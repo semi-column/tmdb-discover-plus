@@ -3,15 +3,16 @@ import { adminApi } from '../api.js';
 import { useAsync, navigate } from '../hooks.js';
 import { TimeChart } from '../components/TimeChart.jsx';
 import { BarList, ErrorNote, Loading, Panel, StatCard } from '../components/ui.jsx';
-import { fmtInt, fmtMs, fmtTime } from '../format.js';
+import { fmtBucketMs, fmtInt, fmtMs, fmtTime } from '../format.js';
 
 const DAILY_SERIES = [{ label: 'Active configs' }, { label: 'Manifest fetches', color: '#4ade80' }];
-const ACTIVITY_SERIES = [{ label: 'Configs saved', color: '#c084fc' }];
+const ACTIVITY_SERIES = [{ label: 'Configs by last update', color: '#c084fc' }];
 
 const toDay = (value) => Math.floor(new Date(value).getTime() / 1000);
 
 export function Usage({ range, meta }) {
   const caps = meta?.capabilities;
+  const formatPercentile = caps?.approximatePercentiles ? fmtBucketMs : fmtMs;
   const overview = useAsync(() => adminApi.overview({ range }), [range]);
   const usage = useAsync(() => adminApi.usage({ range }), [range]);
 
@@ -45,9 +46,18 @@ export function Usage({ range, meta }) {
               sub={`${fmtInt(business.summary.api_keys)} distinct TMDB keys`}
             />
             <StatCard label="Catalogs" value={fmtInt(business.summary.catalogs)} />
-            <StatCard label="Configs saved (24h)" value={fmtInt(business.summary.updated_1d)} />
-            <StatCard label="Configs saved (7d)" value={fmtInt(business.summary.updated_7d)} />
-            <StatCard label="Configs saved (30d)" value={fmtInt(business.summary.updated_30d)} />
+            <StatCard
+              label="Configs last updated (24h)"
+              value={fmtInt(business.summary.updated_1d)}
+            />
+            <StatCard
+              label="Configs last updated (7d)"
+              value={fmtInt(business.summary.updated_7d)}
+            />
+            <StatCard
+              label="Configs last updated (30d)"
+              value={fmtInt(business.summary.updated_30d)}
+            />
             {business.marketplace.totals && (
               <StatCard
                 label="Marketplace"
@@ -56,7 +66,7 @@ export function Usage({ range, meta }) {
               />
             )}
           </div>
-          <Panel title="Config saves per day (30d)">
+          <Panel title="Configs by last update date (30d)">
             <TimeChart data={charts.activity} series={ACTIVITY_SERIES} height={180} />
           </Panel>
         </>
@@ -135,7 +145,7 @@ export function Usage({ range, meta }) {
                     <td className={`num ${Number(c.errors) ? 'adm-text-bad' : ''}`}>
                       {fmtInt(c.errors ?? 0)}
                     </td>
-                    <td className="num">{fmtMs(c.p95_ms)}</td>
+                    <td className="num">{formatPercentile(c.p95_ms)}</td>
                   </tr>
                 ))}
               </tbody>
