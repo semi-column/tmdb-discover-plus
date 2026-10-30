@@ -25,7 +25,11 @@ import {
   Plus,
 } from 'lucide-react';
 import { DonateModal } from './components/modals/DonateModal';
-import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
+import {
+  FilterPanelSkeleton,
+  CatalogListSkeleton,
+  MobileBuilderSkeleton,
+} from './components/layout/Skeleton';
 import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
 import { CreditsBanner } from './components/layout/CreditsBanner';
 import { AppProviders } from './context/AppContext';
@@ -114,12 +118,18 @@ function App() {
 
   if (pageLoading || !config.authChecked) {
     return (
-      <div className="app">
+      <div className={`app ${isMobile ? 'is-builder' : ''}`}>
         <Header stats={stats} />
         <main className="main">
-          <div className="loading loading--page">
-            <div className="spinner" />
-          </div>
+          {isMobile ? (
+            <div className="container">
+              <MobileBuilderSkeleton />
+            </div>
+          ) : (
+            <div className="loading loading--page">
+              <div className="spinner" />
+            </div>
+          )}
         </main>
       </div>
     );
@@ -143,28 +153,37 @@ function App() {
 
   if (tmdb.loading) {
     return (
-      <div className="app">
-        <Header />
+      <div className={`app ${isMobile ? 'is-builder' : ''}`}>
+        <Header stats={stats} />
         <main className="main">
-          <div className="container">
-            <div className="builder-toolbar">
-              <div>
-                <div
-                  className="skeleton-box"
-                  style={{ width: 200, height: 24, borderRadius: 6, marginBottom: 8 }}
-                />
-                <div className="skeleton-box" style={{ width: 320, height: 14, borderRadius: 4 }} />
+          {isMobile ? (
+            <div className="container">
+              <MobileBuilderSkeleton />
+            </div>
+          ) : (
+            <div className="container">
+              <div className="builder-toolbar">
+                <div>
+                  <div
+                    className="skeleton-box"
+                    style={{ width: 200, height: 24, borderRadius: 6, marginBottom: 8 }}
+                  />
+                  <div
+                    className="skeleton-box"
+                    style={{ width: 320, height: 14, borderRadius: 4 }}
+                  />
+                </div>
+              </div>
+              <div className="builder-layout">
+                <aside className="sidebar">
+                  <CatalogListSkeleton count={4} />
+                </aside>
+                <div className="editor-panel" style={{ padding: 24 }}>
+                  <FilterPanelSkeleton />
+                </div>
               </div>
             </div>
-            <div className="builder-layout">
-              <aside className="sidebar">
-                <CatalogListSkeleton count={4} />
-              </aside>
-              <div className="editor-panel" style={{ padding: 24 }}>
-                <FilterPanelSkeleton />
-              </div>
-            </div>
-          </div>
+          )}
         </main>
       </div>
     );

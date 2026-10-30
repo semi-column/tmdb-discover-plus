@@ -36,6 +36,56 @@ export function FilterPanelSkeleton() {
   );
 }
 
+export function MobileBuilderSkeleton() {
+  return (
+    <section
+      className="mobile-builder-skeleton"
+      aria-busy="true"
+      aria-label="Loading catalog workspace"
+    >
+      <span className="mobile-loading-status" role="status">
+        Loading catalog workspace...
+      </span>
+      <div aria-hidden="true">
+        <div className="builder-toolbar">
+          <div className="actions-toolbar">
+            <Skeleton width={44} height={44} borderRadius={6} className="mobile-loading-focus" />
+            <div className="config-dropdown">
+              <Skeleton width="100%" height={44} borderRadius={6} />
+            </div>
+          </div>
+        </div>
+        <div className="mobile-workspace-navigation">
+          <Skeleton width="100%" height={48} borderRadius={6} />
+          <Skeleton width={44} height={48} borderRadius={6} />
+          <Skeleton width={44} height={48} borderRadius={6} />
+        </div>
+        <div className="editor-panel">
+          <div className="editor-header mobile-loading-editor-header">
+            <Skeleton width={36} height={36} borderRadius={6} />
+            <div>
+              <Skeleton width="70%" height={18} borderRadius={4} />
+              <Skeleton width="40%" height={12} borderRadius={4} />
+            </div>
+          </div>
+          <div className="editor-content">
+            <div className="content-type-toggle">
+              {[0, 1, 2].map((key) => (
+                <Skeleton key={key} width="100%" height={44} borderRadius={4} />
+              ))}
+            </div>
+            <FilterPanelSkeleton />
+          </div>
+        </div>
+        <div className="mobile-editor-actions">
+          <Skeleton width="100%" height={46} borderRadius={6} />
+          <Skeleton width="100%" height={46} borderRadius={6} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function PreviewGridSkeleton({ count = 10 }) {
   return (
     <div className="preview-grid">

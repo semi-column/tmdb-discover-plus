@@ -98,21 +98,6 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl, onDonate
             </button>
           </div>
 
-          <div
-            style={{
-              background: 'rgba(124, 58, 237, 0.1)',
-              border: '1px solid var(--accent-primary)',
-              borderRadius: 'var(--radius-md)',
-              padding: '14px',
-              marginTop: '16px',
-            }}
-          >
-            <p className="text-sm">
-              <strong>Tip:</strong> You can always return to your configuration page to edit your
-              catalogs. Stremio may cache addon data—if you don't see changes, refresh the Addons
-              page or restart Stremio.
-            </p>
-          </div>
           <div className="install-community-callout">
             <div className="install-community-text">
               <strong>Join the community on Discord</strong>
@@ -122,7 +107,7 @@ export function InstallModal({ isOpen, onClose, installUrl, stremioUrl, onDonate
               href={DISCORD_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="header-community-btn install-community-btn"
+              className="install-community-btn"
             >
               <DiscordIcon className="sidebar-support-icon" />
               Join Discord

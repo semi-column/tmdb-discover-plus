@@ -282,6 +282,29 @@
 
 .install-community-btn {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #5865f2;
+  border-radius: 6px;
+  background: #5865f2;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.install-community-btn:hover {
+  background: #4752c4;
+  color: #fff;
+  text-decoration: none;
+}
+.install-community-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
 }
 
 .install-support-note {

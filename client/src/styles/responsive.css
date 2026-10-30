@@ -821,6 +821,46 @@
   display: none;
 }
 
+.mobile-loading-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.mobile-builder-skeleton .skeleton-box {
+  max-width: 100%;
+}
+.mobile-builder-skeleton .builder-toolbar {
+  display: block;
+}
+.mobile-loading-focus {
+  grid-column: 1;
+}
+.mobile-builder-skeleton .mobile-loading-editor-header {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: center;
+}
+.mobile-loading-editor-header > .skeleton-box {
+  flex-shrink: 0;
+}
+.mobile-loading-editor-header > div:not(.skeleton-box) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-builder-skeleton .skeleton-box {
+    animation: none;
+  }
+}
+
 .mobile-catalog-management {
   width: 100%;
 }
