@@ -3,14 +3,14 @@ import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 
 const PALETTE = [
-  '#4a9eff',
-  '#ef4444',
-  '#facc15',
-  '#4ade80',
-  '#c084fc',
-  '#f97316',
-  '#22d3ee',
-  '#a3a3a3',
+  '#70d7b6',
+  '#f18683',
+  '#edc36a',
+  '#8cbbe8',
+  '#b6bea0',
+  '#dd9d7e',
+  '#8acbd1',
+  '#b0b8b2',
 ];
 
 /** Thin uPlot wrapper. `data` = [timestampsSec[], ...seriesValues[]], `series` = [{ label, color? }]. */
@@ -35,15 +35,25 @@ export function TimeChart({ data, series, height = 220, yLabel }) {
         },
       },
       axes: [
-        { stroke: '#8a8a8a', grid: { stroke: '#2a2a2a' } },
-        { stroke: '#8a8a8a', grid: { stroke: '#2a2a2a' }, label: yLabel, size: 60 },
+        {
+          stroke: '#929da4',
+          grid: { stroke: '#303638', width: 1 },
+          font: '11px "Avenir Next", sans-serif',
+        },
+        {
+          stroke: '#929da4',
+          grid: { stroke: '#303638', width: 1 },
+          label: yLabel,
+          size: 56,
+          font: '11px "Avenir Next", sans-serif',
+        },
       ],
       series: [
         {},
         ...series.map((s, i) => ({
           label: s.label,
           stroke: s.color || PALETTE[i % PALETTE.length],
-          width: 1.5,
+          width: 2,
           spanGaps: true,
         })),
       ],

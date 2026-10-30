@@ -1,8 +1,17 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Film, Tv, GripVertical, Trash2, Copy, Sparkles } from 'lucide-react';
+import { Film, Tv, GripVertical, Trash2, Copy, Sparkles, ArrowUp, ArrowDown } from 'lucide-react';
 
-export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onDuplicate }) {
+export function SortableCatalogItem({
+  catalog,
+  isActive,
+  onSelect,
+  onDelete,
+  onDuplicate,
+  onMove,
+  canMoveUp,
+  canMoveDown,
+}) {
   const getCatalogKey = (cat) => String(cat?._id || cat?.id || cat?.name);
   const id = getCatalogKey(catalog);
   const isSourceDisabled = false;
@@ -30,7 +39,9 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
         className="catalog-item-main"
         onClick={() => !isSourceDisabled && onSelect(catalog)}
         onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
           if (!isSourceDisabled && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
             onSelect(catalog);
           }
         }}
@@ -119,6 +130,30 @@ export function SortableCatalogItem({ catalog, isActive, onSelect, onDelete, onD
       </div>
       {isActive && !isSourceDisabled && (
         <div className="catalog-item-expanded">
+          {onMove && (
+            <div className="catalog-move-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                aria-label="Move catalog up"
+                title="Move up"
+                disabled={!canMoveUp}
+                onClick={() => onMove(-1)}
+              >
+                <ArrowUp size={16} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                aria-label="Move catalog down"
+                title="Move down"
+                disabled={!canMoveDown}
+                onClick={() => onMove(1)}
+              >
+                <ArrowDown size={16} />
+              </button>
+            </div>
+          )}
           <button
             className="btn-action-minimal"
             onClick={(e) => {

@@ -85,12 +85,16 @@ function RoutePerformance({ range, approximatePercentiles }) {
           </thead>
           <tbody>
             {(data || []).map((r) => (
-              <tr
-                key={r.route}
-                className="adm-clickable"
-                onClick={() => navigate('requests', { range, route: r.route })}
-              >
-                <td className="mono">{r.route}</td>
+              <tr key={r.route} className="adm-clickable">
+                <td className="mono">
+                  <button
+                    type="button"
+                    className="adm-link mono"
+                    onClick={() => navigate('requests', { range, route: r.route })}
+                  >
+                    {r.route}
+                  </button>
+                </td>
                 <td className="num">{fmtInt(r.count)}</td>
                 <td className={`num ${Number(r.errors5xx) ? 'adm-text-bad' : ''}`}>
                   {fmtInt(r.errors5xx ?? 0)}
@@ -160,23 +164,28 @@ function RequestList({ range, filters, onOpenTrace }) {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr
-                  key={`${r.request_id}-${r.ts}`}
-                  className="adm-clickable"
-                  onClick={() => onOpenTrace(r.request_id)}
-                >
+                <tr key={`${r.request_id}-${r.ts}`} className="adm-clickable">
                   <td className="nowrap">{fmtTime(r.ts)}</td>
                   <td>
                     <Badge tone={statusTone(r.status)}>{r.status}</Badge>
                     {r.error_fp && (
-                      <Badge tone="bad" title="An error was logged during this request">
-                        err
+                      <Badge
+                        tone={r.status >= 500 ? 'bad' : 'warn'}
+                        title="An application error was logged; open the trace to check the HTTP outcome"
+                      >
+                        log
                       </Badge>
                     )}
                   </td>
                   <td>{r.method}</td>
                   <td className="mono adm-ellipsis" title={r.path}>
-                    {r.path}
+                    <button
+                      type="button"
+                      className="adm-link mono"
+                      onClick={() => onOpenTrace(r.request_id)}
+                    >
+                      {r.path}
+                    </button>
                   </td>
                   <td className="num">{fmtMs(r.duration_ms)}</td>
                   <td>{r.source}</td>
@@ -209,7 +218,7 @@ export function Requests({ range, params, onOpenTrace, meta }) {
   const caps = meta?.capabilities;
   const filters = pickFilters(params);
   const filterKey = JSON.stringify(filters);
-  const [tab, setTab] = useState(params.tab === 'routes' ? 'routes' : 'explorer');
+  const tab = params.tab === 'routes' ? 'routes' : 'explorer';
 
   const facets = useAsync(() => adminApi.facets({ range }), [range]);
 
@@ -220,13 +229,45 @@ export function Requests({ range, params, onOpenTrace, meta }) {
 
   return (
     <div className="adm-stack">
+      <div className="adm-investigation-bar" role="group" aria-label="Request investigation">
+        {[
+          ['All responses', {}],
+          ['HTTP failures', { status: '5xx' }],
+          ['Slow responses', { minMs: 1500 }],
+          ['5xx or logged errors', { errorsOnly: 'true' }],
+        ].map(([label, preset]) => (
+          <button
+            type="button"
+            className="adm-btn"
+            key={label}
+            onClick={() => navigate('requests', { range, ...preset })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {activeCount > 0 && (
+        <div className="adm-filter-summary" aria-label="Active filters">
+          {Object.entries(filters).map(([name, value]) => (
+            <button
+              type="button"
+              className="adm-filter-chip"
+              key={name}
+              title={`Remove ${name} filter`}
+              onClick={() => setFilter(name, '')}
+            >
+              {name}: {value} <span aria-hidden="true">×</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="adm-tabs" role="tablist">
         <button
           type="button"
           role="tab"
           aria-selected={tab === 'explorer'}
           className={tab === 'explorer' ? 'active' : ''}
-          onClick={() => setTab('explorer')}
+          onClick={() => navigate('requests', { range, ...filters })}
         >
           Explorer
         </button>
@@ -235,7 +276,7 @@ export function Requests({ range, params, onOpenTrace, meta }) {
           role="tab"
           aria-selected={tab === 'routes'}
           className={tab === 'routes' ? 'active' : ''}
-          onClick={() => setTab('routes')}
+          onClick={() => navigate('requests', { range, ...filters, tab: 'routes' })}
         >
           Route performance
         </button>

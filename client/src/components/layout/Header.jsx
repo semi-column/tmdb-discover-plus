@@ -12,6 +12,7 @@ function CommunityActions({ onSupportClick }) {
         target="_blank"
         rel="noopener noreferrer"
         className="header-community-btn"
+        aria-label="Join Discord"
         title="Get help, updates and request features"
       >
         <DiscordIcon className="sidebar-support-icon" />
@@ -20,6 +21,7 @@ function CommunityActions({ onSupportClick }) {
       <button
         type="button"
         className="header-support-btn"
+        aria-label="Support the project"
         onClick={onSupportClick}
         title="Support the project"
       >
@@ -49,6 +51,17 @@ export function Header({ stats }) {
                 {isNightly && <span className="nightly-badge">Nightly</span>}
               </div>
               <span className="logo-subtitle">Custom Catalogs for Stremio</span>
+              {stats && (
+                <div className="mobile-header-stats" aria-label="Community statistics">
+                  <span>
+                    <strong>{stats.totalUsers.toLocaleString()}</strong> users
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>
+                    <strong>{stats.totalCatalogs.toLocaleString()}</strong> catalogs
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

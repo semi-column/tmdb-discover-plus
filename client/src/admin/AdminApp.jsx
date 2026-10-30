@@ -14,29 +14,56 @@ import { Usage } from './pages/Usage.jsx';
 import { System } from './pages/System.jsx';
 import { Diagnostics } from './pages/Diagnostics.jsx';
 import { Security } from './pages/Security.jsx';
+import {
+  Activity,
+  ArrowLeft,
+  ArrowUpRight,
+  ChevronRight,
+  Menu,
+  X,
+  LayoutDashboard,
+  ListFilter,
+  Radio,
+  FileWarning,
+  Network,
+  ChartNoAxesCombined,
+  Cpu,
+  Route,
+  ShieldCheck,
+  LogOut,
+} from 'lucide-react';
 
 const PAGES = [
-  ['overview', 'Overview'],
-  ['requests', 'Requests'],
-  ['live', 'Live tail'],
-  ['errors', 'Errors'],
-  ['upstreams', 'Upstream APIs'],
-  ['usage', 'Usage'],
-  ['system', 'System'],
-  ['diagnostics', 'Proxy diagnostics'],
-  ['security', 'Security'],
+  ['overview', 'Overview', LayoutDashboard],
+  ['requests', 'Requests', ListFilter],
+  ['live', 'Live tail', Radio],
+  ['errors', 'Application logs', FileWarning],
+  ['upstreams', 'Dependencies', Network],
+  ['usage', 'Usage', ChartNoAxesCombined],
+  ['system', 'System', Cpu],
+  ['diagnostics', 'Proxy diagnostics', Route],
+  ['security', 'Security', ShieldCheck],
 ];
 
 const HISTORY_LABELS = { postgres: 'Postgres', mongo: 'MongoDB', memory: 'in-memory' };
 
 function Dashboard({ onLogout }) {
   const { page, params } = useHashRoute();
+  const [navOpen, setNavOpen] = useState(false);
   const range = RANGE_OPTIONS.includes(params.range) ? params.range : '1h';
-  const [traceId, setTraceId] = useState(null);
+  const traceId = params.trace || null;
   const meta = useAsync(() => adminApi.meta(), [], { pollMs: 60_000 });
-  const closeTrace = useCallback(() => setTraceId(null), []);
+  const closeTrace = useCallback(
+    () => navigate(page, { ...params, trace: undefined }),
+    [page, params]
+  );
 
-  const pageProps = { range, params, onOpenTrace: setTraceId, meta: meta.data };
+  const pageProps = {
+    range,
+    params,
+    onOpenTrace: (trace) => navigate(page, { ...params, trace }),
+    meta: meta.data,
+  };
   const content = {
     overview: <Overview {...pageProps} />,
     requests: <Requests {...pageProps} />,
@@ -55,17 +82,46 @@ function Dashboard({ onLogout }) {
 
   return (
     <div className="adm-shell">
-      <nav className="adm-nav" aria-label="Admin sections">
-        <div className="adm-brand">TMDB Discover+ · Admin</div>
-        {PAGES.map(([id, label]) => (
-          <a
-            key={id}
-            href={`#/${id}${showRange && range !== '1h' ? `?range=${range}` : ''}`}
-            className={page === id ? 'active' : ''}
+      <nav className={`adm-nav ${navOpen ? 'is-open' : ''}`} aria-label="Admin sections">
+        <div className="adm-nav-heading">
+          <div className="adm-brand">
+            <span className="adm-brand-mark">
+              <Activity size={20} aria-hidden="true" />
+            </span>
+            <span>
+              TMDB Discover+<small>OPERATIONS</small>
+            </span>
+          </div>
+          <button
+            type="button"
+            className="adm-btn adm-icon-btn adm-mobile-menu"
+            aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
+            title={navOpen ? 'Close navigation' : 'Open navigation'}
+            aria-expanded={navOpen}
+            aria-controls="adm-nav-links"
+            onClick={() => setNavOpen(!navOpen)}
           >
-            {label}
-          </a>
-        ))}
+            {navOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+        <div id="adm-nav-links" className="adm-nav-links">
+          {PAGES.map(([id, label, Icon], index) => (
+            <div key={id}>
+              {(index === 0 || index === 6) && (
+                <div className="adm-nav-section">{index === 0 ? 'Monitor' : 'Administration'}</div>
+              )}
+              <a
+                href={`#/${id}${range !== '1h' ? `?range=${range}` : ''}`}
+                className={page === id ? 'active' : ''}
+                aria-current={page === id ? 'page' : undefined}
+                onClick={() => setNavOpen(false)}
+              >
+                <Icon size={17} aria-hidden="true" />
+                {label}
+              </a>
+            </div>
+          ))}
+        </div>
         <div className="adm-nav-foot">
           {m && (
             <div className="adm-muted">
@@ -73,8 +129,16 @@ function Dashboard({ onLogout }) {
               {HISTORY_LABELS[m.persistence] ?? m.persistence}
             </div>
           )}
+          <a
+            className="adm-builder-link"
+            href="/configure"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Catalog builder <ArrowUpRight size={14} aria-hidden="true" />
+          </a>
           <button type="button" className="adm-btn" onClick={onLogout}>
-            Sign out
+            <LogOut size={15} aria-hidden="true" /> Sign out
           </button>
         </div>
       </nav>
@@ -96,6 +160,37 @@ function Dashboard({ onLogout }) {
             </div>
           )}
         </header>
+        {page !== 'overview' && (
+          <nav className="adm-breadcrumbs" aria-label="Investigation path">
+            <button
+              type="button"
+              className="adm-link"
+              onClick={() => navigate('overview', { range })}
+            >
+              <ArrowLeft size={14} /> Overview
+            </button>
+            <ChevronRight size={14} aria-hidden="true" />
+            <span>{PAGES.find(([id]) => id === page)?.[1]}</span>
+            {params.provider && (
+              <>
+                <ChevronRight size={14} aria-hidden="true" />
+                <button
+                  type="button"
+                  className="adm-link"
+                  onClick={() => navigate(page, { range, provider: params.provider })}
+                >
+                  {params.provider}
+                </button>
+              </>
+            )}
+            {params.endpoint && (
+              <>
+                <ChevronRight size={14} aria-hidden="true" />
+                <span className="mono">{params.endpoint}</span>
+              </>
+            )}
+          </nav>
+        )}
         {caps?.history === 'memory' && (
           <div className="adm-alert adm-tone-warn">
             No database for history: keeping the last {caps.memoryCapacity?.toLocaleString()}{' '}
@@ -114,9 +209,9 @@ function Dashboard({ onLogout }) {
         <TraceDrawer
           requestId={traceId}
           onClose={closeTrace}
+          onInvestigate={(target, filters) => navigate(target, { range, ...filters })}
           onOpenError={(fp) => {
-            setTraceId(null);
-            navigate('errors', { fp });
+            navigate('errors', { range, fp });
           }}
         />
       )}

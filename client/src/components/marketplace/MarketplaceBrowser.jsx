@@ -49,6 +49,7 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
 
   // Native preview surface state (mirrors CatalogEditor's preview wiring).
   const [previewData, setPreviewData] = useState(null);
+  const [previewSource, setPreviewSource] = useState('tmdb');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -88,6 +89,7 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
   const runPreview = useCallback(
     async (entry) => {
       lastPreviewEntryRef.current = entry;
+      setPreviewSource(entry.source || 'tmdb');
       const requestId = ++previewRequestRef.current;
       if (isMobileSize) setIsPreviewModalOpen(true);
       setPreviewLoading(true);
@@ -157,7 +159,7 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
               </div>
             </div>
           </div>
-          <div className="editor-actions" style={{ minWidth: '180px' }}>
+          <div className="editor-actions marketplace-sort-actions" style={{ minWidth: '180px' }}>
             <MarketplaceSortSelect value={sort} onChange={handleSortChange} />
           </div>
         </div>
@@ -233,6 +235,7 @@ export function MarketplaceBrowser({ userId = null, refreshConfig = null, apiKey
       </div>
 
       <CatalogPreview
+        source={previewSource}
         loading={previewLoading}
         error={previewError}
         data={previewData}

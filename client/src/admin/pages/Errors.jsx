@@ -4,9 +4,9 @@ import { useAsync, navigate } from '../hooks.js';
 import { Badge, ErrorNote, Loading, Panel, Sparkline } from '../components/ui.jsx';
 import { fmtAgo, fmtInt, fmtTime } from '../format.js';
 
-const STATUS_TONES = { open: 'bad', regressed: 'bad', resolved: 'good', ignored: 'muted' };
+const STATUS_TONES = { open: 'warn', regressed: 'warn', resolved: 'good', ignored: 'muted' };
 
-function ErrorDetail({ fingerprint, onOpenTrace, onChanged }) {
+function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
   const { data, error, loading, reload } = useAsync(
     () => adminApi.errorGroup(fingerprint),
     [fingerprint]
@@ -71,13 +71,26 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged }) {
               Reopen
             </button>
           )}
-          <button type="button" className="adm-btn" onClick={() => navigate('errors')}>
+          <button
+            type="button"
+            className="adm-btn"
+            onClick={() =>
+              navigate('errors', { ...params, range, fp: undefined, trace: undefined })
+            }
+          >
             Back
           </button>
         </>
       }
     >
       <ErrorNote error={actionError} />
+      <div className="adm-context-note">
+        <strong>Log severity is not response impact</strong>
+        <p>
+          A linked request trace can establish the HTTP outcome. Background events have no parent
+          response; successful HTTP responses may still contain incomplete results.
+        </p>
+      </div>
       <p className="mono adm-error-message">{g.message}</p>
       <div className="adm-trace-grid">
         <div className="adm-trace-field">
@@ -117,7 +130,20 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged }) {
           <ul className="adm-list">
             {data.routes.map((r) => (
               <li key={r.route}>
-                <span className="mono">{r.route || '(background job)'}</span> · {fmtInt(r.count)}
+                {r.route ? (
+                  <button
+                    type="button"
+                    className="adm-link mono"
+                    onClick={() =>
+                      navigate('requests', { range, route: r.route, errorsOnly: 'true' })
+                    }
+                  >
+                    {r.route}
+                  </button>
+                ) : (
+                  <span className="mono">Background job</span>
+                )}{' '}
+                · {fmtInt(r.count)}
               </li>
             ))}
           </ul>
@@ -164,7 +190,14 @@ export function Errors({ range, params, onOpenTrace }) {
 
   if (params.fp) {
     return (
-      <ErrorDetail fingerprint={params.fp} onOpenTrace={onOpenTrace} onChanged={list.reload} />
+      <ErrorDetail
+        key={params.fp}
+        fingerprint={params.fp}
+        onOpenTrace={onOpenTrace}
+        onChanged={list.reload}
+        range={range}
+        params={params}
+      />
     );
   }
 
@@ -176,7 +209,7 @@ export function Errors({ range, params, onOpenTrace }) {
 
   return (
     <Panel
-      title="Errors & warnings (grouped)"
+      title="Application log groups"
       actions={
         <>
           <select
@@ -218,6 +251,14 @@ export function Errors({ range, params, onOpenTrace }) {
       }
     >
       <ErrorNote error={list.error} />
+      <div className="adm-context-note">
+        <strong>Uncorrelated signals</strong>
+        <p>
+          Open and regressed are triage states, not proof of an outage. Transport warnings may be
+          retried; missing-resource lookups may be expected. Confirm the parent response before
+          resolving or ignoring a group.
+        </p>
+      </div>
       {list.loading && !list.data ? (
         <Loading />
       ) : groups.length === 0 ? (
@@ -228,7 +269,7 @@ export function Errors({ range, params, onOpenTrace }) {
             <thead>
               <tr>
                 <th>Issue</th>
-                <th>Status</th>
+                <th>Triage</th>
                 <th className="num">Total</th>
                 <th>Trend</th>
                 <th>Last seen</th>
@@ -237,11 +278,7 @@ export function Errors({ range, params, onOpenTrace }) {
             </thead>
             <tbody>
               {groups.map((g) => (
-                <tr
-                  key={g.fingerprint}
-                  className="adm-clickable"
-                  onClick={() => go({ fp: g.fingerprint })}
-                >
+                <tr key={g.fingerprint} className="adm-clickable">
                   <td>
                     <div>
                       <Badge tone={g.level === 'error' ? 'bad' : 'warn'}>{g.level}</Badge>{' '}
@@ -253,7 +290,13 @@ export function Errors({ range, params, onOpenTrace }) {
                       )}
                     </div>
                     <div className="mono adm-ellipsis adm-error-line" title={g.message}>
-                      {g.message}
+                      <button
+                        type="button"
+                        className="adm-link mono"
+                        onClick={() => go({ fp: g.fingerprint })}
+                      >
+                        {g.message}
+                      </button>
                     </div>
                     {g.sample_route && <div className="adm-muted mono">{g.sample_route}</div>}
                   </td>

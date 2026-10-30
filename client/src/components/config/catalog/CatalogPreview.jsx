@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, memo } from 'react';
+import { createPortal } from 'react-dom';
+import { useModalA11y } from '../../../hooks/useModalA11y';
 import {
   Eye,
   Settings,
@@ -19,6 +21,7 @@ export const CatalogPreview = memo(function CatalogPreview({
   error,
   data,
   previewPosterProvider,
+  source = 'tmdb',
   onRetry,
   onOpenPreferences,
   isModal,
@@ -27,6 +30,7 @@ export const CatalogPreview = memo(function CatalogPreview({
 }) {
   const [showUpdated, setShowUpdated] = useState(false);
   const prevDataRef = useRef(null);
+  const modalRef = useModalA11y(Boolean(isModal && isOpen), onClose);
 
   useEffect(() => {
     if (data && data !== prevDataRef.current && prevDataRef.current !== null) {
@@ -208,21 +212,13 @@ export const CatalogPreview = memo(function CatalogPreview({
 
   if (isModal) {
     if (!isOpen) return null;
-    return (
+    return createPortal(
       <div
-        className="modal-overlay preview-modal-overlay"
+        className={`modal-overlay preview-modal-overlay theme-${source}`}
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onClose();
-          }
-        }}
-        role="button"
-        tabIndex={0}
-        aria-label="Close preview"
+        role="presentation"
         style={{
           zIndex: 1000,
           position: 'fixed',
@@ -234,7 +230,11 @@ export const CatalogPreview = memo(function CatalogPreview({
         }}
       >
         <div
+          ref={modalRef}
           className="preview-modal-container"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Catalog preview"
           style={{
             position: 'relative',
             width: '100%',
@@ -247,6 +247,8 @@ export const CatalogPreview = memo(function CatalogPreview({
         >
           <button
             className="btn btn-ghost btn-icon"
+            aria-label="Close preview"
+            title="Close preview"
             onClick={onClose}
             style={{
               position: 'absolute',
@@ -260,7 +262,8 @@ export const CatalogPreview = memo(function CatalogPreview({
           </button>
           {content}
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 

@@ -2,21 +2,22 @@ import { useMemo } from 'react';
 import { adminApi } from '../api.js';
 import { useAsync, navigate } from '../hooks.js';
 import { TimeChart } from '../components/TimeChart.jsx';
+import { AttentionSummary } from '../components/AttentionSummary.jsx';
 import { BarList, ErrorNote, Loading, Panel, StatCard } from '../components/ui.jsx';
 import { delta, fmtBucketMs, fmtInt, fmtMs, fmtPct } from '../format.js';
 
 const REQUEST_SERIES = [
   { label: 'Requests' },
-  { label: '5xx', color: '#ef4444' },
-  { label: '4xx', color: '#facc15' },
+  { label: '5xx', color: '#f18683' },
+  { label: '4xx', color: '#edc36a' },
 ];
 const LATENCY_SERIES = [
-  { label: 'Avg', color: '#4a9eff' },
-  { label: 'p95 (≤)', color: '#c084fc' },
+  { label: 'Avg', color: '#70d7b6' },
+  { label: 'p95 (≤)', color: '#8cbbe8' },
 ];
 const LOG_SERIES = [
-  { label: 'Errors logged', color: '#ef4444' },
-  { label: 'Warnings logged', color: '#facc15' },
+  { label: 'Errors logged', color: '#f18683' },
+  { label: 'Warnings logged', color: '#edc36a' },
 ];
 
 function Trend({ current, previous, invert }) {
@@ -54,6 +55,7 @@ export function Overview({ range }) {
   return (
     <div className="adm-stack">
       <ErrorNote error={error} />
+      <AttentionSummary totals={totals} range={range} />
       {spike && (
         <div className="adm-alert adm-tone-bad">
           Error rate is {fmtPct(totals.errorRate)}, more than double the previous period (
@@ -64,22 +66,26 @@ export function Overview({ range }) {
         <StatCard
           label="HTTP requests (all routes)"
           value={fmtInt(totals.requests)}
+          onClick={() => navigate('requests', { range })}
           sub={<Trend current={totals.requests} previous={previous?.requests} invert />}
         />
         <StatCard
           label="5xx error rate"
           value={fmtPct(totals.errorRate)}
+          onClick={() => navigate('requests', { range, status: '5xx' })}
           tone={totals.errorRate > 0.01 ? 'bad' : 'good'}
           sub={`${fmtInt(totals.errors5xx)} errors · ${fmtInt(totals.errors4xx)} 4xx`}
         />
         <StatCard
           label="Latency p95"
           value={fmtBucketMs(totals.p95Ms)}
+          onClick={() => navigate('requests', { range, tab: 'routes' })}
           sub={`avg ${fmtMs(totals.avgMs)} · p99 ${fmtBucketMs(totals.p99Ms)}`}
         />
         <StatCard
           label="Slow requests"
           value={fmtInt(totals.slow)}
+          onClick={() => navigate('requests', { range, minMs: 1500 })}
           tone={totals.slow ? 'warn' : undefined}
         />
         <StatCard
@@ -89,32 +95,41 @@ export function Overview({ range }) {
         />
         <StatCard label="Cache lookup hit rate" value={fmtPct(totals.cacheHitRate, 1)} />
         <StatCard
-          label="Logged errors / warnings"
+          label="Internal logs: errors / warnings"
           value={`${fmtInt(totals.logErrors)} / ${fmtInt(totals.logWarnings)}`}
-          tone={totals.logErrors ? 'bad' : undefined}
+          tone={totals.logErrors ? 'warn' : undefined}
           sub={
-            <button type="button" className="adm-link" onClick={() => navigate('errors')}>
-              View errors →
+            <button
+              type="button"
+              className="adm-link"
+              onClick={() => navigate('errors', { range, status: 'all' })}
+            >
+              Investigate logs →
             </button>
           }
         />
       </div>
 
-      <Panel title={`Traffic (per ${data.range.resolution})`}>
-        <TimeChart data={charts.requests} series={REQUEST_SERIES} />
-      </Panel>
       <div className="adm-grid-2">
+        <Panel title={`Traffic (per ${data.range.resolution})`}>
+          <TimeChart data={charts.requests} series={REQUEST_SERIES} />
+        </Panel>
         <Panel title="Latency">
           <TimeChart data={charts.latency} series={LATENCY_SERIES} yLabel="ms" height={200} />
         </Panel>
-        <Panel title="Logged errors & warnings">
-          <TimeChart data={charts.logs} series={LOG_SERIES} height={200} />
-        </Panel>
       </div>
+
+      <details className="adm-secondary">
+        <summary>
+          Internal log activity · {fmtInt(totals.logErrors)} errors / {fmtInt(totals.logWarnings)}{' '}
+          warnings
+        </summary>
+        <TimeChart data={charts.logs} series={LOG_SERIES} height={200} />
+      </details>
 
       <Panel
         title="Routes"
-        actions={<span className="adm-muted">click a row to inspect requests</span>}
+        actions={<span className="adm-muted">{fmtInt(data.routes.length)} routes</span>}
       >
         <div className="adm-table-wrap">
           <table className="adm-table">
@@ -129,13 +144,15 @@ export function Overview({ range }) {
             </thead>
             <tbody>
               {data.routes.slice(0, 40).map((r) => (
-                <tr
-                  key={r.route}
-                  className="adm-clickable"
-                  onClick={() => navigate('requests', { range, route: r.route })}
-                >
+                <tr key={r.route} className="adm-clickable">
                   <td className="mono">
-                    {r.route === '(unmatched)' ? '(unmatched / SPA fallback)' : r.route}
+                    <button
+                      type="button"
+                      className="adm-link mono"
+                      onClick={() => navigate('requests', { range, route: r.route })}
+                    >
+                      {r.route === '(unmatched)' ? '(unmatched / SPA fallback)' : r.route}
+                    </button>
                   </td>
                   <td className="num">{fmtInt(r.count)}</td>
                   <td className={`num ${r.errors5xx ? 'adm-text-bad' : ''}`}>
@@ -169,7 +186,9 @@ export function Overview({ range }) {
                   ? `≤ ${fmtMs(data.latencyHistogram.bounds[i])}`
                   : `> ${fmtMs(data.latencyHistogram.bounds.at(-1))}`,
               count,
+              minMs: i ? data.latencyHistogram.bounds[i - 1] + 1 : 0,
             }))}
+            onSelect={(_label, bucket) => navigate('requests', { range, minMs: bucket.minMs })}
           />
         </Panel>
         <Panel title="Addon resources">

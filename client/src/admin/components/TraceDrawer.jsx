@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useModalA11y } from '../../hooks/useModalA11y';
+import { X, ArrowUpRight } from 'lucide-react';
 import { adminApi } from '../api.js';
 import { useAsync } from '../hooks.js';
 import { Badge, ErrorNote, Loading, Panel } from '../components/ui.jsx';
-import { fmtMs, fmtTime, statusTone } from '../format.js';
+import { fmtMs, fmtTime, statusTone, requestOutcome, upstreamOutcome } from '../format.js';
 
 function Field({ label, children }) {
   return (
@@ -13,18 +14,14 @@ function Field({ label, children }) {
   );
 }
 
-export function TraceDrawer({ requestId, onClose, onOpenError }) {
+export function TraceDrawer({ requestId, onClose, onOpenError, onInvestigate }) {
   const { data, error, loading } = useAsync(() => adminApi.trace(requestId), [requestId]);
-
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  const drawerRef = useModalA11y(true, onClose);
 
   const req = data?.requests?.[0];
   const total = req ? Number(req.duration_ms) || 1 : 1;
   const start = req ? new Date(req.ts).getTime() : 0;
+  const outcome = req ? requestOutcome(req, data.upstream, data.errors) : null;
 
   return (
     <div
@@ -32,13 +29,26 @@ export function TraceDrawer({ requestId, onClose, onOpenError }) {
       role="presentation"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <aside className="adm-drawer" role="dialog" aria-modal="true" aria-label="Request trace">
+      <aside
+        ref={drawerRef}
+        tabIndex={-1}
+        className="adm-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Request trace"
+      >
         <header className="adm-panel-head">
           <h2>
             Request <span className="mono">{requestId}</span>
           </h2>
-          <button type="button" className="adm-btn" onClick={onClose}>
-            Close
+          <button
+            type="button"
+            className="adm-btn adm-icon-btn"
+            aria-label="Close trace"
+            title="Close trace"
+            onClick={onClose}
+          >
+            <X size={18} />
           </button>
         </header>
         {loading && <Loading />}
@@ -50,6 +60,36 @@ export function TraceDrawer({ requestId, onClose, onOpenError }) {
         )}
         {req && (
           <div className="adm-stack">
+            <div className={`adm-trace-outcome adm-tone-${outcome.tone}`}>
+              <strong>{outcome.label}</strong>
+              <p>{outcome.detail}</p>
+              <div className="adm-panel-actions">
+                <Badge tone={statusTone(req.status)}>HTTP {req.status}</Badge>
+                <span>
+                  {data.upstream.filter((call) => !call.status || call.status >= 400).length} failed
+                  dependency attempts
+                </span>
+                <span>{data.errors.length} log events</span>
+              </div>
+            </div>
+            {onInvestigate && (
+              <div className="adm-investigation-bar">
+                <button
+                  type="button"
+                  className="adm-btn"
+                  onClick={() => onInvestigate('requests', { route: req.route })}
+                >
+                  <ArrowUpRight size={14} /> Same route
+                </button>
+                <button
+                  type="button"
+                  className="adm-btn"
+                  onClick={() => onInvestigate('requests', { route: req.route, status: '5xx' })}
+                >
+                  <ArrowUpRight size={14} /> Failed responses on this route
+                </button>
+              </div>
+            )}
             <div className="adm-trace-grid">
               <Field label="Time">{fmtTime(req.ts)}</Field>
               <Field label="Status">
@@ -83,8 +123,28 @@ export function TraceDrawer({ requestId, onClose, onOpenError }) {
                     return (
                       <div key={i} className="adm-waterfall-row">
                         <span className="adm-waterfall-label mono" title={`${u.host}${u.path}`}>
-                          <Badge tone={statusTone(u.status)}>{u.status || 'ERR'}</Badge>{' '}
-                          {u.provider} {u.path}
+                          <Badge
+                            tone={upstreamOutcome(u.status).tone}
+                            title={upstreamOutcome(u.status).detail}
+                          >
+                            {u.status || 'NET'}
+                          </Badge>{' '}
+                          {onInvestigate ? (
+                            <button
+                              type="button"
+                              className="adm-link mono"
+                              onClick={() =>
+                                onInvestigate('upstreams', {
+                                  provider: u.provider,
+                                  endpoint: u.path,
+                                })
+                              }
+                            >
+                              {u.provider} {u.path}
+                            </button>
+                          ) : (
+                            `${u.provider} ${u.path}`
+                          )}
                         </span>
                         <span className="adm-waterfall-track">
                           <span

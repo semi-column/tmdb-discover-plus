@@ -14,13 +14,20 @@ export function Panel({ title, actions, children, className = '' }) {
   );
 }
 
-export function StatCard({ label, value, sub, tone }) {
-  return (
+export function StatCard({ label, value, sub, tone, onClick }) {
+  const content = (
     <span className={`adm-stat ${tone ? `adm-tone-${tone}` : ''}`}>
       <span className="adm-stat-label">{label}</span>
       <span className="adm-stat-value">{value}</span>
       {sub && <span className="adm-stat-sub">{sub}</span>}
     </span>
+  );
+  return onClick ? (
+    <button type="button" className="adm-stat-button" onClick={onClick}>
+      {content}
+    </button>
+  ) : (
+    content
   );
 }
 
@@ -42,7 +49,7 @@ export function BarList({ items, onSelect, format = fmtInt, empty = 'No data' })
           <button
             type="button"
             className="adm-barlist-row"
-            onClick={onSelect ? () => onSelect(item.key) : undefined}
+            onClick={onSelect ? () => onSelect(item.key, item) : undefined}
             disabled={!onSelect}
           >
             <span

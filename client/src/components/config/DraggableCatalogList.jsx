@@ -51,7 +51,7 @@ export function DraggableCatalogList({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={catalogs.map(getCatalogKey)} strategy={verticalListSortingStrategy}>
-        {catalogs.map((catalog) => (
+        {catalogs.map((catalog, index) => (
           <SortableCatalogItem
             key={getCatalogKey(catalog)}
             catalog={catalog}
@@ -59,6 +59,14 @@ export function DraggableCatalogList({
             onSelect={onSelectCatalog}
             onDelete={onDeleteCatalog}
             onDuplicate={onDuplicateCatalog}
+            canMoveUp={index > 0}
+            canMoveDown={index < catalogs.length - 1}
+            onMove={(direction) => {
+              const nextIndex = index + direction;
+              if (nextIndex >= 0 && nextIndex < catalogs.length) {
+                onReorderCatalogs(arrayMove(catalogs, index, nextIndex));
+              }
+            }}
           />
         ))}
       </SortableContext>

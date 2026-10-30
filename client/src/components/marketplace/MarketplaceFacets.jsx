@@ -78,7 +78,6 @@ export function MarketplaceFacets({ source, type, onChange }) {
               title={t.label}
             >
               <t.Icon size={16} />
-              <span className="marketplace-type-label">{t.label}</span>
             </button>
           ))}
         </div>

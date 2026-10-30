@@ -57,17 +57,21 @@ export function MarketplaceCard({
         </div>
 
         <div className="marketplace-row-meta">
-          {visibleGenres.map((genre) => (
-            <span key={genre} className="genre-chip selected marketplace-row-genre">
-              {genre}
-            </span>
-          ))}
-          {extraGenres > 0 && (
-            <span
-              className="genre-chip marketplace-row-genre"
-              title={genres.slice(MAX_GENRE_CHIPS).join(', ')}
-            >
-              +{extraGenres}
+          {genres.length > 0 && (
+            <span className="marketplace-row-genres" title={genres.join(', ')}>
+              {visibleGenres.map((genre) => (
+                <span key={genre} className="genre-chip selected marketplace-row-genre">
+                  {genre}
+                </span>
+              ))}
+              {extraGenres > 0 && (
+                <span
+                  className="genre-chip marketplace-row-genre"
+                  title={genres.slice(MAX_GENRE_CHIPS).join(', ')}
+                >
+                  +{extraGenres}
+                </span>
+              )}
             </span>
           )}
           <span className="marketplace-row-stat" title={`${installs} installs`}>
@@ -87,6 +91,7 @@ export function MarketplaceCard({
           className="btn btn-ghost btn-sm"
           onClick={() => onPreview?.(entry)}
           title={`Preview ${name}`}
+          aria-label={`Preview ${name}`}
         >
           <Eye size={15} aria-hidden="true" />
           <span className="marketplace-action-label">Preview</span>
@@ -107,6 +112,7 @@ export function MarketplaceCard({
           onClick={() => onInstall?.(entry)}
           disabled={installing}
           title={`Add ${name} to your configuration`}
+          aria-label={installing ? `Adding ${name}` : `Add ${name} to your configuration`}
         >
           <Download size={15} aria-hidden="true" />
           <span className="marketplace-action-label">{installing ? 'Adding...' : 'Add'}</span>

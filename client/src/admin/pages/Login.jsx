@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { adminApi } from '../api.js';
+import { Activity, ArrowRight } from 'lucide-react';
 
 export function Login({ totpRequired, onSuccess }) {
   const [form, setForm] = useState({ username: '', password: '', totp: '' });
@@ -29,7 +30,15 @@ export function Login({ totpRequired, onSuccess }) {
   return (
     <div className="adm-login">
       <form className="adm-login-card" onSubmit={submit}>
-        <h1>TMDB Discover+ Admin</h1>
+        <div className="adm-login-brand">
+          <span className="adm-brand-mark">
+            <Activity size={20} aria-hidden="true" />
+          </span>
+          <span>
+            TMDB Discover+<small>OPERATIONS</small>
+          </span>
+        </div>
+        <h1>Admin sign in</h1>
         <label>
           Username
           <input autoComplete="username" required {...field('username')} />
@@ -51,9 +60,19 @@ export function Login({ totpRequired, onSuccess }) {
             />
           </label>
         )}
-        {error && <div className="adm-alert adm-tone-bad">{error}</div>}
+        {error && (
+          <div role="alert" className="adm-alert adm-tone-bad">
+            {error}
+          </div>
+        )}
         <button type="submit" className="adm-btn adm-btn-primary" disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
+          {busy ? (
+            'Signing in…'
+          ) : (
+            <>
+              Sign in <ArrowRight size={16} aria-hidden="true" />
+            </>
+          )}
         </button>
       </form>
     </div>

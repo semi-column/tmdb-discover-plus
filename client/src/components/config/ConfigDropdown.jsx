@@ -30,8 +30,19 @@ export function ConfigDropdown({
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [resetDelete]);
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && isOpen && dropdownRef.current) {
+        setIsOpen(false);
+        resetDelete();
+        dropdownRef.current.querySelector('.config-dropdown-trigger')?.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [resetDelete, isOpen]);
 
   const getCatalogCount = (catalogs) => {
     if (!catalogs || catalogs.length === 0) return 'Empty';
@@ -50,22 +61,15 @@ export function ConfigDropdown({
 
   const getConfigName = (config, index, isCurrentLive = false) => {
     if (isCurrentLive && currentConfigName) {
-      return currentConfigName.length <= 20
-        ? currentConfigName
-        : currentConfigName.substring(0, 17) + '...';
+      return currentConfigName;
     }
     if (config.configName) {
-      return config.configName.length <= 20
-        ? config.configName
-        : config.configName.substring(0, 17) + '...';
+      return config.configName;
     }
     const catalogs = isCurrentLive ? currentCatalogs : config.catalogs;
     if (catalogs && catalogs.length > 0 && catalogs[0].name) {
       const firstName = catalogs[0].name;
-      if (firstName.length <= 20) {
-        return firstName;
-      }
-      return firstName.substring(0, 17) + '...';
+      return firstName;
     }
     return `Config ${index + 1}`;
   };
@@ -93,6 +97,8 @@ export function ConfigDropdown({
       <button
         className={`btn btn-secondary config-dropdown-trigger ${isOpen ? 'open' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        title={currentConfigName || currentConfig?.configName || 'Choose configuration'}
       >
         <FolderOpen size={18} />
         <span className="config-dropdown-current">

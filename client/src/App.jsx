@@ -1,16 +1,29 @@
 import { Header } from './components/layout/Header';
 import { ApiKeySetup } from './components/auth/ApiKeySetup';
 import { CatalogSidebar } from './components/config/CatalogSidebar';
+import { MobileCatalogManager } from './components/config/MobileCatalogManager';
+import { MobileCatalogSwitcher } from './components/config/MobileCatalogSwitcher';
 import { InstallModal } from './components/modals/InstallModal';
 import { NewCatalogModal } from './components/modals/NewCatalogModal';
 import { ConfigMismatchModal } from './components/modals/ConfigMismatchModal';
 import { ToastContainer } from './components/layout/Toast';
 import { ConfigDropdown } from './components/config/ConfigDropdown';
 import { MarketplaceBrowser } from './components/marketplace/MarketplaceBrowser';
-import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
+import { useIsMobile } from './hooks/useIsMobile';
 import { useAppController } from './hooks/useAppController';
 import { api } from './services/api';
-import { Expand, Shrink, Download, Settings, Loader, Coffee, Heart, Store } from 'lucide-react';
+import {
+  Expand,
+  Shrink,
+  Download,
+  Settings,
+  Loader,
+  Coffee,
+  Heart,
+  Store,
+  Plus,
+} from 'lucide-react';
 import { DonateModal } from './components/modals/DonateModal';
 import { FilterPanelSkeleton, CatalogListSkeleton } from './components/layout/Skeleton';
 import { PanelErrorBoundary } from './components/layout/PanelErrorBoundary';
@@ -56,6 +69,15 @@ function App() {
   const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
   const [isMarketplaceMode, setIsMarketplaceMode] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const isMobile = useIsMobile(768);
+  const [mobileCatalogsOpen, setMobileCatalogsOpen] = useState(false);
+  const editorRef = useRef(null);
+  const closeMobileCatalogs = useCallback(() => {
+    setMobileCatalogsOpen(false);
+    requestAnimationFrame(() =>
+      document.querySelector('.mobile-catalog-picker')?.focus({ preventScroll: true })
+    );
+  }, []);
 
   const exitMarketplace = useCallback(() => setIsMarketplaceMode(false), []);
 
@@ -68,9 +90,13 @@ function App() {
       setActiveCatalog: (catalog) => {
         if (catalog) exitMarketplace();
         state.setActiveCatalog(catalog);
+        if (catalog && isMobile) {
+          setMobileCatalogsOpen(false);
+          requestAnimationFrame(() => editorRef.current?.scrollIntoView({ block: 'start' }));
+        }
       },
     }),
-    [state, exitMarketplace]
+    [state, exitMarketplace, isMobile]
   );
 
   useEffect(() => {
@@ -144,8 +170,24 @@ function App() {
     );
   }
 
+  const saveAction = config.catalogs.length > 0 && (
+    <div className="save-button-wrapper">
+      {config.isDirty && <span className="unsaved-indicator" title="Unsaved changes" />}
+      <button
+        className="btn btn-primary"
+        onClick={actions.handleSave}
+        disabled={isSaving || config.loading || configsLoading}
+      >
+        {isSaving ? <Loader size={18} className="animate-spin" /> : <Download size={18} />}
+        Save & Install
+      </button>
+    </div>
+  );
+
   return (
-    <div className={`app ${isFocusMode ? 'focus-mode' : ''}`}>
+    <div
+      className={`app is-builder ${isFocusMode ? 'focus-mode' : ''} ${isMarketplaceMode ? 'marketplace-mode' : ''}`}
+    >
       <a href="#main-content" className="skip-to-content">
         Skip to content
       </a>
@@ -188,7 +230,7 @@ function App() {
                 )}
               </div>
 
-              <CreditsBanner addonVariant={stats?.addonVariant ?? null} />
+              {!isMobile && <CreditsBanner addonVariant={stats?.addonVariant ?? null} />}
 
               <div className="actions-toolbar">
                 <button
@@ -224,31 +266,59 @@ function App() {
                   />
                 )}
 
-                {config.catalogs.length > 0 && (
-                  <div className="save-button-wrapper">
-                    {config.isDirty && (
-                      <span className="unsaved-indicator" title="Unsaved changes" />
-                    )}
-                    <button
-                      className="btn btn-primary"
-                      onClick={actions.handleSave}
-                      disabled={isSaving || config.loading || configsLoading}
-                    >
-                      {isSaving ? (
-                        <Loader size={18} className="animate-spin" />
-                      ) : (
-                        <Download size={18} />
-                      )}
-                      Save & Install
-                    </button>
-                  </div>
-                )}
+                {saveAction}
               </div>
             </div>
 
-            <div className="builder-layout">
+            <div className="mobile-workspace-navigation" hidden={isMobile && mobileCatalogsOpen}>
+              {isMobile && (
+                <MobileCatalogSwitcher
+                  catalogs={config.catalogs}
+                  activeCatalog={state.activeCatalog}
+                  isMarketplaceMode={isMarketplaceMode}
+                  onSelect={marketplaceAwareState.setActiveCatalog}
+                  onManage={() => {
+                    setMobileCatalogsOpen(true);
+                    requestAnimationFrame(() =>
+                      document
+                        .querySelector('.mobile-catalog-management')
+                        ?.scrollIntoView({ block: 'start' })
+                    );
+                  }}
+                />
+              )}
+              <button
+                type="button"
+                className="btn btn-secondary btn-icon"
+                aria-label="New Catalog"
+                title="New catalog"
+                onClick={() => state.setShowNewCatalogModal(true)}
+              >
+                <Plus size={20} />
+              </button>
+              <button
+                type="button"
+                className={`btn btn-icon ${isMarketplaceMode ? 'btn-primary' : 'btn-secondary'}`}
+                aria-label="Toggle catalog marketplace"
+                title="Marketplace"
+                aria-pressed={isMarketplaceMode}
+                onClick={() => setIsMarketplaceMode((mode) => !mode)}
+              >
+                <Store size={20} />
+              </button>
+            </div>
+
+            {isMobile && mobileCatalogsOpen && (
+              <MobileCatalogManager onClose={closeMobileCatalogs}>
+                <PanelErrorBoundary fallbackMessage="Catalog management encountered an error.">
+                  <CatalogSidebar />
+                </PanelErrorBoundary>
+              </MobileCatalogManager>
+            )}
+
+            <div className="builder-layout" ref={editorRef} hidden={isMobile && mobileCatalogsOpen}>
               <PanelErrorBoundary fallbackMessage="The sidebar encountered an error.">
-                <CatalogSidebar />
+                {!isMobile && <CatalogSidebar />}
               </PanelErrorBoundary>
 
               <button
@@ -277,11 +347,22 @@ function App() {
                       </div>
                     }
                   >
-                    <CatalogEditor />
+                    <CatalogEditor
+                      saveAction={saveAction}
+                      hideMobileActions={isMobile && mobileCatalogsOpen}
+                    />
                   </Suspense>
                 )}
               </PanelErrorBoundary>
             </div>
+            {isMobile && (
+              <footer className="mobile-workspace-footer">
+                <CreditsBanner addonVariant={stats?.addonVariant ?? null} />
+                {stats?.addonVariant === 'nightly' && (
+                  <a href="https://tmdb-discover-plus.elfhosted.com/">Switch to Stable</a>
+                )}
+              </footer>
+            )}
           </div>
         </main>
 
@@ -290,7 +371,10 @@ function App() {
           onClose={() => state.setShowNewCatalogModal(false)}
           onAdd={(catalog) => {
             exitMarketplace();
+            setMobileCatalogsOpen(false);
             actions.handleAddCatalog(catalog);
+            if (isMobile)
+              requestAnimationFrame(() => editorRef.current?.scrollIntoView({ block: 'start' }));
           }}
           imdbEnabled={tmdb.imdbEnabled}
         />

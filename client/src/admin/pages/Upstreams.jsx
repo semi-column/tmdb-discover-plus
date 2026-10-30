@@ -3,7 +3,7 @@ import { adminApi } from '../api.js';
 import { useAsync, navigate } from '../hooks.js';
 import { TimeChart } from '../components/TimeChart.jsx';
 import { Badge, ErrorNote, Loading, Panel, StatCard } from '../components/ui.jsx';
-import { fmtBucketMs, fmtInt, fmtMs, fmtPct, fmtTime, statusTone } from '../format.js';
+import { fmtBucketMs, fmtInt, fmtMs, fmtPct, fmtTime, upstreamOutcome } from '../format.js';
 
 export function Upstreams({ range, params, onOpenTrace, meta }) {
   const formatPercentile = meta?.capabilities?.approximatePercentiles ? fmtBucketMs : fmtMs;
@@ -31,10 +31,53 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
 
   if (loading && !data) return <Loading />;
   if (!data) return <ErrorNote error={error} />;
+  const endpoint = params.endpoint || '';
+  const failure = params.failure || '';
+  const samples = data.details?.recentErrors || [];
+  const recentErrors = samples.filter(
+    (entry) =>
+      (!endpoint || entry.path === endpoint) &&
+      (!provider || entry.provider === provider) &&
+      (!failure ||
+        (failure === 'network'
+          ? !entry.status
+          : failure === '5xx'
+            ? entry.status >= 500
+            : String(entry.status) === failure))
+  );
 
   return (
     <div className="adm-stack">
       <ErrorNote error={error} />
+      <div className="adm-context-note">
+        <strong>Dependency attempts, not failed user responses</strong>
+        <p>
+          Retries, fallbacks, and background jobs can generate failures here. Parent request traces
+          show the recorded HTTP outcome.
+        </p>
+      </div>
+      {(provider || endpoint) && (
+        <div className="adm-filter-summary">
+          {provider && (
+            <button
+              type="button"
+              className="adm-filter-chip"
+              onClick={() => navigate('upstreams', { range })}
+            >
+              Provider: {provider} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {endpoint && (
+            <button
+              type="button"
+              className="adm-filter-chip"
+              onClick={() => navigate('upstreams', { range, provider })}
+            >
+              Endpoint: {endpoint} <span aria-hidden="true">×</span>
+            </button>
+          )}
+        </div>
+      )}
       <div className="adm-stats">
         {data.providers.map((p) => (
           <button
@@ -48,8 +91,8 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
             <StatCard
               label={p.provider}
               value={fmtInt(p.calls)}
-              tone={p.errorRate > 0.05 ? 'bad' : p.errorRate > 0.01 ? 'warn' : 'good'}
-              sub={`${fmtPct(p.errorRate)} failed · p95 ${fmtBucketMs(p.p95Ms)} · 429s ${fmtInt(p.rateLimited)} · timeouts ${fmtInt(p.timeouts)}`}
+              tone={p.errorRate > 0.01 ? 'warn' : 'good'}
+              sub={`${fmtPct(p.errorRate)} failed attempts · p95 ${fmtBucketMs(p.p95Ms)} · 429s ${fmtInt(p.rateLimited)} · timeouts ${fmtInt(p.timeouts)}`}
             />
           </button>
         ))}
@@ -94,10 +137,21 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
                 </thead>
                 <tbody>
                   {data.details.endpoints.map((e) => (
-                    <tr key={`${e.provider}${e.method}${e.path}`}>
+                    <tr
+                      key={`${e.provider}${e.method}${e.path}`}
+                      className={endpoint === e.path ? 'adm-selected-row' : ''}
+                    >
                       <td>{e.provider}</td>
                       <td className="mono adm-ellipsis" title={e.path}>
-                        {e.method} {e.path}
+                        <button
+                          type="button"
+                          className="adm-link mono"
+                          onClick={() =>
+                            navigate('upstreams', { range, provider: e.provider, endpoint: e.path })
+                          }
+                        >
+                          {e.method} {e.path}
+                        </button>
                       </td>
                       <td className="num">{fmtInt(e.calls)}</td>
                       <td className={`num ${Number(e.errors) ? 'adm-text-bad' : ''}`}>
@@ -114,9 +168,45 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
               </table>
             </div>
           </Panel>
-          <Panel title="Recent failed calls (4xx, 5xx, network)">
-            {data.details.recentErrors.length === 0 ? (
-              <div className="adm-empty">None in this range.</div>
+          <Panel
+            title={
+              endpoint
+                ? `Recent failure samples · ${endpoint}`
+                : 'Recent dependency failure samples'
+            }
+            actions={
+              <label className="adm-filter">
+                <span>Failure type</span>
+                <select
+                  value={failure}
+                  onChange={(event) =>
+                    navigate('upstreams', {
+                      range,
+                      provider,
+                      endpoint,
+                      failure: event.target.value,
+                    })
+                  }
+                >
+                  <option value="">All failures</option>
+                  <option value="network">Transport failures</option>
+                  <option value="429">Rate limits (429)</option>
+                  <option value="401">Authentication (401)</option>
+                  <option value="403">Access restrictions (403)</option>
+                  <option value="404">Not found (404)</option>
+                  <option value="5xx">Provider errors (5xx)</option>
+                </select>
+              </label>
+            }
+          >
+            <p className="adm-muted adm-sample-note">
+              {fmtInt(recentErrors.length)} matching samples from the latest{' '}
+              {fmtInt(samples.length)} recorded failures in this range.
+            </p>
+            {recentErrors.length === 0 ? (
+              <div className="adm-empty">
+                No matching recent samples. This does not rule out older failures.
+              </div>
             ) : (
               <div className="adm-table-wrap">
                 <table className="adm-table">
@@ -124,6 +214,7 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
                     <tr>
                       <th>Time</th>
                       <th>Status</th>
+                      <th>Signal</th>
                       <th>Endpoint</th>
                       <th className="num">Duration</th>
                       <th>Error</th>
@@ -131,11 +222,19 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.details.recentErrors.map((e, i) => (
+                    {recentErrors.map((e, i) => (
                       <tr key={i}>
                         <td className="nowrap">{fmtTime(e.ts)}</td>
                         <td>
-                          <Badge tone={statusTone(e.status)}>{e.status || 'ERR'}</Badge>
+                          <Badge tone={upstreamOutcome(e.status).tone}>{e.status || 'NET'}</Badge>
+                        </td>
+                        <td>
+                          <Badge
+                            tone={upstreamOutcome(e.status).tone}
+                            title={upstreamOutcome(e.status).detail}
+                          >
+                            {upstreamOutcome(e.status).label}
+                          </Badge>
                         </td>
                         <td className="mono adm-ellipsis">
                           {e.provider} {e.method} {e.path}

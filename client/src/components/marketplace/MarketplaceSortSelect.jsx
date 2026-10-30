@@ -1,3 +1,5 @@
+import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
+
 /**
  * Allowed marketplace sort modes (Requirement 8.1).
  */
@@ -22,18 +24,22 @@ const SORT_OPTIONS = [
  */
 export function MarketplaceSortSelect({ value = 'relevance', onChange, id = 'marketplace-sort' }) {
   return (
-    <select
-      id={id}
-      className="select marketplace-sort-select"
-      value={value}
-      onChange={(e) => onChange?.(e.target.value)}
-      aria-label="Sort marketplace results"
-    >
-      {SORT_OPTIONS.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+    <div className="marketplace-sort-control">
+      <ArrowDownWideNarrow size={17} className="marketplace-sort-icon" aria-hidden="true" />
+      <select
+        id={id}
+        className="marketplace-sort-select"
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        aria-label="Sort marketplace results"
+      >
+        {SORT_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={16} className="marketplace-sort-chevron" aria-hidden="true" />
+    </div>
   );
 }

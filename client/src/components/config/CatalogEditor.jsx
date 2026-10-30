@@ -2,6 +2,7 @@ import { AlertTriangle, Eye, Film, Globe, Loader, Lock, Sparkles, Tv, X } from '
 import { memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { ActiveFiltersBar } from './catalog/ActiveFiltersBar';
 import { CatalogPreview } from './catalog/CatalogPreview';
+import { createPortal } from 'react-dom';
 
 import { useCatalogEditor } from '../../hooks/useCatalogEditor';
 import { useCatalogEditorHandlers } from '../../hooks/useCatalogEditorHandlers';
@@ -165,8 +166,12 @@ function resolveGlobalPreviewPosterProvider(preferences, contentType) {
   return SUPPORTED_PREVIEW_POSTER_PROVIDERS.has(provider) ? provider : 'tmdb';
 }
 
-export const CatalogEditor = memo(function CatalogEditor() {
+export const CatalogEditor = memo(function CatalogEditor({
+  saveAction,
+  hideMobileActions = false,
+}) {
   const isMobileSize = useIsMobile(1800);
+  const isPhoneSize = useIsMobile(768);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
   const state = useCatalogEditor();
@@ -339,7 +344,7 @@ export const CatalogEditor = memo(function CatalogEditor() {
             <Sparkles size={48} />
           </div>
           <h3>Create Your First Catalog</h3>
-          <p>Click "Add" in the sidebar to start building a custom catalog with TMDB filters</p>
+          <p>Add a catalog or choose a preset to start building.</p>
         </div>
       </div>
     );
@@ -685,7 +690,30 @@ export const CatalogEditor = memo(function CatalogEditor() {
         </div>
       </div>
 
+      {isPhoneSize &&
+        !hideMobileActions &&
+        createPortal(
+          <div
+            className={`mobile-editor-actions theme-${localCatalog?.source || 'tmdb'}`}
+            role="toolbar"
+            aria-label="Catalog actions"
+          >
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handlePreviewClick}
+              disabled={previewLoading}
+            >
+              {previewLoading ? <Loader size={18} className="animate-spin" /> : <Eye size={18} />}{' '}
+              Preview
+            </button>
+            {saveAction}
+          </div>,
+          document.body
+        )}
+
       <CatalogPreview
+        source={localCatalog?.source || 'tmdb'}
         loading={previewLoading}
         error={previewError}
         data={previewData}

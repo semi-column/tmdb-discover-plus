@@ -272,18 +272,14 @@
   display: flex;
   align-items: center;
   padding: 0;
-  background: var(--chip-bg, rgba(255, 255, 255, 0.1));
+  background: var(--bg-secondary);
   color: var(--chip-color, var(--text-primary));
-  border: 1px solid var(--chip-border, rgba(255, 255, 255, 0.1));
+  border: 1px solid var(--border-light);
   font-size: 0.75rem;
   font-weight: 500;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-  transition:
-    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.2s ease,
-    filter 0.2s ease;
+  border-radius: 6px;
+  max-width: 100%;
+  transition: border-color 0.15s ease;
   animation: chipEnter 0.2s var(--ease-out-expo);
 }
 
@@ -293,7 +289,10 @@
   color: inherit;
   font: inherit;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
   padding: 6px 6px 6px 12px;
   cursor: pointer;
   text-align: left;
@@ -311,45 +310,29 @@
 }
 
 .active-filter-chip[data-section='filters'] {
-  --chip-bg: rgba(99, 102, 241, 0.15);
-  --chip-border: rgba(99, 102, 241, 0.3);
   --chip-color: #a5b4fc;
 }
 .active-filter-chip[data-section='genres'] {
-  --chip-bg: rgba(16, 185, 129, 0.15);
-  --chip-border: rgba(16, 185, 129, 0.3);
   --chip-color: #6ee7b7;
 }
 .active-filter-chip[data-section='release'] {
-  --chip-bg: rgba(139, 92, 246, 0.15);
-  --chip-border: rgba(139, 92, 246, 0.3);
   --chip-color: #c4b5fd;
 }
 .active-filter-chip[data-section='streaming'] {
-  --chip-bg: rgba(14, 165, 233, 0.15);
-  --chip-border: rgba(14, 165, 233, 0.3);
   --chip-color: #7dd3fc;
 }
 .active-filter-chip[data-section='region'] {
-  --chip-bg: rgba(244, 63, 94, 0.15);
-  --chip-border: rgba(244, 63, 94, 0.3);
   --chip-color: #fda4af;
 }
 .active-filter-chip[data-section='people'] {
-  --chip-bg: rgba(236, 72, 153, 0.15);
-  --chip-border: rgba(236, 72, 153, 0.3);
   --chip-color: #f9a8d4;
 }
 .active-filter-chip[data-section='options'] {
-  --chip-bg: rgba(245, 158, 11, 0.15);
-  --chip-border: rgba(245, 158, 11, 0.3);
   --chip-color: #fcd34d;
 }
 
 .active-filter-chip:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-  filter: brightness(1.1);
+  border-color: var(--chip-color, var(--text-secondary));
 }
 
 .active-filter-chip .chip-remove {
@@ -359,19 +342,19 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  background: var(--chip-border);
+  background: transparent;
   color: var(--chip-color);
   border: none;
-  border-radius: 50%;
+  border-radius: 4px;
+  flex-shrink: 0;
   cursor: pointer;
   padding: 0;
   transition: all 0.15s ease;
 }
 
 .active-filter-chip .chip-remove:hover {
-  background: var(--chip-color);
-  color: var(--bg-primary, #111);
-  transform: scale(1.1);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .active-filter-chip .chip-remove svg {
