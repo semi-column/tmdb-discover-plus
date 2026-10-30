@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.11.1...v2.12.0) (2026-10-30)
+
+
+### Features
+
+* Added Observability stack ([78007cb](https://github.com/semi-column/tmdb-discover-plus/commit/78007cbc1ce8c626699dc74cc32e56c8f0d785e8))
+* filter catalog items without genres ([5a5a3c4](https://github.com/semi-column/tmdb-discover-plus/commit/5a5a3c4aed10d2ce7954034f40ac099364159159))
+* Improve Mobile First UI/UX ([014067e](https://github.com/semi-column/tmdb-discover-plus/commit/014067efac897fe7d20a7288f486e2a9d43342c4))
+
+
+### Bug Fixes
+
+* align preview metadata with full meta ([#131](https://github.com/semi-column/tmdb-discover-plus/issues/131)) ([37c5ee6](https://github.com/semi-column/tmdb-discover-plus/commit/37c5ee6d5ebf062d5449a8abd5bde47e568d983f))
+* correct observability charts and labels ([cef23fa](https://github.com/semi-column/tmdb-discover-plus/commit/cef23fa44d6cd2df57ebfe21e3ee826a0de2a0d3))
+* **deps:** patch server Vitest security vulnerabilities ([3f7c384](https://github.com/semi-column/tmdb-discover-plus/commit/3f7c3844f8b8700bb623c20bb84660caff904635))
+* retry transient native TMDB fetch errors ([c5b7144](https://github.com/semi-column/tmdb-discover-plus/commit/c5b7144e781f68d003b7f04e585e017956944ec3))
+
 ## [2.11.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.11.0...v2.11.1) (2026-09-25)
 
 
