@@ -146,6 +146,7 @@ export class CacheWrapper {
           const age = (Date.now() - entry.__storedAt) / 1000;
           if (age > entry.__ttl) {
             if (age < entry.__ttl * CACHE_STORAGE.WRAPPER_STALE_MULTIPLIER) {
+              this.stats.hits++;
               this.stats.staleServed++;
               trackCacheOperation('hits');
               return { ...entry, __isStale: true };
@@ -276,6 +277,7 @@ export class CacheWrapper {
   ): Promise<unknown> {
     const { allowStale = true } = options;
     const cached = await this.getEntry(key);
+    options.onCacheRead?.(cached);
 
     if (cached !== null) {
       if (cached.__errorType) {

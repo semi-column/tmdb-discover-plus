@@ -16,6 +16,7 @@ export const CACHE_TTLS = {
   RPDB_NOT_FOUND: 86_400,
   RPDB_RATING: 86_400,
   TMDB_API_RESPONSE: 3_600,
+  TMDB_RECENT_DETAIL: 21_600,
   TMDB_REFERENCE: 604_800,
   TMDB_WATCH_PROVIDERS: 86_400,
   TMDB_DISCOVER_TOTAL_PAGES: 86_400,
@@ -90,4 +91,26 @@ export function catalogServerTtl(listType: string | undefined | null): number {
   return listType && TRENDING_LIST_TYPES.has(listType)
     ? CACHE_TTLS.CATALOG_SERVER_TRENDING
     : CACHE_TTLS.CATALOG_SERVER_DISCOVER;
+}
+
+export function tmdbResponseTtl(endpoint: string, data: unknown): number {
+  if (/^\/discover\/(movie|tv)$/.test(endpoint)) {
+    return CACHE_TTLS.CATALOG_SERVER_DISCOVER;
+  }
+  if (/^\/configuration(?:\/|$)|^\/genre\/(movie|tv)\/list$/.test(endpoint)) {
+    return CACHE_TTLS.TMDB_REFERENCE;
+  }
+  if (/^\/(movie|tv)\/\d+\/images$/.test(endpoint)) return CACHE_TTLS.LOGO;
+  const details = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+  if (/^\/movie\/\d+$/.test(endpoint)) {
+    const releasedAt =
+      typeof details.release_date === 'string' ? Date.parse(details.release_date) : NaN;
+    return Date.now() - releasedAt >= 365 * 86_400_000
+      ? CACHE_TTLS.DETAIL
+      : CACHE_TTLS.TMDB_RECENT_DETAIL;
+  }
+  if (/^\/tv\/\d+$/.test(endpoint) && ['Ended', 'Canceled'].includes(String(details.status))) {
+    return CACHE_TTLS.DETAIL;
+  }
+  return CACHE_TTLS.TMDB_API_RESPONSE;
 }

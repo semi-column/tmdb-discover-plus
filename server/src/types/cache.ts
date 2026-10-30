@@ -42,4 +42,5 @@ export interface CacheWrapperStats {
 
 export interface CacheWrapOptions {
   allowStale?: boolean;
+  onCacheRead?: (entry: CacheWrapperEntry | null) => void;
 }

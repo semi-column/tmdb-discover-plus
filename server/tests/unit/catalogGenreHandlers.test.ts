@@ -18,6 +18,9 @@ const {
   mockTmdbDiscover,
   mockTmdbDetails,
   mockTmdbToMeta,
+  mockTmdbGetDetails,
+  mockTmdbFullMeta,
+  mockBuildArtworkOptions,
 } = vi.hoisted(() => ({
   mockCacheGet: vi.fn(),
   mockCacheSet: vi.fn(),
@@ -34,6 +37,9 @@ const {
   mockTmdbDiscover: vi.fn(),
   mockTmdbDetails: vi.fn(),
   mockTmdbToMeta: vi.fn(),
+  mockTmdbGetDetails: vi.fn(),
+  mockTmdbFullMeta: vi.fn(),
+  mockBuildArtworkOptions: vi.fn(),
 }));
 
 vi.mock('../../src/services/cache/index.ts', () => ({
@@ -50,6 +56,7 @@ vi.mock('../../src/services/artworkService.ts', () => ({
   createArtworkOptions: () => null,
   resolveContentType: (type: string) => type,
   applyArtworkOverridesToMetaPreviews: async (metas: unknown[]) => metas,
+  requiresAsyncArtworkResolution: () => false,
 }));
 
 vi.mock('../../src/services/anilist/index.ts', () => ({
@@ -69,6 +76,8 @@ vi.mock('../../src/services/tmdb/index.ts', () => ({
   batchGetCinemetaRatings: async () => null,
   discover: mockTmdbDiscover,
   toStremioMetaPreview: mockTmdbToMeta,
+  getDetails: mockTmdbGetDetails,
+  toStremioFullMeta: mockTmdbFullMeta,
 }));
 
 vi.mock('../../src/services/kitsu/index.ts', () => ({
@@ -114,7 +123,10 @@ vi.mock('../../src/cacheTtls.ts', () => ({
     CATALOG_HEADER: 60,
     CATALOG_STALE_IF_ERROR: 60,
     CATALOG_STALE_REVALIDATE: 60,
+    META_HEADER: 86_400,
+    META_STALE_REVALIDATE: 172_800,
   },
+  CACHE_STORAGE: { WRAPPER_RETENTION_MULTIPLIER: 2.5, WRAPPER_STALE_MULTIPLIER: 2 },
   LOCAL_CACHE_TTLS: { ERROR_DEDUP: 60_000 },
   catalogServerTtl: () => 60,
 }));
@@ -131,7 +143,7 @@ vi.mock('../../src/utils/helpers.ts', () => ({
 vi.mock('../../src/utils/encryption.ts', () => ({ decrypt: () => null }));
 
 vi.mock('../../src/routes/handlers/sharedHelpers.ts', () => ({
-  buildArtworkOptions: () => null,
+  buildArtworkOptions: mockBuildArtworkOptions,
   getPlaceholderUrls: () => ({ posterPlaceholder: 'placeholder' }),
 }));
 
@@ -146,6 +158,8 @@ import { handleMalCatalogRequest } from '../../src/routes/handlers/malHandler.ts
 import { handleSimklCatalogRequest } from '../../src/routes/handlers/simklHandler.ts';
 import { addonRouter } from '../../src/routes/addon.ts';
 import { etagMiddleware } from '../../src/utils/etag.ts';
+import { CacheWrapper } from '../../src/services/cache/CacheWrapper.ts';
+import { MockCacheAdapter } from './helpers/mocks.ts';
 
 const genrelessMeta = { id: 'genreless', genres: [] };
 const knownGenreMeta = { id: 'known', genres: ['Drama'] };
@@ -160,6 +174,7 @@ const sourceHandlers = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockBuildArtworkOptions.mockReturnValue(null);
   mockCacheGet.mockResolvedValue(null);
   mockCacheSet.mockResolvedValue(undefined);
   mockCacheWrap.mockImplementation((_key, loader) => loader());
@@ -253,4 +268,60 @@ describe('TMDB catalog route', () => {
       );
     }
   );
+});
+
+describe('metadata route cache dependencies', () => {
+  it('survives unrelated config edits but invalidates relevant settings and isolates users', async () => {
+    const adapter = new MockCacheAdapter();
+    const cache = new CacheWrapper(adapter);
+    const read = vi.spyOn(adapter, 'get');
+    mockCacheWrap.mockImplementation(cache.wrap.bind(cache));
+    const config = {
+      updatedAt: '2026-10-26T00:00:00Z',
+      preferences: { region: 'US', defaultLanguage: 'en' },
+      catalogs: [{ catalogId: 'movies', type: 'movie', name: 'Movies', enabled: true }],
+    };
+    mockGetUserConfig.mockImplementation(async () => structuredClone(config));
+    mockTmdbGetDetails.mockResolvedValue({
+      id: 550,
+      external_ids: { imdb_id: 'tt0137523' },
+      images: { logos: [{ file_path: '/logo.png' }] },
+    });
+    mockTmdbFullMeta.mockResolvedValue({
+      id: 'tt0137523',
+      poster: 'https://images.test/poster.jpg',
+    });
+    const app = express();
+    app.use(addonRouter);
+    const fetchMeta = async (user = 'testuser') => {
+      const response = await request(app).get(`/${user}/meta/movie/tmdb:550.json`);
+      expect(response.status).toBe(200);
+      expect(response.body.meta.id).toBe('tt0137523');
+    };
+
+    await fetchMeta();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(mockTmdbGetDetails).toHaveBeenCalledTimes(1);
+    config.updatedAt = '2026-10-30T00:00:00Z';
+    config.catalogs[0].name = 'Renamed';
+    await fetchMeta();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(mockTmdbGetDetails).toHaveBeenCalledTimes(1);
+
+    config.preferences.region = 'GB';
+    await fetchMeta();
+    expect(mockTmdbGetDetails).toHaveBeenCalledTimes(2);
+    config.preferences.defaultLanguage = 'fr';
+    await fetchMeta();
+    expect(mockTmdbGetDetails).toHaveBeenCalledTimes(3);
+    config.catalogs[0].enabled = false;
+    await fetchMeta();
+    expect(mockTmdbGetDetails).toHaveBeenCalledTimes(4);
+    mockBuildArtworkOptions.mockReturnValue({ poster: { service: 'rpdb', apiKey: 'secret' } });
+    await fetchMeta();
+    expect(mockTmdbGetDetails).toHaveBeenCalledTimes(5);
+    await fetchMeta('otheruser');
+    expect(mockTmdbGetDetails).toHaveBeenCalledTimes(6);
+    expect(read).toHaveBeenCalledTimes(7);
+  });
 });

@@ -24,18 +24,14 @@ import {
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.ts';
 import { SORT_OPTIONS } from '../services/tmdb/referenceData.ts';
 import { createLogger } from '../utils/logger.ts';
-import { stableStringify } from '../utils/stableStringify.ts';
-import crypto from 'crypto';
-import {
-  buildImdbEnrichmentCacheKey,
-  buildArtworkIntegrationScope,
-} from '../services/imdb/cacheKey.ts';
+import { buildImdbEnrichmentCacheKey } from '../services/imdb/cacheKey.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { etagMiddleware } from '../utils/etag.ts';
 import { CachedError } from '../services/cache/CacheWrapper.ts';
 import { getCache } from '../services/cache/index.ts';
+import { buildMetaCacheKey } from '../services/cache/keys.ts';
 import {
   isValidUserId,
   isValidContentType,
@@ -153,11 +149,6 @@ const IMDB_PAGE_SIZE = DISPLAY.IMDB_PAGE_SIZE;
 
 function pickPreferredMetaLanguage(config: UserConfig | null): string {
   return config?.preferences?.defaultLanguage || 'en';
-}
-
-function buildMetaCacheKey(payload: Record<string, unknown>): string {
-  const digest = crypto.createHash('sha256').update(stableStringify(payload)).digest('hex');
-  return `meta:full:${digest}`;
 }
 
 router.get('/:userId/manifest.json', async (req, res) => {
@@ -672,26 +663,31 @@ async function handleMetaRequest(
       final: language,
     });
     const cache = getCache();
-    const configVersion = config.updatedAt ? new Date(config.updatedAt).getTime() : 0;
-    const artworkScope = buildArtworkIntegrationScope(artworkOptions);
+    const manifestUrl = `${baseUrl}/${userId}/manifest.json`;
+    const genreCatalogId =
+      (config.catalogs || [])
+        .filter(
+          (catalog) =>
+            catalog.enabled !== false &&
+            (catalog.type === stremioType ||
+              catalog.type === tmdbType ||
+              (!catalog.type && tmdbType === 'movie'))
+        )
+        .map((catalog) => buildCatalogId('tmdb', catalog))[0] || null;
+    const userRegion = resolveUserRegion(config);
     const metaCacheKey = buildMetaCacheKey({
       userId,
       type,
       requestedId,
       language,
       baseUrl: resolvedBaseUrl,
-      configVersion,
-      artworkScope,
+      manifestUrl,
+      genreCatalogId,
+      userRegion,
+      artworkOptions,
     });
 
-    const cacheEntry = await cache.getEntry(metaCacheKey);
-    const cacheState = cacheEntry?.__errorType
-      ? 'error'
-      : cacheEntry?.__isStale
-        ? 'stale'
-        : cacheEntry
-          ? 'hit'
-          : 'miss';
+    let cacheState = 'miss';
 
     const computeMeta = async (): Promise<Partial<StremioMeta> | null> => {
       const resolvedId = resolveRequestedMetaId(requestedId, getEntryByPrefixedId);
@@ -741,19 +737,6 @@ async function handleMetaRequest(
       if (episodesResult) {
         log.debug('Fetched series episodes', { tmdbId, episodeCount: episodesResult.length || 0 });
       }
-
-      const manifestUrl = `${baseUrl}/${userId}/manifest.json`;
-
-      const genreCatalogId =
-        (config.catalogs || [])
-          .filter(
-            (c) =>
-              c.enabled !== false &&
-              (c.type === stremioType || c.type === tmdbType || (!c.type && tmdbType === 'movie'))
-          )
-          .map((c) => buildCatalogId('tmdb', c))[0] || null;
-
-      const userRegion = resolveUserRegion(config);
 
       const fullMeta = await tmdb.toStremioFullMeta(
         details,
@@ -805,6 +788,15 @@ async function handleMetaRequest(
     try {
       meta = (await cache.wrap(metaCacheKey, computeMeta, CACHE_TTLS.META_HEADER, {
         allowStale: true,
+        onCacheRead: (entry) => {
+          cacheState = entry?.__errorType
+            ? 'error'
+            : entry?.__isStale
+              ? 'stale'
+              : entry
+                ? 'hit'
+                : 'miss';
+        },
       })) as Partial<StremioMeta> | null;
     } catch (error) {
       if (error instanceof CachedError) {

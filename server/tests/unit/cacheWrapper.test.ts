@@ -158,6 +158,10 @@ describe('CacheWrapper', () => {
       expect(result.__isStale).toBe(true);
       expect(result.data).toBe('stale-data');
       expect(cache.getStats().staleServed).toBe(1);
+      expect(cache.getStats().hits).toBe(1);
+      expect(cache.getStats().hitRate).toBe('100.0%');
+      await cache.get('missing');
+      expect(cache.getStats().hitRate).toBe('50.0%');
     });
 
     it('returns null for entries beyond 2x TTL', async () => {
@@ -190,6 +194,20 @@ describe('CacheWrapper', () => {
   });
 
   describe('wrap()', () => {
+    it('reports the existing lookup without reading the adapter twice', async () => {
+      const read = vi.spyOn(adapter, 'get');
+      const onCacheRead = vi.fn();
+      const fetcher = vi.fn().mockResolvedValue('value');
+      await cache.wrap('observed', fetcher, 300, { onCacheRead });
+      expect(onCacheRead).toHaveBeenLastCalledWith(null);
+      expect(read).toHaveBeenCalledTimes(1);
+      await cache.wrap('observed', fetcher, 300, { onCacheRead });
+      expect(onCacheRead).toHaveBeenLastCalledWith(expect.objectContaining({ data: 'value' }));
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledOnce();
+      expect(cache.getStats()).toMatchObject({ hits: 1, misses: 1 });
+    });
+
     it('fetches and caches on miss', async () => {
       const fn = vi.fn().mockResolvedValue({ id: 1, title: 'Test' });
       const result = await cache.wrap('wrap-key', fn, 300);

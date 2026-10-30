@@ -5,7 +5,7 @@ import { getTmdbThrottle } from '../../infrastructure/tmdbThrottle.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
 import { TIMEOUTS, CONCURRENCY, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
-import { CACHE_TTLS } from '../../cacheTtls.ts';
+import { CACHE_TTLS, tmdbResponseTtl } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
 
@@ -141,6 +141,34 @@ export async function tmdbFetch(
 
   const cacheUrl = new URL(url.toString());
   cacheUrl.searchParams.delete('api_key');
+  if (/^\/3\/discover\/(movie|tv)$/.test(cacheUrl.pathname)) {
+    for (const name of [
+      'with_genres',
+      'without_genres',
+      'with_watch_providers',
+      'with_watch_monetization_types',
+      'with_networks',
+      'with_companies',
+      'without_companies',
+      'with_keywords',
+      'without_keywords',
+      'with_cast',
+      'with_crew',
+      'with_people',
+      'with_origin_country',
+      'with_release_type',
+      'with_status',
+      'with_type',
+    ]) {
+      const value = cacheUrl.searchParams.get(name);
+      if (!value || (value.includes(',') && value.includes('|'))) continue;
+      const separator = value.includes('|') ? '|' : ',';
+      const values = value.split(separator);
+      if (values.some((item) => !item)) continue;
+      cacheUrl.searchParams.set(name, [...new Set(values)].sort().join(separator));
+    }
+  }
+  cacheUrl.searchParams.sort();
   const cacheKey = cacheUrl.toString();
 
   const existingRequest = inFlightRequests.get(cacheKey);
@@ -241,7 +269,11 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       recordCircuitSuccess();
 
       try {
-        await cache.set(cacheKey, data, CACHE_TTLS.TMDB_API_RESPONSE);
+        await cache.set(
+          cacheKey,
+          data,
+          tmdbResponseTtl(url.pathname.slice(TMDB_API_BASE_PATH.length), data)
+        );
       } catch (cacheErr) {
         log.warn('Failed to cache TMDB response', {
           key: cacheKey,
