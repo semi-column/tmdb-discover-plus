@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.12.0...v2.12.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **addon:** prevent late writes and stop scheduling provider work after timeout ([68c73ee](https://github.com/semi-column/tmdb-discover-plus/commit/68c73eef8deea2e8a8119f2f1249545945267fa1))
+* **anime:** normalize external IMDb IDs before artwork resolution ([68c73ee](https://github.com/semi-column/tmdb-discover-plus/commit/68c73eef8deea2e8a8119f2f1249545945267fa1))
+* **cache:** cache completed seasons for 14 days ([68c73ee](https://github.com/semi-column/tmdb-discover-plus/commit/68c73eef8deea2e8a8119f2f1249545945267fa1))
+* **collection:** return empty results for catalogs without a collection ID ([68c73ee](https://github.com/semi-column/tmdb-discover-plus/commit/68c73eef8deea2e8a8119f2f1249545945267fa1))
+* **collector:** report omissions, failed writes, and recovered flushes accurately ([4b055b5](https://github.com/semi-column/tmdb-discover-plus/commit/4b055b5c9030b866966d1fe0376e90e5343cd511))
+* **dashboard:** label samples, approximations, and Redis fallback granularity ([4b055b5](https://github.com/semi-column/tmdb-discover-plus/commit/4b055b5c9030b866966d1fe0376e90e5343cd511))
+* **errors:** preserve sanitized stacks and separate status-code fingerprints ([4b055b5](https://github.com/semi-column/tmdb-discover-plus/commit/4b055b5c9030b866966d1fe0376e90e5343cd511))
+* harden addon requests and observability ([68c73ee](https://github.com/semi-column/tmdb-discover-plus/commit/68c73eef8deea2e8a8119f2f1249545945267fa1))
+* improve observability accuracy and loss reporting ([4b055b5](https://github.com/semi-column/tmdb-discover-plus/commit/4b055b5c9030b866966d1fe0376e90e5343cd511))
+* **metrics:** distinguish open-ended histogram buckets from upper bounds ([4b055b5](https://github.com/semi-column/tmdb-discover-plus/commit/4b055b5c9030b866966d1fe0376e90e5343cd511))
+* **observability:** use persisted overview history and label Redis fallback data ([68c73ee](https://github.com/semi-column/tmdb-discover-plus/commit/68c73eef8deea2e8a8119f2f1249545945267fa1))
+* **overview:** normalize route metrics and mark unavailable comparisons ([4b055b5](https://github.com/semi-column/tmdb-discover-plus/commit/4b055b5c9030b866966d1fe0376e90e5343cd511))
+* **throttle:** keep local queue timeouts out of upstream circuit breakers ([68c73ee](https://github.com/semi-column/tmdb-discover-plus/commit/68c73eef8deea2e8a8119f2f1249545945267fa1))
+* **upstreams:** derive provider summaries and endpoint samples from one source ([4b055b5](https://github.com/semi-column/tmdb-discover-plus/commit/4b055b5c9030b866966d1fe0376e90e5343cd511))
+
 ## [2.12.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.11.1...v2.12.0) (2026-10-30)
 
 
