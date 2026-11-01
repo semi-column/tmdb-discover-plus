@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
+import { hasIncompleteCollectionSelection } from './utils/catalogValidation';
 import { useAppController } from './hooks/useAppController';
 
 vi.mock('./hooks/useAppController', () => ({ useAppController: vi.fn() }));
@@ -9,6 +10,30 @@ vi.mock('./services/api', () => ({ api: { getStats: () => new Promise(() => {}) 
 beforeEach(() => {
   vi.clearAllMocks();
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+});
+
+it('blocks incomplete enabled TMDB collection and studio catalogs', () => {
+  expect(
+    hasIncompleteCollectionSelection([
+      { source: 'tmdb', enabled: true, filters: { listType: 'collection' } },
+    ])
+  ).toBe(true);
+  expect(
+    hasIncompleteCollectionSelection([
+      { source: 'tmdb', enabled: true, filters: { listType: 'studio', studioId: '42' } },
+    ])
+  ).toBe(false);
+  expect(
+    hasIncompleteCollectionSelection([
+      { source: 'tmdb', enabled: true, filters: { listType: 'discover' } },
+    ])
+  ).toBe(false);
+  expect(
+    hasIncompleteCollectionSelection([
+      { source: 'tmdb', enabled: false, filters: { listType: 'collection' } },
+      { source: 'simkl', enabled: true, filters: { listType: 'collection' } },
+    ])
+  ).toBe(false);
 });
 
 it.each([

@@ -1,6 +1,7 @@
 import { hashIdentifier } from '../identity.ts';
 import type { TimeRange } from '../liveQueries.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
+import type { HistoryOverview } from './overview.ts';
 
 export type HistoryKind = 'postgres' | 'mongo' | 'memory';
 
@@ -77,6 +78,7 @@ export interface HistoryStore {
     errors: Record<string, unknown>[];
   }>;
   routeStats(range: TimeRange): Promise<Record<string, unknown>[]>;
+  overview(range: TimeRange, slowMs: number): Promise<HistoryOverview>;
   listErrorGroups(range: TimeRange, filter: ErrorFilter): Promise<Record<string, unknown>[]>;
   getErrorGroup(fingerprint: string): Promise<{
     group: Record<string, unknown>;

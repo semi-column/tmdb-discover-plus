@@ -1,6 +1,8 @@
 import pg from 'pg';
 import { createLogger } from '../../../utils/logger.ts';
+import { LATENCY_BUCKETS } from '../collector.ts';
 import type { TimeRange } from '../liveQueries.ts';
+import { buildHistoryOverview } from './overview.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
 import {
   SETTABLE_ERROR_STATUSES,
@@ -465,6 +467,109 @@ export class PostgresHistory implements HistoryStore {
       ),
     ]);
     return { requests: requests.rows, upstream: upstream.rows, errors: errors.rows };
+  }
+
+  async overview(range: TimeRange, slowMs: number) {
+    const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
+    const histogram = [
+      ...LATENCY_BUCKETS.map((upper, index) => {
+        const condition = index
+          ? `duration_ms > ${LATENCY_BUCKETS[index - 1]} AND duration_ms <= ${upper}`
+          : `duration_ms <= ${upper}`;
+        return `COALESCE(SUM(weight) FILTER (WHERE ${condition}), 0)::float AS lat_${index}`;
+      }),
+      `COALESCE(SUM(weight) FILTER (WHERE duration_ms > ${LATENCY_BUCKETS.at(-1)}), 0)::float AS lat_${LATENCY_BUCKETS.length}`,
+    ].join(',');
+    const timeFilter = 'ts >= $1 AND ts <= $2';
+    const [bucketResult, statusResult, breakdownResult, logBucketResult, usersResult, routes] =
+      await Promise.all([
+        this.pool.query(
+          `SELECT (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket,
+           SUM(weight)::float AS requests,
+           COALESCE(SUM(weight) FILTER (WHERE status >= 500), 0)::float AS errors5xx,
+           COALESCE(SUM(weight) FILTER (WHERE status >= 400 AND status < 500), 0)::float AS errors4xx,
+           COALESCE(SUM(weight) FILTER (WHERE duration_ms >= $4), 0)::float AS slow,
+           SUM(duration_ms * weight)::float AS duration,
+           SUM(cache_hits * weight)::float AS cache_hits,
+           SUM(cache_misses * weight)::float AS cache_misses,
+           ${histogram}
+         FROM obs_requests WHERE ${timeFilter} GROUP BY bucket ORDER BY bucket`,
+          [new Date(range.from), new Date(range.to), bucketMs, slowMs]
+        ),
+        this.pool.query(
+          `SELECT status, SUM(weight)::float AS count FROM obs_requests WHERE ${timeFilter} GROUP BY status`,
+          [new Date(range.from), new Date(range.to)]
+        ),
+        this.pool.query(
+          `WITH filtered AS (
+           SELECT resource, source, content_type, client, country, colo, instance, weight
+           FROM obs_requests WHERE ${timeFilter}
+         )
+         SELECT kind, key, SUM(weight)::float AS count FROM (
+           SELECT 'resource' AS kind, resource AS key, weight FROM filtered
+           UNION ALL SELECT 'source', source, weight FROM filtered
+           UNION ALL SELECT 'contentType', content_type, weight FROM filtered
+           UNION ALL SELECT 'client', client, weight FROM filtered
+           UNION ALL SELECT 'country', country, weight FROM filtered WHERE country <> ''
+           UNION ALL SELECT 'colo', colo, weight FROM filtered WHERE colo <> ''
+           UNION ALL SELECT 'instance', instance, weight FROM filtered
+         ) AS dimensions GROUP BY kind, key`,
+          [new Date(range.from), new Date(range.to)]
+        ),
+        this.pool.query(
+          `SELECT (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket,
+           level, count(*)::int AS count FROM obs_error_events
+         WHERE ${timeFilter} GROUP BY bucket, level`,
+          [new Date(range.from), new Date(range.to), bucketMs]
+        ),
+        this.pool.query(
+          `SELECT count(DISTINCT user_hash)::int AS count FROM obs_requests WHERE ${timeFilter} AND user_hash <> ''`,
+          [new Date(range.from), new Date(range.to)]
+        ),
+        this.routeStats(range),
+      ]);
+    const buckets = bucketResult.rows.map((row) => ({
+      bucket: Number(row.bucket),
+      requests: Number(row.requests),
+      errors5xx: Number(row.errors5xx),
+      errors4xx: Number(row.errors4xx),
+      slow: Number(row.slow),
+      duration: Number(row.duration),
+      cacheHits: Number(row.cache_hits),
+      cacheMisses: Number(row.cache_misses),
+      histogram: LATENCY_BUCKETS.map((_, index) => Number(row[`lat_${index}`])).concat(
+        Number(row[`lat_${LATENCY_BUCKETS.length}`])
+      ),
+    }));
+    const logs = logBucketResult.rows.reduce((map, row) => {
+      const bucket = Number(row.bucket);
+      const value = map.get(bucket) ?? { bucket, errors: 0, warnings: 0 };
+      if (row.level === 'error') value.errors += Number(row.count);
+      else if (row.level === 'warn') value.warnings += Number(row.count);
+      map.set(bucket, value);
+      return map;
+    }, new Map<number, { bucket: number; errors: number; warnings: number }>());
+    const logCounts = [...logs.values()].reduce(
+      (sum, bucket) => ({
+        errors: sum.errors + bucket.errors,
+        warnings: sum.warnings + bucket.warnings,
+      }),
+      { errors: 0, warnings: 0 }
+    );
+    return buildHistoryOverview(
+      range,
+      buckets,
+      routes,
+      statusResult.rows.map((row) => ({ status: Number(row.status), count: Number(row.count) })),
+      breakdownResult.rows.map((row) => ({
+        kind: String(row.kind),
+        key: String(row.key),
+        count: Number(row.count),
+      })),
+      [...logs.values()],
+      logCounts,
+      Number(usersResult.rows[0]?.count ?? 0)
+    );
   }
 
   async routeStats(range: TimeRange) {

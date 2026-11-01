@@ -12,6 +12,7 @@ import { MarketplaceBrowser } from './components/marketplace/MarketplaceBrowser'
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useIsMobile } from './hooks/useIsMobile';
 import { useAppController } from './hooks/useAppController';
+import { hasIncompleteCollectionSelection } from './utils/catalogValidation';
 import { api } from './services/api';
 import {
   Expand,
@@ -84,6 +85,7 @@ function App() {
   }, []);
 
   const exitMarketplace = useCallback(() => setIsMarketplaceMode(false), []);
+  const hasIncompleteCollection = hasIncompleteCollectionSelection(config.catalogs);
 
   // Selecting (or creating) a catalog should bring the editor forward. Wrap the
   // context's setActiveCatalog so any catalog selection exits marketplace mode
@@ -195,10 +197,11 @@ function App() {
       <button
         className="btn btn-primary"
         onClick={actions.handleSave}
-        disabled={isSaving || config.loading || configsLoading}
+        disabled={isSaving || config.loading || configsLoading || hasIncompleteCollection}
+        title={hasIncompleteCollection ? 'Select a collection or studio before saving' : undefined}
       >
         {isSaving ? <Loader size={18} className="animate-spin" /> : <Download size={18} />}
-        Save & Install
+        {hasIncompleteCollection ? 'Select collection or studio' : 'Save & Install'}
       </button>
     </div>
   );

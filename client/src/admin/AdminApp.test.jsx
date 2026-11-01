@@ -139,3 +139,20 @@ it('closes a deep-linked trace with Escape without losing filters', async () => 
   expect(window.location.hash).toContain('status=5xx');
   expect(window.location.hash).toContain('range=24h');
 });
+
+it('labels Redis live overview data when history fallback is active', async () => {
+  adminApi.overview.mockResolvedValueOnce({
+    range: { resolution: 'minute' },
+    dataSource: 'redis-live-fallback',
+    totals: { requests: 2, errors5xx: 0, slow: 0 },
+    series: {},
+    routes: [],
+    statusCodes: {},
+    latencyHistogram: { bounds: [100], counts: [2, 0] },
+    breakdowns: { resources: [] },
+  });
+  render(<AdminApp />);
+  expect(
+    await screen.findByText(/History is unavailable\. Showing Redis live counters/)
+  ).toBeInTheDocument();
+});

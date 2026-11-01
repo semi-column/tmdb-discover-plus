@@ -462,7 +462,7 @@ export async function fetchSpecialList(
         );
       }
       if (!collectionId) {
-        throw new Error('Collection ID required for collection list type');
+        return { page, total_pages: 0, total_results: 0, results: [] };
       }
       const collection = (await tmdbFetch(`/collection/${collectionId}`, apiKey, {
         ...(languageParam ? { language: languageParam } : {}),

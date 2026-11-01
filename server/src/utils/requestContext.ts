@@ -29,6 +29,7 @@ interface RequestStore {
   method: string;
   path: string;
   startedAt: number;
+  aborted: boolean;
   cache: RequestCacheStats;
   obs: RequestObsState;
 }
@@ -45,6 +46,15 @@ const buildEmptyCacheStats = (): RequestCacheStats => ({
 
 export function getRequestId(): string | undefined {
   return asyncLocalStorage.getStore()?.requestId;
+}
+
+export function abortRequestContext(): void {
+  const store = asyncLocalStorage.getStore();
+  if (store) store.aborted = true;
+}
+
+export function isRequestAborted(): boolean {
+  return asyncLocalStorage.getStore()?.aborted ?? false;
 }
 
 export function getRequestContextSnapshot(): RequestContextSnapshot | undefined {
@@ -88,16 +98,20 @@ export function requestIdMiddleware() {
         ? incoming
         : randomBytes(9).toString('base64url');
     res.setHeader('X-Request-Id', requestId);
-    asyncLocalStorage.run(
-      {
-        requestId,
-        method: req.method,
-        path: req.originalUrl || req.url,
-        startedAt: Date.now(),
-        cache: buildEmptyCacheStats(),
-        obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
-      },
-      next
-    );
+    const store: RequestStore = {
+      requestId,
+      method: req.method,
+      path: req.originalUrl || req.url,
+      startedAt: Date.now(),
+      aborted: false,
+      cache: buildEmptyCacheStats(),
+      obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
+    };
+    asyncLocalStorage.run(store, () => {
+      res.once?.('close', () => {
+        if (!res.writableFinished) store.aborted = true;
+      });
+      next();
+    });
   };
 }

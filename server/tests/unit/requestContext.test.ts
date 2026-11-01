@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   requestIdMiddleware,
   getRequestId,
+  abortRequestContext,
+  isRequestAborted,
   getRequestContextSnapshot,
   getRequestCacheStats,
   trackCacheOperation,
@@ -89,6 +91,7 @@ describe('requestIdMiddleware', () => {
 describe('getRequestId', () => {
   it('returns undefined outside of request context', () => {
     expect(getRequestId()).toBeUndefined();
+    expect(isRequestAborted()).toBe(false);
   });
 
   it('returns the request ID inside middleware context', async () => {
@@ -106,6 +109,22 @@ describe('getRequestId', () => {
 
     expect(capturedId).toBeDefined();
     expect(typeof capturedId).toBe('string');
+  });
+
+  it('marks the active request context as aborted', async () => {
+    let aborted = false;
+    const req = { headers: {} };
+    const res = { setHeader: () => {} };
+
+    await new Promise<void>((resolve) => {
+      requestIdMiddleware()(req as any, res as any, () => {
+        abortRequestContext();
+        aborted = isRequestAborted();
+        resolve();
+      });
+    });
+
+    expect(aborted).toBe(true);
   });
 
   it('captures request metadata in context snapshot', async () => {

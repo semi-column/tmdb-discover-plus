@@ -268,6 +268,16 @@ describe('applyArtworkOverridesToMetaPreviews', () => {
     expect(resolved.poster).toBe('https://cdn.myanimelist.net/images/anime/123/456.jpg');
   });
 
+  it('keeps native artwork when the upstream IMDb ID is not a string', () => {
+    const resolved = applyArtworkOverridesSync(
+      { type: 'anime', imdbId: 123 as unknown as string, tmdbId: 0 },
+      { poster: 'https://cdn.myanimelist.net/images/anime/123/456.jpg' },
+      null
+    );
+
+    expect(resolved.poster).toBe('https://cdn.myanimelist.net/images/anime/123/456.jpg');
+  });
+
   it('applies RPDB preview poster overrides (sync providers)', async () => {
     const metas = [
       {

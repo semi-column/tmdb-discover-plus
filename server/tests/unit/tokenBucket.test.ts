@@ -48,7 +48,10 @@ describe('TokenBucket', () => {
     bucket = new TokenBucket({ maxTokens: 0, refillRate: 0 });
     bucket.tokens = 0;
 
-    await expect(bucket.acquire(50)).rejects.toThrow('timeout');
+    await expect(bucket.acquire(50)).rejects.toMatchObject({
+      message: expect.stringContaining('timeout'),
+      code: 'RATE_LIMITER_TIMEOUT',
+    });
   });
 
   it('drains queue on shutdown', async () => {

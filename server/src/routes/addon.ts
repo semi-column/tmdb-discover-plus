@@ -603,6 +603,8 @@ async function handleCatalogRequest(
       durationMs: Date.now() - startTime,
     });
 
+    if (res.headersSent) return;
+
     res.etagJson(
       {
         metas: filteredMetas,
@@ -612,6 +614,8 @@ async function handleCatalogRequest(
       { extra: `${userId}:${catalogId}:${skip}` }
     );
   } catch (error) {
+    if (res.headersSent) return;
+
     const durationMs = Date.now() - startTime;
     const errMsg = (error as Error).message;
     if (shouldLogError(userId, errMsg)) {
@@ -643,10 +647,16 @@ async function handleMetaRequest(
   const startTime = Date.now();
   try {
     const config = await getUserConfig(userId);
-    if (!config) return res.json({ meta: {} });
+    if (!config) {
+      if (!res.headersSent) res.json({ meta: {} });
+      return;
+    }
 
     const apiKey = getApiKeyFromConfig(config);
-    if (!apiKey) return res.json({ meta: {} });
+    if (!apiKey) {
+      if (!res.headersSent) res.json({ meta: {} });
+      return;
+    }
 
     const artworkOptions = buildArtworkOptions(config, type);
 
@@ -835,6 +845,8 @@ async function handleMetaRequest(
       videoCount: Array.isArray(responseMeta.videos) ? responseMeta.videos.length : 0,
     });
 
+    if (res.headersSent) return;
+
     res.set(
       'Cache-Control',
       `max-age=${CACHE_TTLS.META_HEADER}, stale-while-revalidate=${CACHE_TTLS.META_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
@@ -849,6 +861,8 @@ async function handleMetaRequest(
       { extra: `${userId}:${id}` }
     );
   } catch (error) {
+    if (res.headersSent) return;
+
     const durationMs = Date.now() - startTime;
     const errMsg = (error as Error).message;
     if (shouldLogError(userId, errMsg)) {

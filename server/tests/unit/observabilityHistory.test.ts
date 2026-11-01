@@ -97,6 +97,44 @@ describe('MemoryHistory', () => {
     expect(routes[0]).toMatchObject({ count: 50, errors5xx: 1 });
   });
 
+  it('builds overview totals, routes, cache rate, and charts from the exact selected interval', async () => {
+    const h = newHistory();
+    const start = now - 60_000;
+    await h.insertRequests([
+      request(1, { ts: start - 1, durationMs: 2000, cacheHits: 1, cacheMisses: 1, weight: 10 }),
+      request(2, { ts: start, durationMs: 100, cacheHits: 3, cacheMisses: 1, weight: 1 }),
+      request(3, { ts: start + 1, status: 503, durationMs: 2500, cacheMisses: 2, weight: 1 }),
+    ]);
+    await h.insertErrors(
+      [
+        { ...errorEvent('fp1'), ts: start + 1, level: 'error' },
+        { ...errorEvent('fp2'), ts: start - 1, level: 'warn' },
+      ],
+      new Map()
+    );
+
+    const overview = await h.overview({ from: start, to: now, kind: 'm' }, 1500);
+
+    expect(overview.totals).toMatchObject({
+      requests: 2,
+      errors5xx: 1,
+      slow: 1,
+      cacheHitRate: 0.5,
+      logErrors: 1,
+      logWarnings: 0,
+      uniqueUsers: 1,
+    });
+    expect(overview.routes).toHaveLength(1);
+    expect(overview.routes[0]).toMatchObject({ count: 2, errors5xx: 1 });
+    expect(overview.series.requests.reduce((sum, value) => sum + value, 0)).toBe(
+      overview.totals.requests
+    );
+    expect(overview.series.logErrors.reduce((sum, value) => sum + value, 0)).toBe(
+      overview.totals.logErrors
+    );
+    expect(overview.range).toEqual({ from: start, to: now, resolution: 'minute' });
+  });
+
   it('groups errors, links them to requests, and marks resolved groups as regressed', async () => {
     const h = newHistory();
     const batch = (fp: string, requestId = '') =>

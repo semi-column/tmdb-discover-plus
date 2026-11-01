@@ -1,6 +1,7 @@
 import { getCache } from '../cache/index.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { getImdbThrottle } from '../../infrastructure/imdbThrottle.ts';
+import { RATE_LIMITER_TIMEOUT_CODE } from '../../infrastructure/tmdbThrottle.ts';
 import { config } from '../../config.ts';
 import { getRequestId } from '../../utils/requestContext.ts';
 import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
@@ -304,18 +305,27 @@ async function executeImdbFetch(
     throw new Error('All retries exhausted without error');
   }
 
-  log.error('IMDb fetch error after retries', {
-    error: lastError.message,
-    endpoint: ep.slice(0, 80),
-    statusCode: lastError.statusCode,
-    requestId: getRequestId(),
-  });
+  const isRateLimiterTimeout = lastError.code === RATE_LIMITER_TIMEOUT_CODE;
+  if (isRateLimiterTimeout) {
+    log.warn('IMDb request skipped after local rate limiter timeout', {
+      endpoint: ep.slice(0, 80),
+      requestId: getRequestId(),
+    });
+  } else {
+    log.error('IMDb fetch error after retries', {
+      error: lastError.message,
+      endpoint: ep.slice(0, 80),
+      statusCode: lastError.statusCode,
+      requestId: getRequestId(),
+    });
+  }
 
   const shouldTrip =
-    !lastError.statusCode ||
-    lastError.statusCode >= 500 ||
-    lastError.statusCode === 429 ||
-    ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(lastError.code || '');
+    !isRateLimiterTimeout &&
+    (!lastError.statusCode ||
+      lastError.statusCode >= 500 ||
+      lastError.statusCode === 429 ||
+      ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(lastError.code || ''));
 
   if (shouldTrip) {
     recordCircuitFailure();

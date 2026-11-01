@@ -8,6 +8,7 @@ import { generateEpisodeThumbnailUrl, isValidPosterConfig } from '../artworkServ
 import * as imdb from '../imdb/index.ts';
 import { CONCURRENCY, DISPLAY } from '../../constants.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
+import { isRequestAborted } from '../../utils/requestContext.ts';
 
 import type {
   ArtworkOptions,
@@ -27,6 +28,7 @@ interface DetailsOptions {
   displayLanguage?: string;
   language?: string;
   artworkOptions?: ArtworkOptions | null;
+  completedSeason?: boolean;
 }
 
 export async function getDetails(
@@ -110,7 +112,11 @@ export async function getSeasonDetails(
   try {
     const data = await tmdbFetch(`/tv/${tmdbId}/season/${seasonNumber}`, apiKey, params);
     try {
-      await cache.set(cacheKey, data, CACHE_TTLS.DETAIL);
+      await cache.set(
+        cacheKey,
+        data,
+        options.completedSeason ? CACHE_TTLS.SEASON_COMPLETED : CACHE_TTLS.DETAIL
+      );
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
     }
@@ -141,6 +147,7 @@ interface TvDetailsForEpisodes {
   seasons?: TmdbSeason[];
   backdrop_path?: string | null;
   external_ids?: { imdb_id?: string | null };
+  status?: string;
 }
 
 interface ImdbEpisodeEdge {
@@ -166,6 +173,8 @@ async function getImdbEpisodesForSeason(
   let endCursor: string | undefined;
 
   for (let i = 0; i < IMDB_EPISODE_PAGE_MAX; i++) {
+    if (isRequestAborted()) break;
+
     const response = await imdb.getEpisodesBySeason(imdbId, {
       season,
       limit: IMDB_EPISODE_PAGE_LIMIT,
@@ -317,6 +326,8 @@ export async function getSeriesEpisodes(
   };
 
   const regularSeasons = details.seasons.filter((s) => s.season_number > 0);
+  const latestSeasonNumber = Math.max(0, ...regularSeasons.map((season) => season.season_number));
+  const seriesEnded = details.status === 'Ended' || details.status === 'Canceled';
 
   const seriesBackdrop = details.backdrop_path
     ? `${TMDB_IMAGE_BASE}/w500${details.backdrop_path}`
@@ -333,15 +344,15 @@ export async function getSeriesEpisodes(
   const seasonResults: StremioVideo[][] = [];
 
   for (let i = 0; i < seasonQueue.length; i += DETAIL_CONCURRENCY) {
+    if (isRequestAborted()) break;
+
     const batch = seasonQueue.slice(i, i + DETAIL_CONCURRENCY);
     const batchResults = await Promise.all(
       batch.map(async (season) => {
-        const seasonData = (await getSeasonDetails(
-          apiKey,
-          tmdbId,
-          season.season_number,
-          options
-        )) as SeasonDetailsResult | null;
+        const seasonData = (await getSeasonDetails(apiKey, tmdbId, season.season_number, {
+          ...options,
+          completedSeason: seriesEnded || season.season_number < latestSeasonNumber,
+        })) as SeasonDetailsResult | null;
         if (!seasonData?.episodes) return [];
 
         return seasonData.episodes.map((ep) => {
@@ -392,6 +403,8 @@ export async function getSeriesEpisodes(
     const imdbSeasonQueue = seasonNumbersToProbe.map((season_number) => ({ season_number }));
 
     for (let i = 0; i < imdbSeasonQueue.length; i += IMDB_SEASON_CONCURRENCY) {
+      if (isRequestAborted()) break;
+
       const batch = imdbSeasonQueue.slice(i, i + IMDB_SEASON_CONCURRENCY);
       const batchVideos = await Promise.all(
         batch.map(async (season) => {
@@ -453,6 +466,8 @@ export async function batchGetDetails(
   const results = new Map<number, unknown>();
 
   for (let i = 0; i < tmdbIds.length; i += DETAIL_CONCURRENCY) {
+    if (isRequestAborted()) break;
+
     const batch = tmdbIds.slice(i, i + DETAIL_CONCURRENCY);
     await Promise.all(
       batch.map(async (tmdbId) => {

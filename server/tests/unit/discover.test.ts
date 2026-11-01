@@ -261,10 +261,16 @@ describe('fetchSpecialList', () => {
     expect(result.results.map((item) => item.id)).toEqual([222218, 225067, 229747]);
   });
 
-  it('throws when collection list is requested without collectionId', async () => {
-    await expect(fetchSpecialList('key', 'collection', 'movie')).rejects.toThrow(
-      'Collection ID required for collection list type'
-    );
+  it('returns an empty collection page when collectionId is missing', async () => {
+    mockedFetch.mockClear();
+
+    await expect(fetchSpecialList('key', 'collection', 'movie')).resolves.toEqual({
+      page: 1,
+      total_pages: 0,
+      total_results: 0,
+      results: [],
+    });
+    expect(mockedFetch).not.toHaveBeenCalled();
   });
 
   it('throws when studio list is requested without studioId', async () => {

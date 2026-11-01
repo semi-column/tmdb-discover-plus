@@ -1,6 +1,13 @@
 import type { TimeRange } from '../liveQueries.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
 import type { UserConfig } from '../../../types/index.ts';
+import { LATENCY_BUCKETS, latencyBucket } from '../collector.ts';
+import {
+  buildHistoryOverview,
+  type OverviewBreakdown,
+  type OverviewBucket,
+  type OverviewLogBucket,
+} from './overview.ts';
 import {
   SETTABLE_ERROR_STATUSES,
   bucketForRange,
@@ -268,6 +275,92 @@ export class MemoryHistory implements HistoryStore {
         };
       })
       .sort((a, b) => b.count - a.count);
+  }
+
+  async overview(range: TimeRange, slowMs: number) {
+    const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
+    const buckets = new Map<number, OverviewBucket>();
+    const statuses = new Map<number, number>();
+    const breakdowns = new Map<string, number>();
+    const users = new Set<string>();
+    const getBucket = (ts: number) => {
+      const time = Math.floor(ts / bucketMs) * bucketMs;
+      let bucket = buckets.get(time);
+      if (!bucket) {
+        bucket = {
+          bucket: time,
+          requests: 0,
+          errors5xx: 0,
+          errors4xx: 0,
+          slow: 0,
+          duration: 0,
+          cacheHits: 0,
+          cacheMisses: 0,
+          histogram: Array(LATENCY_BUCKETS.length + 1).fill(0),
+        };
+        buckets.set(time, bucket);
+      }
+      return bucket;
+    };
+    for (const event of this.requests) {
+      if (!inRange(event.ts, range)) continue;
+      const bucket = getBucket(event.ts);
+      const weight = event.weight;
+      bucket.requests += weight;
+      if (event.status >= 500) bucket.errors5xx += weight;
+      else if (event.status >= 400) bucket.errors4xx += weight;
+      if (event.durationMs >= slowMs) bucket.slow += weight;
+      bucket.duration += event.durationMs * weight;
+      bucket.cacheHits += event.cacheHits * weight;
+      bucket.cacheMisses += event.cacheMisses * weight;
+      bucket.histogram[latencyBucket(event.durationMs)] += weight;
+      statuses.set(event.status, (statuses.get(event.status) ?? 0) + weight);
+      for (const [kind, key] of Object.entries({
+        resource: event.resource,
+        source: event.source,
+        contentType: event.contentType,
+        client: event.client,
+        country: event.country,
+        colo: event.colo,
+        instance: event.instance,
+      })) {
+        if (key) {
+          const composite = `${kind}\0${key}`;
+          breakdowns.set(composite, (breakdowns.get(composite) ?? 0) + weight);
+        }
+      }
+      if (event.userHash) users.add(event.userHash);
+    }
+    const logBuckets = new Map<number, OverviewLogBucket>();
+    let errors = 0,
+      warnings = 0;
+    for (const event of this.errorEvents) {
+      if (!inRange(event.ts, range)) continue;
+      const time = Math.floor(event.ts / bucketMs) * bucketMs;
+      const bucket = logBuckets.get(time) ?? { bucket: time, errors: 0, warnings: 0 };
+      if (event.level === 'error') {
+        errors++;
+        bucket.errors++;
+      } else {
+        warnings++;
+        bucket.warnings++;
+      }
+      logBuckets.set(time, bucket);
+    }
+    const breakdownRows: OverviewBreakdown[] = [...breakdowns].map(([composite, count]) => {
+      const [kind, key] = composite.split('\0');
+      return { kind, key, count };
+    });
+    return buildHistoryOverview(
+      range,
+      [...buckets.values()],
+      await this.routeStats(range),
+      [...statuses].map(([status, count]) => ({ status, count })),
+      breakdownRows,
+      [...logBuckets.values()],
+      { errors, warnings },
+      users.size
+    );
   }
 
   async listErrorGroups(range: TimeRange, filter: ErrorFilter) {

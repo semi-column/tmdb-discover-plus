@@ -9,9 +9,16 @@ import { generateSlug } from '../common/stremioHelpers.ts';
 import { applyArtworkOverridesSync } from '../artworkService.ts';
 import type { ArtworkContext, NativeArtworkUrls } from '../artworkService.ts';
 
+function normalizeImdbId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const imdbId = value.trim();
+  return /^tt\d+$/i.test(imdbId) ? imdbId : null;
+}
+
 function resolveStremioId(ids: SimklAnime['ids']): string | null {
   // Direct IMDB ID from Simkl's response
-  if (ids.imdb) return ids.imdb;
+  const imdbId = normalizeImdbId(ids.imdb);
+  if (imdbId) return imdbId;
 
   // Try Simkl's own ID map
   const simklId = ids.simkl ?? ids.simkl_id;
@@ -59,7 +66,9 @@ export function simklToStremioMeta(
   const simklId = simklRawId != null ? parseInt(String(simklRawId), 10) : NaN;
   const mapEntry = Number.isNaN(simklId) ? undefined : getEntryBySimklId(simklId);
   const imdbId =
-    anime.ids.imdb || mapEntry?.imdb_id || (stremioId.startsWith('tt') ? stremioId : null);
+    normalizeImdbId(anime.ids.imdb) ||
+    normalizeImdbId(mapEntry?.imdb_id) ||
+    (stremioId.startsWith('tt') ? stremioId : null);
   const primaryId = imdbId || stremioId;
   const tmdbId = mapEntry?.themoviedb_id ?? 0;
 

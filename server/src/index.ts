@@ -39,7 +39,11 @@ import { getImdbCircuitBreakerState } from './services/imdb/client.ts';
 import { isImdbApiEnabled } from './services/imdb/index.ts';
 import { initImdbApi } from './services/imdb/index.ts';
 import { initAnimeIdMap } from './services/animeIdMap/index.ts';
-import { requestIdMiddleware, getRequestCacheStats } from './utils/requestContext.ts';
+import {
+  requestIdMiddleware,
+  getRequestCacheStats,
+  abortRequestContext,
+} from './utils/requestContext.ts';
 import { sendError, ErrorCodes, AppError } from './utils/AppError.ts';
 import { TIMEOUTS, HEAP_WARN_THRESHOLD_MB } from './constants.ts';
 import type { Server } from 'http';
@@ -204,6 +208,7 @@ app.use((req, res, next) => {
   req.setTimeout(TIMEOUTS.REQUEST_MS);
   res.setTimeout(TIMEOUTS.REQUEST_MS, () => {
     if (!res.headersSent) {
+      abortRequestContext();
       log.warn('Request timeout', { url: req.originalUrl, method: req.method });
       res.status(504).json({ error: 'Gateway Timeout' });
     }
@@ -410,8 +415,14 @@ app.use('/api', apiRouter);
 
 app.use('/', addonRouter);
 
-app.use((req, res, next) => {
-  if (req.method !== 'GET') return next();
+app.use(['/api', '/meta', '/catalog'], (_req, res) => {
+  res.status(404).json({ error: 'Not Found' });
+});
+
+app.get(['/', '/:userId'], (req, res) => {
+  if (req.path !== '/' && req.path.includes('.')) {
+    return res.status(404).send('Not Found');
+  }
 
   const indexPath = path.join(clientDistPath, 'index.html');
   if (fs.existsSync(indexPath)) {

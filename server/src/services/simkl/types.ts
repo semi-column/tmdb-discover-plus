@@ -7,7 +7,7 @@ export interface SimklAnime {
     simkl?: number;
     simkl_id?: number;
     slug?: string;
-    imdb?: string;
+    imdb?: string | number;
     tmdb?: string;
     mal?: string;
     anidb?: string;

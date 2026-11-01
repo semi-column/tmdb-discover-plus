@@ -4,6 +4,7 @@ import { UserConfig } from '../../../models/UserConfig.ts';
 import { MarketplaceEntryModel } from '../../../models/MarketplaceEntry.ts';
 import { LATENCY_BUCKETS } from '../collector.ts';
 import { histPercentile, type TimeRange } from '../liveQueries.ts';
+import { buildHistoryOverview } from './overview.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
 import {
   SETTABLE_ERROR_STATUSES,
@@ -421,6 +422,153 @@ export class MongoHistory implements HistoryStore {
     return [...merged.values()];
   }
 
+  async overview(range: TimeRange, slowMs: number) {
+    const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
+    const bucketExpr = {
+      $multiply: [{ $floor: { $divide: [{ $toLong: '$ts' }, bucketMs] } }, bucketMs],
+    };
+    const histogram = Object.fromEntries([
+      ...LATENCY_BUCKETS.map((upper, index) => {
+        const condition = index
+          ? {
+              $and: [
+                { $gt: ['$duration_ms', LATENCY_BUCKETS[index - 1]] },
+                { $lte: ['$duration_ms', upper] },
+              ],
+            }
+          : { $lte: ['$duration_ms', upper] };
+        return [`lat_${index}`, { $sum: { $cond: [condition, '$weight', 0] } }];
+      }),
+      [
+        `lat_${LATENCY_BUCKETS.length}`,
+        { $sum: { $cond: [{ $gt: ['$duration_ms', LATENCY_BUCKETS.at(-1)] }, '$weight', 0] } },
+      ],
+    ]);
+    const weighted = (condition: unknown) => ({ $sum: { $cond: [condition, '$weight', 0] } });
+    const dimensions = {
+      resource: 'resource',
+      source: 'source',
+      contentType: 'content_type',
+      client: 'client',
+      country: 'country',
+      colo: 'colo',
+      instance: 'instance',
+    };
+    const facets = Object.fromEntries(
+      Object.entries(dimensions).map(([kind, field]) => [
+        kind,
+        [
+          { $group: { _id: `$${field}`, count: { $sum: '$weight' } } },
+          { $match: { _id: { $nin: ['', null] } } },
+        ],
+      ])
+    );
+    const match = this.rangeMatch(range);
+    const [bucketRows, statusRows, [breakdownResult], logRows, [userResult], routes] =
+      await Promise.all([
+        this.coll(C.requests)
+          .aggregate(
+            [
+              { $match: match },
+              {
+                $group: {
+                  _id: bucketExpr,
+                  requests: { $sum: '$weight' },
+                  errors5xx: weighted({ $gte: ['$status', 500] }),
+                  errors4xx: weighted({
+                    $and: [{ $gte: ['$status', 400] }, { $lt: ['$status', 500] }],
+                  }),
+                  slow: weighted({ $gte: ['$duration_ms', slowMs] }),
+                  duration: { $sum: { $multiply: ['$duration_ms', '$weight'] } },
+                  cacheHits: { $sum: { $multiply: ['$cache_hits', '$weight'] } },
+                  cacheMisses: { $sum: { $multiply: ['$cache_misses', '$weight'] } },
+                  ...histogram,
+                },
+              },
+              { $sort: { _id: 1 } },
+            ],
+            AGG_OPTS
+          )
+          .toArray(),
+        this.coll(C.requests)
+          .aggregate(
+            [{ $match: match }, { $group: { _id: '$status', count: { $sum: '$weight' } } }],
+            AGG_OPTS
+          )
+          .toArray(),
+        this.coll(C.requests)
+          .aggregate([{ $match: match }, { $facet: facets }], AGG_OPTS)
+          .toArray(),
+        this.coll(C.errorEvents)
+          .aggregate(
+            [
+              { $match: this.rangeMatch(range) },
+              {
+                $group: {
+                  _id: { bucket: bucketExpr, level: '$level' },
+                  count: { $sum: 1 },
+                },
+              },
+            ],
+            AGG_OPTS
+          )
+          .toArray(),
+        this.coll(C.requests)
+          .aggregate(
+            [
+              { $match: { ...match, user_hash: { $ne: '' } } },
+              { $group: { _id: '$user_hash' } },
+              { $count: 'count' },
+            ],
+            AGG_OPTS
+          )
+          .toArray(),
+        this.routeStats(range),
+      ]);
+    const buckets = bucketRows.map((row) => ({
+      bucket: Number(row._id),
+      requests: Number(row.requests),
+      errors5xx: Number(row.errors5xx),
+      errors4xx: Number(row.errors4xx),
+      slow: Number(row.slow),
+      duration: Number(row.duration),
+      cacheHits: Number(row.cacheHits),
+      cacheMisses: Number(row.cacheMisses),
+      histogram: LATENCY_BUCKETS.map((_, index) => Number(row[`lat_${index}`])).concat(
+        Number(row[`lat_${LATENCY_BUCKETS.length}`])
+      ),
+    }));
+    const logs = logRows.reduce((map, row) => {
+      const bucket = Number(row._id.bucket);
+      const value = map.get(bucket) ?? { bucket, errors: 0, warnings: 0 };
+      if (row._id.level === 'error') value.errors += Number(row.count);
+      else if (row._id.level === 'warn') value.warnings += Number(row.count);
+      map.set(bucket, value);
+      return map;
+    }, new Map<number, { bucket: number; errors: number; warnings: number }>());
+    const logCounts = [...logs.values()].reduce(
+      (sum, bucket) => ({
+        errors: sum.errors + bucket.errors,
+        warnings: sum.warnings + bucket.warnings,
+      }),
+      { errors: 0, warnings: 0 }
+    );
+    const breakdownRows = Object.entries(
+      (breakdownResult ?? {}) as Record<string, Array<{ _id: string; count: number }>>
+    ).flatMap(([kind, rows]) =>
+      rows.map((row) => ({ kind, key: row._id, count: Number(row.count) }))
+    );
+    return buildHistoryOverview(
+      range,
+      buckets,
+      routes,
+      statusRows.map((row) => ({ status: Number(row._id), count: Number(row.count) })),
+      breakdownRows,
+      [...logs.values()],
+      logCounts,
+      Number(userResult?.count ?? 0)
+    );
+  }
   async routeStats(range: TimeRange) {
     const groups = await this.groupedWithHistogram(
       C.requests,

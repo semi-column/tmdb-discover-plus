@@ -33,6 +33,15 @@ import {
 const SUITE = 'Stremio Protocol';
 
 export async function run() {
+  await runTest(SUITE, 'Malformed addon URLs do not return the web app', async () => {
+    const res = await get('/meta/series/tt0111161.json');
+    assert(res.status === 404, `Expected 404 for addon URL without config ID, got ${res.status}`);
+    assert(
+      res.headers['content-type']?.includes('application/json'),
+      'Expected a JSON not-found response'
+    );
+  });
+
   // Ensure we're authenticated
   await loginAndGetToken();
 

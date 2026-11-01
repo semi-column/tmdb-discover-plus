@@ -55,6 +55,12 @@ export function Overview({ range }) {
   return (
     <div className="adm-stack">
       <ErrorNote error={error} />
+      {data.dataSource === 'redis-live-fallback' && (
+        <div className="adm-alert adm-tone-warn" role="status">
+          History is unavailable. Showing Redis live counters, which may be incomplete for older
+          ranges.
+        </div>
+      )}
       <AttentionSummary totals={totals} range={range} />
       {spike && (
         <div className="adm-alert adm-tone-bad">

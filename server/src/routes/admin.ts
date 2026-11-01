@@ -227,14 +227,29 @@ router.get(
   handle(async (req) => {
     const range = parseRange(req.query, retention());
     const live = await getLiveStore();
-    const current = await liveOverview(live, range);
+    const history = getHistory();
     const span = range.to - range.from;
-    const previous = await liveOverview(live, {
-      ...range,
-      from: range.from - span,
-      to: range.from,
-    });
-    return { ...current, previous: previous.totals };
+    const previousRange = { ...range, from: range.from - span, to: range.from - 1 };
+    const liveFallback = async () => {
+      const [current, previous] = await Promise.all([
+        liveOverview(live, range),
+        liveOverview(live, previousRange),
+      ]);
+      return { ...current, previous: previous.totals, dataSource: 'redis-live-fallback' };
+    };
+    if (!history) return liveFallback();
+    try {
+      const [current, previous] = await Promise.all([
+        history.overview(range, config.observability.slowMs),
+        history.overview(previousRange, config.observability.slowMs),
+      ]);
+      return { ...current, previous: previous.totals, dataSource: 'history' };
+    } catch (error) {
+      log.warn('History overview failed; falling back to Redis live aggregates', {
+        error: (error as Error).message,
+      });
+      return liveFallback();
+    }
   })
 );
 

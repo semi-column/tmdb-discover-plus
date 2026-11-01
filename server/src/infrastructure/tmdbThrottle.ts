@@ -2,6 +2,7 @@ import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
 
 const log = createLogger('TmdbThrottle');
+export const RATE_LIMITER_TIMEOUT_CODE = 'RATE_LIMITER_TIMEOUT';
 
 /**
  * Token bucket rate limiter for outbound TMDB API calls.
@@ -102,7 +103,11 @@ class TokenBucket {
     return setTimeout(() => {
       const idx = this.queue.findIndex((item) => item.resolve === resolve);
       if (idx !== -1) this.queue.splice(idx, 1);
-      reject(new Error('TMDB rate limiter timeout — waited too long for token'));
+      reject(
+        Object.assign(new Error('Rate limiter timeout — waited too long for token'), {
+          code: RATE_LIMITER_TIMEOUT_CODE,
+        })
+      );
     }, timeoutMs);
   }
 

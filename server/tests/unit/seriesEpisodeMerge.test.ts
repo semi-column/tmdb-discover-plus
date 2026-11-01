@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../../src/services/tmdb/client.ts', () => ({ tmdbFetch: vi.fn() }));
 vi.mock('../../src/services/imdb/index.ts', () => ({ getEpisodesBySeason: vi.fn() }));
+vi.mock('../../src/utils/requestContext.ts', () => ({
+  getRequestId: vi.fn(),
+  isRequestAborted: vi.fn(() => false),
+}));
 vi.mock('../../src/services/cache/index.ts', () => ({
   getCache: vi.fn(() => ({
     get: vi.fn().mockResolvedValue(null),
@@ -23,9 +27,11 @@ vi.mock('../../src/config.ts', () => ({
 import { getSeriesEpisodes } from '../../src/services/tmdb/details.ts';
 import * as imdb from '../../src/services/imdb/index.ts';
 import { tmdbFetch } from '../../src/services/tmdb/client.ts';
+import { isRequestAborted } from '../../src/utils/requestContext.ts';
 
 const mockedFetch = tmdbFetch as ReturnType<typeof vi.fn>;
 const mockedImdb = imdb.getEpisodesBySeason as ReturnType<typeof vi.fn>;
+const mockedRequestAborted = isRequestAborted as ReturnType<typeof vi.fn>;
 
 const BASE_DETAILS = {
   seasons: [{ season_number: 1, poster_path: '/season1.jpg' }],
@@ -78,6 +84,19 @@ function makeImdbSeasonResponse(imageUrl: string | null) {
 }
 
 describe('getSeriesEpisodes — thumbnail priority', () => {
+  it('does not start provider batches for an aborted request', async () => {
+    mockedFetch.mockClear();
+    mockedImdb.mockClear();
+    mockedRequestAborted.mockReturnValue(true);
+
+    const videos = await getSeriesEpisodes('api-key', 123, BASE_DETAILS as any);
+
+    expect(videos).toEqual([]);
+    expect(mockedFetch).not.toHaveBeenCalled();
+    expect(mockedImdb).not.toHaveBeenCalled();
+    mockedRequestAborted.mockReturnValue(false);
+  });
+
   it('prefers TMDB thumbnail over IMDb when both are available', async () => {
     mockedFetch.mockResolvedValue(makeTmdbSeasonResponse('/tmdb-still.jpg'));
     mockedImdb.mockResolvedValue(makeImdbSeasonResponse(IMDB_STILL));

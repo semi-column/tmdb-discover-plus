@@ -13,6 +13,7 @@ vi.mock('../../src/infrastructure/tmdbThrottle.ts', () => ({
   getTmdbThrottle: vi.fn(() => ({
     acquire: vi.fn().mockResolvedValue(undefined),
   })),
+  RATE_LIMITER_TIMEOUT_CODE: 'RATE_LIMITER_TIMEOUT',
 }));
 
 import {
@@ -21,6 +22,7 @@ import {
   resetCircuitBreaker,
 } from '../../src/services/tmdb/client.ts';
 import { getCache } from '../../src/services/cache/index.ts';
+import { getTmdbThrottle } from '../../src/infrastructure/tmdbThrottle.ts';
 import { CACHE_TTLS } from '../../src/cacheTtls.ts';
 import { CacheWrapper } from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter } from './helpers/mocks.ts';
@@ -41,6 +43,23 @@ describe('TMDB Circuit Breaker', () => {
 
   it('starts in closed state', () => {
     expect(getCircuitBreakerState().state).toBe('closed');
+  });
+
+  it('does not trip the TMDB circuit breaker for a local limiter timeout', async () => {
+    vi.mocked(getTmdbThrottle).mockReturnValueOnce({
+      acquire: vi
+        .fn()
+        .mockRejectedValue(
+          Object.assign(new Error('Rate limiter timeout'), { code: 'RATE_LIMITER_TIMEOUT' })
+        ),
+    } as any);
+
+    await expect(tmdbFetch('/movie/550', 'test-key', {}, 0)).rejects.toThrow(
+      'Rate limiter timeout'
+    );
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(getCircuitBreakerState()).toMatchObject({ state: 'closed', recentFailures: 0 });
   });
 
   it.each([

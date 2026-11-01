@@ -41,6 +41,7 @@ vi.mock('../../src/infrastructure/imdbThrottle.ts', () => ({
   getImdbThrottle: vi.fn(() => ({
     acquire: throttleAcquire,
   })),
+  RATE_LIMITER_TIMEOUT_CODE: 'RATE_LIMITER_TIMEOUT',
 }));
 
 vi.mock('../../src/utils/requestContext.ts', () => ({
@@ -94,5 +95,18 @@ describe('imdb client outbound caller headers', () => {
 
     expect(headers['x-tmdbdp-variant']).toBe('stable');
     expect(headers['x-tmdbdp-caller']).toBe('stable:unknown');
+  });
+
+  it('does not trip the IMDb circuit breaker for a local limiter timeout', async () => {
+    throttleAcquire.mockRejectedValue(
+      Object.assign(new Error('Rate limiter timeout'), { code: 'RATE_LIMITER_TIMEOUT' })
+    );
+
+    await expect(imdbFetch('/api/imdb/genres', {}, 120, 0)).rejects.toThrow('Rate limiter timeout');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(
+      (await import('../../src/services/imdb/client.ts')).getImdbCircuitBreakerState()
+    ).toMatchObject({ state: 'closed', recentFailures: 0 });
   });
 });

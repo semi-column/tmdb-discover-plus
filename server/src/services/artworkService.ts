@@ -937,6 +937,11 @@ const providerRegistry = new Map<ArtworkProvider, ArtworkProviderDefinition>([
   ['customUrl', customUrlProvider],
 ]);
 
+function normalizeArtworkContext(context: ArtworkContext): ArtworkContext {
+  const imdbId = typeof context.imdbId === 'string' ? context.imdbId.trim() : '';
+  return { ...context, imdbId: /^tt\d+$/i.test(imdbId) ? imdbId : null };
+}
+
 export function isValidArtworkConfig(config: PosterOptions | null): boolean {
   if (!config) return false;
   const { service, apiKey, customUrlPattern } = config;
@@ -958,7 +963,7 @@ export function resolveArtworkUrl(
   if (!definition) return null;
   if (!definition.supportedKinds.has(kind)) return null;
 
-  return definition.resolve(context, kind, config);
+  return definition.resolve(normalizeArtworkContext(context), kind, config);
 }
 
 function metahubFallback(kind: ArtworkKind, imdbId: string | null | undefined): string | null {
@@ -1000,7 +1005,7 @@ export async function applyArtworkOverrides(
   };
 
   const effectiveContext: ArtworkContext = {
-    ...context,
+    ...normalizeArtworkContext(context),
     englishArtOnly:
       context.englishArtOnly !== undefined
         ? context.englishArtOnly
@@ -1088,7 +1093,7 @@ export function applyArtworkOverridesSync(
   };
 
   const effectiveContext: ArtworkContext = {
-    ...context,
+    ...normalizeArtworkContext(context),
     englishArtOnly:
       context.englishArtOnly !== undefined
         ? context.englishArtOnly
