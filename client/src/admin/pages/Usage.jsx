@@ -10,11 +10,17 @@ const ACTIVITY_SERIES = [{ label: 'Configs by last update', color: '#c084fc' }];
 
 const toDay = (value) => Math.floor(new Date(value).getTime() / 1000);
 
-export function Usage({ range, meta }) {
+export function Usage({ range, rangeParams = { range }, onSelectRange, meta }) {
   const caps = meta?.capabilities;
   const formatPercentile = caps?.approximatePercentiles ? fmtBucketMs : fmtMs;
-  const overview = useAsync(() => adminApi.overview({ range }), [range]);
-  const usage = useAsync(() => adminApi.usage({ range }), [range]);
+  const overview = useAsync(
+    () => adminApi.overview(rangeParams),
+    [range, rangeParams.from, rangeParams.to]
+  );
+  const usage = useAsync(
+    () => adminApi.usage(rangeParams),
+    [range, rangeParams.from, rangeParams.to]
+  );
 
   const charts = useMemo(() => {
     const daily = usage.data?.traffic?.daily || [];
@@ -67,14 +73,24 @@ export function Usage({ range, meta }) {
             )}
           </div>
           <Panel title="Configs by last update date (30d)">
-            <TimeChart data={charts.activity} series={ACTIVITY_SERIES} height={180} />
+            <TimeChart
+              data={charts.activity}
+              series={ACTIVITY_SERIES}
+              height={180}
+              onSelectRange={onSelectRange}
+            />
           </Panel>
         </>
       )}
 
       {usage.data?.traffic && (
         <Panel title="Daily active configs (requests carrying a config ID)">
-          <TimeChart data={charts.daily} series={DAILY_SERIES} height={200} />
+          <TimeChart
+            data={charts.daily}
+            series={DAILY_SERIES}
+            height={200}
+            onSelectRange={onSelectRange}
+          />
         </Panel>
       )}
 

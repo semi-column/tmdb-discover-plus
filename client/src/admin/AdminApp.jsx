@@ -50,17 +50,44 @@ const HISTORY_LABELS = { postgres: 'Postgres', mongo: 'MongoDB', memory: 'in-mem
 function Dashboard({ onLogout }) {
   const { page, params } = useHashRoute();
   const [navOpen, setNavOpen] = useState(false);
-  const range = RANGE_OPTIONS.includes(params.range) ? params.range : '1h';
+  const customFrom = params.from?.trim() ? Number(params.from) : NaN;
+  const customTo = params.to?.trim() ? Number(params.to) : NaN;
+  const hasCustomRange =
+    params.range === 'custom' &&
+    Number.isFinite(customFrom) &&
+    Number.isFinite(customTo) &&
+    customTo > customFrom;
+  const range = hasCustomRange
+    ? 'custom'
+    : RANGE_OPTIONS.includes(params.range)
+      ? params.range
+      : '1h';
+  const rangeParams = hasCustomRange
+    ? { range: 'custom', from: customFrom, to: customTo }
+    : { range };
+  const formatRangeBound = (value) =>
+    new Date(value).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
   const traceId = params.trace || null;
   const meta = useAsync(() => adminApi.meta(), [], { pollMs: 60_000 });
   const closeTrace = useCallback(
     () => navigate(page, { ...params, trace: undefined }),
     [page, params]
   );
+  const selectCustomRange = useCallback(
+    ({ from, to }) => navigate(page, { ...params, range: 'custom', from, to, cursor: undefined }),
+    [page, params]
+  );
 
   const pageProps = {
     range,
+    rangeParams,
     params,
+    onSelectRange: selectCustomRange,
     onOpenTrace: (trace) => navigate(page, { ...params, trace }),
     meta: meta.data,
   };
@@ -77,6 +104,7 @@ function Dashboard({ onLogout }) {
   }[page] ?? <Overview {...pageProps} />;
 
   const showRange = !['live', 'diagnostics', 'security'].includes(page);
+  const rangeQuery = new URLSearchParams(rangeParams).toString();
   const m = meta.data;
   const caps = m?.capabilities;
 
@@ -111,7 +139,7 @@ function Dashboard({ onLogout }) {
                 <div className="adm-nav-section">{index === 0 ? 'Monitor' : 'Administration'}</div>
               )}
               <a
-                href={`#/${id}${range !== '1h' ? `?range=${range}` : ''}`}
+                href={`#/${id}${range !== '1h' || hasCustomRange ? `?${rangeQuery}` : ''}`}
                 className={page === id ? 'active' : ''}
                 aria-current={page === id ? 'page' : undefined}
                 onClick={() => setNavOpen(false)}
@@ -146,17 +174,35 @@ function Dashboard({ onLogout }) {
         <header className="adm-topbar">
           <h1>{PAGES.find(([id]) => id === page)?.[1] ?? 'Overview'}</h1>
           {showRange && (
-            <div className="adm-range" role="group" aria-label="Time range">
-              {RANGE_OPTIONS.map((r) => (
+            <div className="adm-range-control">
+              <div className="adm-range" role="group" aria-label="Time range">
+                {RANGE_OPTIONS.map((r) => (
+                  <button
+                    type="button"
+                    key={r}
+                    className={r === range ? 'active' : ''}
+                    onClick={() => navigate(page, { ...params, range: r, cursor: undefined })}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              {hasCustomRange && (
                 <button
                   type="button"
-                  key={r}
-                  className={r === range ? 'active' : ''}
-                  onClick={() => navigate(page, { ...params, range: r, cursor: undefined })}
+                  className="adm-range-current"
+                  aria-label="Clear custom time interval and return to 1h"
+                  title="Clear custom time interval"
+                  onClick={() =>
+                    navigate(page, { ...params, range: '1h', from: undefined, to: undefined })
+                  }
                 >
-                  {r}
+                  <span>
+                    {formatRangeBound(customFrom)} – {formatRangeBound(customTo)}
+                  </span>
+                  <X size={14} aria-hidden="true" />
                 </button>
-              ))}
+              )}
             </div>
           )}
         </header>

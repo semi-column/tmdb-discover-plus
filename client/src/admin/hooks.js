@@ -45,8 +45,18 @@ export function useHashRoute() {
 }
 
 export function navigate(page, params = {}) {
+  const currentQuery = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  const nextParams = { ...params };
+  if (nextParams.range && nextParams.range !== 'custom') {
+    delete nextParams.from;
+    delete nextParams.to;
+  } else if (currentQuery.get('range') === 'custom') {
+    nextParams.range ??= 'custom';
+    nextParams.from ??= currentQuery.get('from');
+    nextParams.to ??= currentQuery.get('to');
+  }
   const query = new URLSearchParams(
-    Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    Object.entries(nextParams).filter(([, v]) => v !== undefined && v !== null && v !== '')
   ).toString();
   window.location.hash = `/${page}${query ? `?${query}` : ''}`;
 }

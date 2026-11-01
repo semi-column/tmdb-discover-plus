@@ -17,6 +17,7 @@ import {
   liveOverview,
   liveUpstreams,
   histPercentile,
+  parseRange,
   previousRangeIfRetained,
 } from '../../src/services/observability/liveQueries.ts';
 
@@ -64,6 +65,32 @@ describe('previousRangeIfRetained', () => {
   it('returns no comparison when the previous window predates retention', () => {
     const range = { from: now - 7 * 86_400_000, to: now, kind: 'h' as const };
     expect(previousRangeIfRetained(range, 7, now)).toBeNull();
+  });
+});
+
+describe('parseRange', () => {
+  it('accepts a precise custom interval', () => {
+    const now = Date.now();
+    const from = now - 2 * 60 * 60_000;
+    const to = now - 30 * 60_000;
+    const range = parseRange({ range: 'custom', from: String(from), to: String(to) }, 7);
+
+    expect(range).toEqual({ from, to, kind: 'm' });
+  });
+
+  it('clamps a custom interval to retained history', () => {
+    const now = Date.now();
+    const range = parseRange({ range: 'custom', from: now - 10 * 86_400_000, to: now }, 7);
+
+    expect(range.from).toBeGreaterThanOrEqual(now - 7 * 86_400_000);
+    expect(range.to).toBeLessThanOrEqual(now);
+    expect(range.kind).toBe('h');
+  });
+
+  it('rejects empty custom bounds and falls back to the default range', () => {
+    const range = parseRange({ range: 'custom', from: '', to: String(Date.now()) }, 7);
+    expect(range.kind).toBe('m');
+    expect(range.to - range.from).toBeLessThanOrEqual(60 * 60_000);
   });
 });
 

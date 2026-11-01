@@ -20,10 +20,12 @@ function seriesByInstance(rows, pick) {
   return { data: [times, ...values], series: instances.map((label) => ({ label })) };
 }
 
-export function System({ range, meta }) {
-  const { data, error, loading } = useAsync(() => adminApi.system({ range }), [range], {
-    pollMs: 30_000,
-  });
+export function System({ range, rangeParams = { range }, onSelectRange, meta }) {
+  const { data, error, loading } = useAsync(
+    () => adminApi.system(rangeParams),
+    [range, rangeParams.from, rangeParams.to],
+    { pollMs: 30_000 }
+  );
 
   const charts = useMemo(() => {
     const rows = data?.series || [];
@@ -103,18 +105,38 @@ export function System({ range, meta }) {
         <>
           <div className="adm-grid-2">
             <Panel title="Heap used (MB)">
-              <TimeChart data={charts.heap.data} series={charts.heap.series} height={180} />
+              <TimeChart
+                data={charts.heap.data}
+                series={charts.heap.series}
+                height={180}
+                onSelectRange={onSelectRange}
+              />
             </Panel>
             <Panel title="RSS (MB)">
-              <TimeChart data={charts.rss.data} series={charts.rss.series} height={180} />
+              <TimeChart
+                data={charts.rss.data}
+                series={charts.rss.series}
+                height={180}
+                onSelectRange={onSelectRange}
+              />
             </Panel>
           </div>
           <div className="adm-grid-2">
             <Panel title="Event loop delay p99 (ms)">
-              <TimeChart data={charts.loop.data} series={charts.loop.series} height={180} />
+              <TimeChart
+                data={charts.loop.data}
+                series={charts.loop.series}
+                height={180}
+                onSelectRange={onSelectRange}
+              />
             </Panel>
             <Panel title="CPU (% of one core)">
-              <TimeChart data={charts.cpu.data} series={charts.cpu.series} height={180} />
+              <TimeChart
+                data={charts.cpu.data}
+                series={charts.cpu.series}
+                height={180}
+                onSelectRange={onSelectRange}
+              />
             </Panel>
           </div>
         </>

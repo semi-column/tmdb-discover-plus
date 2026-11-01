@@ -60,9 +60,12 @@ function TextFilter({ label, name, value, onChange, placeholder, type = 'text' }
   );
 }
 
-function RoutePerformance({ range, approximatePercentiles }) {
+function RoutePerformance({ range, rangeParams, approximatePercentiles }) {
   const formatPercentile = approximatePercentiles ? fmtBucketMs : fmtMs;
-  const { data, error, loading } = useAsync(() => adminApi.routes({ range }), [range]);
+  const { data, error, loading } = useAsync(
+    () => adminApi.routes(rangeParams),
+    [range, rangeParams.from, rangeParams.to]
+  );
   if (loading && !data) return <Loading />;
   return (
     <>
@@ -116,8 +119,8 @@ function RoutePerformance({ range, approximatePercentiles }) {
 }
 
 /** Keyed by range+filters by the parent, so its paging state resets when they change. */
-function RequestList({ range, filters, onOpenTrace }) {
-  const first = useAsync(() => adminApi.requests({ range, ...filters, limit: 100 }), []);
+function RequestList({ rangeParams, filters, onOpenTrace }) {
+  const first = useAsync(() => adminApi.requests({ ...rangeParams, ...filters, limit: 100 }), []);
   const [more, setMore] = useState({ rows: [], cursor: undefined });
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState(null);
@@ -129,7 +132,7 @@ function RequestList({ range, filters, onOpenTrace }) {
     setLoadingMore(true);
     setMoreError(null);
     try {
-      const next = await adminApi.requests({ range, ...filters, cursor, limit: 100 });
+      const next = await adminApi.requests({ ...rangeParams, ...filters, cursor, limit: 100 });
       setMore((m) => ({ rows: [...m.rows, ...next.rows], cursor: next.nextCursor }));
     } catch (err) {
       setMoreError(err);
@@ -214,13 +217,16 @@ function RequestList({ range, filters, onOpenTrace }) {
   );
 }
 
-export function Requests({ range, params, onOpenTrace, meta }) {
+export function Requests({ range, rangeParams = { range }, params, onOpenTrace, meta }) {
   const caps = meta?.capabilities;
   const filters = pickFilters(params);
   const filterKey = JSON.stringify(filters);
   const tab = params.tab === 'routes' ? 'routes' : 'explorer';
 
-  const facets = useAsync(() => adminApi.facets({ range }), [range]);
+  const facets = useAsync(
+    () => adminApi.facets(rangeParams),
+    [range, rangeParams.from, rangeParams.to]
+  );
 
   const setFilter = (name, value) =>
     navigate('requests', { range, ...filters, [name]: value || undefined });
@@ -290,7 +296,11 @@ export function Requests({ range, params, onOpenTrace, meta }) {
               : 'Route performance (exact percentiles from stored requests)'
           }
         >
-          <RoutePerformance range={range} approximatePercentiles={caps?.approximatePercentiles} />
+          <RoutePerformance
+            range={range}
+            rangeParams={rangeParams}
+            approximatePercentiles={caps?.approximatePercentiles}
+          />
         </Panel>
       ) : (
         <>
@@ -310,7 +320,7 @@ export function Requests({ range, params, onOpenTrace, meta }) {
                 <button
                   type="button"
                   className="adm-btn"
-                  onClick={() => downloadExport({ kind: 'requests', range, ...filters })}
+                  onClick={() => downloadExport({ kind: 'requests', ...rangeParams, ...filters })}
                 >
                   Export CSV
                 </button>
@@ -445,8 +455,8 @@ export function Requests({ range, params, onOpenTrace, meta }) {
           </Panel>
 
           <RequestList
-            key={`${range}|${filterKey}`}
-            range={range}
+            key={`${range}|${rangeParams.from ?? ''}|${rangeParams.to ?? ''}|${filterKey}`}
+            rangeParams={rangeParams}
             filters={filters}
             onOpenTrace={onOpenTrace}
           />

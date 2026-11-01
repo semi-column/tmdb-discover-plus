@@ -207,6 +207,36 @@ body {
   gap: 2px;
 }
 
+.adm-range-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.adm-range-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.adm-range-current span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .adm-range button,
 .adm-tabs button {
   background: transparent;
@@ -1080,6 +1110,13 @@ body {
   }
   .adm-range {
     max-width: 100%;
+  }
+  .adm-range-control {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .adm-range-current {
+    min-height: 44px;
   }
   .adm-range button {
     padding: 6px 10px;

@@ -7,6 +7,9 @@ vi.mock('uplot', () => ({
   default: vi.fn(function () {
     this.setSize = vi.fn();
     this.destroy = vi.fn();
+    this.select = { left: 0, top: 0, width: 0, height: 0 };
+    this.posToVal = vi.fn();
+    this.setSelect = vi.fn();
   }),
 }));
 
@@ -29,4 +32,30 @@ it('anchors a single-point time range to the timestamp, not expanded library bou
     timestamp - 43200,
     timestamp + 43200,
   ]);
+});
+
+it('emits selected chart bounds as epoch milliseconds without zooming the chart', () => {
+  const onSelectRange = vi.fn();
+  const from = 1_798_000_000;
+  const to = from + 900;
+  render(
+    <TimeChart
+      data={[
+        [from, to],
+        [4, 8],
+      ]}
+      series={[{ label: 'Requests' }]}
+      onSelectRange={onSelectRange}
+    />
+  );
+
+  const options = uPlot.mock.calls[0][0];
+  const plot = uPlot.mock.instances[0];
+  plot.select = { left: 20, top: 0, width: 40, height: 100 };
+  plot.posToVal.mockImplementation((position) => (position === 20 ? from : to));
+  options.hooks.setSelect[0](plot);
+
+  expect(options.cursor.drag.setScale).toBe(false);
+  expect(onSelectRange).toHaveBeenCalledWith({ from: from * 1000, to: to * 1000 });
+  expect(plot.setSelect).toHaveBeenCalledWith({ left: 0, top: 0, width: 0, height: 0 }, false);
 });

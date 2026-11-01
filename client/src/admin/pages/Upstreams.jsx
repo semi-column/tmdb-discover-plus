@@ -5,12 +5,19 @@ import { TimeChart } from '../components/TimeChart.jsx';
 import { Badge, ErrorNote, Loading, Panel, StatCard } from '../components/ui.jsx';
 import { fmtBucketMs, fmtInt, fmtMs, fmtPct, fmtTime, upstreamOutcome } from '../format.js';
 
-export function Upstreams({ range, params, onOpenTrace, meta }) {
+export function Upstreams({
+  range,
+  rangeParams = { range },
+  params,
+  onOpenTrace,
+  onSelectRange,
+  meta,
+}) {
   const formatEndpointPercentile = meta?.capabilities?.approximatePercentiles ? fmtBucketMs : fmtMs;
   const provider = params.provider || '';
   const { data, error, loading } = useAsync(
-    () => adminApi.upstreams({ range, provider }),
-    [range, provider],
+    () => adminApi.upstreams({ ...rangeParams, provider }),
+    [range, rangeParams.from, rangeParams.to, provider],
     {
       pollMs: 60_000,
     }
@@ -104,14 +111,25 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
       {charts && (
         <>
           <Panel title="Outbound calls">
-            <TimeChart data={charts.calls} series={charts.series} />
+            <TimeChart data={charts.calls} series={charts.series} onSelectRange={onSelectRange} />
           </Panel>
           <div className="adm-grid-2">
             <Panel title="Failures (network error or 5xx)">
-              <TimeChart data={charts.errors} series={charts.series} height={200} />
+              <TimeChart
+                data={charts.errors}
+                series={charts.series}
+                height={200}
+                onSelectRange={onSelectRange}
+              />
             </Panel>
             <Panel title="Avg time to response headers">
-              <TimeChart data={charts.latency} series={charts.series} yLabel="ms" height={200} />
+              <TimeChart
+                data={charts.latency}
+                series={charts.series}
+                yLabel="ms"
+                height={200}
+                onSelectRange={onSelectRange}
+              />
             </Panel>
           </div>
         </>

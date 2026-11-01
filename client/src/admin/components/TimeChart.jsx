@@ -14,7 +14,7 @@ const PALETTE = [
 ];
 
 /** Thin uPlot wrapper. `data` = [timestampsSec[], ...seriesValues[]], `series` = [{ label, color? }]. */
-export function TimeChart({ data, series, height = 220, yLabel }) {
+export function TimeChart({ data, series, height = 220, yLabel, onSelectRange }) {
   const ref = useRef(null);
   const plotRef = useRef(null);
 
@@ -26,7 +26,23 @@ export function TimeChart({ data, series, height = 220, yLabel }) {
     const opts = {
       width: el.clientWidth || 600,
       height,
-      cursor: { drag: { x: true, y: false } },
+      cursor: { drag: { x: true, y: false, setScale: false, dist: 5 } },
+      hooks: {
+        setSelect: [
+          (plot) => {
+            const { left, width } = plot.select;
+            if (!onSelectRange || width < 5) return;
+            const first = plot.posToVal(left, 'x');
+            const last = plot.posToVal(left + width, 'x');
+            const range = {
+              from: Math.floor(Math.min(first, last) * 1000),
+              to: Math.ceil(Math.max(first, last) * 1000),
+            };
+            plot.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
+            if (range.to - range.from >= 60_000) onSelectRange(range);
+          },
+        ],
+      },
       legend: { live: true },
       scales: {
         x: {
@@ -68,8 +84,16 @@ export function TimeChart({ data, series, height = 220, yLabel }) {
       plotRef.current?.destroy();
       plotRef.current = null;
     };
-  }, [data, series, height, yLabel]);
+  }, [data, series, height, yLabel, onSelectRange]);
 
   if (!data?.[0]?.length) return <div className="adm-empty">No data in this range</div>;
-  return <div ref={ref} className="adm-chart" />;
+  return (
+    <div
+      ref={ref}
+      className={`adm-chart ${onSelectRange ? 'adm-chart-selectable' : ''}`}
+      aria-label={
+        onSelectRange ? 'Drag across the chart to select a custom time interval' : undefined
+      }
+    />
+  );
 }

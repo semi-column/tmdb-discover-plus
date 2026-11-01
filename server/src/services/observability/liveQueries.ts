@@ -17,6 +17,26 @@ export interface TimeRange {
 
 export function parseRange(query: Record<string, unknown>, maxDays: number): TimeRange {
   const to = Date.now();
+  if (query.range === 'custom') {
+    const hasFrom =
+      typeof query.from === 'number' || (typeof query.from === 'string' && !!query.from.trim());
+    const hasTo =
+      typeof query.to === 'number' || (typeof query.to === 'string' && !!query.to.trim());
+    const requestedFrom = hasFrom ? Number(query.from) : NaN;
+    const requestedTo = hasTo ? Number(query.to) : NaN;
+    if (
+      Number.isFinite(requestedFrom) &&
+      Number.isFinite(requestedTo) &&
+      requestedTo > requestedFrom
+    ) {
+      const retentionStart = to - maxDays * 86_400_000;
+      const from = Math.max(retentionStart, Math.min(requestedFrom, to));
+      const boundedTo = Math.max(from, Math.min(requestedTo, to));
+      const span = boundedTo - from;
+      return { from, to: boundedTo, kind: span <= RANGES['24h'] ? 'm' : 'h' };
+    }
+  }
+
   const span = RANGES[String(query.range)] ?? RANGES['1h'];
   const from = Math.max(to - span, to - maxDays * 86_400_000);
   // Minute buckets live 24h in the live store; anything longer uses hourly buckets.

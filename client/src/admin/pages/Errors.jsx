@@ -175,14 +175,14 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
   );
 }
 
-export function Errors({ range, params, onOpenTrace }) {
+export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) {
   const status = params.status || 'active';
   const level = params.level || '';
   const q = params.q || '';
   const [search, setSearch] = useState(q);
   const list = useAsync(
-    () => adminApi.errors({ range, status, level, q }),
-    [range, status, level, q],
+    () => adminApi.errors({ ...rangeParams, status, level, q }),
+    [range, rangeParams.from, rangeParams.to, status, level, q],
     {
       pollMs: 60_000,
     }
@@ -243,7 +243,7 @@ export function Errors({ range, params, onOpenTrace }) {
           <button
             type="button"
             className="adm-btn"
-            onClick={() => downloadExport({ kind: 'errors', range, status, level, q })}
+            onClick={() => downloadExport({ kind: 'errors', ...rangeParams, status, level, q })}
           >
             Export CSV
           </button>

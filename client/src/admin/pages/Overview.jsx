@@ -31,11 +31,12 @@ function Trend({ current, previous, invert }) {
   );
 }
 
-export function Overview({ range, meta }) {
-  const { data, error, loading } = useAsync(() => adminApi.overview({ range }), [range], {
-    pollMs: 30_000,
-  });
-
+export function Overview({ range, rangeParams = { range }, meta, onSelectRange }) {
+  const { data, error, loading } = useAsync(
+    () => adminApi.overview(rangeParams),
+    [range, rangeParams.from, rangeParams.to],
+    { pollMs: 30_000 }
+  );
   const charts = useMemo(() => {
     if (!data) return null;
     const s = data.series;
@@ -132,10 +133,16 @@ export function Overview({ range, meta }) {
 
       <div className="adm-grid-2">
         <Panel title={`Traffic (per ${data.range.resolution})`}>
-          <TimeChart data={charts.requests} series={REQUEST_SERIES} />
+          <TimeChart data={charts.requests} series={REQUEST_SERIES} onSelectRange={onSelectRange} />
         </Panel>
         <Panel title="Latency">
-          <TimeChart data={charts.latency} series={LATENCY_SERIES} yLabel="ms" height={200} />
+          <TimeChart
+            data={charts.latency}
+            series={LATENCY_SERIES}
+            yLabel="ms"
+            height={200}
+            onSelectRange={onSelectRange}
+          />
         </Panel>
       </div>
 
@@ -148,7 +155,12 @@ export function Overview({ range, meta }) {
           Samples are capped per fingerprint and can be fewer than the occurrence totals shown in
           Errors.
         </p>
-        <TimeChart data={charts.logs} series={LOG_SERIES} height={200} />
+        <TimeChart
+          data={charts.logs}
+          series={LOG_SERIES}
+          height={200}
+          onSelectRange={onSelectRange}
+        />
       </details>
 
       <Panel

@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { AdminApp } from './AdminApp.jsx';
 import { adminApi } from './api.js';
 import { System } from './pages/System.jsx';
+import { navigate } from './hooks.js';
 
 vi.mock('./components/TimeChart.jsx', () => ({ TimeChart: () => null }));
 vi.mock('./api.js', () => ({
@@ -14,6 +15,7 @@ vi.mock('./api.js', () => ({
     requests: vi.fn(),
     facets: vi.fn(),
     upstreams: vi.fn(),
+    usage: vi.fn(),
     errors: vi.fn(),
     errorGroup: vi.fn(),
     trace: vi.fn(),
@@ -82,6 +84,7 @@ beforeEach(() => {
       recentErrors: [upstream, { ...upstream, status: 404 }],
     },
   });
+  adminApi.usage.mockResolvedValue({ traffic: null, business: null });
   adminApi.errors.mockResolvedValue({ groups: [] });
   adminApi.errorGroup.mockResolvedValue({
     group: { ...log, status: 'open', count: 10 },
@@ -141,6 +144,54 @@ it('closes a deep-linked trace with Escape without losing filters', async () => 
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(window.location.hash).toContain('status=5xx');
   expect(window.location.hash).toContain('range=24h');
+});
+
+it('uses a selected custom interval for overview and requests and preserves it when navigating', async () => {
+  const from = Date.parse('2026-11-01T17:20:00Z');
+  const to = Date.parse('2026-11-01T20:00:00Z');
+  window.location.hash = `/overview?range=custom&from=${from}&to=${to}`;
+
+  render(<AdminApp />);
+
+  await waitFor(() =>
+    expect(adminApi.overview).toHaveBeenCalledWith({ range: 'custom', from, to })
+  );
+  fireEvent.click(await screen.findByRole('button', { name: /Failed HTTP responses/ }));
+  await waitFor(() =>
+    expect(adminApi.requests).toHaveBeenCalledWith(
+      expect.objectContaining({ range: 'custom', from, to, status: '5xx' })
+    )
+  );
+
+  navigate('upstreams', { range: 'custom', provider: 'tmdb' });
+  const customParams = new URLSearchParams(window.location.hash.split('?')[1]);
+  expect(customParams.get('from')).toBe(String(from));
+  expect(customParams.get('to')).toBe(String(to));
+
+  navigate('overview', { range: '24h' });
+  const presetParams = new URLSearchParams(window.location.hash.split('?')[1]);
+  expect(presetParams.get('range')).toBe('24h');
+  expect(presetParams.has('from')).toBe(false);
+  expect(presetParams.has('to')).toBe(false);
+});
+
+it('carries a custom interval through the dashboard page navigation', async () => {
+  const from = Date.parse('2026-11-01T17:20:00Z');
+  const to = Date.parse('2026-11-01T20:00:00Z');
+  window.location.hash = `/overview?range=custom&from=${from}&to=${to}`;
+
+  render(<AdminApp />);
+
+  fireEvent.click(await screen.findByRole('link', { name: 'Dependencies' }));
+
+  await waitFor(() =>
+    expect(adminApi.upstreams).toHaveBeenCalledWith({
+      range: 'custom',
+      from,
+      to,
+      provider: '',
+    })
+  );
 });
 
 it('labels Redis live overview data when history fallback is active', async () => {
