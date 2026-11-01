@@ -35,7 +35,12 @@ const SENSITIVE_KEYS = [
 
 const MAX_SANITIZE_DEPTH = 10;
 
-function sanitizeValue(value: unknown, key: string = '', depth: number = 0): unknown {
+function sanitizeValue(
+  value: unknown,
+  key: string = '',
+  depth: number = 0,
+  keepErrorStack = false
+): unknown {
   if (value === null || value === undefined) return value;
   if (depth > MAX_SANITIZE_DEPTH) return '[Object]';
 
@@ -46,26 +51,28 @@ function sanitizeValue(value: unknown, key: string = '', depth: number = 0): unk
 
   if (typeof value === 'string') {
     return value
-      .replace(/([?&](?:api_key|apikey|token|key|password|id)=)[^&\s/]+/gi, '$1[REDACTED]')
+      .replace(/(^|[?&\s])((?:api_key|apikey|token|key|password|id)=)[^&\s/]+/gi, '$1$2[REDACTED]')
       .replace(/(Bearer\s+)[a-zA-Z0-9._+/=-]+/gi, '$1[REDACTED]')
       .replace(/(Basic\s+)[a-zA-Z0-9._+/=-]+/gi, '$1[REDACTED]');
   }
 
   if (value instanceof Error) {
     return {
-      message: value.message,
-      stack: config.nodeEnv === 'production' ? '[REDACTED]' : value.stack,
+      message: sanitizeValue(value.message, 'message', depth + 1, keepErrorStack),
+      stack: keepErrorStack
+        ? sanitizeValue(value.stack, 'stack', depth + 1, keepErrorStack)
+        : '[REDACTED]',
     };
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => sanitizeValue(item, '', depth + 1));
+    return value.map((item) => sanitizeValue(item, '', depth + 1, keepErrorStack));
   }
 
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = sanitizeValue(v, k, depth + 1);
+      out[k] = sanitizeValue(v, k, depth + 1, keepErrorStack);
     }
     return out;
   }
@@ -132,7 +139,7 @@ function emitToSink(
       level,
       context,
       message,
-      data ? (sanitizeValue(data) as Record<string, unknown>) : null
+      data ? (sanitizeValue(data, '', 0, true) as Record<string, unknown>) : null
     );
   } catch {
     // A broken sink must never break logging.

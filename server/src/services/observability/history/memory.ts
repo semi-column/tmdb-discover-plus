@@ -3,10 +3,12 @@ import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../t
 import type { UserConfig } from '../../../types/index.ts';
 import { LATENCY_BUCKETS, latencyBucket } from '../collector.ts';
 import {
+  buildHistoryUpstreamOverview,
   buildHistoryOverview,
   type OverviewBreakdown,
   type OverviewBucket,
   type OverviewLogBucket,
+  type UpstreamOverviewBucket,
 } from './overview.ts';
 import {
   SETTABLE_ERROR_STATUSES,
@@ -427,9 +429,9 @@ export class MemoryHistory implements HistoryStore {
   }
 
   async upstreamEndpoints(range: TimeRange, provider?: string) {
-    const list = this.upstream.filter(
-      (u) => inRange(u.ts, range) && (!provider || u.provider === provider)
-    );
+    const list = this.upstream
+      .filter((u) => inRange(u.ts, range) && (!provider || u.provider === provider))
+      .sort((a, b) => a.ts - b.ts);
     const byKey = new Map<string, UpstreamEvent[]>();
     for (const u of list) {
       const key = `${u.provider}\u0000${u.method}\u0000${u.path}`;
@@ -446,6 +448,8 @@ export class MemoryHistory implements HistoryStore {
           path: group[0].path,
           calls: group.length,
           errors: group.filter((u) => u.status === 0 || u.status >= 500).length,
+          rejected: group.filter((u) => u.status >= 400 && u.status < 500 && u.status !== 429)
+            .length,
           rate_limited: group.filter((u) => u.status === 429).length,
           timeouts: group.filter((u) => u.timedOut).length,
           avg_ms: Math.round(group.reduce((a, u) => a + u.durationMs, 0) / group.length),
@@ -455,10 +459,12 @@ export class MemoryHistory implements HistoryStore {
       })
       .sort((a, b) => b.calls - a.calls)
       .slice(0, 100);
-    const recentErrors = list
-      .filter((u) => u.status === 0 || u.status >= 400)
-      .slice(-50)
-      .reverse()
+    const recentErrors = [
+      ...list.filter((u) => u.status === 0 || u.status >= 500).slice(-25),
+      ...list.filter((u) => u.status === 429).slice(-25),
+      ...list.filter((u) => u.status >= 400 && u.status < 500 && u.status !== 429).slice(-25),
+    ]
+      .sort((a, b) => b.ts - a.ts)
       .map((u) => ({
         ts: new Date(u.ts),
         provider: u.provider,
@@ -470,6 +476,39 @@ export class MemoryHistory implements HistoryStore {
         request_id: u.requestId,
       }));
     return { endpoints, recentErrors };
+  }
+
+  async upstreamOverview(range: TimeRange) {
+    const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
+    const buckets = new Map<string, UpstreamOverviewBucket>();
+
+    for (const event of this.upstream) {
+      if (!inRange(event.ts, range)) continue;
+      const bucket = Math.floor(event.ts / bucketMs) * bucketMs;
+      const key = `${event.provider}\0${bucket}`;
+      let row = buckets.get(key);
+      if (!row) {
+        row = {
+          provider: event.provider,
+          bucket,
+          calls: 0,
+          errors: 0,
+          rateLimited: 0,
+          timeouts: 0,
+          duration: 0,
+          histogram: Array(LATENCY_BUCKETS.length + 1).fill(0),
+        };
+        buckets.set(key, row);
+      }
+      row.calls++;
+      if (event.status === 0 || event.status >= 500) row.errors++;
+      if (event.status === 429) row.rateLimited++;
+      if (event.timedOut) row.timeouts++;
+      row.duration += event.durationMs;
+      row.histogram[latencyBucket(event.durationMs)]++;
+    }
+
+    return buildHistoryUpstreamOverview(range, [...buckets.values()]);
   }
 
   async usageStats(range: TimeRange) {

@@ -4,7 +4,7 @@ import { UserConfig } from '../../../models/UserConfig.ts';
 import { MarketplaceEntryModel } from '../../../models/MarketplaceEntry.ts';
 import { LATENCY_BUCKETS } from '../collector.ts';
 import { histPercentile, type TimeRange } from '../liveQueries.ts';
-import { buildHistoryOverview } from './overview.ts';
+import { buildHistoryOverview, buildHistoryUpstreamOverview } from './overview.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
 import {
   SETTABLE_ERROR_STATUSES,
@@ -694,37 +694,52 @@ export class MongoHistory implements HistoryStore {
           errors: {
             $sum: { $cond: [{ $or: [{ $eq: ['$status', 0] }, { $gte: ['$status', 500] }] }, 1, 0] },
           },
+          rejected: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gte: ['$status', 400] },
+                    { $lt: ['$status', 500] },
+                    { $ne: ['$status', 429] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
           rl: { $sum: { $cond: [{ $eq: ['$status', 429] }, 1, 0] } },
           to: { $sum: { $cond: ['$timed_out', 1, 0] } },
           dur: { $sum: '$duration_ms' },
         }
       ),
-      this.coll(C.upstream)
-        .find(
-          { ...match, $or: [{ status: 0 }, { status: { $gte: 400 } }] },
-          {
-            projection: {
-              _id: 0,
-              ts: 1,
-              provider: 1,
-              method: 1,
-              path: 1,
-              status: 1,
-              duration_ms: 1,
-              error: 1,
-              request_id: 1,
-            },
-          }
-        )
-        .sort({ ts: -1 })
-        .limit(50)
-        .toArray(),
+      Promise.all([
+        this.coll(C.upstream)
+          .find({ ...match, $or: [{ status: 0 }, { status: { $gte: 500 } }] })
+          .sort({ ts: -1 })
+          .limit(25)
+          .toArray(),
+        this.coll(C.upstream)
+          .find({ ...match, status: 429 })
+          .sort({ ts: -1 })
+          .limit(25)
+          .toArray(),
+        this.coll(C.upstream)
+          .find({ ...match, status: { $gte: 400, $lt: 500, $ne: 429 } })
+          .sort({ ts: -1 })
+          .limit(25)
+          .toArray(),
+      ]).then((groups) =>
+        groups.flat().sort((a, b) => +new Date(b.ts as Date) - +new Date(a.ts as Date))
+      ),
     ]);
     const endpoints = groups
       .map((g) => ({
         ...g.key,
         calls: g.sums.n,
         errors: g.sums.errors,
+        rejected: g.sums.rejected,
         rate_limited: g.sums.rl,
         timeouts: g.sums.to,
         avg_ms: Math.round(g.sums.dur / g.sums.n),
@@ -734,6 +749,68 @@ export class MongoHistory implements HistoryStore {
       .sort((a, b) => b.calls - a.calls)
       .slice(0, 100);
     return { endpoints, recentErrors };
+  }
+
+  async upstreamOverview(range: TimeRange) {
+    const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
+    const bucketExpr = {
+      $multiply: [{ $floor: { $divide: [{ $toLong: '$ts' }, bucketMs] } }, bucketMs],
+    };
+    const histogram = Object.fromEntries([
+      ...LATENCY_BUCKETS.map((upper, index) => {
+        const condition = index
+          ? {
+              $and: [
+                { $gt: ['$duration_ms', LATENCY_BUCKETS[index - 1]] },
+                { $lte: ['$duration_ms', upper] },
+              ],
+            }
+          : { $lte: ['$duration_ms', upper] };
+        return [`lat_${index}`, { $sum: { $cond: [condition, 1, 0] } }];
+      }),
+      [
+        `lat_${LATENCY_BUCKETS.length}`,
+        { $sum: { $cond: [{ $gt: ['$duration_ms', LATENCY_BUCKETS.at(-1)] }, 1, 0] } },
+      ],
+    ]);
+    const rows = await this.coll(C.upstream)
+      .aggregate(
+        [
+          { $match: this.rangeMatch(range) },
+          {
+            $group: {
+              _id: { provider: '$provider', bucket: bucketExpr },
+              calls: { $sum: 1 },
+              errors: {
+                $sum: {
+                  $cond: [{ $or: [{ $eq: ['$status', 0] }, { $gte: ['$status', 500] }] }, 1, 0],
+                },
+              },
+              rateLimited: { $sum: { $cond: [{ $eq: ['$status', 429] }, 1, 0] } },
+              timeouts: { $sum: { $cond: ['$timed_out', 1, 0] } },
+              duration: { $sum: '$duration_ms' },
+              ...histogram,
+            },
+          },
+        ],
+        AGG_OPTS
+      )
+      .toArray();
+    return buildHistoryUpstreamOverview(
+      range,
+      rows.map((row) => ({
+        provider: String(row._id.provider),
+        bucket: Number(row._id.bucket),
+        calls: Number(row.calls),
+        errors: Number(row.errors),
+        rateLimited: Number(row.rateLimited),
+        timeouts: Number(row.timeouts),
+        duration: Number(row.duration),
+        histogram: LATENCY_BUCKETS.map((_, index) => Number(row[`lat_${index}`])).concat(
+          Number(row[`lat_${LATENCY_BUCKETS.length}`])
+        ),
+      }))
+    );
   }
 
   async usageStats(range: TimeRange) {

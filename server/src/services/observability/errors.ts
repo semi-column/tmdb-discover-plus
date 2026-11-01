@@ -28,13 +28,15 @@ export function computeFingerprint(
   context: string,
   message: string,
   detail: string,
-  stack: string
+  stack: string,
+  classification = ''
 ): string {
   return createHash('sha1')
     .update(
       [
         level,
         context,
+        classification,
         normalizeMessage(message),
         normalizeMessage(detail),
         topAppFrame(stack),

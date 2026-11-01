@@ -16,8 +16,8 @@ const LATENCY_SERIES = [
   { label: 'p95 (≤)', color: '#8cbbe8' },
 ];
 const LOG_SERIES = [
-  { label: 'Errors logged', color: '#f18683' },
-  { label: 'Warnings logged', color: '#edc36a' },
+  { label: 'Error samples', color: '#f18683' },
+  { label: 'Warning samples', color: '#edc36a' },
 ];
 
 function Trend({ current, previous, invert }) {
@@ -31,7 +31,7 @@ function Trend({ current, previous, invert }) {
   );
 }
 
-export function Overview({ range }) {
+export function Overview({ range, meta }) {
   const { data, error, loading } = useAsync(() => adminApi.overview({ range }), [range], {
     pollMs: 30_000,
   });
@@ -49,6 +49,7 @@ export function Overview({ range }) {
   if (loading && !data) return <Loading />;
   if (!data) return <ErrorNote error={error} />;
   const { totals, previous } = data;
+  const slowMs = meta?.slowMs ?? 1500;
   const spike =
     previous && totals.errorRate > 0.01 && totals.errorRate > (previous.errorRate || 0) * 2;
 
@@ -57,8 +58,14 @@ export function Overview({ range }) {
       <ErrorNote error={error} />
       {data.dataSource === 'redis-live-fallback' && (
         <div className="adm-alert adm-tone-warn" role="status">
-          History is unavailable. Showing Redis live counters, which may be incomplete for older
-          ranges.
+          History is unavailable. Showing Redis live counters; totals use {data.totalsResolution}
+          buckets while route/status breakdowns use {data.breakdownResolution} buckets. Older ranges
+          may also be incomplete.
+        </div>
+      )}
+      {data.comparisonAvailable === false && (
+        <div className="adm-muted" role="status">
+          Previous-period comparison unavailable: the earlier window is outside retained history.
         </div>
       )}
       <AttentionSummary totals={totals} range={range} />
@@ -84,24 +91,31 @@ export function Overview({ range }) {
         />
         <StatCard
           label="Latency p95"
-          value={fmtBucketMs(totals.p95Ms)}
+          value={fmtBucketMs(totals.p95Ms, data.latencyHistogram.bounds.at(-1))}
           onClick={() => navigate('requests', { range, tab: 'routes' })}
-          sub={`avg ${fmtMs(totals.avgMs)} · p99 ${fmtBucketMs(totals.p99Ms)}`}
+          sub={`avg ${fmtMs(totals.avgMs)} · p99 ${fmtBucketMs(totals.p99Ms, data.latencyHistogram.bounds.at(-1))}`}
         />
         <StatCard
           label="Slow requests"
           value={fmtInt(totals.slow)}
-          onClick={() => navigate('requests', { range, minMs: 1500 })}
+          onClick={() => navigate('requests', { range, minMs: slowMs })}
+          sub={`≥ ${fmtMs(slowMs)}`}
           tone={totals.slow ? 'warn' : undefined}
         />
         <StatCard
           label="Unique configs"
           value={fmtInt(totals.uniqueUsers)}
-          sub="approx. (HyperLogLog)"
+          sub={
+            data.uniqueUsersApproximate
+              ? data.dataSource === 'redis-live-fallback'
+                ? 'approx. (HyperLogLog)'
+                : 'approx. (sampled or bounded history)'
+              : 'distinct config hashes'
+          }
         />
         <StatCard label="Cache lookup hit rate" value={fmtPct(totals.cacheHitRate, 1)} />
         <StatCard
-          label="Internal logs: errors / warnings"
+          label="Captured log samples: errors / warnings"
           value={`${fmtInt(totals.logErrors)} / ${fmtInt(totals.logWarnings)}`}
           tone={totals.logErrors ? 'warn' : undefined}
           sub={
@@ -127,9 +141,13 @@ export function Overview({ range }) {
 
       <details className="adm-secondary">
         <summary>
-          Internal log activity · {fmtInt(totals.logErrors)} errors / {fmtInt(totals.logWarnings)}{' '}
+          Captured log samples · {fmtInt(totals.logErrors)} errors / {fmtInt(totals.logWarnings)}{' '}
           warnings
         </summary>
+        <p className="adm-muted">
+          Samples are capped per fingerprint and can be fewer than the occurrence totals shown in
+          Errors.
+        </p>
         <TimeChart data={charts.logs} series={LOG_SERIES} height={200} />
       </details>
 
@@ -146,6 +164,7 @@ export function Overview({ range }) {
                 <th className="num">5xx</th>
                 <th className="num">4xx</th>
                 <th className="num">Avg</th>
+                <th className="num">p95{data.routePercentilesApproximate ? ' (≤)' : ''}</th>
               </tr>
             </thead>
             <tbody>
@@ -161,13 +180,18 @@ export function Overview({ range }) {
                     </button>
                   </td>
                   <td className="num">{fmtInt(r.count)}</td>
-                  <td className={`num ${r.errors5xx ? 'adm-text-bad' : ''}`}>
+                  <td className={`num ${Number(r.errors5xx) > 0 ? 'adm-text-bad' : ''}`}>
                     {fmtInt(r.errors5xx)}
                   </td>
-                  <td className={`num ${r.errors4xx ? 'adm-text-warn' : ''}`}>
+                  <td className={`num ${Number(r.errors4xx) > 0 ? 'adm-text-warn' : ''}`}>
                     {fmtInt(r.errors4xx)}
                   </td>
                   <td className="num">{fmtMs(r.avgMs)}</td>
+                  <td className="num">
+                    {data.routePercentilesApproximate
+                      ? fmtBucketMs(r.p95Ms, data.latencyHistogram.bounds.at(-1))
+                      : fmtMs(r.p95Ms)}
+                  </td>
                 </tr>
               ))}
             </tbody>

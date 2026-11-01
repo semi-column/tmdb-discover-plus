@@ -23,6 +23,17 @@ export function parseRange(query: Record<string, unknown>, maxDays: number): Tim
   return { from, to, kind: span <= RANGES['24h'] ? 'm' : 'h' };
 }
 
+export function previousRangeIfRetained(
+  range: TimeRange,
+  retentionDays: number,
+  now = Date.now()
+): TimeRange | null {
+  const span = range.to - range.from;
+  const from = range.from - span;
+  if (from < now - retentionDays * 86_400_000) return null;
+  return { ...range, from, to: range.from - 1 };
+}
+
 function sumInto(target: Record<string, number>, source: Record<string, number>): void {
   for (const [k, v] of Object.entries(source)) target[k] = (target[k] ?? 0) + v;
 }
@@ -146,6 +157,8 @@ export async function liveOverview(live: LiveStore, range: TimeRange) {
 
   return {
     range: { from: range.from, to: range.to, resolution: range.kind === 'm' ? 'minute' : 'hour' },
+    totalsResolution: range.kind === 'm' ? 'minute' : 'hour',
+    breakdownResolution: 'hour',
     totals: {
       requests: req,
       errors5xx: totals['sc:5xx'] ?? 0,

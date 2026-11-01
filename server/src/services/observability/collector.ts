@@ -44,7 +44,16 @@ export interface CollectorOptions {
 }
 
 export interface CollectorStats {
-  dropped: Record<string, number>;
+  dropped: {
+    requests: number;
+    upstream: number;
+    errors: number;
+    storageCap: number;
+    tail: number;
+    sampledErrors: number;
+    system: number;
+  };
+  failedWrites: { liveBatches: number; historyBatches: number; historyRecords: number };
   lastFlushAt: number;
   lastFlushMs: number;
   lastFlushError: string;
@@ -69,7 +78,16 @@ export class Collector {
   private flushing = false;
   private lastWarnAt = 0;
   readonly stats: CollectorStats = {
-    dropped: { requests: 0, upstream: 0, errors: 0, live: 0, persist: 0, storageCap: 0 },
+    dropped: {
+      requests: 0,
+      upstream: 0,
+      errors: 0,
+      storageCap: 0,
+      tail: 0,
+      sampledErrors: 0,
+      system: 0,
+    },
+    failedWrites: { liveBatches: 0, historyBatches: 0, historyRecords: 0 },
     lastFlushAt: 0,
     lastFlushMs: 0,
     lastFlushError: '',
@@ -92,7 +110,6 @@ export class Collector {
   /** True when raw rows must be skipped because OBS_MAX_STORAGE_MB is exceeded. */
   private capped(): boolean {
     this.stats.storagePaused = !!this.history?.isPaused();
-    if (this.stats.storagePaused) this.stats.dropped.storageCap++;
     return this.stats.storagePaused;
   }
 
@@ -159,11 +176,16 @@ export class Collector {
         upstreamCalls: event.upstreamCalls,
         errorFp: event.errorFp,
       });
+    } else {
+      this.stats.dropped.tail++;
     }
 
     const alwaysKeep = isServerError || isSlow || !!event.errorFp;
     if (!alwaysKeep && Math.random() >= this.opts.sampleRate) return;
-    if (this.capped()) return;
+    if (this.capped()) {
+      this.stats.dropped.storageCap++;
+      return;
+    }
     if (this.requests.length >= this.opts.maxBuffer) {
       this.stats.dropped.requests++;
       return;
@@ -189,7 +211,10 @@ export class Collector {
       if (event.timedOut) bump(batch, bucket, `ut:${p}`);
     }
 
-    if (this.capped()) return;
+    if (this.capped()) {
+      this.stats.dropped.storageCap++;
+      return;
+    }
     if (this.upstream.length >= this.opts.maxBuffer) {
       this.stats.dropped.upstream++;
       return;
@@ -206,9 +231,17 @@ export class Collector {
     if (group) {
       group.count++;
       group.lastTs = event.ts;
-      if (group.count > MAX_EVENTS_PER_FINGERPRINT_PER_FLUSH) return;
     } else {
       this.errorGroups.set(event.fingerprint, { count: 1, first: event, lastTs: event.ts });
+    }
+    const currentGroup = this.errorGroups.get(event.fingerprint)!;
+    if (this.capped()) {
+      this.stats.dropped.storageCap++;
+      return;
+    }
+    if (currentGroup.count > MAX_EVENTS_PER_FINGERPRINT_PER_FLUSH) {
+      this.stats.dropped.sampledErrors++;
+      return;
     }
     if (this.errorEvents.length >= this.opts.maxBuffer) {
       this.stats.dropped.errors++;
@@ -218,6 +251,10 @@ export class Collector {
   }
 
   recordSystem(sample: SystemSample): void {
+    if (this.capped()) {
+      this.stats.dropped.storageCap++;
+      return;
+    }
     this.system.push(sample);
     if (this.system.length > 1000) this.system.shift();
   }
@@ -233,6 +270,7 @@ export class Collector {
     if (this.flushing) return;
     this.flushing = true;
     const started = Date.now();
+    this.stats.lastFlushError = '';
 
     const liveBatch: LiveBatch = {
       minutes: this.minutes,
@@ -266,23 +304,32 @@ export class Collector {
         try {
           await this.live.apply(liveBatch, this.opts.hourTtlSec);
         } catch (err) {
-          this.stats.dropped.live++;
+          this.stats.failedWrites.liveBatches++;
           this.warnThrottled('Live store flush failed', err);
         }
       }
       if (history) {
-        const results = await Promise.allSettled([
-          requests.length ? history.insertRequests(requests) : null,
-          upstream.length ? history.insertUpstream(upstream) : null,
-          errorEvents.length || errorGroups.size
-            ? history.insertErrors(errorEvents, errorGroups)
+        const writes = [
+          requests.length
+            ? { records: requests.length, promise: history.insertRequests(requests) }
             : null,
-          system.length ? history.insertSystem(system) : null,
-        ]);
-        for (const r of results) {
+          upstream.length
+            ? { records: upstream.length, promise: history.insertUpstream(upstream) }
+            : null,
+          errorEvents.length || errorGroups.size
+            ? {
+                records: errorEvents.length + errorGroups.size,
+                promise: history.insertErrors(errorEvents, errorGroups),
+              }
+            : null,
+          system.length ? { records: system.length, promise: history.insertSystem(system) } : null,
+        ].filter((write): write is { records: number; promise: Promise<void> } => write !== null);
+        const results = await Promise.allSettled(writes.map((write) => write.promise));
+        for (const [index, r] of results.entries()) {
           if (r.status === 'rejected') {
-            this.stats.dropped.persist++;
-            this.warnThrottled(`History (${history.kind}) flush failed; batch dropped`, r.reason);
+            this.stats.failedWrites.historyBatches++;
+            this.stats.failedWrites.historyRecords += writes[index].records;
+            this.warnThrottled(`History (${history.kind}) flush failed`, r.reason);
           }
         }
       }

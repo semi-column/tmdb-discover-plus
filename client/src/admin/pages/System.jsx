@@ -39,6 +39,9 @@ export function System({ range, meta }) {
   if (loading && !data) return <Loading />;
 
   const c = meta?.collector;
+  const rawOmitted = Object.entries(c?.dropped || {})
+    .filter(([kind]) => kind !== 'tail')
+    .reduce((sum, [, count]) => sum + Number(count || 0), 0);
   return (
     <div className="adm-stack">
       <ErrorNote error={error} />
@@ -146,13 +149,33 @@ export function System({ range, meta }) {
               <StatCard
                 label="Last flush"
                 value={c.lastFlushAt ? fmtAgo(c.lastFlushAt) : '–'}
-                sub={`${fmtMs(c.lastFlushMs)} · dropped ${fmtInt(Object.values(c.dropped).reduce((a, b) => a + b, 0))}`}
-                tone={c.lastFlushError ? 'warn' : undefined}
+                sub={`${fmtMs(c.lastFlushMs)} · ${fmtInt(rawOmitted)} raw records omitted · ${fmtInt(c.dropped?.tail)} live-tail entries omitted · ${fmtInt(c.failedWrites?.liveBatches)} live / ${fmtInt(c.failedWrites?.historyBatches)} history batches failed (${fmtInt(c.failedWrites?.historyRecords)} records involved)`}
+                tone={
+                  c.lastFlushError ||
+                  c.failedWrites?.liveBatches ||
+                  c.failedWrites?.historyBatches ||
+                  Object.values(c.dropped).some((count) => count > 0)
+                    ? 'warn'
+                    : undefined
+                }
               />
             )}
           </div>
           {c?.lastFlushError && (
             <div className="adm-alert adm-tone-warn">Last flush problem: {c.lastFlushError}</div>
+          )}
+          {c?.failedWrites?.historyBatches > 0 && (
+            <div className="adm-alert adm-tone-warn" role="status">
+              {fmtInt(c.failedWrites.historyBatches)} history batches failed involving{' '}
+              {fmtInt(c.failedWrites.historyRecords)} records. They are not replayed because inserts
+              may have partially succeeded, so the exact missing-row count is unknown.
+            </div>
+          )}
+          {meta.storage?.paused && (
+            <div className="adm-alert adm-tone-warn" role="status">
+              History storage is at its cap. Raw request, upstream, error, and system samples are
+              being omitted while live aggregates continue.
+            </div>
           )}
           {meta.storage?.memory && (
             <p className="adm-muted">

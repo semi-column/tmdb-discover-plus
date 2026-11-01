@@ -2,12 +2,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { AdminApp } from './AdminApp.jsx';
 import { adminApi } from './api.js';
+import { System } from './pages/System.jsx';
 
 vi.mock('./components/TimeChart.jsx', () => ({ TimeChart: () => null }));
 vi.mock('./api.js', () => ({
   adminApi: {
     session: vi.fn(),
     meta: vi.fn(),
+    system: vi.fn(),
     overview: vi.fn(),
     requests: vi.fn(),
     facets: vi.fn(),
@@ -58,6 +60,7 @@ beforeEach(() => {
   window.location.hash = '/overview?range=24h';
   adminApi.session.mockResolvedValue({ authenticated: true });
   adminApi.meta.mockResolvedValue({ capabilities: {} });
+  adminApi.system.mockResolvedValue({ instances: [], series: [] });
   adminApi.overview.mockResolvedValue({
     totals: { requests: 100, errors5xx: 2, slow: 4, logErrors: 10, logWarnings: 20 },
     series: {},
@@ -155,4 +158,101 @@ it('labels Redis live overview data when history fallback is active', async () =
   expect(
     await screen.findByText(/History is unavailable\. Showing Redis live counters/)
   ).toBeInTheDocument();
+});
+
+it('labels exact history counts and renders normalized route latency', async () => {
+  adminApi.overview.mockResolvedValueOnce({
+    range: { resolution: 'minute' },
+    dataSource: 'history',
+    routePercentilesApproximate: false,
+    uniqueUsersApproximate: false,
+    totals: {
+      requests: 4,
+      errors5xx: 0,
+      errors4xx: 0,
+      slow: 0,
+      uniqueUsers: 2,
+    },
+    series: {},
+    routes: [
+      {
+        route: '/:userId/meta/:type/:id.json',
+        count: 4,
+        errors5xx: 0,
+        errors4xx: 0,
+        avgMs: 20,
+        p95Ms: 40,
+      },
+    ],
+    statusCodes: {},
+    latencyHistogram: { bounds: [100], counts: [4, 0] },
+    breakdowns: { resources: [] },
+  });
+
+  render(<AdminApp />);
+
+  expect(await screen.findByText('distinct config hashes')).toBeInTheDocument();
+  expect(screen.getByText('40ms')).toBeInTheDocument();
+  const zeroCell = screen
+    .getAllByText('0')
+    .find((element) => element.className.includes('adm-text-bad'));
+  expect(zeroCell).toBeUndefined();
+});
+
+it('distinguishes all-time error-group counts from range sparkline samples', async () => {
+  window.location.hash = '/errors?range=7d&status=all';
+  adminApi.errors.mockResolvedValueOnce({
+    groups: [
+      {
+        fingerprint: 'fp1',
+        level: 'error',
+        context: 'tmdb:client',
+        message: 'Fetch failed',
+        status: 'open',
+        count: 100,
+        spark: [[1, 3]],
+        first_seen: '2026-10-01T00:00:00Z',
+        last_seen: '2026-11-01T00:00:00Z',
+      },
+    ],
+    version: '2.12.0',
+  });
+
+  render(<AdminApp />);
+
+  expect(await screen.findByText('All-time')).toBeInTheDocument();
+  expect(
+    screen.getByText(/Sparklines cover the selected range and use stored event samples/)
+  ).toBeInTheDocument();
+});
+
+it('keeps live-tail omissions separate from omitted history records', async () => {
+  render(
+    <System
+      range="1h"
+      meta={{
+        collector: {
+          dropped: { requests: 2, upstream: 3, errors: 1, storageCap: 4, tail: 7 },
+          failedWrites: { liveBatches: 0, historyBatches: 0, historyRecords: 0 },
+          lastFlushAt: new Date().toISOString(),
+          lastFlushMs: 20,
+        },
+      }}
+    />
+  );
+
+  expect(
+    await screen.findByText(/10 raw records omitted · 7 live-tail entries omitted/)
+  ).toBeInTheDocument();
+});
+
+it('uses the configured slow threshold for the Overview drilldown', async () => {
+  adminApi.meta.mockResolvedValueOnce({ capabilities: {}, slowMs: 2500 });
+  render(<AdminApp />);
+
+  fireEvent.click(await screen.findByRole('button', { name: /Slow requests/ }));
+
+  await waitFor(() =>
+    expect(adminApi.requests).toHaveBeenCalledWith(expect.objectContaining({ minMs: '2500' }))
+  );
 });

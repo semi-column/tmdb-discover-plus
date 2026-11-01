@@ -12,10 +12,12 @@ import {
 } from '../../src/services/observability/upstream.ts';
 import { Collector, latencyBucket } from '../../src/services/observability/collector.ts';
 import { MemoryLiveStore } from '../../src/services/observability/liveStore.ts';
+import { createLogger, setLogSink } from '../../src/utils/logger.ts';
 import {
   liveOverview,
   liveUpstreams,
   histPercentile,
+  previousRangeIfRetained,
 } from '../../src/services/observability/liveQueries.ts';
 
 describe('describePath', () => {
@@ -47,6 +49,24 @@ describe('describePath', () => {
   });
 });
 
+describe('previousRangeIfRetained', () => {
+  const now = Date.UTC(2026, 10, 1);
+
+  it('returns a previous window when it fits inside retention', () => {
+    const range = { from: now - 6 * 60 * 60_000, to: now, kind: 'm' as const };
+    expect(previousRangeIfRetained(range, 7, now)).toEqual({
+      from: now - 12 * 60 * 60_000,
+      to: range.from - 1,
+      kind: 'm',
+    });
+  });
+
+  it('returns no comparison when the previous window predates retention', () => {
+    const range = { from: now - 7 * 86_400_000, to: now, kind: 'h' as const };
+    expect(previousRangeIfRetained(range, 7, now)).toBeNull();
+  });
+});
+
 describe('error fingerprints', () => {
   it('normalises volatile parts of messages', () => {
     expect(normalizeMessage('Fetch https://x.y/z?id=1 failed after 3 tries for tt12345')).toBe(
@@ -60,6 +80,47 @@ describe('error fingerprints', () => {
     const c = computeFingerprint('error', 'imdb', 'Movie 987 failed', 'timeout after 8000ms', '');
     expect(a).toBe(b);
     expect(a).not.toBe(c);
+  });
+
+  it('keeps HTTP status classes separate in error fingerprints', () => {
+    const notFound = computeFingerprint(
+      'error',
+      'tmdb',
+      'Fetch failed',
+      'Request rejected',
+      '',
+      'http:404'
+    );
+    const serverError = computeFingerprint(
+      'error',
+      'tmdb',
+      'Fetch failed',
+      'Request rejected',
+      '',
+      'http:500'
+    );
+
+    expect(notFound).not.toBe(serverError);
+  });
+
+  it('preserves a secret-scrubbed stack for the observability sink', () => {
+    let captured: Record<string, unknown> | null = null;
+    const error = new Error('Request failed');
+    error.stack =
+      'Error: api_key=secret-value\n    at handle (/app/server/src/routes/addon.ts:10:2)';
+    setLogSink((_level, _context, _message, data) => {
+      captured = data;
+    });
+
+    try {
+      createLogger('observability-test').error('Request failed', { error });
+    } finally {
+      setLogSink(null);
+    }
+
+    const safeError = captured?.error as { stack?: string } | undefined;
+    expect(safeError?.stack).toContain('routes/addon.ts');
+    expect(safeError?.stack).not.toContain('secret-value');
   });
 
   it('extracts the first app frame without line numbers', () => {
@@ -146,6 +207,8 @@ describe('collector + live store', () => {
     expect(overview.totals.errors5xx).toBe(1);
     expect(overview.totals.slow).toBe(1);
     expect(overview.totals.uniqueUsers).toBe(2);
+    expect(overview.totalsResolution).toBe('minute');
+    expect(overview.breakdownResolution).toBe('hour');
     expect(overview.breakdowns.countries[0]).toEqual({ key: 'IN', count: 2 });
     expect(overview.routes[0].errors5xx).toBe(1);
 
@@ -160,5 +223,148 @@ describe('collector + live store', () => {
     expect(latencyBucket(60_000)).toBe(11);
     expect(histPercentile([0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0], 0.95)).toBe(50);
     expect(histPercentile(new Array(12).fill(0), 0.5)).toBeNull();
+  });
+
+  it('counts storage-cap omissions while retaining aggregated error groups', async () => {
+    const collector = new Collector({
+      sampleRate: 1,
+      slowMs: 1500,
+      maxBuffer: 100,
+      hourTtlSec: 3600,
+    });
+    const history = {
+      kind: 'memory',
+      isPaused: () => true,
+      insertRequests: vi.fn().mockResolvedValue(undefined),
+      insertUpstream: vi.fn().mockResolvedValue(undefined),
+      insertErrors: vi.fn().mockResolvedValue(undefined),
+      insertSystem: vi.fn().mockResolvedValue(undefined),
+    };
+    collector.setHistory(history as any);
+    const now = Date.now();
+    collector.recordRequest({ ...base, ts: now, status: 200, durationMs: 40 });
+    collector.recordUpstream({
+      ts: now,
+      requestId: 'r1',
+      instance: 'i1',
+      provider: 'tmdb',
+      host: 'api.themoviedb.org',
+      method: 'GET',
+      path: '/3/movie/:id',
+      status: 200,
+      durationMs: 40,
+      error: '',
+      timedOut: false,
+    });
+    collector.recordError({
+      ts: now,
+      fingerprint: 'fp1',
+      level: 'error',
+      context: 'tmdb:client',
+      message: 'boom',
+      stack: '',
+      requestId: 'r1',
+      instance: 'i1',
+      route: '/meta',
+    });
+    collector.recordSystem({ ts: now, instance: 'i1', data: {} });
+
+    expect(collector.stats.dropped.storageCap).toBe(4);
+    await collector.flush();
+
+    expect(history.insertRequests).not.toHaveBeenCalled();
+    expect(history.insertUpstream).not.toHaveBeenCalled();
+    expect(history.insertSystem).not.toHaveBeenCalled();
+    expect(history.insertErrors.mock.calls[0][0]).toEqual([]);
+    expect(history.insertErrors.mock.calls[0][1].get('fp1').count).toBe(1);
+  });
+
+  it('reports failed history batches separately from omitted raw records', async () => {
+    const collector = new Collector({
+      sampleRate: 1,
+      slowMs: 1500,
+      maxBuffer: 100,
+      hourTtlSec: 3600,
+    });
+    const history = {
+      kind: 'postgres',
+      isPaused: () => false,
+      insertRequests: vi.fn().mockRejectedValue(new Error('database unavailable')),
+      insertUpstream: vi.fn().mockResolvedValue(undefined),
+      insertErrors: vi.fn().mockResolvedValue(undefined),
+      insertSystem: vi.fn().mockResolvedValue(undefined),
+    };
+    collector.setHistory(history as any);
+    collector.recordRequest({ ...base, ts: Date.now(), status: 200, durationMs: 40 });
+
+    await collector.flush();
+
+    expect(collector.stats.failedWrites).toMatchObject({ historyBatches: 1, historyRecords: 1 });
+    expect(collector.stats.dropped.requests).toBe(0);
+    expect(collector.stats.lastFlushError).toContain('database unavailable');
+  });
+
+  it('clears the last flush error after a successful recovery flush', async () => {
+    const collector = new Collector({
+      sampleRate: 1,
+      slowMs: 1500,
+      maxBuffer: 100,
+      hourTtlSec: 3600,
+    });
+    const history = {
+      kind: 'postgres',
+      isPaused: () => false,
+      insertRequests: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('database unavailable'))
+        .mockResolvedValue(undefined),
+      insertUpstream: vi.fn().mockResolvedValue(undefined),
+      insertErrors: vi.fn().mockResolvedValue(undefined),
+      insertSystem: vi.fn().mockResolvedValue(undefined),
+    };
+    collector.setHistory(history as any);
+
+    collector.recordRequest({ ...base, ts: Date.now(), status: 200, durationMs: 40 });
+    await collector.flush();
+    expect(collector.stats.lastFlushError).toContain('database unavailable');
+
+    collector.recordRequest({
+      ...base,
+      ts: Date.now(),
+      requestId: 'r2',
+      status: 200,
+      durationMs: 40,
+    });
+    await collector.flush();
+    expect(collector.stats.lastFlushError).toBe('');
+  });
+
+  it('counts capped live-tail and per-fingerprint error samples', () => {
+    const collector = new Collector({
+      sampleRate: 1,
+      slowMs: 1500,
+      maxBuffer: 500,
+      hourTtlSec: 3600,
+    });
+    const now = Date.now();
+    for (let i = 0; i <= 200; i++) {
+      collector.recordRequest({ ...base, ts: now + i, status: 200, durationMs: 40 });
+    }
+    for (let i = 0; i <= 50; i++) {
+      collector.recordError({
+        ts: now + i,
+        fingerprint: 'same-error',
+        level: 'error',
+        context: 'tmdb:client',
+        message: 'boom',
+        stack: '',
+        requestId: `r${i}`,
+        instance: 'i1',
+        route: '/meta',
+      });
+    }
+
+    expect(collector.stats.dropped.tail).toBe(1);
+    expect(collector.stats.dropped.sampledErrors).toBe(1);
   });
 });

@@ -1,5 +1,11 @@
 import { expect, it } from 'vitest';
-import { requestOutcome, upstreamOutcome } from './format.js';
+import { fmtBucketMs, requestOutcome, upstreamOutcome } from './format.js';
+
+it('marks open-ended latency percentiles as greater-than', () => {
+  expect(fmtBucketMs(2500)).toBe('≤2.5s');
+  expect(fmtBucketMs(60000)).toBe('>30s');
+  expect(fmtBucketMs(null)).toBe('–');
+});
 
 it('distinguishes transport errors, expected lookup misses, and actionable access failures', () => {
   expect(upstreamOutcome(0)).toMatchObject({ tone: 'warn', label: 'Transport failure' });

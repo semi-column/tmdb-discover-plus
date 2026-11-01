@@ -26,7 +26,12 @@ import {
   getCountry,
   hashIdentifier,
 } from '../services/observability/identity.ts';
-import { liveOverview, liveUpstreams, parseRange } from '../services/observability/liveQueries.ts';
+import {
+  liveOverview,
+  liveUpstreams,
+  parseRange,
+  previousRangeIfRetained,
+} from '../services/observability/liveQueries.ts';
 import {
   parseErrorFilter,
   parseRequestFilter,
@@ -228,22 +233,37 @@ router.get(
     const range = parseRange(req.query, retention());
     const live = await getLiveStore();
     const history = getHistory();
-    const span = range.to - range.from;
-    const previousRange = { ...range, from: range.from - span, to: range.from - 1 };
+    const previousRange = previousRangeIfRetained(range, retention());
     const liveFallback = async () => {
       const [current, previous] = await Promise.all([
         liveOverview(live, range),
-        liveOverview(live, previousRange),
+        previousRange ? liveOverview(live, previousRange) : Promise.resolve(null),
       ]);
-      return { ...current, previous: previous.totals, dataSource: 'redis-live-fallback' };
+      return {
+        ...current,
+        previous: previous?.totals ?? null,
+        comparisonAvailable: previous !== null,
+        dataSource: 'redis-live-fallback',
+        routePercentilesApproximate: true,
+        uniqueUsersApproximate: true,
+      };
     };
     if (!history) return liveFallback();
     try {
       const [current, previous] = await Promise.all([
         history.overview(range, config.observability.slowMs),
-        history.overview(previousRange, config.observability.slowMs),
+        previousRange
+          ? history.overview(previousRange, config.observability.slowMs)
+          : Promise.resolve(null),
       ]);
-      return { ...current, previous: previous.totals, dataSource: 'history' };
+      return {
+        ...current,
+        previous: previous?.totals ?? null,
+        comparisonAvailable: previous !== null,
+        dataSource: 'history',
+        routePercentilesApproximate: history.approximatePercentiles,
+        uniqueUsersApproximate: history.kind === 'memory' || config.observability.sampleRate < 1,
+      };
     } catch (error) {
       log.warn('History overview failed; falling back to Redis live aggregates', {
         error: (error as Error).message,
@@ -338,7 +358,7 @@ router.get(
     const provider =
       typeof req.query.provider === 'string' ? req.query.provider.slice(0, 64) : undefined;
     return {
-      providers: await liveUpstreams(live, range),
+      providers: history ? await history.upstreamOverview(range) : await liveUpstreams(live, range),
       details: history ? await history.upstreamEndpoints(range, provider) : null,
     };
   })

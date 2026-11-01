@@ -5,7 +5,12 @@ import {
   parseRequestFilter,
 } from '../../src/services/observability/history/types.ts';
 import { hashIdentifier } from '../../src/services/observability/identity.ts';
-import type { ErrorEvent, RequestEvent } from '../../src/services/observability/types.ts';
+import { buildHistoryOverview } from '../../src/services/observability/history/overview.ts';
+import type {
+  ErrorEvent,
+  RequestEvent,
+  UpstreamEvent,
+} from '../../src/services/observability/types.ts';
 
 const now = Date.now();
 const range = { from: now - 3_600_000, to: now + 1000, kind: 'm' as const };
@@ -54,6 +59,22 @@ function errorEvent(fp: string, requestId = ''): ErrorEvent {
   };
 }
 
+function upstream(status: number, durationMs: number, timedOut = false): UpstreamEvent {
+  return {
+    ts: now,
+    requestId: `upstream-${status}`,
+    instance: 'i1',
+    provider: 'tmdb',
+    host: 'api.themoviedb.org',
+    method: 'GET',
+    path: '/3/movie/:id',
+    status,
+    durationMs,
+    error: '',
+    timedOut,
+  };
+}
+
 function newHistory(maxEvents = 100) {
   return new MemoryHistory({
     maxEvents,
@@ -64,6 +85,73 @@ function newHistory(maxEvents = 100) {
 }
 
 describe('MemoryHistory', () => {
+  it('normalizes PostgreSQL route metrics for the dashboard', () => {
+    const overview = buildHistoryOverview(
+      range,
+      [],
+      [
+        {
+          route: '/:userId/meta/:type/:id.json',
+          count: '5',
+          errors5xx: '0',
+          errors4xx: '2',
+          avg_ms: 125,
+          p95_ms: 250,
+        },
+      ],
+      [],
+      [],
+      [],
+      { errors: 0, warnings: 0 },
+      1
+    );
+
+    expect(overview.routes[0]).toMatchObject({
+      count: 5,
+      errors5xx: 0,
+      errors4xx: 2,
+      avgMs: 125,
+      p95Ms: 250,
+    });
+  });
+
+  it('builds provider totals and endpoint detail from the same history window', async () => {
+    const history = newHistory();
+    await history.insertUpstream([
+      upstream(200, 100),
+      upstream(403, 40),
+      upstream(429, 50),
+      upstream(0, 1000, true),
+    ]);
+
+    const providers = await history.upstreamOverview(range);
+    const endpoints = await history.upstreamEndpoints(range);
+    const provider = providers[0];
+    const endpoint = endpoints.endpoints[0];
+
+    expect(provider).toMatchObject({ calls: 4, errors: 1, rateLimited: 1, timeouts: 1 });
+    expect(provider.calls).toBe(endpoint.calls);
+    expect(provider.errors).toBe(endpoint.errors);
+    expect(endpoint.rejected).toBe(1);
+    expect(provider.series.calls.reduce((sum, calls) => sum + calls, 0)).toBe(provider.calls);
+  });
+
+  it('keeps transport failures visible when 4xx samples are more frequent', async () => {
+    const history = newHistory();
+    await history.insertUpstream([
+      ...Array.from({ length: 60 }, (_, i) => upstream(403, i + 1)),
+      upstream(0, 1000, true),
+      upstream(500, 900),
+    ]);
+
+    const { endpoints, recentErrors } = await history.upstreamEndpoints(range);
+
+    expect(endpoints[0]).toMatchObject({ calls: 62, errors: 2, rejected: 60 });
+    expect(recentErrors.some((event) => event.status === 0)).toBe(true);
+    expect(recentErrors.some((event) => event.status === 500)).toBe(true);
+    expect(recentErrors.filter((event) => event.status === 403)).toHaveLength(25);
+  });
+
   it('filters, pages with a cursor, and caps memory', async () => {
     const h = newHistory(50);
     await h.insertRequests(

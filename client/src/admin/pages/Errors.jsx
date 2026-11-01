@@ -98,7 +98,7 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
           <Badge tone={STATUS_TONES[g.status]}>{g.status}</Badge>
         </div>
         <div className="adm-trace-field">
-          <span className="adm-muted">Occurrences</span>
+          <span className="adm-muted">All-time occurrences</span>
           <span>{fmtInt(g.count)}</span>
         </div>
         <div className="adm-trace-field">
@@ -270,7 +270,7 @@ export function Errors({ range, params, onOpenTrace }) {
               <tr>
                 <th>Issue</th>
                 <th>Triage</th>
-                <th className="num">Total</th>
+                <th className="num">All-time</th>
                 <th>Trend</th>
                 <th>Last seen</th>
                 <th>First seen</th>
@@ -316,8 +316,8 @@ export function Errors({ range, params, onOpenTrace }) {
         </div>
       )}
       <p className="adm-muted">
-        Grouped from every warn/error the server logs. Totals are exact; trend lines use stored
-        occurrences (capped at 50 per group per 5s per instance).
+        Counts are all-time per fingerprint. Sparklines cover the selected range and use stored
+        event samples, capped at 50 per group per 5s per instance.
       </p>
     </Panel>
   );

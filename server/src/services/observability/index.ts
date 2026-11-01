@@ -141,7 +141,8 @@ function captureLog(
 ): void {
   if (context.startsWith('obs') || context === 'swallowed') return;
   const { detail, stack } = extractDetail(data);
-  const fingerprint = computeFingerprint(level, context, message, detail, stack);
+  const classification = typeof data?.statusCode === 'number' ? `http:${data.statusCode}` : '';
+  const fingerprint = computeFingerprint(level, context, message, detail, stack, classification);
   const state = getRequestLiveState();
   if (state && level === 'error' && !state.obs.errorFingerprint) {
     state.obs.errorFingerprint = fingerprint;

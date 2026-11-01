@@ -6,7 +6,7 @@ import { Badge, ErrorNote, Loading, Panel, StatCard } from '../components/ui.jsx
 import { fmtBucketMs, fmtInt, fmtMs, fmtPct, fmtTime, upstreamOutcome } from '../format.js';
 
 export function Upstreams({ range, params, onOpenTrace, meta }) {
-  const formatPercentile = meta?.capabilities?.approximatePercentiles ? fmtBucketMs : fmtMs;
+  const formatEndpointPercentile = meta?.capabilities?.approximatePercentiles ? fmtBucketMs : fmtMs;
   const provider = params.provider || '';
   const { data, error, loading } = useAsync(
     () => adminApi.upstreams({ range, provider }),
@@ -128,6 +128,7 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
                     <th>Endpoint</th>
                     <th className="num">Calls</th>
                     <th className="num">Failed</th>
+                    <th className="num">Other 4xx</th>
                     <th className="num">429</th>
                     <th className="num">Timeouts</th>
                     <th className="num">Avg</th>
@@ -157,10 +158,11 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
                       <td className={`num ${Number(e.errors) ? 'adm-text-bad' : ''}`}>
                         {fmtInt(e.errors)}
                       </td>
+                      <td className="num">{fmtInt(e.rejected)}</td>
                       <td className="num">{fmtInt(e.rate_limited)}</td>
                       <td className="num">{fmtInt(e.timeouts)}</td>
                       <td className="num">{fmtMs(e.avg_ms)}</td>
-                      <td className="num">{formatPercentile(e.p95_ms)}</td>
+                      <td className="num">{formatEndpointPercentile(e.p95_ms)}</td>
                       <td className="num">{fmtMs(e.max_ms)}</td>
                     </tr>
                   ))}
@@ -200,8 +202,8 @@ export function Upstreams({ range, params, onOpenTrace, meta }) {
             }
           >
             <p className="adm-muted adm-sample-note">
-              {fmtInt(recentErrors.length)} matching samples from the latest{' '}
-              {fmtInt(samples.length)} recorded failures in this range.
+              {fmtInt(recentErrors.length)} matching samples from up to 25 recent events per failure
+              class ({fmtInt(samples.length)} samples total in this range).
             </p>
             {recentErrors.length === 0 ? (
               <div className="adm-empty">

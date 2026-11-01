@@ -2,7 +2,7 @@ import pg from 'pg';
 import { createLogger } from '../../../utils/logger.ts';
 import { LATENCY_BUCKETS } from '../collector.ts';
 import type { TimeRange } from '../liveQueries.ts';
-import { buildHistoryOverview } from './overview.ts';
+import { buildHistoryOverview, buildHistoryUpstreamOverview } from './overview.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
 import {
   SETTABLE_ERROR_STATUSES,
@@ -658,6 +658,7 @@ export class PostgresHistory implements HistoryStore {
       this.pool.query(
         `SELECT provider, method, path, count(*) AS calls,
            count(*) FILTER (WHERE status = 0 OR status >= 500) AS errors,
+            count(*) FILTER (WHERE status >= 400 AND status < 500 AND status <> 429) AS rejected,
            count(*) FILTER (WHERE status = 429) AS rate_limited,
            count(*) FILTER (WHERE timed_out) AS timeouts,
            round(avg(duration_ms))::int AS avg_ms,
@@ -668,13 +669,64 @@ export class PostgresHistory implements HistoryStore {
         params
       ),
       this.pool.query(
-        `SELECT ts, provider, method, path, status, duration_ms, error, request_id FROM obs_upstream
-         WHERE ts >= $1 AND ts <= $2 ${extra} AND (status = 0 OR status >= 400)
-         ORDER BY ts DESC LIMIT 50`,
+        `WITH transport AS (
+           SELECT ts, provider, method, path, status, duration_ms, error, request_id FROM obs_upstream
+           WHERE ts >= $1 AND ts <= $2 ${extra} AND (status = 0 OR status >= 500)
+           ORDER BY ts DESC LIMIT 25
+         ), limited AS (
+           SELECT ts, provider, method, path, status, duration_ms, error, request_id FROM obs_upstream
+           WHERE ts >= $1 AND ts <= $2 ${extra} AND status = 429
+           ORDER BY ts DESC LIMIT 25
+         ), rejected AS (
+           SELECT ts, provider, method, path, status, duration_ms, error, request_id FROM obs_upstream
+           WHERE ts >= $1 AND ts <= $2 ${extra} AND status >= 400 AND status < 500 AND status <> 429
+           ORDER BY ts DESC LIMIT 25
+         )
+         SELECT * FROM transport UNION ALL SELECT * FROM limited UNION ALL SELECT * FROM rejected
+         ORDER BY ts DESC LIMIT 75`,
         params
       ),
     ]);
     return { endpoints: endpoints.rows, recentErrors: recentErrors.rows };
+  }
+
+  async upstreamOverview(range: TimeRange) {
+    const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
+    const histogram = [
+      ...LATENCY_BUCKETS.map((upper, index) => {
+        const condition = index
+          ? `duration_ms > ${LATENCY_BUCKETS[index - 1]} AND duration_ms <= ${upper}`
+          : `duration_ms <= ${upper}`;
+        return `COALESCE(SUM(1) FILTER (WHERE ${condition}), 0)::float AS lat_${index}`;
+      }),
+      `COALESCE(SUM(1) FILTER (WHERE duration_ms > ${LATENCY_BUCKETS.at(-1)}), 0)::float AS lat_${LATENCY_BUCKETS.length}`,
+    ].join(',');
+    const { rows } = await this.pool.query(
+      `SELECT provider, (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket,
+         count(*)::float AS calls,
+         count(*) FILTER (WHERE status = 0 OR status >= 500)::float AS errors,
+         count(*) FILTER (WHERE status = 429)::float AS "rateLimited",
+         count(*) FILTER (WHERE timed_out)::float AS timeouts,
+         COALESCE(sum(duration_ms), 0)::float AS duration,
+         ${histogram}
+       FROM obs_upstream WHERE ts >= $1 AND ts <= $2 GROUP BY provider, bucket ORDER BY provider, bucket`,
+      [new Date(range.from), new Date(range.to), bucketMs]
+    );
+    return buildHistoryUpstreamOverview(
+      range,
+      rows.map((row) => ({
+        provider: String(row.provider),
+        bucket: Number(row.bucket),
+        calls: Number(row.calls),
+        errors: Number(row.errors),
+        rateLimited: Number(row.rateLimited),
+        timeouts: Number(row.timeouts),
+        duration: Number(row.duration),
+        histogram: LATENCY_BUCKETS.map((_, index) => Number(row[`lat_${index}`])).concat(
+          Number(row[`lat_${LATENCY_BUCKETS.length}`])
+        ),
+      }))
+    );
   }
 
   async usageStats(range: TimeRange) {

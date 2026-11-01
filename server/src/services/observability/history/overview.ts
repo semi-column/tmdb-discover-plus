@@ -25,6 +25,17 @@ export interface OverviewLogBucket {
   warnings: number;
 }
 
+export interface UpstreamOverviewBucket {
+  provider: string;
+  bucket: number;
+  calls: number;
+  errors: number;
+  rateLimited: number;
+  timeouts: number;
+  duration: number;
+  histogram: number[];
+}
+
 export function buildHistoryOverview(
   range: TimeRange,
   buckets: OverviewBucket[],
@@ -35,6 +46,27 @@ export function buildHistoryOverview(
   logCounts: { errors: number; warnings: number },
   uniqueUsers: number
 ) {
+  const toNumber = (value: unknown, fallback = 0): number => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  };
+  const optionalNumber = (value: unknown): number | null => {
+    if (value == null) return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+  const normalizedRoutes = routes.map((row) => ({
+    route: String(row.route ?? ''),
+    count: toNumber(row.count),
+    errors5xx: toNumber(row.errors5xx ?? row.e5),
+    errors4xx: toNumber(row.errors4xx ?? row.e4),
+    avgMs: optionalNumber(row.avgMs ?? row.avg_ms),
+    p50Ms: optionalNumber(row.p50Ms ?? row.p50_ms),
+    p95Ms: optionalNumber(row.p95Ms ?? row.p95_ms),
+    p99Ms: optionalNumber(row.p99Ms ?? row.p99_ms),
+    maxMs: optionalNumber(row.maxMs ?? row.max_ms),
+    avgUpstreamCalls: optionalNumber(row.avgUpstreamCalls ?? row.avg_upstream_calls),
+  }));
   const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
   const start = Math.floor(range.from / bucketMs);
   const end = Math.floor(range.to / bucketMs);
@@ -132,7 +164,7 @@ export function buildHistoryOverview(
       '5xx': totals.errors5xx,
     },
     statusCodes,
-    routes,
+    routes: normalizedRoutes,
     breakdowns: {
       resources: grouped('resource'),
       sources: grouped('source'),
@@ -146,4 +178,69 @@ export function buildHistoryOverview(
   };
 }
 
+export function buildHistoryUpstreamOverview(range: TimeRange, rows: UpstreamOverviewBucket[]) {
+  const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
+  const start = Math.floor(range.from / bucketMs);
+  const end = Math.floor(range.to / bucketMs);
+  const providers = new Map<string, Map<number, UpstreamOverviewBucket>>();
+
+  for (const row of rows) {
+    let buckets = providers.get(row.provider);
+    if (!buckets) {
+      buckets = new Map();
+      providers.set(row.provider, buckets);
+    }
+    buckets.set(Math.floor(row.bucket / bucketMs), row);
+  }
+
+  return [...providers.entries()]
+    .map(([provider, buckets]) => {
+      const histogram = Array(LATENCY_BUCKETS.length + 1).fill(0) as number[];
+      let calls = 0;
+      let errors = 0;
+      let rateLimited = 0;
+      let timeouts = 0;
+      let duration = 0;
+      const series = {
+        t: [] as number[],
+        calls: [] as number[],
+        errors: [] as number[],
+        avgMs: [] as Array<number | null>,
+      };
+
+      for (let index = start; index <= end; index++) {
+        const bucket = buckets.get(index);
+        series.t.push((index * bucketMs) / 1000);
+        series.calls.push(bucket?.calls ?? 0);
+        series.errors.push(bucket?.errors ?? 0);
+        series.avgMs.push(bucket?.calls ? Math.round(bucket.duration / bucket.calls) : null);
+        if (!bucket) continue;
+        calls += bucket.calls;
+        errors += bucket.errors;
+        rateLimited += bucket.rateLimited;
+        timeouts += bucket.timeouts;
+        duration += bucket.duration;
+        bucket.histogram.forEach((value, i) => {
+          histogram[i] += value;
+        });
+      }
+
+      return {
+        provider,
+        calls,
+        errors,
+        rateLimited,
+        timeouts,
+        errorRate: calls ? errors / calls : 0,
+        avgMs: calls ? Math.round(duration / calls) : null,
+        p50Ms: histPercentile(histogram, 0.5),
+        p95Ms: histPercentile(histogram, 0.95),
+        p99Ms: histPercentile(histogram, 0.99),
+        series,
+      };
+    })
+    .sort((a, b) => b.calls - a.calls);
+}
+
 export type HistoryOverview = ReturnType<typeof buildHistoryOverview>;
+export type HistoryUpstreamOverview = ReturnType<typeof buildHistoryUpstreamOverview>;

@@ -498,7 +498,7 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  log.error('Unhandled rejection', { reason: String(reason) });
+  log.error('Unhandled rejection', { reason });
 });
 
 async function start() {

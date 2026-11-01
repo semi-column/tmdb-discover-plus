@@ -11,8 +11,13 @@ export const fmtMs = (ms) => {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}s` : `${Math.round(n)}ms`;
 };
 
-/** Percentiles from histogram buckets are upper bounds, so show them as "≤". */
-export const fmtBucketMs = (ms) => (ms === null || ms === undefined ? '–' : `≤${fmtMs(ms)}`);
+/** Percentiles from histogram buckets are bounds; the final bucket is open-ended. */
+export const fmtBucketMs = (ms, maxUpperBound = 30_000) => {
+  if (ms === null || ms === undefined) return '–';
+  const value = Number(ms);
+  if (!Number.isFinite(value)) return '–';
+  return value > maxUpperBound ? `>${fmtMs(maxUpperBound)}` : `≤${fmtMs(value)}`;
+};
 
 export const fmtTime = (value) => {
   if (!value) return '–';
