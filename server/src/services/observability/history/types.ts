@@ -30,16 +30,22 @@ export interface RequestFilter {
   statusMin?: number;
   statusMax?: number;
   minMs?: number;
+  maxMs?: number;
+  minUpstreamCalls?: number;
+  sort?: RequestSort;
   errorsOnly: boolean;
   pathContains?: string;
-  cursor?: { ts: Date; requestId: string };
+  cursor?: { ts: Date; requestId: string; value?: number };
 }
+
+export type RequestSort = 'newest' | 'oldest' | 'duration' | 'upstreamCalls';
 
 export interface ErrorFilter {
   status?: string;
   active: boolean;
   level?: 'error' | 'warn';
   q?: string;
+  classification?: string;
 }
 
 export interface StorageInfo {
@@ -53,7 +59,7 @@ export interface StorageInfo {
 
 export interface HistoryStore {
   readonly kind: HistoryKind;
-  /** True when percentiles are bucket upper bounds rather than exact values. */
+  /** Backend capability; individual overview results also flag sampled request distributions. */
   readonly approximatePercentiles: boolean;
   init(): Promise<void>;
   maintain(): Promise<void>;
@@ -70,7 +76,12 @@ export interface HistoryStore {
     range: TimeRange,
     filter: RequestFilter,
     limit: number
-  ): Promise<{ rows: Record<string, unknown>[]; nextCursor: string | null }>;
+  ): Promise<{
+    rows: Record<string, unknown>[];
+    /** Matching retained rows before cursor pagination, not a weighted traffic estimate. */
+    total: number;
+    nextCursor: string | null;
+  }>;
   requestFacets(range: TimeRange): Promise<Record<string, Array<{ value: string; count: number }>>>;
   getTrace(requestId: string): Promise<{
     requests: Record<string, unknown>[];
@@ -108,8 +119,27 @@ function str(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, MAX_TEXT) : undefined;
 }
 
+export class RequestFilterValidationError extends RangeError {
+  constructor(field: string) {
+    super(`Invalid request filter: ${field}`);
+    this.name = 'RequestFilterValidationError';
+  }
+}
+
 export function parseRequestFilter(raw: Record<string, unknown>): RequestFilter {
-  const filter: RequestFilter = { exact: {}, errorsOnly: raw.errorsOnly === 'true' };
+  const text = (field: string, maxLength = MAX_TEXT) => {
+    const value = raw[field];
+    if (value === undefined) return undefined;
+    if (typeof value !== 'string' || !value.trim() || value.length > maxLength)
+      throw new RequestFilterValidationError(field);
+    return value.trim();
+  };
+  const filter: RequestFilter = { exact: {}, errorsOnly: false };
+  if (raw.errorsOnly !== undefined) {
+    if (!['true', 'false', true, false].includes(raw.errorsOnly as string | boolean))
+      throw new RequestFilterValidationError('errorsOnly');
+    filter.errorsOnly = raw.errorsOnly === 'true' || raw.errorsOnly === true;
+  }
   const exactKeys: Array<[string, keyof RequestFilter['exact']]> = [
     ['route', 'route'],
     ['method', 'method'],
@@ -119,32 +149,87 @@ export function parseRequestFilter(raw: Record<string, unknown>): RequestFilter 
     ['country', 'country'],
     ['instance', 'instance'],
     ['requestId', 'request_id'],
+    ['userHash', 'user_hash'],
   ];
   for (const [param, field] of exactKeys) {
-    const value = str(raw[param]);
+    const value = text(param);
     if (value) filter.exact[field] = value;
   }
-  const userId = str(raw.userId);
-  if (userId) filter.exact.user_hash = hashIdentifier(userId);
+  const userId = text('userId');
+  if (userId) {
+    const userHash = hashIdentifier(userId);
+    if (filter.exact.user_hash && filter.exact.user_hash !== userHash)
+      throw new RequestFilterValidationError('userHash');
+    filter.exact.user_hash = userHash;
+  }
 
-  const status = str(raw.status);
+  const status = text('status');
   if (status && /^[1-5]xx$/.test(status)) {
     filter.statusMin = Number(status[0]) * 100;
     filter.statusMax = filter.statusMin + 99;
-  } else if (status && /^\d{3}$/.test(status)) {
+  } else if (status && /^[1-5]\d{2}$/.test(status)) {
     filter.statusMin = filter.statusMax = Number(status);
+  } else if (status !== undefined) {
+    throw new RequestFilterValidationError('status');
   }
 
-  const minMs = Number(raw.minMs);
-  if (Number.isFinite(minMs) && minMs > 0) filter.minMs = Math.floor(minMs);
+  for (const field of ['minMs', 'maxMs', 'minUpstreamCalls'] as const) {
+    const value = text(field);
+    if (value === undefined) continue;
+    const number = Number(value);
+    if (
+      !/^\d+(?:\.\d+)?$/.test(value) ||
+      !Number.isFinite(number) ||
+      number > Number.MAX_SAFE_INTEGER ||
+      (field === 'minUpstreamCalls' && !Number.isInteger(number))
+    )
+      throw new RequestFilterValidationError(field);
+    filter[field] = number;
+  }
+  if (filter.minMs !== undefined && filter.maxMs !== undefined && filter.minMs > filter.maxMs)
+    throw new RequestFilterValidationError('maxMs');
 
-  filter.pathContains = str(raw.q);
+  filter.pathContains = text('q');
+  const sortValue = text('sort') ?? 'newest';
+  const sort = sortValue === 'upstream' ? 'upstreamCalls' : sortValue;
+  if (!['newest', 'oldest', 'duration', 'upstreamCalls'].includes(sort))
+    throw new RequestFilterValidationError('sort');
+  filter.sort = sort as RequestSort;
 
-  const cursor = str(raw.cursor);
+  const cursor = text('cursor', 2048);
   if (cursor) {
-    const [ts, requestId] = cursor.split('|');
-    const parsed = Date.parse(ts);
-    if (Number.isFinite(parsed) && requestId) filter.cursor = { ts: new Date(parsed), requestId };
+    try {
+      if (cursor.startsWith('v1:')) {
+        const decoded = JSON.parse(Buffer.from(cursor.slice(3), 'base64url').toString());
+        if (!Array.isArray(decoded) || decoded.length !== 4) throw new Error('cursor');
+        const [cursorSort, ts, requestId, value] = decoded;
+        if (
+          cursorSort !== sort ||
+          !Number.isSafeInteger(ts) ||
+          typeof requestId !== 'string' ||
+          !requestId ||
+          requestId.length > MAX_TEXT ||
+          !Number.isFinite(new Date(ts).getTime()) ||
+          ((sort === 'duration' || sort === 'upstreamCalls') &&
+            (typeof value !== 'number' || !Number.isFinite(value) || value < 0))
+        )
+          throw new Error('cursor');
+        filter.cursor = { ts: new Date(ts), requestId, value };
+      } else {
+        const [ts, requestId, extra] = cursor.split('|');
+        if (
+          !['newest', 'oldest'].includes(sort) ||
+          !requestId ||
+          extra !== undefined ||
+          !Number.isFinite(Date.parse(ts)) ||
+          new Date(ts).toISOString() !== ts
+        )
+          throw new Error('cursor');
+        filter.cursor = { ts: new Date(ts), requestId };
+      }
+    } catch {
+      throw new RequestFilterValidationError('cursor');
+    }
   }
   return filter;
 }
@@ -157,13 +242,51 @@ export function parseErrorFilter(raw: Record<string, unknown>): ErrorFilter {
     active: status === 'active',
     level: level === 'error' || level === 'warn' ? level : undefined,
     q: str(raw.q),
+    classification: str(raw.classification),
   };
 }
 
-export function encodeCursor(rows: Record<string, unknown>[], limit: number): string | null {
+export function encodeCursor(
+  rows: Record<string, unknown>[],
+  limit: number,
+  sort: RequestSort = 'newest'
+): string | null {
   const last = rows[rows.length - 1];
   if (rows.length < limit || !last) return null;
-  return `${new Date(last.ts as string | Date).toISOString()}|${last.request_id}`;
+  if (sort === 'newest' || sort === 'oldest')
+    return `${new Date(last.ts as string | Date).toISOString()}|${last.request_id}`;
+  return `v1:${Buffer.from(
+    JSON.stringify([
+      sort,
+      new Date(last.ts as string | Date).getTime(),
+      last.request_id,
+      Number(last[sort === 'duration' ? 'duration_ms' : 'upstream_calls']),
+    ])
+  ).toString('base64url')}`;
+}
+
+/** Weighted nearest rank; identical to percentile_disc for unsampled (weight=1) rows. */
+export function weightedPercentiles(values: Iterable<readonly [number, number]>) {
+  const sorted = [...values].sort((a, b) => a[0] - b[0]);
+  const total = sorted.reduce((sum, [, weight]) => sum + weight, 0);
+  let cumulative = 0;
+  const result: { p50Ms: number | null; p95Ms: number | null; p99Ms: number | null } = {
+    p50Ms: null,
+    p95Ms: null,
+    p99Ms: null,
+  };
+  const quantiles = [
+    ['p50Ms', 0.5],
+    ['p95Ms', 0.95],
+    ['p99Ms', 0.99],
+  ] as const;
+  for (const [value, weight] of sorted) {
+    cumulative += weight;
+    for (const [key, quantile] of quantiles) {
+      if (total > 0 && result[key] === null && cumulative >= total * quantile) result[key] = value;
+    }
+  }
+  return result;
 }
 
 /** Exact percentile over an ascending-sorted array. */

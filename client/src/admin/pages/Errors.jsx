@@ -92,6 +92,15 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
         </p>
       </div>
       <p className="mono adm-error-message">{g.message}</p>
+      <Badge tone={g.classification === 'user_config' ? 'warn' : 'muted'}>
+        {g.classification || 'Unclassified historical event'}
+      </Badge>
+      {g.classification === 'user_config' && (
+        <p>
+          Check the affected configuration or API key. This is not automatically an application
+          defect.
+        </p>
+      )}
       <div className="adm-trace-grid">
         <div className="adm-trace-field">
           <span className="adm-muted">Status</span>
@@ -124,6 +133,25 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
           <pre className="adm-pre">{g.sample_stack}</pre>
         </details>
       )}
+      {!g.sample_stack && (
+        <p className="adm-muted">
+          No stack was captured for this group. Historical message-only logs cannot be
+          reconstructed.
+        </p>
+      )}
+      <button
+        type="button"
+        className="adm-btn"
+        onClick={() =>
+          navigate('errors', {
+            range: '7d',
+            status: 'all',
+            q: g.message.slice(0, 40),
+          })
+        }
+      >
+        Find related historical logs
+      </button>
       <div className="adm-grid-2">
         <div>
           <h3>Affected routes</h3>
@@ -149,7 +177,7 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
           </ul>
         </div>
         <div>
-          <h3>Recent occurrences</h3>
+          <h3>Recent event samples</h3>
           <ul className="adm-list">
             {data.events.map((e, i) => (
               <li key={i}>
@@ -178,11 +206,12 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
 export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) {
   const status = params.status || 'active';
   const level = params.level || '';
+  const classification = params.classification || '';
   const q = params.q || '';
   const [search, setSearch] = useState(q);
   const list = useAsync(
-    () => adminApi.errors({ ...rangeParams, status, level, q }),
-    [range, rangeParams.from, rangeParams.to, status, level, q],
+    () => adminApi.errors({ ...rangeParams, status, level, q, classification }),
+    [range, rangeParams.from, rangeParams.to, status, level, q, classification],
     {
       pollMs: 60_000,
     }
@@ -201,11 +230,13 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
     );
   }
 
-  const go = (next) => navigate('errors', { range, status, level, q, ...next });
+  const go = (next) => navigate('errors', { range, status, level, q, classification, ...next });
   const groups = list.data?.groups || [];
   const version = list.data?.version;
-  // On the first version ever deployed every group is "new", so only flag once older versions exist.
-  const flagNew = !!version && groups.some((g) => g.first_version && g.first_version !== version);
+  const sparkMax = Math.max(
+    1,
+    ...groups.flatMap((g) => (g.spark || []).map((point) => Number(point[1])))
+  );
 
   return (
     <Panel
@@ -214,6 +245,17 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
         <>
           <select
             className="adm-input"
+            aria-label="Log classification"
+            value={classification}
+            onChange={(e) => go({ classification: e.target.value })}
+          >
+            <option value="">All causes</option>
+            <option value="application">Application</option>
+            <option value="user_config">User configuration</option>
+          </select>
+          <select
+            className="adm-input"
+            aria-label="Triage status"
             value={status}
             onChange={(e) => go({ status: e.target.value })}
           >
@@ -226,6 +268,7 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
           </select>
           <select
             className="adm-input"
+            aria-label="Log level"
             value={level}
             onChange={(e) => go({ level: e.target.value })}
           >
@@ -235,6 +278,7 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
           </select>
           <input
             className="adm-input"
+            aria-label="Search log message"
             placeholder="Search message…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -243,7 +287,9 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
           <button
             type="button"
             className="adm-btn"
-            onClick={() => downloadExport({ kind: 'errors', ...rangeParams, status, level, q })}
+            onClick={() =>
+              downloadExport({ kind: 'errors', ...rangeParams, status, level, q, classification })
+            }
           >
             Export CSV
           </button>
@@ -256,7 +302,9 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
         <p>
           Open and regressed are triage states, not proof of an outage. Transport warnings may be
           retried; missing-resource lookups may be expected. Confirm the parent response before
-          resolving or ignoring a group.
+          resolving or ignoring a group. First-seen versions describe fingerprint identity, not
+          proof of a new regression. The 2.12.1 fingerprint change split historical groups; old
+          groups are not auto-resolved.
         </p>
       </div>
       {list.loading && !list.data ? (
@@ -283,9 +331,10 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
                     <div>
                       <Badge tone={g.level === 'error' ? 'bad' : 'warn'}>{g.level}</Badge>{' '}
                       <span className="adm-muted">{g.context}</span>{' '}
-                      {flagNew && g.first_version === version && (
-                        <Badge tone="warn" title="First seen in the currently deployed version">
-                          new in v{version}
+                      {g.classification && <Badge>{g.classification}</Badge>}
+                      {g.first_version === version && (
+                        <Badge title="This fingerprint was first observed in this version; the underlying issue may be older">
+                          fingerprint first seen v{version}
                         </Badge>
                       )}
                     </div>
@@ -305,7 +354,11 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
                   </td>
                   <td className="num">{fmtInt(g.count)}</td>
                   <td className={g.level === 'error' ? 'adm-text-bad' : 'adm-text-warn'}>
-                    <Sparkline points={g.spark || []} />
+                    <span
+                      title={`Shared scale: 0–${fmtInt(sparkMax)} recorded occurrences per bucket`}
+                    >
+                      <Sparkline points={g.spark || []} max={sparkMax} />
+                    </span>
                   </td>
                   <td className="nowrap">{fmtAgo(g.last_seen)}</td>
                   <td className="nowrap">{fmtAgo(g.first_seen)}</td>
@@ -317,7 +370,8 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
       )}
       <p className="adm-muted">
         Counts are all-time per fingerprint. Sparklines cover the selected range and use stored
-        event samples, capped at 50 per group per 5s per instance.
+        occurrence weights on a shared vertical scale. Older, unweighted history remains a lower
+        bound because event detail was capped at 50 per group per 5s per instance.
       </p>
     </Panel>
   );

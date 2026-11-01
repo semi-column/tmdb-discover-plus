@@ -18,7 +18,12 @@ import {
   verifySession,
   verifyTotp,
 } from '../services/admin/auth.ts';
-import { getCollectorStats, getHistory, getLiveStore } from '../services/observability/index.ts';
+import {
+  getAlertingError,
+  getCollectorStats,
+  getHistory,
+  getLiveStore,
+} from '../services/observability/index.ts';
 import {
   INSTANCE_ID,
   getClientIp,
@@ -38,6 +43,7 @@ import {
   type HistoryStore,
 } from '../services/observability/history/types.ts';
 import type { TailItem } from '../services/observability/types.ts';
+import { deploymentMarkers, findIncidents } from '../services/observability/health.ts';
 
 const log = createLogger('admin');
 const router = Router();
@@ -91,7 +97,10 @@ function handle(fn: (req: Request, res: Response) => Promise<unknown>) {
       const result = await fn(req, res);
       if (result !== undefined && !res.headersSent) res.json(result);
     } catch (err) {
-      log.error('Admin endpoint failed', { path: req.path, error: (err as Error).message });
+      if (err instanceof RangeError) {
+        return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, err.message);
+      }
+      log.error('Admin endpoint failed', { path: req.path, error: err });
       if (!res.headersSent) sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Query failed');
     }
   };
@@ -208,6 +217,13 @@ router.get(
       sampleRate: config.observability.sampleRate,
       slowMs: config.observability.slowMs,
       collector: getCollectorStats(),
+      collectorScope: INSTANCE_ID,
+      alerting: {
+        evaluationSeconds: 60,
+        webhookConfigured: !!config.observability.alertWebhookUrl && !getAlertingError(),
+        error: getAlertingError(),
+        scope: live.driver === 'redis' ? 'shared' : 'instance',
+      },
       storage: history ? await history.storageInfo() : null,
     };
   })
@@ -244,8 +260,14 @@ router.get(
         previous: previous?.totals ?? null,
         comparisonAvailable: previous !== null,
         dataSource: 'redis-live-fallback',
+        percentilesApproximate: true,
         routePercentilesApproximate: true,
         uniqueUsersApproximate: true,
+        incidents: findIncidents(
+          current.series,
+          current.range.resolution === 'minute' ? 60_000 : 3_600_000
+        ),
+        deployments: [],
       };
     };
     if (!history) return liveFallback();
@@ -256,6 +278,16 @@ router.get(
           ? history.overview(previousRange, config.observability.slowMs)
           : Promise.resolve(null),
       ]);
+      let deployments: ReturnType<typeof deploymentMarkers> = [];
+      let deploymentsUnavailable = false;
+      try {
+        deployments = deploymentMarkers(await history.systemSeries(range)).filter(
+          (marker) => marker.at >= range.from && marker.at <= range.to
+        );
+      } catch (error) {
+        deploymentsUnavailable = true;
+        log.warn('Deployment annotations unavailable', { error });
+      }
       return {
         ...current,
         previous: previous?.totals ?? null,
@@ -263,6 +295,9 @@ router.get(
         dataSource: 'history',
         routePercentilesApproximate: history.approximatePercentiles,
         uniqueUsersApproximate: history.kind === 'memory' || config.observability.sampleRate < 1,
+        incidents: findIncidents(current.series, range.kind === 'm' ? 60_000 : 3_600_000),
+        deployments,
+        deploymentsUnavailable,
       };
     } catch (error) {
       log.warn('History overview failed; falling back to Redis live aggregates', {
@@ -288,8 +323,14 @@ router.get(
     const history = requireHistory(res);
     if (!history) return;
     const range = parseRange(req.query, retention());
-    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-    return history.listRequests(range, parseRequestFilter(req.query), limit);
+    const limit = req.query.limit === undefined ? 100 : Number(req.query.limit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+      throw new RangeError('limit must be an integer from 1 to 500');
+    }
+    return {
+      ...(await history.listRequests(range, parseRequestFilter(req.query), limit)),
+      range: { from: range.from, to: range.to },
+    };
   })
 );
 
@@ -360,6 +401,7 @@ router.get(
     return {
       providers: history ? await history.upstreamOverview(range) : await liveUpstreams(live, range),
       details: history ? await history.upstreamEndpoints(range, provider) : null,
+      percentilesApproximate: history?.approximatePercentiles ?? true,
     };
   })
 );

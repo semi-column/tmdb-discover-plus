@@ -61,7 +61,13 @@ export const delta = (current, previous) => {
   return (current - previous) / previous;
 };
 
-export function upstreamOutcome(status) {
+export function upstreamOutcome(status, cancelled = false) {
+  if (cancelled)
+    return {
+      tone: 'muted',
+      label: 'Cancelled',
+      detail: 'The caller cancelled this attempt; this is not evidence of a provider timeout.',
+    };
   const code = Number(status);
   if (!code)
     return {
@@ -122,7 +128,7 @@ export function requestOutcome(request, upstream = [], errors = []) {
       detail: 'No completed HTTP response is recorded.',
     };
   if (
-    upstream.some((call) => !call.status || call.status >= 400) ||
+    upstream.some((call) => !call.cancelled && (!call.status || call.status >= 400)) ||
     errors.length ||
     request.error_fp
   ) {

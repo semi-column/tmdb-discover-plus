@@ -72,6 +72,7 @@ export class Collector {
   private requests: RequestEvent[] = [];
   private upstream: UpstreamEvent[] = [];
   private errorEvents: ErrorEvent[] = [];
+  private errorRepresentatives = new Map<string, ErrorEvent>();
   private errorGroups = new Map<string, { count: number; first: ErrorEvent; lastTs: number }>();
   private system: SystemSample[] = [];
 
@@ -134,6 +135,9 @@ export class Collector {
     bump(this.hours, hour, 'dur', event.durationMs);
     bump(this.hours, hour, `lat:${latencyBucket(event.durationMs)}`);
     if (isSlow) bump(this.hours, hour, 'slow');
+    if (event.cacheHits) bump(this.hours, hour, 'ch', event.cacheHits);
+    if (event.cacheMisses) bump(this.hours, hour, 'cm', event.cacheMisses);
+    bump(this.hours, hour, `inst:${event.instance}`);
     bump(this.hours, hour, `st:${event.status}`);
     bump(this.hours, hour, `r:${event.route}`);
     bump(this.hours, hour, `rd:${event.route}`, event.durationMs);
@@ -198,7 +202,7 @@ export class Collector {
     const minute = Math.floor(event.ts / 60_000);
     const hour = Math.floor(event.ts / 3_600_000);
     const p = event.provider;
-    const failed = event.status === 0 || event.status >= 500;
+    const failed = !event.cancelled && (event.status === 0 || event.status >= 500);
     for (const [batch, bucket] of [
       [this.minutes, minute],
       [this.hours, hour],
@@ -208,6 +212,9 @@ export class Collector {
       bump(batch, bucket, `ul:${p}:${latencyBucket(event.durationMs)}`);
       if (failed) bump(batch, bucket, `ue:${p}`);
       if (event.status === 429) bump(batch, bucket, `u429:${p}`);
+      if (event.cancelled) bump(batch, bucket, `uc:${p}`);
+      if (event.status >= 400 && event.status < 500 && event.status !== 429)
+        bump(batch, bucket, `u4:${p}`);
       if (event.timedOut) bump(batch, bucket, `ut:${p}`);
     }
 
@@ -224,6 +231,12 @@ export class Collector {
 
   recordError(event: ErrorEvent): void {
     const minute = Math.floor(event.ts / 60_000);
+    const cohort = JSON.stringify([
+      event.fingerprint,
+      minute,
+      event.route,
+      event.classification ?? '',
+    ]);
     bump(this.minutes, minute, event.level === 'error' ? 'err' : 'warn');
     bump(this.hours, Math.floor(event.ts / 3_600_000), event.level === 'error' ? 'err' : 'warn');
 
@@ -240,14 +253,20 @@ export class Collector {
       return;
     }
     if (currentGroup.count > MAX_EVENTS_PER_FINGERPRINT_PER_FLUSH) {
-      this.stats.dropped.sampledErrors++;
-      return;
+      const representative = this.errorRepresentatives.get(cohort);
+      if (representative) {
+        this.stats.dropped.sampledErrors++;
+        representative.occurrences = (representative.occurrences ?? 1) + 1;
+        return;
+      }
     }
     if (this.errorEvents.length >= this.opts.maxBuffer) {
       this.stats.dropped.errors++;
       return;
     }
-    this.errorEvents.push(event);
+    const sample = { ...event, occurrences: 1 };
+    this.errorEvents.push(sample);
+    this.errorRepresentatives.set(cohort, sample);
   }
 
   recordSystem(sample: SystemSample): void {
@@ -256,7 +275,10 @@ export class Collector {
       return;
     }
     this.system.push(sample);
-    if (this.system.length > 1000) this.system.shift();
+    if (this.system.length > 1000) {
+      this.system.shift();
+      this.stats.dropped.system++;
+    }
   }
 
   private warnThrottled(message: string, err: unknown): void {
@@ -294,6 +316,7 @@ export class Collector {
       this.requests = [];
       this.upstream = [];
       this.errorEvents = [];
+      this.errorRepresentatives = new Map();
       this.errorGroups = new Map();
       this.system = [];
     }

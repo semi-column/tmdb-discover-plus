@@ -6,6 +6,7 @@ import { TimeChart } from './TimeChart.jsx';
 vi.mock('uplot', () => ({
   default: vi.fn(function () {
     this.setSize = vi.fn();
+    this.setData = vi.fn();
     this.destroy = vi.fn();
     this.select = { left: 0, top: 0, width: 0, height: 0 };
     this.posToVal = vi.fn();
@@ -22,6 +23,43 @@ beforeEach(() => {
       disconnect() {}
     }
   );
+});
+
+it('updates polling data without recreating the chart and uses the latest selection callback', () => {
+  const first = vi.fn();
+  const next = vi.fn();
+  const { rerender } = render(
+    <TimeChart
+      data={[
+        [100, 200],
+        [1, 2],
+      ]}
+      series={[{ label: 'Requests' }]}
+      onSelectRange={first}
+    />
+  );
+  const plot = uPlot.mock.instances[0];
+  rerender(
+    <TimeChart
+      data={[
+        [200, 300],
+        [2, 3],
+      ]}
+      series={[{ label: 'Requests' }]}
+      onSelectRange={next}
+    />
+  );
+  expect(uPlot).toHaveBeenCalledTimes(1);
+  expect(plot.destroy).not.toHaveBeenCalled();
+  expect(plot.setData).toHaveBeenLastCalledWith([
+    [200, 300],
+    [2, 3],
+  ]);
+  plot.select = { left: 0, width: 40 };
+  plot.posToVal.mockImplementation((p) => (p ? 300 : 200));
+  uPlot.mock.calls[0][0].hooks.setSelect[0](plot);
+  expect(next).toHaveBeenCalledWith({ from: 200000, to: 300000 });
+  expect(first).not.toHaveBeenCalled();
 });
 
 it('anchors a single-point time range to the timestamp, not expanded library bounds', () => {

@@ -44,7 +44,8 @@ vi.mock('../../src/infrastructure/imdbThrottle.ts', () => ({
   RATE_LIMITER_TIMEOUT_CODE: 'RATE_LIMITER_TIMEOUT',
 }));
 
-vi.mock('../../src/utils/requestContext.ts', () => ({
+vi.mock('../../src/utils/requestContext.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/utils/requestContext.ts')>()),
   getRequestId: vi.fn(() => 'req-test-1'),
 }));
 

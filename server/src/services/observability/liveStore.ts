@@ -142,7 +142,7 @@ export class RedisLiveStore implements LiveStore {
       .multi()
       .zAdd('obs:instances', { score: Date.now(), value: instance })
       .set(`obs:instance:${instance}`, JSON.stringify(sample), { EX: 120 })
-      .zRemRangeByScore('obs:instances', 0, Date.now() - 7 * 24 * 3600 * 1000)
+      .zRemRangeByScore('obs:instances', 0, Date.now() - 24 * 3600 * 1000)
       .exec();
   }
 
@@ -265,7 +265,16 @@ export class MemoryLiveStore implements LiveStore {
   }
 
   async listInstances(): Promise<InstanceInfo[]> {
-    return [...this.instances.values()];
+    const now = Date.now();
+    for (const [id, instance] of this.instances) {
+      if (now - instance.lastSeen >= 86_400_000) this.instances.delete(id);
+    }
+    return [...this.instances.values()]
+      .map((instance) => ({
+        ...instance,
+        sample: now - instance.lastSeen < INSTANCE_STALE_MS ? instance.sample : null,
+      }))
+      .sort((a, b) => b.lastSeen - a.lastSeen);
   }
 
   async incr(key: string, ttlSec: number): Promise<number> {

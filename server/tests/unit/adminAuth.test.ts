@@ -4,8 +4,10 @@ import request from 'supertest';
 
 process.env.ADMIN_USERNAME = 'admin';
 process.env.REDIS_URL = '';
+process.env.OBS_REDIS_URL = '';
 process.env.CACHE_DRIVER = 'memory';
 process.env.TRUST_CLOUDFLARE_HEADERS = 'true';
+process.env.ADMIN_ALLOWED_IPS = '';
 
 const PASSWORD = 'correct horse battery staple';
 
@@ -52,6 +54,15 @@ describe('TOTP', () => {
 });
 
 describe('admin routes', () => {
+  it('returns a validation error rather than another period for invalid custom ranges', async () => {
+    const { token } = auth.issueSession();
+    const res = await request(app)
+      .get('/api/admin/overview?range=custom&from=&to=1')
+      .set(H)
+      .set('Cookie', `${auth.ADMIN_COOKIE}=${token}`);
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toContain('Custom time range');
+  });
   it('requires the CSRF header', async () => {
     const res = await request(app).get('/api/admin/session');
     expect(res.status).toBe(403);

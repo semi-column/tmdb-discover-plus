@@ -1,4 +1,5 @@
 import express from 'express';
+import { AsyncResource } from 'node:async_hooks';
 import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import compression from 'compression';
@@ -9,6 +10,7 @@ import { config, validateRequiredConfig } from './config.ts';
 import { initStorage, getStorage } from './services/storage/index.ts';
 import { initCache, getCacheStatus } from './services/cache/index.ts';
 import { addonRouter } from './routes/addon.ts';
+import { buildManifest } from './services/manifestService.ts';
 import { apiRouter } from './routes/api.ts';
 import { authRouter } from './routes/auth.ts';
 import marketplaceRouter from './routes/marketplace.ts';
@@ -206,13 +208,16 @@ app.use((req, res, next) => {
 
 app.use((req, res, next) => {
   req.setTimeout(TIMEOUTS.REQUEST_MS);
-  res.setTimeout(TIMEOUTS.REQUEST_MS, () => {
-    if (!res.headersSent) {
-      abortRequestContext();
-      log.warn('Request timeout', { url: req.originalUrl, method: req.method });
-      res.status(504).json({ error: 'Gateway Timeout' });
-    }
-  });
+  res.setTimeout(
+    TIMEOUTS.REQUEST_MS,
+    AsyncResource.bind(() => {
+      abortRequestContext(new DOMException('Request timed out', 'TimeoutError'));
+      if (!res.headersSent) {
+        log.warn('Request timeout', { url: req.originalUrl, method: req.method });
+        res.status(504).json({ error: 'Gateway Timeout' });
+      }
+    })
+  );
   next();
 });
 
@@ -220,15 +225,6 @@ app.use((req, res, next) => {
 app.use(apiRateLimit);
 
 const clientDistPath = path.join(__dirname, '../../client/dist');
-const distManifest = path.join(clientDistPath, 'manifest.json');
-const publicManifest = path.join(__dirname, '../../client/public/manifest.json');
-
-let clientManifestPath = publicManifest;
-if (process.env.NODE_ENV === 'production') {
-  clientManifestPath = distManifest;
-} else if (process.env.NODE_ENV === 'nightly') {
-  clientManifestPath = fs.existsSync(distManifest) ? distManifest : publicManifest;
-}
 
 log.info('Environment status', {
   port: PORT,
@@ -265,26 +261,9 @@ app.get('/:userId/configure', (req, res) => {
   return res.status(404).send('Not Found');
 });
 
-let _clientManifestParsed: Record<string, unknown> | null = null;
-
 app.get('/manifest.json', (req, res) => {
-  try {
-    if (!_clientManifestParsed) {
-      if (!fs.existsSync(clientManifestPath)) {
-        log.warn('Manifest file not found', { path: clientManifestPath });
-      }
-      const raw = fs.readFileSync(clientManifestPath, 'utf8');
-      _clientManifestParsed = JSON.parse(raw);
-    }
-    const manifest = { ..._clientManifestParsed };
-    const baseUrl = config.baseUrl || getBaseUrl(req);
-    manifest.logo = `${baseUrl.replace(/\/$/, '')}/logo.png`;
-    res.setHeader('Cache-Control', 'no-store, must-revalidate');
-    res.json(manifest);
-  } catch (error) {
-    log.warn('Failed to serve manifest.json', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Failed to load manifest');
-  }
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  res.json(buildManifest(null, getBaseUrl(req)));
 });
 
 app.get(['/admin', '/admin.html'], (req, res) => {

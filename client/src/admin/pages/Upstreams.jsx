@@ -98,8 +98,8 @@ export function Upstreams({
             <StatCard
               label={p.provider}
               value={fmtInt(p.calls)}
-              tone={p.errorRate > 0.01 ? 'warn' : 'good'}
-              sub={`${fmtPct(p.errorRate)} failed attempts · p95 ${fmtBucketMs(p.p95Ms)} · 429s ${fmtInt(p.rateLimited)} · timeouts ${fmtInt(p.timeouts)}`}
+              tone={p.errorRate > 0.01 || p.rateLimited || p.rejected ? 'warn' : 'good'}
+              sub={`${fmtPct(p.errorRate)} network/5xx · p95 ${(p.percentilesApproximate ?? data.percentilesApproximate) ? fmtBucketMs(p.p95Ms) : fmtMs(p.p95Ms)} · other 4xx ${fmtInt(p.rejected)} · 429s ${fmtInt(p.rateLimited)} · timeouts ${fmtInt(p.timeouts)} · cancelled ${fmtInt(p.cancelled)}`}
             />
           </button>
         ))}
@@ -246,14 +246,16 @@ export function Upstreams({
                       <tr key={i}>
                         <td className="nowrap">{fmtTime(e.ts)}</td>
                         <td>
-                          <Badge tone={upstreamOutcome(e.status).tone}>{e.status || 'NET'}</Badge>
+                          <Badge tone={upstreamOutcome(e.status, e.cancelled).tone}>
+                            {e.cancelled ? 'CANCEL' : e.status || 'NET'}
+                          </Badge>
                         </td>
                         <td>
                           <Badge
-                            tone={upstreamOutcome(e.status).tone}
-                            title={upstreamOutcome(e.status).detail}
+                            tone={upstreamOutcome(e.status, e.cancelled).tone}
+                            title={upstreamOutcome(e.status, e.cancelled).detail}
                           >
-                            {upstreamOutcome(e.status).label}
+                            {upstreamOutcome(e.status, e.cancelled).label}
                           </Badge>
                         </td>
                         <td className="mono adm-ellipsis">

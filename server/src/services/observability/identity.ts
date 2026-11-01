@@ -46,6 +46,9 @@ export function getUserAgent(req: Request): string {
 }
 
 const CLIENT_RULES: Array<[RegExp, string]> = [
+  [/\bnuvio\b/i, 'Nuvio'],
+  [/\baiostreams\b/i, 'AIOStreams'],
+  [/\bomni\b/i, 'Omni'],
   [/stremio.*android|android.*stremio/i, 'Stremio Android'],
   [
     /stremio.*(windows|macintosh|mac os|linux|x11)|(windows|macintosh|mac os|linux|x11).*stremio/i,

@@ -30,3 +30,18 @@ it('does not describe an empty time range as healthy', () => {
   render(<AttentionSummary range="1h" totals={{ requests: 0 }} />);
   expect(screen.getByText('No requests recorded')).toBeInTheDocument();
 });
+
+it('surfaces 4xx even with no 5xx and respects the configured slow threshold', () => {
+  render(
+    <AttentionSummary
+      range="1h"
+      slowMs={2500}
+      totals={{ requests: 100, errors5xx: 0, errors4xx: 25, slow: 2 }}
+    />
+  );
+  expect(screen.getByText('Rejected responses need investigation')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Rejected HTTP responses/ }));
+  expect(navigate).toHaveBeenLastCalledWith('requests', { range: '1h', status: '4xx' });
+  fireEvent.click(screen.getByRole('button', { name: /Slow responses/ }));
+  expect(navigate).toHaveBeenLastCalledWith('requests', { range: '1h', minMs: 2500 });
+});

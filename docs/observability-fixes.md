@@ -1,0 +1,146 @@
+# Observability remediation report
+
+Date: 2026-11-01
+
+## Status and confidence
+
+Implemented and tested in the working tree; **not deployed**. Production was accessed read-only.
+Reproductions below use synthetic fixtures and isolated databases, not destructive experiments
+against production. Production improvement must be measured after rollout.
+
+The investigation corrected several recommendations from the review:
+
+- The root manifest demonstrably advertised unsupported endpoints. That does **not** prove it
+  caused every configuration-less request; old installations and third-party integrations can
+  continue making them after the manifest changes.
+- A busy hashed IP is not proof of abuse. No arbitrary client/IP block was added.
+- Search needed correct pagination, not arbitrary truncation of enrichment or results.
+- Aborted aggregate metadata could be cached, but its TTL was **24 hours**, not 14 days.
+  The 14-day TTL applies to completed-season data.
+- First-seen fingerprints do not prove new regressions. Historical groups were not bulk-resolved.
+- Exact percentiles cost computation. Fewer SQL statements do not prove lower latency.
+
+## Application failures
+
+| Issue                                              | Root cause and conclusive evidence                                                                                                                                                                 | Fix and reason                                                                                                                                                                                                                            |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configuration-less metadata 404s                   | The root manifest advertised catalog/meta and `tt`/TMDB prefixes without a configuration; the corresponding configuration-less handlers do not exist. Tests compare root and configured manifests. | Root manifest no longer advertises unsupported resources and requires configuration. Configured manifests preserve their resources and prefixes. No default provider key or silent fallback was introduced.                               |
+| Hundreds of upstream calls for search              | A deterministic search fixture returned **329 results on page one**, enriching far more than one page.                                                                                             | Stable 20-result pagination. Tests retrieve all 329 results without duplicates, rather than discarding matches or applying an arbitrary request-wide call cap.                                                                            |
+| Excess series fetches                              | A 35-season fixture demonstrated redundant individual TMDB season requests.                                                                                                                        | Reuse batched season responses and existing cached data. Fixture: **35 TMDB calls reduced to 2**, while preserving **37 IMDb augmentation calls**. Removed the unrelated 50-season result ceiling rather than silently truncating series. |
+| Work continues after cancellation; poisoned caches | Tests reproduced partial-result and negative-cache writes after cancellation, including shared/coalesced work.                                                                                     | Abort-aware transports, throttle queues, retries and loops; aborted work throws and cannot populate caches. Healthy coalesced callers can retry/recover; a cancelled waiter does not cancel a healthy producer.                           |
+| Invalid collections silently appear empty          | Missing/invalid IDs were treated as successful empty results.                                                                                                                                      | Classified `400 / VALIDATION_ERROR` on addon requests and POST preview, including repeated requests. Warnings carry `user_config`; validation happens before upstream work.                                                               |
+| Artwork disappears or causes unnecessary work      | Six HEAD/cache cases reproduced unsupported methods, access failures cached as absence, and duplicate provider work.                                                                               | One bounded ranged GET after HEAD 401/405/501, with body cancellation; transient/authentication failures are not cached as confirmed absence. Reuse Fanart/TVDB payloads across artwork kinds and remove duplicate resolution.            |
+
+Relevant regression tests:
+[search](../server/tests/unit/comprehensiveSearch.test.ts),
+[series](../server/tests/unit/seriesEpisodeMerge.test.ts),
+[cancellation/cache](../server/tests/unit/requestCancellation.test.ts),
+[transport cancellation](../server/tests/unit/upstreamCancellation.test.ts),
+[artwork](../server/tests/unit/posterService.test.ts),
+[preview validation](../server/tests/unit/collectionPreview.test.ts).
+
+## Observability correctness
+
+| Issue                                         | Root cause and evidence                                                                                                                                            | Fix                                                                                                                                                                                                                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Misleading headline/provider percentiles      | History used histogram ceilings while advertising exact percentiles. On 50,000 durations, the old p95 was **60,000ms** instead of **47,500ms**.                    | Exact stored-row percentiles across PostgreSQL, MongoDB and memory. Explicit approximation flags remain for live histogram fallback; UI formatting follows those flags. Sampling and bounded-history caveats remain visible.                                                 |
+| Weighted totals drift                         | PostgreSQL `REAL` accumulation produced **66,657** rather than **66,667** in a reproducible fixture.                                                               | Higher-precision aggregation and normalization; coverage includes weighted traffic and consistent totals.                                                                                                                                                                    |
+| Expensive, inconsistent overview reads        | Six separate PostgreSQL statements could observe different snapshots and competed for a small pool.                                                                | One PostgreSQL statement/one physical scan per selected partition; MongoDB reduced from six to two aggregations. A 50,000-distinct-duration test caught a naive Mongo facet exceeding 100MB; replaced with streaming aggregation.                                            |
+| Log bursts undercounted                       | Raw event detail was capped at 50 per fingerprint/flush; overview counted sampled rows as occurrences. An 80-event, two-minute fixture reproduces the discrepancy. | Occurrence weights retain full represented counts, grouped by fingerprint, minute, route and classification. Tests assert 80 total and minute counts `[60, 20]`, with correct route totals. Sampled request attribution and sub-minute boundaries remain explicitly limited. |
+| Stacks and causes missing                     | Call sites discarded Error objects; extraction handled `error.stack` but not `err` or `reason`.                                                                    | Preserve Error objects at hot call sites, extract all supported fields, retain bounded cause chains, and redact before capture. Old message-only events remain unrecoverable.                                                                                                |
+| User configuration faults bury app problems   | Known invalid-key/missing-collection events were undifferentiated logs.                                                                                            | Separate `user_config` metadata/counts/filter, with a configuration drilldown from request traces. Historical unknown classifications remain unknown. No real HTTP failures are excluded or hidden.                                                                          |
+| Fingerprint change looks like new defects     | Fingerprint input changed in 2.12.1, splitting old/new identities.                                                                                                 | Remove the misleading “new in version” claim, explain first-observed fingerprint semantics, and provide related-history search. Preserve historical counts, fingerprints and triage states instead of inventing a migration or resolving unverified bugs.                    |
+| Cancellation counted as provider timeout      | Local real-undici reproduction: timeout emits `TimeoutError`; explicit cancellation emits `AbortError`. Both were marked timed out.                                | Separate cancellation from timeout/failure across collectors, all history stores and UI. Outbound call counts now start when attempts are created, not only when headers arrive.                                                                                             |
+| Missing hourly cache/instance data            | Collector populated minute cache/instance fields but omitted corresponding hourly fields.                                                                          | Populate both resolutions; regression verifies hourly cache hit rate and instance totals.                                                                                                                                                                                    |
+| Old short custom ranges show zero on fallback | Resolution was selected by interval width, while live minute retention expires by age.                                                                             | Use retained hourly buckets for old live windows. Invalid/custom-empty ranges return 400, not a silently substituted hour. History keeps its available fine resolution.                                                                                                      |
+| Weak request exploration                      | No total, duration upper bound, fan-out filter, or stable alternate sorting.                                                                                       | Stored-match totals, `maxMs`, `minUpstreamCalls`, direct config-hash filter, stable pagination/sorting across all three stores. Subsequent UI pages retain the first page’s exact time bounds.                                                                               |
+| Unhelpful client labels                       | Specific supplied user agents fell through generic rules.                                                                                                          | Recognize Nuvio, AIOStreams and Omni before generic clients. Missing user-agent data remains honestly “No user-agent”; it is not guessed.                                                                                                                                    |
+| Search terms/provider keys in telemetry       | Search text was embedded in Stremio path extras. RPDB/Top Posters credentials can occupy short, nonhex path segments missed by generic masking.                    | Redact search extras, sensitive log messages/causes and known credential-bearing provider path segments before new capture. No secret values were copied into tests or this report.                                                                                          |
+
+[History regression suite and benchmark notes](../server/tests/unit/observabilityHistoryBackends.test.ts)
+include real PostgreSQL/MongoDB execution, setup instructions and the baseline used.
+[Collector regressions](../server/tests/unit/observability.test.ts) cover counts, redaction,
+classification, fallback ranges and cancellation.
+
+### Performance caveat
+
+The local 50,000-row PostgreSQL median went from approximately **58ms to 98ms** when exact
+computation was added. This is a correctness/round-trip improvement, **not a demonstrated CPU
+speedup**. The production 24-hour query previously took about 4.4 seconds; its new latency has not
+been measured. Polling no longer stacks concurrent requests. Rollup tables were not added blindly:
+they would require a separate exact-percentile/retention design and production profiling.
+
+## Operational and UI improvements
+
+- **4xx visibility:** separate response-rate card and attention signal; unmatched-route and rejected
+  response presets. A clean 5xx count no longer makes a 25% 4xx window appear healthy.
+- **Incident windows:** historical threshold breaches with direct time-bounded request drilldowns.
+  At least 20 requests per bucket; 5xx >1%, 4xx >5%, or slow >15%. These are investigation signals,
+  not assertions that every 4xx is an outage.
+- **Unattended detection:** checks run every minute without an open browser over five completed
+  minutes, including upstream 429s. Five-minute shared deduplication, bounded HTTPS delivery and
+  retry after failure. Notification requests are excluded from capture to prevent alert feedback.
+  A malformed webhook is surfaced without disabling collection/local health logging.
+- **Start annotations:** explicit process-start timestamps on new samples; labelled estimates for
+  historical samples. Dashed chart markers and a text list. A restart is not automatically labelled
+  a deployment.
+- **Collector scope:** per-instance loss/failure details, explicit responding-pod scope, and visible
+  missing/stale data. Stats are snapshotted, not mutable references to future counters.
+- **Stale instances:** hidden by default; optional last-day view. Live roster entries expire after
+  24 hours without deleting retained historical samples.
+- **Charts:** update existing uPlot instances instead of recreating them every poll; shared error
+  sparkline scale; no interpolation across missing values. Fixed desktop card crowding.
+- **Time selection:** chart drag selection plus keyboard-accessible native date/time inputs.
+  Slow-response links use the configured threshold.
+- **Trace honesty:** show overlapping upstream-time semantics, time-to-headers limitations and
+  missing dependency rows; clamp waterfall bars to their track. Detailed database/cache/queue spans
+  are not fabricated from unexplained request latency.
+- **Storage isolation:** optional dedicated `OBS_REDIS_URL`, with fail-closed dedicated-store
+  connection behavior and documented password rotation when moving revocation stores.
+
+## Verification
+
+| Check                                                                                                                                            | Result                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LOG_LEVEL=silent npm test --prefix server -- --reporter=dot`                                                                                    | **878 passed, 28 skipped**, 84 test files.                                                                                                                           |
+| `cd server && npm test -- tests/unit/observabilityHistory.test.ts tests/unit/observabilityHistoryBackends.test.ts` with disposable database URLs | **65 passed**, using isolated PostgreSQL 16, MongoDB 7 and memory. Containers stopped/removed afterward.                                                             |
+| `npm test --prefix client -- src/admin`                                                                                                          | **26 passed**, 5 files.                                                                                                                                              |
+| `npm run typecheck --prefix server`                                                                                                              | Passed.                                                                                                                                                              |
+| `npm run build --prefix client`                                                                                                                  | Passed.                                                                                                                                                              |
+| `npm run lint --prefix client -- src/admin`                                                                                                      | No errors; 5 existing warnings outside admin in SearchInput/useAuth/useConfig.                                                                                       |
+| `git diff --check`                                                                                                                               | Passed.                                                                                                                                                              |
+| Real browser, built local UI with synthetic API responses                                                                                        | Charts rendered; exact p95/4xx warning/start marker visible; drag updates custom interval; two native date controls; no horizontal page overflow at 390px or 1440px. |
+
+The first admin-auth suite run exposed local allowlist contamination rather than an application
+regression. Its fixture now explicitly isolates the allowlist and dedicated Redis setting.
+Chronicle was not exposed by available tools; session-history queries found no workaround.
+Direct reproductions resolved the test/browser blockers instead of assuming their causes.
+
+## External limits and deployment actions
+
+1. **Deploy before judging production results.** Apply normal history migrations on startup; then
+   check search pagination, configured clients, collector coverage, and 24h/7d query latency.
+   Previously poisoned cache entries are not retroactively reconstructed: allow their existing
+   TTLs to expire or invalidate verified affected entries. Do not flush every cache and create a
+   new upstream traffic surge.
+2. **Configure notifications.** Set an operator-owned HTTPS `OBS_ALERT_WEBHOOK_URL` or keep local
+   logging. The generic JSON payload needs an adapter for Slack/Discord-specific schemas.
+   No external destination was invented or contacted during testing.
+3. **Provider credentials/capacity remain external.** A read-only production one-hour sample
+   contained RPDB 403s and Top Posters 401/405/429s plus transport failures. Correct credentials,
+   subscription/access and provider limits cannot be repaired locally. Unsupported HEAD now has
+   a bounded GET alternative; definitive access failures remain visible and transient failures
+   do not become cached “not found” results.
+4. **No blanket traffic block.** Existing bare-manifest installations may need refresh or
+   reconfiguration. Track the residual 404s by route/client; volume alone did not establish abuse.
+5. **Use a separate noeviction Redis if isolation is needed.** Another logical DB in the same
+   Redis does not isolate eviction. Rotate admin password/hash when moving the revocation store.
+6. **Old losses cannot be recreated.** Missing stacks, dropped rows, old unweighted log counts and
+   old cancellation labels stay limited. Previously captured sensitive paths expire under normal
+   retention; inspect access and rotate affected provider credentials if necessary. No historical
+   data was silently purged.
+7. **The stale-replicaset explanation was not proven.** A delayed heartbeat does not establish
+   staging/production DB sharing. Deployment inventory and datastore configuration need an
+   operator-side check; the UI now reports freshness/scope without inventing that explanation.
+
+Runtime settings and semantics are documented in [environment.md](./environment.md).

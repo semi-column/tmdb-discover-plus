@@ -43,12 +43,17 @@ export function providerForHost(host: string): string {
   return host || 'unknown';
 }
 
-export function templateUpstreamPath(rawPath: string): string {
+export function templateUpstreamPath(rawPath: string, host = ''): string {
   const pathname = rawPath.split('?')[0];
+  const keyedPath =
+    /(^|\.)ratingposterdb\.com$/.test(host) ||
+    host === 'api.top-streaming.stream' ||
+    host === 'api.top-posters.com';
   return (
     pathname
       .split('/')
       .map((seg, i) => {
+        if (keyedPath && i === 1 && seg) return ':credential';
         // Keep a leading API version like /3/ (TMDB) intact.
         if (/^\d+$/.test(seg) && !(i === 1 && seg.length <= 2)) return ':id';
         if (/^tt\d+$/.test(seg)) return ':imdbId';
@@ -76,10 +81,20 @@ function hostOf(origin: string | URL | undefined): string {
  */
 export function startUpstreamCapture(record: (event: UpstreamEvent) => void): () => void {
   const pending = new WeakMap<object, Pending>();
+  const alertUrl = URL.canParse(config.observability.alertWebhookUrl)
+    ? new URL(config.observability.alertWebhookUrl)
+    : null;
 
   const onCreate = (message: unknown) => {
     const { request } = message as { request: UndiciRequest };
+    if (
+      alertUrl &&
+      hostOf(request.origin) === alertUrl.hostname &&
+      request.path === `${alertUrl.pathname}${alertUrl.search}`
+    )
+      return;
     const state = getRequestLiveState();
+    if (state) state.obs.upstreamCalls++;
     pending.set(request, {
       started: performance.now(),
       ts: Date.now(),
@@ -97,9 +112,9 @@ export function startUpstreamCapture(record: (event: UpstreamEvent) => void): ()
     const err = error as { name?: string; message?: string; code?: string } | null;
     const timedOut =
       !!err &&
-      (err.name === 'TimeoutError' || err.name === 'AbortError' || /timeout/i.test(err.code ?? ''));
+      (err.name === 'TimeoutError' || /timeout/i.test(`${err.code ?? ''} ${err.message ?? ''}`));
+    const cancelled = !!err && err.name === 'AbortError' && !timedOut;
     if (entry.obs) {
-      entry.obs.upstreamCalls++;
       entry.obs.upstreamMs += durationMs;
     }
     record({
@@ -109,15 +124,17 @@ export function startUpstreamCapture(record: (event: UpstreamEvent) => void): ()
       provider: providerForHost(host),
       host,
       method: request.method ?? 'GET',
-      path: templateUpstreamPath(request.path ?? ''),
+      path: templateUpstreamPath(request.path ?? '', host),
       status,
       durationMs,
       error: err
         ? `${err.name ?? 'Error'}: ${err.message ?? ''}`
+            .replace(/https?:\/\/\S+/gi, '[redacted-url]')
             .replace(/([?&](?:api_key|apikey|key|token|client_id)=)[^&\s]+/gi, '$1[REDACTED]')
             .slice(0, 300)
         : '',
       timedOut,
+      cancelled,
     });
   };
 

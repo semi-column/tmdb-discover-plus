@@ -66,14 +66,27 @@ export function TraceDrawer({ requestId, onClose, onOpenError, onInvestigate }) 
               <div className="adm-panel-actions">
                 <Badge tone={statusTone(req.status)}>HTTP {req.status}</Badge>
                 <span>
-                  {data.upstream.filter((call) => !call.status || call.status >= 400).length} failed
-                  dependency attempts
+                  {
+                    data.upstream.filter(
+                      (call) => !call.cancelled && (!call.status || call.status >= 400)
+                    ).length
+                  }{' '}
+                  failed dependency attempts
                 </span>
                 <span>{data.errors.length} log events</span>
               </div>
             </div>
             {onInvestigate && (
               <div className="adm-investigation-bar">
+                {req.user_hash && (
+                  <button
+                    type="button"
+                    className="adm-btn"
+                    onClick={() => onInvestigate('requests', { userHash: req.user_hash })}
+                  >
+                    <ArrowUpRight size={14} /> Same configuration
+                  </button>
+                )}
                 <button
                   type="button"
                   className="adm-btn"
@@ -110,12 +123,20 @@ export function TraceDrawer({ requestId, onClose, onOpenError, onInvestigate }) 
               </Field>
               <Field label="Instance">{req.instance}</Field>
               <Field label="Cache hits / misses">{`${req.cache_hits} / ${req.cache_misses}`}</Field>
-              <Field label="Upstream calls">{`${req.upstream_calls} (${fmtMs(req.upstream_ms)} total)`}</Field>
+              <Field label="Upstream calls (summed, may overlap)">{`${req.upstream_calls} (${fmtMs(req.upstream_ms)} total)`}</Field>
             </div>
 
             <Panel title={`Upstream calls (${data.upstream.length})`}>
+              <p className="adm-muted">
+                Dependency timings end at response headers and may overlap. They exclude queue
+                waits, body parsing and database/cache work; their sum is not request latency.
+              </p>
               {data.upstream.length === 0 ? (
-                <div className="adm-empty">None — served from cache or no outbound calls.</div>
+                <div className="adm-empty">
+                  {Number(req.upstream_calls) > 0
+                    ? 'Dependency rows are missing or still flushing; the request recorded outbound calls.'
+                    : 'No captured outbound HTTP calls. This does not exclude database or cache work.'}
+                </div>
               ) : (
                 <div className="adm-waterfall">
                   {data.upstream.map((u, i) => {
@@ -124,10 +145,10 @@ export function TraceDrawer({ requestId, onClose, onOpenError, onInvestigate }) 
                       <div key={i} className="adm-waterfall-row">
                         <span className="adm-waterfall-label mono" title={`${u.host}${u.path}`}>
                           <Badge
-                            tone={upstreamOutcome(u.status).tone}
-                            title={upstreamOutcome(u.status).detail}
+                            tone={upstreamOutcome(u.status, u.cancelled).tone}
+                            title={upstreamOutcome(u.status, u.cancelled).detail}
                           >
-                            {u.status || 'NET'}
+                            {u.cancelled ? 'CANCEL' : u.status || 'NET'}
                           </Badge>{' '}
                           {onInvestigate ? (
                             <button
@@ -151,7 +172,7 @@ export function TraceDrawer({ requestId, onClose, onOpenError, onInvestigate }) 
                             className={`adm-waterfall-bar adm-tone-${statusTone(u.status)}`}
                             style={{
                               left: `${Math.min(100, (offset / total) * 100)}%`,
-                              width: `${Math.max(0.5, Math.min(100, (u.duration_ms / total) * 100))}%`,
+                              width: `${Math.max(0, Math.min(100 - Math.min(100, (offset / total) * 100), (u.duration_ms / total) * 100))}%`,
                             }}
                           />
                         </span>

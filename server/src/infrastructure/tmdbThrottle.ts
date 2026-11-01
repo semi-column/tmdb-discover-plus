@@ -1,5 +1,6 @@
 import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
+import { getRequestSignal } from '../utils/requestContext.ts';
 
 const log = createLogger('TmdbThrottle');
 export const RATE_LIMITER_TIMEOUT_CODE = 'RATE_LIMITER_TIMEOUT';
@@ -94,44 +95,12 @@ class TokenBucket {
     log.info('TMDB throttle warmup phase ended, full rate restored');
   }
 
-  private _createQueueTimeout(
-    resolve: () => void,
-    reject: (reason?: unknown) => void,
-    timeoutMs: number,
-    queuedAt: number
-  ): ReturnType<typeof setTimeout> {
-    return setTimeout(() => {
-      const idx = this.queue.findIndex((item) => item.resolve === resolve);
-      if (idx !== -1) this.queue.splice(idx, 1);
-      reject(
-        Object.assign(new Error('Rate limiter timeout — waited too long for token'), {
-          code: RATE_LIMITER_TIMEOUT_CODE,
-        })
-      );
-    }, timeoutMs);
-  }
-
-  async acquire(timeoutMs: number = 10000): Promise<void> {
+  async acquire(timeoutMs: number = 10000, signal = getRequestSignal()): Promise<void> {
+    signal?.throwIfAborted();
     this.stats.totalRequests++;
-
-    const now = Date.now();
-    if (now < this._pausedUntil) {
-      const remaining = this._pausedUntil - now;
-      this.stats.queuedRequests++;
-      return new Promise<void>((resolve, reject) => {
-        const timer = this._createQueueTimeout(resolve, reject, timeoutMs, now);
-
-        setTimeout(() => {
-          this._refill();
-        }, remaining);
-
-        this.queue.push({ resolve, reject, timer, queuedAt: now });
-      });
-    }
-
     this._refill();
 
-    if (this.tokens >= 1) {
+    if (Date.now() >= this._pausedUntil && this.tokens >= 1) {
       this.tokens -= 1;
       this.stats.immediateGrants++;
       return;
@@ -144,9 +113,33 @@ class TokenBucket {
 
     this.stats.queuedRequests++;
     return new Promise<void>((resolve, reject) => {
-      const timer = this._createQueueTimeout(resolve, reject, timeoutMs, Date.now());
-
-      this.queue.push({ resolve, reject, timer, queuedAt: Date.now() });
+      const cleanup = () => {
+        clearTimeout(item.timer);
+        signal?.removeEventListener('abort', onAbort);
+        const index = this.queue.indexOf(item);
+        if (index !== -1) this.queue.splice(index, 1);
+      };
+      const onAbort = () => item.reject(signal?.reason);
+      const item = {
+        resolve: () => {
+          cleanup();
+          resolve();
+        },
+        reject: (reason?: unknown) => {
+          cleanup();
+          reject(reason);
+        },
+        queuedAt: Date.now(),
+        timer: setTimeout(() => {
+          item.reject(
+            Object.assign(new Error('Rate limiter timeout — waited too long for token'), {
+              code: RATE_LIMITER_TIMEOUT_CODE,
+            })
+          );
+        }, timeoutMs),
+      };
+      this.queue.push(item);
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
   }
 
@@ -167,7 +160,7 @@ class TokenBucket {
 
   destroy(): void {
     clearInterval(this._refillInterval);
-    for (const { reject, timer } of this.queue) {
+    for (const { reject, timer } of [...this.queue]) {
       clearTimeout(timer);
       reject(new Error('Rate limiter shutting down'));
     }

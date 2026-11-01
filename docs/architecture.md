@@ -67,6 +67,14 @@ TMDB Discover+ is a Stremio addon that lets users create custom content catalogs
 7. **Format conversion** — Transforms TMDB data to Stremio meta objects via `toStremioMeta()`
 8. **ETag response** — SHA-256-based weak ETag with 304 Not Modified support
 
+### Configuration and enrichment bounds
+
+- The root `/manifest.json` requires configuration and advertises no catalog or meta resources. Only a configured `/:userId/manifest.json` advertises playable IDs and catalogs.
+- TMDB search merges title matches and person credits, then returns 20 items per `skip` page. The full filmography remains reachable; only that page receives detailed metadata/artwork enrichment.
+- Series metadata uses TMDB's [append-to-response](https://developer.themoviedb.org/reference/tv-series-details) support to batch up to 20 uncached seasons per request, retaining individual season caches and falling back to individual fetches for missing batch members. All seasons and IMDb episode/overview augmentation are preserved, including the two existing extra-season probes.
+- Artwork is resolved once per TMDB meta/preview. TVDB/Fanart payloads are reused across image kinds within that resolution. Image probes retry HEAD 401/405/501 once with a ranged GET under the same deadline, cancel the body, and only negative-cache definitive missing/invalid images—not authentication, throttling, transport failures, or cancellation.
+- Timeout/disconnect cancellation propagates through TMDB/IMDb fetches, throttle queues, retry waits, and enrichment loops. Aborted computations cannot write positive or negative cache entries; a healthy coalesced caller can retry independently when its original producer disconnects. Completed season responses may retain their normal 14-day TTL, but the aggregated meta TTL is one day, not 14 days.
+
 ### Configuration API Request
 
 1. Client authenticates via `POST /api/auth/login` with TMDB API key → receives JWT

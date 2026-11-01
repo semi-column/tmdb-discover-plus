@@ -1,8 +1,8 @@
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, FileWarning } from 'lucide-react';
 import { navigate } from '../hooks.js';
-import { fmtInt } from '../format.js';
+import { fmtInt, fmtMs } from '../format.js';
 
-export function AttentionSummary({ totals, range }) {
+export function AttentionSummary({ totals, range, slowMs = 1500 }) {
   const signals = [
     {
       label: 'Failed HTTP responses',
@@ -14,13 +14,22 @@ export function AttentionSummary({ totals, range }) {
       filters: { status: '5xx' },
     },
     {
+      label: 'Rejected HTTP responses',
+      count: totals.errors4xx,
+      tone: 'warn',
+      icon: AlertTriangle,
+      detail: '4xx may be invalid config, missing routes or rate limits. Inspect route and client.',
+      page: 'requests',
+      filters: { status: '4xx' },
+    },
+    {
       label: 'Slow responses',
       count: totals.slow,
       tone: 'warn',
       icon: Clock3,
-      detail: 'Responses taking 1.5 seconds or longer.',
+      detail: `Responses taking ${fmtMs(slowMs)} or longer.`,
       page: 'requests',
-      filters: { minMs: 1500 },
+      filters: { minMs: slowMs },
     },
     {
       label: 'Application logs',
@@ -34,18 +43,24 @@ export function AttentionSummary({ totals, range }) {
   ];
   return (
     <section
-      className={`adm-attention ${totals.errors5xx ? 'is-alert' : ''}`}
+      className={`adm-attention ${totals.errors5xx || totals.errors4xx ? 'is-alert' : ''}`}
       aria-label="Attention summary"
     >
       <div className="adm-attention-heading">
-        {totals.errors5xx ? <AlertTriangle size={20} /> : <CheckCircle2 size={20} />}
+        {totals.errors5xx || totals.errors4xx ? (
+          <AlertTriangle size={20} />
+        ) : (
+          <CheckCircle2 size={20} />
+        )}
         <div>
           <h2>
             {totals.errors5xx
               ? 'Failed responses need attention'
-              : totals.requests
-                ? 'No HTTP 5xx recorded'
-                : 'No requests recorded'}
+              : totals.errors4xx
+                ? 'Rejected responses need investigation'
+                : totals.requests
+                  ? 'No HTTP 5xx recorded'
+                  : 'No requests recorded'}
           </h2>
           <p>HTTP status alone does not confirm that catalog or metadata results were complete.</p>
         </div>

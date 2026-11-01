@@ -3,7 +3,13 @@ import { createLogger } from '../../utils/logger.ts';
 import { getImdbThrottle } from '../../infrastructure/imdbThrottle.ts';
 import { RATE_LIMITER_TIMEOUT_CODE } from '../../infrastructure/tmdbThrottle.ts';
 import { config } from '../../config.ts';
-import { getRequestId } from '../../utils/requestContext.ts';
+import {
+  getRequestId,
+  getRequestSignal,
+  throwIfRequestAborted,
+  awaitWithRequestAbort,
+} from '../../utils/requestContext.ts';
+import { setTimeout as delay } from 'node:timers/promises';
 import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
 import { CACHE_STORAGE, IMDB_CACHE_TTL_DEFAULTS } from '../../cacheTtls.ts';
 
@@ -37,7 +43,7 @@ function getCallerHeaders(): Record<string, string> {
   };
 }
 
-const inFlightRequests = new Map<string, Promise<unknown>>();
+const inFlightRequests = new Map<string, { promise: Promise<unknown>; signal?: AbortSignal }>();
 
 const CIRCUIT_BREAKER = {
   threshold: CIRCUIT_BREAKER_DEFAULTS.THRESHOLD,
@@ -96,6 +102,7 @@ export async function imdbFetch(
   cacheTtl: number = IMDB_CACHE_TTL_DEFAULTS.DEFAULT_REQUEST,
   retries: number = 3
 ): Promise<unknown> {
+  throwIfRequestAborted();
   const apiKey = config.imdbApi.apiKey;
   const apiHost = config.imdbApi.apiHost;
 
@@ -147,27 +154,40 @@ export async function imdbFetch(
 
   try {
     const cached = await cache.get(cacheKey);
+    throwIfRequestAborted();
     if (cached !== null && cached !== undefined) {
       const isFresh = await cache.get(freshnessKey).catch(() => null);
+      throwIfRequestAborted();
       if (isFresh) return cached;
 
       doBackgroundRevalidation(ep, url, cacheKey, freshnessKey, cacheTtl, retries);
       return cached;
     }
   } catch (err) {
-    log.warn('IMDb cache get failed', { error: (err as Error).message });
+    throwIfRequestAborted();
+    log.warn('IMDb cache get failed', { error: err });
   }
 
   const existing = inFlightRequests.get(cacheKey);
-  if (existing) return existing;
+  if (existing) {
+    try {
+      return await awaitWithRequestAbort(existing.promise);
+    } catch (error) {
+      throwIfRequestAborted();
+      if (!existing.signal?.aborted) throw error;
+      if (inFlightRequests.get(cacheKey) === existing) inFlightRequests.delete(cacheKey);
+      return imdbFetch(endpoint, params, cacheTtl, retries);
+    }
+  }
 
   const promise = executeImdbFetch(ep, url, cacheKey, freshnessKey, cacheTtl, retries);
-  inFlightRequests.set(cacheKey, promise);
+  const entry = { promise, signal: getRequestSignal() };
+  inFlightRequests.set(cacheKey, entry);
 
   try {
-    return await promise;
+    return await awaitWithRequestAbort(promise);
   } finally {
-    inFlightRequests.delete(cacheKey);
+    if (inFlightRequests.get(cacheKey) === entry) inFlightRequests.delete(cacheKey);
   }
 }
 
@@ -182,12 +202,15 @@ function doBackgroundRevalidation(
   if (inFlightRequests.has(cacheKey)) return;
 
   const promise = executeImdbFetch(ep, url, cacheKey, freshnessKey, cacheTtl, retries);
-  inFlightRequests.set(cacheKey, promise);
+  const entry = { promise, signal: getRequestSignal() };
+  inFlightRequests.set(cacheKey, entry);
   promise
-    .catch((err) =>
-      log.warn('IMDb background revalidation failed', { error: (err as Error).message })
-    )
-    .finally(() => inFlightRequests.delete(cacheKey));
+    .catch((err) => {
+      if (!entry.signal?.aborted) log.warn('IMDb background revalidation failed', { error: err });
+    })
+    .finally(() => {
+      if (inFlightRequests.get(cacheKey) === entry) inFlightRequests.delete(cacheKey);
+    });
 }
 
 async function executeImdbFetch(
@@ -208,27 +231,25 @@ async function executeImdbFetch(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      throwIfRequestAborted();
       const throttle = getImdbThrottle();
       await throttle.acquire();
 
-      const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), FETCH_TIMEOUT_MS);
-
+      throwIfRequestAborted();
+      const requestSignal = getRequestSignal();
       const fetchStart = Date.now();
-      let response;
-      try {
-        response = await fetch(url.toString(), {
-          signal: abortController.signal as RequestInit['signal'],
-          headers: {
-            [keyHeader]: apiKey,
-            [hostHeader]: apiHost,
-            Accept: 'application/json',
-            ...getCallerHeaders(),
-          },
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
+      const response = await fetch(url.toString(), {
+        signal: AbortSignal.any([
+          AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          ...(requestSignal ? [requestSignal] : []),
+        ]),
+        headers: {
+          [keyHeader]: apiKey,
+          [hostHeader]: apiHost,
+          Accept: 'application/json',
+          ...getCallerHeaders(),
+        },
+      });
       const fetchDuration = Date.now() - fetchStart;
 
       if (!response.ok) {
@@ -238,7 +259,7 @@ async function executeImdbFetch(
             if (retryAfter) {
               const waitMs = Math.min(parseInt(retryAfter) * 1000, 10000) || 1000;
               log.warn('IMDb 429 — respecting Retry-After', { retryAfter, waitMs });
-              await new Promise((resolve) => setTimeout(resolve, waitMs));
+              await delay(waitMs, undefined, { signal: getRequestSignal() });
             }
           }
           throw new Error(`IMDb API retryable error: ${response.status}`);
@@ -254,6 +275,7 @@ async function executeImdbFetch(
       }
 
       const data: unknown = await response.json();
+      throwIfRequestAborted();
       recordCircuitSuccess();
 
       log.debug('IMDb API response', {
@@ -272,12 +294,13 @@ async function executeImdbFetch(
       } catch (cacheErr) {
         log.warn('Failed to cache IMDb response', {
           key: cacheKey.substring(0, 80),
-          error: (cacheErr as Error).message,
+          error: cacheErr,
         });
       }
 
       return data;
     } catch (err) {
+      throwIfRequestAborted();
       const error = err as ImdbFetchError;
       lastError = error;
       const isNetworkError =
@@ -288,12 +311,12 @@ async function executeImdbFetch(
         error.name === 'FetchError';
 
       if (attempt < retries && isNetworkError) {
-        const delay = 300 * Math.pow(2, attempt);
-        log.warn(`IMDb request failed, retrying in ${delay}ms`, {
+        const delayMs = 300 * Math.pow(2, attempt);
+        log.warn(`IMDb request failed, retrying in ${delayMs}ms`, {
           attempt: attempt + 1,
-          error: error.message,
+          error,
         });
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await delay(delayMs, undefined, { signal: getRequestSignal() });
         continue;
       }
 
@@ -313,7 +336,7 @@ async function executeImdbFetch(
     });
   } else {
     log.error('IMDb fetch error after retries', {
-      error: lastError.message,
+      error: lastError,
       endpoint: ep.slice(0, 80),
       statusCode: lastError.statusCode,
       requestId: getRequestId(),

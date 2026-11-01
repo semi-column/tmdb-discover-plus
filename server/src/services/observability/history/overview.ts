@@ -1,6 +1,12 @@
 import { LATENCY_BUCKETS } from '../collector.ts';
 import { histPercentile, type TimeRange } from '../liveQueries.ts';
 
+export interface ExactPercentiles {
+  p50Ms: number | null;
+  p95Ms: number | null;
+  p99Ms: number | null;
+}
+
 export interface OverviewBucket {
   bucket: number;
   requests: number;
@@ -11,6 +17,8 @@ export interface OverviewBucket {
   cacheHits: number;
   cacheMisses: number;
   histogram: number[];
+  p95Ms?: number | null;
+  sampled?: boolean;
 }
 
 export interface OverviewBreakdown {
@@ -23,6 +31,8 @@ export interface OverviewLogBucket {
   bucket: number;
   errors: number;
   warnings: number;
+  userConfigErrors?: number;
+  userConfigWarnings?: number;
 }
 
 export interface UpstreamOverviewBucket {
@@ -32,8 +42,11 @@ export interface UpstreamOverviewBucket {
   errors: number;
   rateLimited: number;
   timeouts: number;
+  rejected?: number;
+  cancelled?: number;
   duration: number;
   histogram: number[];
+  p95Ms?: number | null;
 }
 
 export function buildHistoryOverview(
@@ -43,8 +56,14 @@ export function buildHistoryOverview(
   statuses: Array<{ status: number; count: number }>,
   breakdownRows: OverviewBreakdown[],
   logBuckets: OverviewLogBucket[],
-  logCounts: { errors: number; warnings: number },
-  uniqueUsers: number
+  logCounts: {
+    errors: number;
+    warnings: number;
+    userConfigErrors?: number;
+    userConfigWarnings?: number;
+  },
+  uniqueUsers: number,
+  percentiles?: ExactPercentiles
 ) {
   const toNumber = (value: unknown, fallback = 0): number => {
     const number = Number(value);
@@ -66,6 +85,7 @@ export function buildHistoryOverview(
     p99Ms: optionalNumber(row.p99Ms ?? row.p99_ms),
     maxMs: optionalNumber(row.maxMs ?? row.max_ms),
     avgUpstreamCalls: optionalNumber(row.avgUpstreamCalls ?? row.avg_upstream_calls),
+    percentilesApproximate: Boolean(row.percentilesApproximate ?? row.approximatePercentiles),
   }));
   const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
   const start = Math.floor(range.from / bucketMs);
@@ -105,7 +125,7 @@ export function buildHistoryOverview(
     series.errors4xx.push(bucket?.errors4xx ?? 0);
     series.slow.push(bucket?.slow ?? 0);
     series.avgMs.push(bucket?.requests ? Math.round(bucket.duration / bucket.requests) : null);
-    series.p95Ms.push(bucket ? histPercentile(bucket.histogram, 0.95) : null);
+    series.p95Ms.push(bucket ? (bucket.p95Ms ?? histPercentile(bucket.histogram, 0.95)) : null);
     series.logErrors.push(logsByBucket.get(index)?.errors ?? 0);
     series.logWarnings.push(logsByBucket.get(index)?.warnings ?? 0);
     if (!bucket) continue;
@@ -136,6 +156,9 @@ export function buildHistoryOverview(
   const cacheLookups = totals.cacheHits + totals.cacheMisses;
 
   return {
+    percentilesApproximate: !percentiles || buckets.some((bucket) => bucket.sampled),
+    // Legacy history retained capped samples; occurrences cannot recover events already discarded.
+    logCountBasis: 'recorded_occurrences' as const,
     range: { from: range.from, to: range.to, resolution: range.kind === 'm' ? 'minute' : 'hour' },
     totals: {
       requests: Math.round(totals.requests),
@@ -144,12 +167,14 @@ export function buildHistoryOverview(
       errorRate: totals.requests ? totals.errors5xx / totals.requests : 0,
       slow: Math.round(totals.slow),
       avgMs: totals.requests ? Math.round(totals.duration / totals.requests) : null,
-      p50Ms: histPercentile(histogram, 0.5),
-      p95Ms: histPercentile(histogram, 0.95),
-      p99Ms: histPercentile(histogram, 0.99),
+      p50Ms: percentiles ? percentiles.p50Ms : histPercentile(histogram, 0.5),
+      p95Ms: percentiles ? percentiles.p95Ms : histPercentile(histogram, 0.95),
+      p99Ms: percentiles ? percentiles.p99Ms : histPercentile(histogram, 0.99),
       cacheHitRate: cacheLookups ? totals.cacheHits / cacheLookups : null,
       logErrors: logCounts.errors,
       logWarnings: logCounts.warnings,
+      userConfigErrors: logCounts.userConfigErrors ?? 0,
+      userConfigWarnings: logCounts.userConfigWarnings ?? 0,
       uniqueUsers,
     },
     latencyHistogram: { bounds: LATENCY_BUCKETS, counts: histogram },
@@ -178,7 +203,11 @@ export function buildHistoryOverview(
   };
 }
 
-export function buildHistoryUpstreamOverview(range: TimeRange, rows: UpstreamOverviewBucket[]) {
+export function buildHistoryUpstreamOverview(
+  range: TimeRange,
+  rows: UpstreamOverviewBucket[],
+  percentiles?: Map<string, ExactPercentiles>
+) {
   const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
   const start = Math.floor(range.from / bucketMs);
   const end = Math.floor(range.to / bucketMs);
@@ -200,12 +229,17 @@ export function buildHistoryUpstreamOverview(range: TimeRange, rows: UpstreamOve
       let errors = 0;
       let rateLimited = 0;
       let timeouts = 0;
+      let rejected = 0;
+      let cancelled = 0;
       let duration = 0;
       const series = {
         t: [] as number[],
         calls: [] as number[],
         errors: [] as number[],
+        rejected: [] as number[],
+        cancelled: [] as number[],
         avgMs: [] as Array<number | null>,
+        p95Ms: [] as Array<number | null>,
       };
 
       for (let index = start; index <= end; index++) {
@@ -213,12 +247,17 @@ export function buildHistoryUpstreamOverview(range: TimeRange, rows: UpstreamOve
         series.t.push((index * bucketMs) / 1000);
         series.calls.push(bucket?.calls ?? 0);
         series.errors.push(bucket?.errors ?? 0);
+        series.rejected.push(bucket?.rejected ?? 0);
+        series.cancelled.push(bucket?.cancelled ?? 0);
         series.avgMs.push(bucket?.calls ? Math.round(bucket.duration / bucket.calls) : null);
+        series.p95Ms.push(bucket ? (bucket.p95Ms ?? histPercentile(bucket.histogram, 0.95)) : null);
         if (!bucket) continue;
         calls += bucket.calls;
         errors += bucket.errors;
         rateLimited += bucket.rateLimited;
         timeouts += bucket.timeouts;
+        rejected += bucket.rejected ?? 0;
+        cancelled += bucket.cancelled ?? 0;
         duration += bucket.duration;
         bucket.histogram.forEach((value, i) => {
           histogram[i] += value;
@@ -227,15 +266,18 @@ export function buildHistoryUpstreamOverview(range: TimeRange, rows: UpstreamOve
 
       return {
         provider,
+        percentilesApproximate: !percentiles?.has(provider),
         calls,
         errors,
         rateLimited,
         timeouts,
+        rejected,
+        cancelled,
         errorRate: calls ? errors / calls : 0,
         avgMs: calls ? Math.round(duration / calls) : null,
-        p50Ms: histPercentile(histogram, 0.5),
-        p95Ms: histPercentile(histogram, 0.95),
-        p99Ms: histPercentile(histogram, 0.99),
+        p50Ms: percentiles?.get(provider)?.p50Ms ?? histPercentile(histogram, 0.5),
+        p95Ms: percentiles?.get(provider)?.p95Ms ?? histPercentile(histogram, 0.95),
+        p99Ms: percentiles?.get(provider)?.p99Ms ?? histPercentile(histogram, 0.99),
         series,
       };
     })

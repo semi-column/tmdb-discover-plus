@@ -12,6 +12,7 @@ it('distinguishes transport errors, expected lookup misses, and actionable acces
   expect(upstreamOutcome(404)).toMatchObject({ tone: 'muted', label: 'Not found' });
   expect(upstreamOutcome(401)).toMatchObject({ tone: 'bad', label: 'Access rejected' });
   expect(upstreamOutcome(429).label).toBe('Rate limited');
+  expect(upstreamOutcome(0, true)).toMatchObject({ label: 'Cancelled', tone: 'muted' });
 });
 
 it('does not turn a successful parent response into a failed response or claim recovery', () => {
@@ -21,4 +22,7 @@ it('does not turn a successful parent response into a failed response or claim r
   expect(result.detail).toContain('not confirmed');
   expect(requestOutcome({ status: 503 }).tone).toBe('bad');
   expect(requestOutcome({ status: 200 }).label).toBe('HTTP response completed');
+  expect(requestOutcome({ status: 200 }, [{ status: 0, cancelled: true }]).label).toBe(
+    'HTTP response completed'
+  );
 });

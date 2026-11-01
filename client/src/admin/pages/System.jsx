@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { adminApi } from '../api.js';
 import { useAsync } from '../hooks.js';
 import { TimeChart } from '../components/TimeChart.jsx';
@@ -21,6 +21,7 @@ function seriesByInstance(rows, pick) {
 }
 
 export function System({ range, rangeParams = { range }, onSelectRange, meta }) {
+  const [showGone, setShowGone] = useState(false);
   const { data, error, loading } = useAsync(
     () => adminApi.system(rangeParams),
     [range, rangeParams.from, rangeParams.to],
@@ -47,7 +48,23 @@ export function System({ range, rangeParams = { range }, onSelectRange, meta }) 
   return (
     <div className="adm-stack">
       <ErrorNote error={error} />
-      <Panel title={meta?.capabilities?.sharedLive ? 'Instances' : 'This instance'}>
+      <Panel
+        title={meta?.capabilities?.sharedLive ? 'Instances' : 'This instance'}
+        actions={
+          <label>
+            <input
+              type="checkbox"
+              checked={showGone}
+              onChange={(e) => setShowGone(e.target.checked)}
+            />{' '}
+            Show gone instances (last 24h)
+          </label>
+        }
+      >
+        <p className="adm-muted">
+          Collector counters are cumulative since each process started; gone instances have no fresh
+          counters.
+        </p>
         <div className="adm-table-wrap">
           <table className="adm-table">
             <thead>
@@ -62,40 +79,76 @@ export function System({ range, rangeParams = { range }, onSelectRange, meta }) 
                 <th className="num">Loop p99</th>
                 <th>TMDB circuit</th>
                 <th>Cache</th>
+                <th>Collector loss / failures</th>
               </tr>
             </thead>
             <tbody>
-              {(data?.instances || []).map((inst) => {
-                const s = inst.sample;
-                // The server only returns a sample for instances that heartbeated in the last 90s.
-                const fresh = !!s;
-                return (
-                  <tr key={inst.instance}>
-                    <td className="mono">{inst.instance}</td>
-                    <td>
-                      <Badge tone={fresh ? 'good' : 'muted'}>
-                        {fresh ? 'up' : `gone · ${fmtAgo(inst.lastSeen)}`}
-                      </Badge>
-                    </td>
-                    <td>{s?.version ?? '–'}</td>
-                    <td className="num">{s ? `${Math.round(s.uptimeSec / 3600)}h` : '–'}</td>
-                    <td className="num">{s ? `${s.heapUsedMb} MB` : '–'}</td>
-                    <td className="num">{s ? `${s.rssMb} MB` : '–'}</td>
-                    <td className="num">{s ? `${s.cpuPct}%` : '–'}</td>
-                    <td className="num">{s ? fmtMs(s.eventLoop?.p99Ms) : '–'}</td>
-                    <td>
-                      {s?.tmdbCircuit ? (
-                        <Badge tone={s.tmdbCircuit.state === 'open' ? 'bad' : 'good'}>
-                          {s.tmdbCircuit.state}
+              {(data?.instances || [])
+                .filter((inst) => showGone || inst.sample)
+                .map((inst) => {
+                  const s = inst.sample;
+                  // The server only returns a sample for instances that heartbeated in the last 90s.
+                  const fresh = !!s;
+                  return (
+                    <tr key={inst.instance}>
+                      <td className="mono">{inst.instance}</td>
+                      <td>
+                        <Badge tone={fresh ? 'good' : 'muted'}>
+                          {fresh ? 'up' : `gone · ${fmtAgo(inst.lastSeen)}`}
                         </Badge>
-                      ) : (
-                        '–'
-                      )}
-                    </td>
-                    <td className="mono">{s?.cache?.driver ?? '–'}</td>
-                  </tr>
-                );
-              })}
+                      </td>
+                      <td>{s?.version ?? '–'}</td>
+                      <td className="num">{s ? `${Math.round(s.uptimeSec / 3600)}h` : '–'}</td>
+                      <td className="num">{s ? `${s.heapUsedMb} MB` : '–'}</td>
+                      <td className="num">{s ? `${s.rssMb} MB` : '–'}</td>
+                      <td className="num">{s ? `${s.cpuPct}%` : '–'}</td>
+                      <td className="num">{s ? fmtMs(s.eventLoop?.p99Ms) : '–'}</td>
+                      <td>
+                        {s?.tmdbCircuit ? (
+                          <Badge tone={s.tmdbCircuit.state === 'open' ? 'bad' : 'good'}>
+                            {s.tmdbCircuit.state}
+                          </Badge>
+                        ) : (
+                          '–'
+                        )}
+                      </td>
+                      <td className="mono">{s?.cache?.driver ?? '–'}</td>
+                      <td>
+                        {s?.collector ? (
+                          <details>
+                            <summary>
+                              {fmtInt(
+                                Object.values(s.collector.dropped || {}).reduce(
+                                  (sum, count) => sum + Number(count),
+                                  0
+                                )
+                              )}{' '}
+                              omitted /{' '}
+                              {fmtInt(
+                                (s.collector.failedWrites?.historyBatches || 0) +
+                                  (s.collector.failedWrites?.liveBatches || 0)
+                              )}{' '}
+                              failed batches
+                            </summary>
+                            <pre className="adm-pre">
+                              {JSON.stringify(
+                                {
+                                  dropped: s.collector.dropped,
+                                  failedWrites: s.collector.failedWrites,
+                                  lastFlushError: s.collector.lastFlushError,
+                                },
+                                null,
+                                2
+                              )}
+                            </pre>
+                          </details>
+                        ) : (
+                          'Unavailable'
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
@@ -122,7 +175,7 @@ export function System({ range, rangeParams = { range }, onSelectRange, meta }) 
             </Panel>
           </div>
           <div className="adm-grid-2">
-            <Panel title="Event loop delay p99 (ms)">
+            <Panel title="Event loop delay p99 (ms; 20ms sampling resolution)">
               <TimeChart
                 data={charts.loop.data}
                 series={charts.loop.series}
@@ -169,7 +222,7 @@ export function System({ range, rangeParams = { range }, onSelectRange, meta }) 
             />
             {c && (
               <StatCard
-                label="Last flush"
+                label={`Last flush · ${meta.collectorScope || meta.instance}`}
                 value={c.lastFlushAt ? fmtAgo(c.lastFlushAt) : '–'}
                 sub={`${fmtMs(c.lastFlushMs)} · ${fmtInt(rawOmitted)} raw records omitted · ${fmtInt(c.dropped?.tail)} live-tail entries omitted · ${fmtInt(c.failedWrites?.liveBatches)} live / ${fmtInt(c.failedWrites?.historyBatches)} history batches failed (${fmtInt(c.failedWrites?.historyRecords)} records involved)`}
                 tone={
@@ -183,6 +236,17 @@ export function System({ range, rangeParams = { range }, onSelectRange, meta }) 
               />
             )}
           </div>
+          <p className="adm-muted">
+            Flush totals above cover the responding process only. Use the per-instance rows for
+            fleet coverage. Missing heartbeats are not zero loss.
+          </p>
+          <p className="adm-muted">
+            Health thresholds are checked every {meta.alerting?.evaluationSeconds ?? 60}s.
+            {meta.alerting?.webhookConfigured
+              ? ' Webhook notifications configured.'
+              : ' Webhook delivery is off; set OBS_ALERT_WEBHOOK_URL for external notifications. Threshold breaches are logged.'}
+          </p>
+          <ErrorNote error={meta.alerting?.error} />
           {c?.lastFlushError && (
             <div className="adm-alert adm-tone-warn">Last flush problem: {c.lastFlushError}</div>
           )}

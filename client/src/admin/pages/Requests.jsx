@@ -14,6 +14,10 @@ const FILTER_KEYS = [
   'country',
   'instance',
   'minMs',
+  'maxMs',
+  'minUpstreamCalls',
+  'sort',
+  'userHash',
   'userId',
   'requestId',
   'q',
@@ -132,7 +136,8 @@ function RequestList({ rangeParams, filters, onOpenTrace }) {
     setLoadingMore(true);
     setMoreError(null);
     try {
-      const next = await adminApi.requests({ ...rangeParams, ...filters, cursor, limit: 100 });
+      const bounds = first.data?.range ? { range: 'custom', ...first.data.range } : rangeParams;
+      const next = await adminApi.requests({ ...bounds, ...filters, cursor, limit: 100 });
       setMore((m) => ({ rows: [...m.rows, ...next.rows], cursor: next.nextCursor }));
     } catch (err) {
       setMoreError(err);
@@ -142,7 +147,9 @@ function RequestList({ rangeParams, filters, onOpenTrace }) {
   };
 
   return (
-    <Panel title={`Requests${rows.length ? ` (${fmtInt(rows.length)}${cursor ? '+' : ''})` : ''}`}>
+    <Panel
+      title={`Requests (${fmtInt(rows.length)} shown${first.data?.total != null ? ` / ${fmtInt(first.data.total)} stored matches` : cursor ? '+' : ''})`}
+    >
       <ErrorNote error={first.error} />
       {first.loading && !rows.length ? (
         <Loading />
@@ -239,7 +246,10 @@ export function Requests({ range, rangeParams = { range }, params, onOpenTrace, 
         {[
           ['All responses', {}],
           ['HTTP failures', { status: '5xx' }],
-          ['Slow responses', { minMs: 1500 }],
+          ['Rejected responses', { status: '4xx' }],
+          ['Unmatched routes', { route: '(unmatched)' }],
+          ['Slow responses', { minMs: meta?.slowMs ?? 1500, sort: 'duration' }],
+          ['Heaviest requests', { sort: 'upstream' }],
           ['5xx or logged errors', { errorsOnly: 'true' }],
         ].map(([label, preset]) => (
           <button
@@ -328,6 +338,17 @@ export function Requests({ range, rangeParams = { range }, params, onOpenTrace, 
             }
           >
             <div className="adm-filters">
+              <label className="adm-filter">
+                <span>Sort by</span>
+                <select
+                  value={filters.sort || 'newest'}
+                  onChange={(e) => setFilter('sort', e.target.value)}
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="duration">Longest duration</option>
+                  <option value="upstream">Most upstream calls</option>
+                </select>
+              </label>
               <FacetSelect
                 label="Route"
                 name="route"
@@ -419,6 +440,29 @@ export function Requests({ range, rangeParams = { range }, params, onOpenTrace, 
                 name="minMs"
                 type="number"
                 value={filters.minMs}
+                onChange={setFilter}
+              />
+              <TextFilter
+                key={`maxMs:${filters.maxMs}`}
+                label="Max duration (ms)"
+                name="maxMs"
+                type="number"
+                value={filters.maxMs}
+                onChange={setFilter}
+              />
+              <TextFilter
+                key={`minUpstreamCalls:${filters.minUpstreamCalls}`}
+                label="Min upstream calls"
+                name="minUpstreamCalls"
+                type="number"
+                value={filters.minUpstreamCalls}
+                onChange={setFilter}
+              />
+              <TextFilter
+                key={`userHash:${filters.userHash}`}
+                label="Config hash"
+                name="userHash"
+                value={filters.userHash}
                 onChange={setFilter}
               />
               <TextFilter

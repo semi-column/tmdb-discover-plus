@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
@@ -20,6 +20,7 @@ const {
   mockTmdbToMeta,
   mockTmdbGetDetails,
   mockTmdbFullMeta,
+  mockTmdbSpecialList,
   mockBuildArtworkOptions,
 } = vi.hoisted(() => ({
   mockCacheGet: vi.fn(),
@@ -39,6 +40,7 @@ const {
   mockTmdbToMeta: vi.fn(),
   mockTmdbGetDetails: vi.fn(),
   mockTmdbFullMeta: vi.fn(),
+  mockTmdbSpecialList: vi.fn(),
   mockBuildArtworkOptions: vi.fn(),
 }));
 
@@ -78,6 +80,7 @@ vi.mock('../../src/services/tmdb/index.ts', () => ({
   toStremioMetaPreview: mockTmdbToMeta,
   getDetails: mockTmdbGetDetails,
   toStremioFullMeta: mockTmdbFullMeta,
+  fetchSpecialList: mockTmdbSpecialList,
 }));
 
 vi.mock('../../src/services/kitsu/index.ts', () => ({
@@ -160,9 +163,13 @@ import { addonRouter } from '../../src/routes/addon.ts';
 import { etagMiddleware } from '../../src/utils/etag.ts';
 import { CacheWrapper } from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter } from './helpers/mocks.ts';
+import { AppError, ErrorCodes } from '../../src/utils/AppError.ts';
+import { setLogSink } from '../../src/utils/logger.ts';
+import { requestIdMiddleware, abortRequestContext } from '../../src/utils/requestContext.ts';
 
 const genrelessMeta = { id: 'genreless', genres: [] };
 const knownGenreMeta = { id: 'known', genres: ['Drama'] };
+afterEach(() => setLogSink(null));
 
 const sourceHandlers = [
   { source: 'anilist', type: 'anime', handler: handleAnilistCatalogRequest },
@@ -207,6 +214,24 @@ beforeEach(() => {
 });
 
 describe.each(sourceHandlers)('$source catalog handler', ({ source, type, handler }) => {
+  it('does not send a second response after cancellation while loading config', async () => {
+    mockGetUserConfig.mockImplementationOnce(async () => {
+      abortRequestContext();
+      return null;
+    });
+    const res = { json: vi.fn(), set: vi.fn(), etagJson: vi.fn(), setHeader: vi.fn() };
+    await new Promise<void>((resolve, reject) => {
+      requestIdMiddleware()({ headers: {} } as any, res as any, () => {
+        handler('test-user', type, `${source}-test`, {}, res as never, {} as never).then(
+          resolve,
+          reject
+        );
+      });
+    });
+    expect(res.json).not.toHaveBeenCalled();
+    expect(res.set).not.toHaveBeenCalled();
+  });
+
   it.each([true, false])(
     'applies the catalog flag when excludeUnknownGenres=$enabled',
     async (enabled) => {
@@ -238,6 +263,49 @@ describe.each(sourceHandlers)('$source catalog handler', ({ source, type, handle
 });
 
 describe('TMDB catalog route', () => {
+  it('returns an explicit validation error on every request for an invalid collection', async () => {
+    const warnings: Array<Record<string, unknown> | null> = [];
+    setLogSink((_level, _context, message, data) => {
+      if (message === 'Invalid catalog configuration') warnings.push(data);
+    });
+    const cache = new CacheWrapper(new MockCacheAdapter());
+    mockCacheWrap.mockImplementation(cache.wrap.bind(cache));
+    mockTmdbSpecialList.mockRejectedValue(
+      new AppError(
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        'A valid collection ID is required for collection list type'
+      )
+    );
+    mockGetUserConfig.mockResolvedValue({
+      preferences: {},
+      catalogs: [
+        {
+          catalogId: 'tmdb-invalid',
+          type: 'movie',
+          name: 'Invalid',
+          filters: { listType: 'collection' },
+        },
+      ],
+    });
+    const app = express();
+    app.use(addonRouter);
+    for (let i = 0; i < 2; i++) {
+      const response = await request(app).get('/testuser/catalog/movie/tmdb-invalid.json');
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe('VALIDATION_ERROR');
+    }
+    expect(mockTmdbSpecialList).toHaveBeenCalledTimes(2);
+    expect(warnings).toHaveLength(2);
+    for (const warning of warnings) {
+      expect(warning).toMatchObject({
+        classification: 'user_config',
+        code: 'VALIDATION_ERROR',
+        error: { statusCode: 400 },
+      });
+    }
+  });
+
   it.each([true, false])(
     'applies the catalog flag when excludeUnknownGenres=$enabled',
     async (enabled) => {

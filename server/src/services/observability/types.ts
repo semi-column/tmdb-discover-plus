@@ -38,6 +38,7 @@ export interface UpstreamEvent {
   durationMs: number;
   error: string;
   timedOut: boolean;
+  cancelled?: boolean;
 }
 
 export interface ErrorEvent {
@@ -50,6 +51,9 @@ export interface ErrorEvent {
   requestId: string;
   instance: string;
   route: string;
+  /** Number of occurrences represented by this retained sample. Old rows represent one. */
+  occurrences?: number;
+  classification?: string;
 }
 
 export interface SystemSample {

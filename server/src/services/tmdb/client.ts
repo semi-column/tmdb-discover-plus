@@ -3,7 +3,13 @@ import { CachedError, classifyError } from '../cache/CacheWrapper.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { getTmdbThrottle, RATE_LIMITER_TIMEOUT_CODE } from '../../infrastructure/tmdbThrottle.ts';
 import { config } from '../../config.ts';
-import { getRequestId } from '../../utils/requestContext.ts';
+import {
+  getRequestId,
+  getRequestSignal,
+  throwIfRequestAborted,
+  awaitWithRequestAbort,
+} from '../../utils/requestContext.ts';
+import { setTimeout as delay } from 'node:timers/promises';
 import { TIMEOUTS, CONCURRENCY, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
 import { CACHE_TTLS, tmdbResponseTtl } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
@@ -20,7 +26,7 @@ const log = createLogger('tmdb:client') as Logger;
 const FETCH_TIMEOUT_MS = TIMEOUTS.TMDB_FETCH_MS;
 const MAX_IN_FLIGHT = CONCURRENCY.MAX_IN_FLIGHT;
 
-const inFlightRequests = new Map<string, Promise<unknown>>();
+const inFlightRequests = new Map<string, { promise: Promise<unknown>; signal?: AbortSignal }>();
 
 const CIRCUIT_BREAKER = {
   threshold: CIRCUIT_BREAKER_DEFAULTS.THRESHOLD,
@@ -124,6 +130,7 @@ export async function tmdbFetch(
   params: TmdbApiParams = {},
   retries: number = 3
 ): Promise<unknown> {
+  throwIfRequestAborted();
   const ep = normalizeEndpoint(endpoint);
   const url = new URL(TMDB_API_ORIGIN);
   url.pathname = `${TMDB_API_BASE_PATH}${ep}`;
@@ -173,17 +180,25 @@ export async function tmdbFetch(
 
   const existingRequest = inFlightRequests.get(cacheKey);
   if (existingRequest) {
-    return existingRequest;
+    try {
+      return await awaitWithRequestAbort(existingRequest.promise);
+    } catch (error) {
+      throwIfRequestAborted();
+      if (!existingRequest.signal?.aborted) throw error;
+      if (inFlightRequests.get(cacheKey) === existingRequest) inFlightRequests.delete(cacheKey);
+      return tmdbFetch(endpoint, apiKey, params, retries);
+    }
   }
 
   const requestPromise = _tmdbFetchInner(url, cacheKey, retries);
+  const entry = { promise: requestPromise, signal: getRequestSignal() };
 
   if (inFlightRequests.size < MAX_IN_FLIGHT) {
-    inFlightRequests.set(cacheKey, requestPromise);
+    inFlightRequests.set(cacheKey, entry);
   }
 
-  return requestPromise.finally(() => {
-    inFlightRequests.delete(cacheKey);
+  return awaitWithRequestAbort(requestPromise).finally(() => {
+    if (inFlightRequests.get(cacheKey) === entry) inFlightRequests.delete(cacheKey);
   });
 }
 
@@ -198,6 +213,7 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
 
   try {
     const cached = (await cache.getEntry(cacheKey)) as Record<string, unknown> | null;
+    throwIfRequestAborted();
     if (cached !== null && cached !== undefined) {
       if (cached.__errorType) {
         throw new CachedError(
@@ -209,15 +225,17 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       return cached;
     }
   } catch (err) {
+    throwIfRequestAborted();
     if (err instanceof CachedError) throw err;
     const cacheErr = err as Error;
-    log.warn('Cache get failed', { error: cacheErr.message });
+    log.warn('Cache get failed', { error: cacheErr });
   }
 
   let lastError: TmdbFetchError | undefined;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      throwIfRequestAborted();
       if (config.tmdb.debug) {
         log.debug(`TMDB request (attempt ${attempt + 1})`, { url: redactTmdbUrl(url.toString()) });
       }
@@ -225,23 +243,19 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       const throttle = getTmdbThrottle();
       await throttle.acquire();
 
-      const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), FETCH_TIMEOUT_MS);
-
-      const fetchStart = Date.now();
-      let response;
-      try {
-        response = await fetch(url.toString(), {
-          signal: abortController.signal as RequestInit['signal'],
-          headers: {
-            Accept: 'application/json',
-            'User-Agent': 'TMDB-Discover-Plus/2.10.5',
-          },
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-      const fetchDuration = Date.now() - fetchStart;
+      throwIfRequestAborted();
+      const requestSignal = getRequestSignal();
+      const signal = AbortSignal.any([
+        AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        ...(requestSignal ? [requestSignal] : []),
+      ]);
+      const response = await fetch(url.toString(), {
+        signal,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'TMDB-Discover-Plus/2.10.5',
+        },
+      });
 
       if (!response.ok) {
         if (response.status >= 500 || response.status === 429) {
@@ -250,7 +264,7 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
             const waitMs = retryAfter ? Math.min(parseInt(retryAfter) * 1000, 10000) || 1000 : 1000;
             log.warn('TMDB 429 — respecting Retry-After', { retryAfter, waitMs });
             throttle.notifyRateLimited(waitMs);
-            await new Promise((resolve) => setTimeout(resolve, waitMs));
+            await delay(waitMs, undefined, { signal: getRequestSignal() });
           }
           throw new Error(`TMDB API retryable error: ${response.status}`);
         }
@@ -266,6 +280,7 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       }
 
       const data: unknown = await response.json();
+      throwIfRequestAborted();
       recordCircuitSuccess();
 
       try {
@@ -277,12 +292,13 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       } catch (cacheErr) {
         log.warn('Failed to cache TMDB response', {
           key: cacheKey,
-          error: (cacheErr as Error).message,
+          error: cacheErr,
         });
       }
 
       return data;
     } catch (err) {
+      throwIfRequestAborted();
       const error = err as TmdbFetchError;
       lastError = error;
       const networkCode = error.code ?? (error.cause as { code?: string } | undefined)?.code;
@@ -302,12 +318,12 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
         error.name === 'TimeoutError';
 
       if (attempt < retries && isNetworkError) {
-        const delay = 300 * Math.pow(2, attempt);
-        log.warn(`TMDB request failed, retrying in ${delay}ms`, {
+        const delayMs = 300 * Math.pow(2, attempt);
+        log.warn(`TMDB request failed, retrying in ${delayMs}ms`, {
           attempt: attempt + 1,
-          error: redactTmdbUrl(error.message),
+          error,
         });
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await delay(delayMs, undefined, { signal: getRequestSignal() });
         continue;
       }
 
@@ -323,7 +339,7 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
     });
   } else {
     log.error('TMDB fetch error after retries', {
-      error: redactTmdbUrl(lastError!.message),
+      error: lastError,
       endpoint: url.pathname.slice(0, 80),
       statusCode: lastError!.statusCode,
       requestId: getRequestId(),
@@ -357,15 +373,16 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       lastError!.code === 'ETIMEDOUT' ||
       lastError!.name === 'FetchError' ||
       lastError!.name === 'AbortError' ||
+      lastError!.name === 'TimeoutError' ||
       lastError!.name === 'TypeError' ||
       lastError!.message.includes('fetch failed'));
-  if (!isAuthError && !isTransientNetworkError) {
+  if (!isAuthError && !isTransientNetworkError && !isRateLimiterTimeout) {
     try {
       await cache.setError(cacheKey, errorType, lastError!.message);
     } catch (e) {
       log.debug('Failed to cache error response', {
         cacheKey: cacheKey.slice(0, 60),
-        error: (e as Error).message,
+        error: e,
       });
     }
   }
@@ -377,6 +394,7 @@ export async function tmdbWebsiteFetchJson(
   endpoint: string,
   params: TmdbApiParams = {}
 ): Promise<unknown> {
+  throwIfRequestAborted();
   const ep = normalizeEndpoint(endpoint);
   const url = new URL(TMDB_SITE_ORIGIN);
   url.pathname = ep;
@@ -403,6 +421,10 @@ export async function tmdbWebsiteFetchJson(
   await throttle.acquire();
 
   const response = await fetch(url.toString(), {
+    signal: AbortSignal.any([
+      AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      ...(getRequestSignal() ? [getRequestSignal()!] : []),
+    ]),
     headers: {
       Accept: 'application/json, text/plain, */*',
       'X-Requested-With': 'XMLHttpRequest',
@@ -415,6 +437,7 @@ export async function tmdbWebsiteFetchJson(
   }
 
   const text = await response.text();
+  throwIfRequestAborted();
   const trimmed = text.trim();
   const data: unknown = trimmed ? JSON.parse(trimmed) : null;
 
@@ -423,7 +446,7 @@ export async function tmdbWebsiteFetchJson(
   } catch (err) {
     log.warn('Failed to cache TMDB website response', {
       key: cacheKey,
-      error: (err as Error).message,
+      error: err,
     });
   }
 

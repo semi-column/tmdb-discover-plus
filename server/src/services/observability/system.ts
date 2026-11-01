@@ -7,6 +7,7 @@ import { getConfigCache } from '../../infrastructure/configCache.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 
 const MB = 1024 * 1024;
+const startedAt = Math.round(Date.now() - process.uptime() * 1000);
 
 export function startSystemSampler(
   intervalMs: number,
@@ -47,6 +48,7 @@ export function startSystemSampler(
           maxMs: Math.round(loop.max / 1e4) / 100,
         },
         uptimeSec: Math.round(process.uptime()),
+        startedAt,
         cache: safe(() => getCacheStatus()),
         configCache: safe(() => getConfigCache().getStats()),
         tmdbThrottle: safe(() => getTmdbThrottle().getStats()),

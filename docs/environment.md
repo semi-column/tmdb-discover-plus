@@ -117,19 +117,47 @@ It uses whatever the app already runs on, with no extra services:
 | Redis          |                                                                     | `obs:*` keys, shared by all instances                  |
 | No Redis       |                                                                     | In memory, this instance only (fine for one container) |
 
-| Variable                   | Description                                                                                                                                                                                            | Default      |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
-| `ADMIN_USERNAME`           | Admin login name                                                                                                                                                                                       | _(disabled)_ |
-| `ADMIN_PASSWORD`           | Admin password, at least 16 characters. Set it like any other secret env var. Changing it signs out every admin session                                                                                | _(disabled)_ |
-| `ADMIN_PASSWORD_HASH`      | Optional alternative to `ADMIN_PASSWORD` if you prefer not to keep the plain password in env (from `npm run admin:hash`). Takes precedence                                                             | _(unset)_    |
-| `ADMIN_TOTP_SECRET`        | Optional base32 secret to require an authenticator code. Generate it in the dashboard under **Security** after signing in                                                                              | _(off)_      |
-| `ADMIN_ALLOWED_IPS`        | Optional comma-separated IPs/CIDRs allowed to reach the admin                                                                                                                                          | _(any)_      |
-| `TRUST_CLOUDFLARE_HEADERS` | Set to `true` only when Cloudflare proxies the app. Enables real visitor IP (`CF-Connecting-IP`), country and edge-location data. When off, those headers are ignored because clients could forge them | `false`      |
-| `OBS_SAMPLE_RATE`          | Fraction (0–1) of successful requests stored as history. 5xx, slow (≥1.5s) and error-logging requests are always stored; live counters always count 100%                                               | `1`          |
-| `OBS_RETENTION_DAYS`       | Days of request/upstream/error history kept (1–90)                                                                                                                                                     | `7`          |
-| `OBS_MAX_STORAGE_MB`       | Upper bound for dashboard data in Postgres/MongoDB. Oldest days are deleted early; if today alone exceeds it, new request history pauses until it fits. `0` disables the cap. Never touches app data   | `1024`       |
+| Variable                   | Description                                                                                                                                                                                                                                                                                    | Default              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `ADMIN_USERNAME`           | Admin login name                                                                                                                                                                                                                                                                               | _(disabled)_         |
+| `ADMIN_PASSWORD`           | Admin password, at least 16 characters. Set it like any other secret env var. Changing it signs out every admin session                                                                                                                                                                        | _(disabled)_         |
+| `ADMIN_PASSWORD_HASH`      | Optional alternative to `ADMIN_PASSWORD` if you prefer not to keep the plain password in env (from `npm run admin:hash`). Takes precedence                                                                                                                                                     | _(unset)_            |
+| `ADMIN_TOTP_SECRET`        | Optional base32 secret to require an authenticator code. Generate it in the dashboard under **Security** after signing in                                                                                                                                                                      | _(off)_              |
+| `ADMIN_ALLOWED_IPS`        | Optional comma-separated IPs/CIDRs allowed to reach the admin                                                                                                                                                                                                                                  | _(any)_              |
+| `TRUST_CLOUDFLARE_HEADERS` | Set to `true` only when Cloudflare proxies the app. Enables real visitor IP (`CF-Connecting-IP`), country and edge-location data. When off, those headers are ignored because clients could forge them                                                                                         | `false`              |
+| `OBS_SAMPLE_RATE`          | Fraction (0–1) of successful requests stored as history. 5xx, slow (≥1.5s) and error-logging requests are always stored; live counters always count 100%                                                                                                                                       | `1`                  |
+| `OBS_RETENTION_DAYS`       | Days of request/upstream/error history kept (1–90)                                                                                                                                                                                                                                             | `7`                  |
+| `OBS_MAX_STORAGE_MB`       | Upper bound for dashboard data in Postgres/MongoDB. Oldest days are deleted early; if today alone exceeds it, new request history pauses until it fits. `0` disables the cap. Never touches app data                                                                                           | `1024`               |
+| `OBS_REDIS_URL`            | Optional dedicated Redis for observability, live tail and admin session revocation. Use a separate Redis instance with `noeviction` to prevent application-cache LRU eviction from deleting counters or revocations. A different logical database on the same Redis does not isolate eviction. | _(uses cache Redis)_ |
+| `OBS_ALERT_WEBHOOK_URL`    | Optional HTTPS endpoint receiving JSON health notifications. Redirects and embedded URL credentials are rejected. The receiver must accept generic JSON (use an adapter for Slack/Discord).                                                                                                    | _(off)_              |
 
 Collection runs only when the admin is configured. Admin sessions last 8 hours.
+
+Health checks run every minute without an open dashboard, covering the previous five completed
+minutes. Each minute with at least 20 requests is flagged at **5xx >1%**, **4xx >5%**, or
+**slow >15%**; upstream 429s are also included. Notifications are coalesced for five minutes
+across instances when using shared Redis (per instance otherwise). Failures are logged and retried
+on the next evaluation. Payloads contain counts, time bounds and provider names, not request paths,
+configuration IDs or search terms. Without a webhook, notifications are local logs only.
+These thresholds are investigation signals: a 4xx is not automatically a server defect.
+When moving `OBS_REDIS_URL` to a new store, rotate the admin password/hash in the same rollout:
+revocation and login-lockout records in the old store are not transferred automatically.
+
+The Overview shows historical threshold breaches and process-start markers. Older markers are
+estimated from uptime and explicitly labelled; restarts are not proof of deployments.
+Collector counters are per process since startup, not lifetime fleet totals. Gone instances
+disappear from the live roster after 24 hours; their retained system history is unchanged.
+
+Search terms in newly captured catalog paths are redacted. Existing history is not rewritten and
+expires under normal retention. New error samples preserve occurrence counts even when detail is
+sampled; old sample-capped counts remain lower bounds and missing historical stacks cannot be
+recovered. Occurrence weights retain the minute of the event; sub-minute boundaries remain
+sample-based. Error-group first-seen versions describe fingerprints, not necessarily new bugs;
+2.12.1 changed fingerprint identity. Do not bulk-resolve old groups merely because hashes changed.
+
+Request exploration supports `sort=newest|duration|upstream`, `minMs`, `maxMs`,
+`minUpstreamCalls`, and `userHash`. Counts refer to stored matching rows, not weighted traffic
+estimates. Invalid custom time ranges return 400 rather than quietly selecting another interval.
 
 ## Addon Identity
 

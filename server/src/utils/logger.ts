@@ -51,17 +51,29 @@ function sanitizeValue(
 
   if (typeof value === 'string') {
     return value
-      .replace(/(^|[?&\s])((?:api_key|apikey|token|key|password|id)=)[^&\s/]+/gi, '$1$2[REDACTED]')
+      .replace(
+        /(^|[?&\s/])((?:api_key|apikey|token|key|password|id|search)=)[^&\s/]+/gi,
+        '$1$2[REDACTED]'
+      )
       .replace(/(Bearer\s+)[a-zA-Z0-9._+/=-]+/gi, '$1[REDACTED]')
       .replace(/(Basic\s+)[a-zA-Z0-9._+/=-]+/gi, '$1[REDACTED]');
   }
 
   if (value instanceof Error) {
+    const metadata = value as Error & { code?: unknown; statusCode?: unknown; status?: unknown };
     return {
       message: sanitizeValue(value.message, 'message', depth + 1, keepErrorStack),
       stack: keepErrorStack
         ? sanitizeValue(value.stack, 'stack', depth + 1, keepErrorStack)
         : '[REDACTED]',
+      ...(metadata.code !== undefined
+        ? { code: sanitizeValue(metadata.code, 'code', depth + 1, keepErrorStack) }
+        : {}),
+      ...(typeof metadata.statusCode === 'number' ? { statusCode: metadata.statusCode } : {}),
+      ...(typeof metadata.status === 'number' ? { status: metadata.status } : {}),
+      ...(value.cause !== undefined
+        ? { cause: sanitizeValue(value.cause, 'cause', depth + 1, keepErrorStack) }
+        : {}),
     };
   }
 
@@ -151,30 +163,32 @@ export function createLogger(context: string): Logger {
     debug(message: string, data: Record<string, unknown> | null = null): void {
       if (currentLevel <= LOG_LEVELS.debug) {
         const safeData = data ? sanitizeValue(data) : null;
-        output('debug', formatMessage('debug', context, message, safeData));
+        output('debug', formatMessage('debug', context, String(sanitizeValue(message)), safeData));
       }
     },
 
     info(message: string, data: Record<string, unknown> | null = null): void {
       if (currentLevel <= LOG_LEVELS.info) {
         const safeData = data ? sanitizeValue(data) : null;
-        output('info', formatMessage('info', context, message, safeData));
+        output('info', formatMessage('info', context, String(sanitizeValue(message)), safeData));
       }
     },
 
     warn(message: string, data: Record<string, unknown> | null = null): void {
-      emitToSink('warn', context, message, data);
+      const safeMessage = String(sanitizeValue(message));
+      emitToSink('warn', context, safeMessage, data);
       if (currentLevel <= LOG_LEVELS.warn) {
         const safeData = data ? sanitizeValue(data) : null;
-        output('warn', formatMessage('warn', context, message, safeData));
+        output('warn', formatMessage('warn', context, safeMessage, safeData));
       }
     },
 
     error(message: string, data: Record<string, unknown> | null = null): void {
-      emitToSink('error', context, message, data);
+      const safeMessage = String(sanitizeValue(message));
+      emitToSink('error', context, safeMessage, data);
       if (currentLevel <= LOG_LEVELS.error) {
         const safeData = data ? sanitizeValue(data) : null;
-        output('error', formatMessage('error', context, message, safeData));
+        output('error', formatMessage('error', context, safeMessage, safeData));
       }
     },
   };

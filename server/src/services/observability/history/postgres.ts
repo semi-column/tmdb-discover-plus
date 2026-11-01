@@ -2,7 +2,11 @@ import pg from 'pg';
 import { createLogger } from '../../../utils/logger.ts';
 import { LATENCY_BUCKETS } from '../collector.ts';
 import type { TimeRange } from '../liveQueries.ts';
-import { buildHistoryOverview, buildHistoryUpstreamOverview } from './overview.ts';
+import {
+  buildHistoryOverview,
+  buildHistoryUpstreamOverview,
+  type ExactPercentiles,
+} from './overview.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
 import {
   SETTABLE_ERROR_STATUSES,
@@ -21,6 +25,22 @@ const PARTITIONED_TABLES = ['obs_requests', 'obs_upstream', 'obs_error_events'] 
 const ALL_TABLES = [...PARTITIONED_TABLES, 'obs_error_groups', 'obs_system_samples'];
 const LOCK_KEY = 'tdp_obs_maintenance';
 const MAX_ROWS_PER_INSERT = 2000;
+
+interface RequestMetric extends ExactPercentiles {
+  kind: 'bucket' | 'route' | 'total';
+  key: string;
+  requests: number;
+  errors5xx: number;
+  errors4xx: number;
+  slow: number;
+  duration: number;
+  cache_hits: number;
+  cache_misses: number;
+  upstream_calls: number;
+  sampled: boolean;
+  max_ms: number;
+  [column: string]: unknown;
+}
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS obs_requests (
@@ -100,6 +120,11 @@ CREATE TABLE IF NOT EXISTS obs_error_groups (
   last_version      text NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS obs_error_groups_last_idx ON obs_error_groups (last_seen DESC);
+
+ALTER TABLE obs_error_events ADD COLUMN IF NOT EXISTS occurrences bigint NOT NULL DEFAULT 1;
+ALTER TABLE obs_error_events ADD COLUMN IF NOT EXISTS classification text NOT NULL DEFAULT '';
+ALTER TABLE obs_error_groups ADD COLUMN IF NOT EXISTS classification text NOT NULL DEFAULT '';
+ALTER TABLE obs_upstream ADD COLUMN IF NOT EXISTS cancelled boolean NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS obs_system_samples (
   ts       timestamptz NOT NULL,
@@ -310,9 +335,9 @@ export class PostgresHistory implements HistoryStore {
       const chunk = events.slice(i, i + MAX_ROWS_PER_INSERT);
       await this.pool.query(
         `INSERT INTO obs_upstream (ts, request_id, instance, provider, host, method, path, status,
-           duration_ms, error, timed_out)
+           duration_ms, error, timed_out, cancelled)
          SELECT * FROM unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[],
-           $6::text[], $7::text[], $8::smallint[], $9::int[], $10::text[], $11::boolean[])`,
+           $6::text[], $7::text[], $8::smallint[], $9::int[], $10::text[], $11::boolean[], $12::boolean[])`,
         [
           chunk.map((e) => new Date(e.ts)),
           chunk.map((e) => e.requestId),
@@ -325,6 +350,7 @@ export class PostgresHistory implements HistoryStore {
           chunk.map((e) => e.durationMs),
           chunk.map((e) => e.error),
           chunk.map((e) => e.timedOut),
+          chunk.map((e) => e.cancelled ?? false),
         ]
       );
     }
@@ -336,14 +362,16 @@ export class PostgresHistory implements HistoryStore {
       const list = [...groups.entries()];
       await this.pool.query(
         `INSERT INTO obs_error_groups (fingerprint, level, context, message, sample_stack, sample_route,
-           first_seen, last_seen, count, status, first_version, last_version)
-         SELECT fp, lvl, ctx, msg, stk, rte, fs, ls, cnt, 'open', $10, $10
+           first_seen, last_seen, count, status, first_version, last_version, classification)
+         SELECT fp, lvl, ctx, msg, stk, rte, fs, ls, cnt, 'open', $10, $10, cls
          FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[],
-           $7::timestamptz[], $8::timestamptz[], $9::bigint[]) AS t(fp, lvl, ctx, msg, stk, rte, fs, ls, cnt)
+           $7::timestamptz[], $8::timestamptz[], $9::bigint[], $11::text[]) AS t(fp, lvl, ctx, msg, stk, rte, fs, ls, cnt, cls)
          ON CONFLICT (fingerprint) DO UPDATE SET
            last_seen = GREATEST(obs_error_groups.last_seen, EXCLUDED.last_seen),
            count = obs_error_groups.count + EXCLUDED.count,
            last_version = EXCLUDED.last_version,
+           classification = CASE WHEN EXCLUDED.classification <> '' THEN EXCLUDED.classification
+                                 ELSE obs_error_groups.classification END,
            sample_stack = CASE WHEN EXCLUDED.sample_stack <> '' THEN EXCLUDED.sample_stack
                                ELSE obs_error_groups.sample_stack END,
            status = CASE WHEN obs_error_groups.status = 'resolved' THEN 'regressed'
@@ -361,15 +389,16 @@ export class PostgresHistory implements HistoryStore {
           list.map(([, g]) => new Date(g.lastTs)),
           list.map(([, g]) => g.count),
           this.version,
+          list.map(([, g]) => g.first.classification ?? ''),
         ]
       );
     }
     for (let i = 0; i < events.length; i += MAX_ROWS_PER_INSERT) {
       const chunk = events.slice(i, i + MAX_ROWS_PER_INSERT);
       await this.pool.query(
-        `INSERT INTO obs_error_events (ts, fingerprint, level, request_id, instance, route, message)
+        `INSERT INTO obs_error_events (ts, fingerprint, level, request_id, instance, route, message, occurrences, classification)
          SELECT * FROM unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[],
-           $6::text[], $7::text[])`,
+           $6::text[], $7::text[], $8::bigint[], $9::text[])`,
         [
           chunk.map((e) => new Date(e.ts)),
           chunk.map((e) => e.fingerprint),
@@ -378,6 +407,8 @@ export class PostgresHistory implements HistoryStore {
           chunk.map((e) => e.instance),
           chunk.map((e) => e.route),
           chunk.map((e) => e.message),
+          chunk.map((e) => e.occurrences ?? 1),
+          chunk.map((e) => e.classification ?? ''),
         ]
       );
     }
@@ -411,34 +442,58 @@ export class PostgresHistory implements HistoryStore {
     for (const [column, value] of Object.entries(filter.exact)) add(`${column} = ?`, value);
     if (filter.statusMin !== undefined) add('status >= ?', filter.statusMin);
     if (filter.statusMax !== undefined) add('status <= ?', filter.statusMax);
-    if (filter.minMs !== undefined) add('duration_ms >= ?', filter.minMs);
+    if (filter.minMs !== undefined) add('duration_ms >= ?::double precision', filter.minMs);
+    if (filter.maxMs !== undefined) add('duration_ms <= ?::double precision', filter.maxMs);
+    if (filter.minUpstreamCalls !== undefined)
+      add('upstream_calls >= ?::double precision', filter.minUpstreamCalls);
     if (filter.errorsOnly) where.push("(status >= 500 OR error_fp <> '')");
     if (filter.pathContains) add('path ILIKE ?', likePattern(filter.pathContains));
-    if (filter.cursor) add('(ts, request_id) < (?, ?)', filter.cursor.ts, filter.cursor.requestId);
     return { params, where };
   }
 
   async listRequests(range: TimeRange, filter: RequestFilter, limit: number) {
     const { params, where } = this.requestWhere(range, filter);
-    params.push(limit);
-    const { rows } = await this.pool.query(
-      `SELECT ${REQUEST_COLUMNS} FROM obs_requests WHERE ${where.join(' AND ')}
-       ORDER BY ts DESC, request_id DESC LIMIT $${params.length}`,
+    const sort = filter.sort ?? 'newest';
+    const metric =
+      sort === 'duration' ? 'duration_ms' : sort === 'upstreamCalls' ? 'upstream_calls' : '';
+    const direction = sort === 'oldest' ? 'ASC' : 'DESC';
+    const order = `${metric ? `${metric} DESC, ` : ''}ts ${direction}, request_id COLLATE "C" ${direction}`;
+    let cursor = '';
+    if (filter.cursor) {
+      const start = params.length;
+      params.push(filter.cursor.ts, filter.cursor.requestId);
+      if (metric) params.push(filter.cursor.value);
+      cursor = `WHERE (${metric ? `${metric}, ` : ''}ts, request_id COLLATE "C") ${sort === 'oldest' ? '>' : '<'}
+        (${metric ? `$${start + 3}::double precision, ` : ''}$${start + 1}, $${start + 2})`;
+    }
+    params.push(limit + 1);
+    const { rows: result } = await this.pool.query(
+      `WITH filtered AS MATERIALIZED (
+         SELECT ${REQUEST_COLUMNS} FROM obs_requests WHERE ${where.join(' AND ')}
+       ), page AS (SELECT * FROM filtered ${cursor} ORDER BY ${order} LIMIT $${params.length})
+       SELECT (SELECT count(*)::float FROM filtered) AS total,
+         COALESCE((SELECT json_agg(page ORDER BY ${order}) FROM page), '[]'::json) AS rows`,
       params
     );
-    return { rows, nextCursor: encodeCursor(rows, limit) };
+    const page = result[0].rows as Record<string, unknown>[];
+    const rows = page.slice(0, limit);
+    return {
+      rows,
+      total: Number(result[0].total),
+      nextCursor: page.length > limit ? encodeCursor(rows, limit, sort) : null,
+    };
   }
 
   async requestFacets(range: TimeRange) {
     const { rows } = await this.pool.query(
-      `SELECT 'route' AS facet, route AS value, sum(weight)::bigint AS count FROM obs_requests
+      `SELECT 'route' AS facet, route AS value, sum(weight::double precision)::bigint AS count FROM obs_requests
          WHERE ts >= $1 AND ts <= $2 GROUP BY route
        UNION ALL
-       SELECT 'client', client, sum(weight)::bigint FROM obs_requests WHERE ts >= $1 AND ts <= $2 GROUP BY client
+       SELECT 'client', client, sum(weight::double precision)::bigint FROM obs_requests WHERE ts >= $1 AND ts <= $2 GROUP BY client
        UNION ALL
-       SELECT 'instance', instance, sum(weight)::bigint FROM obs_requests WHERE ts >= $1 AND ts <= $2 GROUP BY instance
+       SELECT 'instance', instance, sum(weight::double precision)::bigint FROM obs_requests WHERE ts >= $1 AND ts <= $2 GROUP BY instance
        UNION ALL
-       SELECT 'country', country, sum(weight)::bigint FROM obs_requests WHERE ts >= $1 AND ts <= $2 AND country <> '' GROUP BY country`,
+       SELECT 'country', country, sum(weight::double precision)::bigint FROM obs_requests WHERE ts >= $1 AND ts <= $2 AND country <> '' GROUP BY country`,
       [new Date(range.from), new Date(range.to)]
     );
     const facets: Record<string, Array<{ value: string; count: number }>> = {};
@@ -455,12 +510,12 @@ export class PostgresHistory implements HistoryStore {
         [requestId]
       ),
       this.pool.query(
-        `SELECT ts, provider, host, method, path, status, duration_ms, error, timed_out
+        `SELECT ts, provider, host, method, path, status, duration_ms, error, timed_out, cancelled
          FROM obs_upstream WHERE request_id = $1 ORDER BY ts LIMIT 500`,
         [requestId]
       ),
       this.pool.query(
-        `SELECT e.ts, e.fingerprint, e.level, e.message, g.context, g.status
+        `SELECT e.ts, e.fingerprint, e.level, e.message, e.occurrences, e.classification, g.context, g.status
          FROM obs_error_events e LEFT JOIN obs_error_groups g USING (fingerprint)
          WHERE e.request_id = $1 ORDER BY e.ts LIMIT 200`,
         [requestId]
@@ -476,79 +531,142 @@ export class PostgresHistory implements HistoryStore {
         const condition = index
           ? `duration_ms > ${LATENCY_BUCKETS[index - 1]} AND duration_ms <= ${upper}`
           : `duration_ms <= ${upper}`;
-        return `COALESCE(SUM(weight) FILTER (WHERE ${condition}), 0)::float AS lat_${index}`;
+        return `COALESCE(SUM(requests) FILTER (WHERE ${condition}), 0)::float AS lat_${index}`;
       }),
-      `COALESCE(SUM(weight) FILTER (WHERE duration_ms > ${LATENCY_BUCKETS.at(-1)}), 0)::float AS lat_${LATENCY_BUCKETS.length}`,
+      `COALESCE(SUM(requests) FILTER (WHERE duration_ms > ${LATENCY_BUCKETS.at(-1)}), 0)::float AS lat_${LATENCY_BUCKETS.length}`,
     ].join(',');
     const timeFilter = 'ts >= $1 AND ts <= $2';
-    const [bucketResult, statusResult, breakdownResult, logBucketResult, usersResult, routes] =
-      await Promise.all([
-        this.pool.query(
-          `SELECT (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket,
-           SUM(weight)::float AS requests,
-           COALESCE(SUM(weight) FILTER (WHERE status >= 500), 0)::float AS errors5xx,
-           COALESCE(SUM(weight) FILTER (WHERE status >= 400 AND status < 500), 0)::float AS errors4xx,
-           COALESCE(SUM(weight) FILTER (WHERE duration_ms >= $4), 0)::float AS slow,
-           SUM(duration_ms * weight)::float AS duration,
-           SUM(cache_hits * weight)::float AS cache_hits,
-           SUM(cache_misses * weight)::float AS cache_misses,
+    // One statement gives every panel one MVCC snapshot and reads the request table only once.
+    const {
+      rows: [result],
+    } = await this.pool.query(
+      `WITH filtered AS MATERIALIZED (
+         SELECT route, status, duration_ms, weight::double precision AS weight,
+           cache_hits, cache_misses, upstream_calls, user_hash,
+           resource, source, content_type, client, country, colo, instance,
+           (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket
+         FROM obs_requests WHERE ${timeFilter}
+       ), sampling AS MATERIALIZED (
+         SELECT coalesce(bool_or(weight <> 1), false) AS sampled FROM filtered
+       ), durations AS (
+         SELECT CASE WHEN grouping(bucket) = 0 THEN 'bucket'
+                     WHEN grouping(route) = 0 THEN 'route' ELSE 'total' END AS kind,
+           CASE WHEN grouping(bucket) = 0 THEN bucket::text
+                WHEN grouping(route) = 0 THEN route ELSE '' END AS key,
+           duration_ms, SUM(weight) AS requests,
+           COALESCE(SUM(weight) FILTER (WHERE status >= 500), 0) AS errors5xx,
+           COALESCE(SUM(weight) FILTER (WHERE status >= 400 AND status < 500), 0) AS errors4xx,
+           COALESCE(SUM(weight) FILTER (WHERE duration_ms >= $4), 0) AS slow,
+           SUM(cache_hits * weight) AS cache_hits, SUM(cache_misses * weight) AS cache_misses,
+           SUM(upstream_calls * weight) AS upstream_calls, bool_or(weight <> 1) AS sampled
+         FROM filtered WHERE (SELECT sampled FROM sampling)
+         GROUP BY GROUPING SETS ((bucket, duration_ms), (route, duration_ms), (duration_ms))
+       ), ranked AS (
+         SELECT *, SUM(requests) OVER (PARTITION BY kind, key ORDER BY duration_ms) AS cumulative,
+           SUM(requests) OVER (PARTITION BY kind, key) AS total FROM durations
+       ), metrics AS (
+         SELECT kind, key, SUM(requests) AS requests, SUM(errors5xx) AS errors5xx,
+           SUM(errors4xx) AS errors4xx, SUM(slow) AS slow,
+           SUM(duration_ms * requests) AS duration, SUM(cache_hits) AS cache_hits,
+           SUM(cache_misses) AS cache_misses, SUM(upstream_calls) AS upstream_calls,
+           bool_or(sampled) AS sampled, max(duration_ms) AS max_ms,
+           min(duration_ms) FILTER (WHERE cumulative >= total * 0.5) AS "p50Ms",
+           min(duration_ms) FILTER (WHERE cumulative >= total * 0.95) AS "p95Ms",
+           min(duration_ms) FILTER (WHERE cumulative >= total * 0.99) AS "p99Ms",
            ${histogram}
-         FROM obs_requests WHERE ${timeFilter} GROUP BY bucket ORDER BY bucket`,
-          [new Date(range.from), new Date(range.to), bucketMs, slowMs]
+         FROM ranked GROUP BY kind, key
+         UNION ALL
+         SELECT CASE WHEN grouping(bucket) = 0 THEN 'bucket'
+                     WHEN grouping(route) = 0 THEN 'route' ELSE 'total' END AS kind,
+           CASE WHEN grouping(bucket) = 0 THEN bucket::text
+                WHEN grouping(route) = 0 THEN route ELSE '' END AS key,
+           SUM(weight) AS requests,
+           COALESCE(SUM(weight) FILTER (WHERE status >= 500), 0) AS errors5xx,
+           COALESCE(SUM(weight) FILTER (WHERE status >= 400 AND status < 500), 0) AS errors4xx,
+           COALESCE(SUM(weight) FILTER (WHERE duration_ms >= $4), 0) AS slow,
+           SUM(duration_ms * weight) AS duration, SUM(cache_hits * weight) AS cache_hits,
+           SUM(cache_misses * weight) AS cache_misses, SUM(upstream_calls * weight) AS upstream_calls,
+           false AS sampled, max(duration_ms) AS max_ms,
+           percentile_disc(0.5) WITHIN GROUP (ORDER BY duration_ms) AS "p50Ms",
+           percentile_disc(0.95) WITHIN GROUP (ORDER BY duration_ms) AS "p95Ms",
+           percentile_disc(0.99) WITHIN GROUP (ORDER BY duration_ms) AS "p99Ms",
+           ${histogram.replaceAll('SUM(requests)', 'SUM(weight)')}
+         FROM filtered WHERE NOT (SELECT sampled FROM sampling)
+         GROUP BY GROUPING SETS ((bucket), (route), ()) HAVING count(*) > 0
+       ), statuses AS (
+         SELECT status, sum(weight) AS count FROM filtered GROUP BY status
+       ), dimensions AS (
+         SELECT CASE WHEN grouping(resource) = 0 THEN 'resource'
+           WHEN grouping(source) = 0 THEN 'source'
+           WHEN grouping(content_type) = 0 THEN 'contentType'
+           WHEN grouping(client) = 0 THEN 'client'
+           WHEN grouping(country) = 0 THEN 'country'
+           WHEN grouping(colo) = 0 THEN 'colo' ELSE 'instance' END AS kind,
+           coalesce(resource, source, content_type, client, country, colo, instance) AS key,
+           sum(weight) AS count FROM filtered
+         GROUP BY GROUPING SETS ((resource), (source), (content_type), (client), (country), (colo), (instance))
+         HAVING coalesce(resource, source, content_type, client, country, colo, instance) <> ''
+       ), logs AS (
+         SELECT (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket,
+           level, classification, sum(coalesce(occurrences, 1))::float AS count
+         FROM obs_error_events WHERE ${timeFilter} GROUP BY bucket, level, classification
+       )
+       SELECT (SELECT json_agg(metrics) FROM metrics) AS metrics,
+         (SELECT json_agg(statuses) FROM statuses) AS statuses,
+         (SELECT json_agg(dimensions) FROM dimensions) AS breakdowns,
+         (SELECT json_agg(logs) FROM logs) AS logs,
+         (SELECT count(DISTINCT user_hash)::int FROM filtered WHERE user_hash <> '') AS users`,
+      [new Date(range.from), new Date(range.to), bucketMs, slowMs]
+    );
+    const metrics: RequestMetric[] = result.metrics ?? [];
+    const buckets = metrics
+      .filter((row) => row.kind === 'bucket')
+      .map((row) => ({
+        bucket: Number(row.key),
+        requests: Number(row.requests),
+        errors5xx: Number(row.errors5xx),
+        errors4xx: Number(row.errors4xx),
+        slow: Number(row.slow),
+        duration: Number(row.duration),
+        cacheHits: Number(row.cache_hits),
+        cacheMisses: Number(row.cache_misses),
+        p95Ms: Number(row.p95Ms),
+        sampled: Boolean(row.sampled),
+        histogram: LATENCY_BUCKETS.map((_, index) => Number(row[`lat_${index}`])).concat(
+          Number(row[`lat_${LATENCY_BUCKETS.length}`])
         ),
-        this.pool.query(
-          `SELECT status, SUM(weight)::float AS count FROM obs_requests WHERE ${timeFilter} GROUP BY status`,
-          [new Date(range.from), new Date(range.to)]
-        ),
-        this.pool.query(
-          `WITH filtered AS (
-           SELECT resource, source, content_type, client, country, colo, instance, weight
-           FROM obs_requests WHERE ${timeFilter}
-         )
-         SELECT kind, key, SUM(weight)::float AS count FROM (
-           SELECT 'resource' AS kind, resource AS key, weight FROM filtered
-           UNION ALL SELECT 'source', source, weight FROM filtered
-           UNION ALL SELECT 'contentType', content_type, weight FROM filtered
-           UNION ALL SELECT 'client', client, weight FROM filtered
-           UNION ALL SELECT 'country', country, weight FROM filtered WHERE country <> ''
-           UNION ALL SELECT 'colo', colo, weight FROM filtered WHERE colo <> ''
-           UNION ALL SELECT 'instance', instance, weight FROM filtered
-         ) AS dimensions GROUP BY kind, key`,
-          [new Date(range.from), new Date(range.to)]
-        ),
-        this.pool.query(
-          `SELECT (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket,
-           level, count(*)::int AS count FROM obs_error_events
-         WHERE ${timeFilter} GROUP BY bucket, level`,
-          [new Date(range.from), new Date(range.to), bucketMs]
-        ),
-        this.pool.query(
-          `SELECT count(DISTINCT user_hash)::int AS count FROM obs_requests WHERE ${timeFilter} AND user_hash <> ''`,
-          [new Date(range.from), new Date(range.to)]
-        ),
-        this.routeStats(range),
-      ]);
-    const buckets = bucketResult.rows.map((row) => ({
-      bucket: Number(row.bucket),
-      requests: Number(row.requests),
-      errors5xx: Number(row.errors5xx),
-      errors4xx: Number(row.errors4xx),
-      slow: Number(row.slow),
-      duration: Number(row.duration),
-      cacheHits: Number(row.cache_hits),
-      cacheMisses: Number(row.cache_misses),
-      histogram: LATENCY_BUCKETS.map((_, index) => Number(row[`lat_${index}`])).concat(
-        Number(row[`lat_${LATENCY_BUCKETS.length}`])
-      ),
-    }));
-    const logs = logBucketResult.rows.reduce((map, row) => {
+      }));
+    const routes = metrics
+      .filter((row) => row.kind === 'route')
+      .map((row) => ({
+        route: row.key,
+        count: Math.round(row.requests),
+        errors5xx: Math.round(row.errors5xx),
+        errors4xx: Math.round(row.errors4xx),
+        avgMs: Math.round(row.duration / row.requests),
+        p50Ms: row.p50Ms,
+        p95Ms: row.p95Ms,
+        p99Ms: row.p99Ms,
+        maxMs: row.max_ms,
+        avgUpstreamCalls: Number((row.upstream_calls / row.requests).toFixed(1)),
+        percentilesApproximate: row.sampled,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 200);
+    const logs = new Map<number, { bucket: number; errors: number; warnings: number }>();
+    let userConfigErrors = 0,
+      userConfigWarnings = 0;
+    for (const row of result.logs ?? []) {
       const bucket = Number(row.bucket);
-      const value = map.get(bucket) ?? { bucket, errors: 0, warnings: 0 };
+      const value = logs.get(bucket) ?? { bucket, errors: 0, warnings: 0 };
       if (row.level === 'error') value.errors += Number(row.count);
       else if (row.level === 'warn') value.warnings += Number(row.count);
-      map.set(bucket, value);
-      return map;
-    }, new Map<number, { bucket: number; errors: number; warnings: number }>());
+      if (row.classification === 'user_config') {
+        if (row.level === 'error') userConfigErrors += Number(row.count);
+        else if (row.level === 'warn') userConfigWarnings += Number(row.count);
+      }
+      logs.set(bucket, value);
+    }
     const logCounts = [...logs.values()].reduce(
       (sum, bucket) => ({
         errors: sum.errors + bucket.errors,
@@ -560,30 +678,33 @@ export class PostgresHistory implements HistoryStore {
       range,
       buckets,
       routes,
-      statusResult.rows.map((row) => ({ status: Number(row.status), count: Number(row.count) })),
-      breakdownResult.rows.map((row) => ({
-        kind: String(row.kind),
-        key: String(row.key),
-        count: Number(row.count),
-      })),
+      result.statuses ?? [],
+      result.breakdowns ?? [],
       [...logs.values()],
-      logCounts,
-      Number(usersResult.rows[0]?.count ?? 0)
+      { ...logCounts, userConfigErrors, userConfigWarnings },
+      Number(result.users),
+      metrics.find((row) => row.kind === 'total') ?? { p50Ms: null, p95Ms: null, p99Ms: null }
     );
   }
 
   async routeStats(range: TimeRange) {
     const { rows } = await this.pool.query(
-      `SELECT route, sum(weight)::bigint AS count,
-         COALESCE(sum(weight) FILTER (WHERE status >= 500), 0)::bigint AS errors5xx,
-         COALESCE(sum(weight) FILTER (WHERE status >= 400 AND status < 500), 0)::bigint AS errors4xx,
-         round(avg(duration_ms))::int AS avg_ms,
-         percentile_disc(0.5) WITHIN GROUP (ORDER BY duration_ms) AS p50_ms,
-         percentile_disc(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms,
-         percentile_disc(0.99) WITHIN GROUP (ORDER BY duration_ms) AS p99_ms,
+      `WITH ranked AS (
+         SELECT *, sum(weight::double precision) OVER (PARTITION BY route ORDER BY duration_ms) AS cumulative,
+           sum(weight::double precision) OVER (PARTITION BY route) AS total
+         FROM obs_requests WHERE ts >= $1 AND ts <= $2
+       )
+       SELECT route, sum(weight::double precision)::bigint AS count,
+         COALESCE(sum(weight::double precision) FILTER (WHERE status >= 500), 0)::bigint AS errors5xx,
+         COALESCE(sum(weight::double precision) FILTER (WHERE status >= 400 AND status < 500), 0)::bigint AS errors4xx,
+         round(sum(duration_ms * weight::double precision) / sum(weight::double precision))::int AS avg_ms,
+         min(duration_ms) FILTER (WHERE cumulative >= total * 0.5) AS p50_ms,
+         min(duration_ms) FILTER (WHERE cumulative >= total * 0.95) AS p95_ms,
+         min(duration_ms) FILTER (WHERE cumulative >= total * 0.99) AS p99_ms,
          max(duration_ms) AS max_ms,
-         round(avg(upstream_calls)::numeric, 1) AS avg_upstream_calls
-       FROM obs_requests WHERE ts >= $1 AND ts <= $2
+         round((sum(upstream_calls * weight::double precision) / sum(weight::double precision))::numeric, 1) AS avg_upstream_calls,
+         bool_or(weight <> 1) AS "percentilesApproximate"
+       FROM ranked
        GROUP BY route ORDER BY count DESC LIMIT 200`,
       [new Date(range.from), new Date(range.to)]
     );
@@ -603,6 +724,10 @@ export class PostgresHistory implements HistoryStore {
       params.push(filter.level);
       where.push(`g.level = $${params.length}`);
     }
+    if (filter.classification) {
+      params.push(filter.classification);
+      where.push(`g.classification = $${params.length}`);
+    }
     if (filter.q) {
       params.push(likePattern(filter.q));
       where.push(`(g.message ILIKE $${params.length} OR g.context ILIKE $${params.length})`);
@@ -611,7 +736,7 @@ export class PostgresHistory implements HistoryStore {
     const { rows } = await this.pool.query(
       `SELECT g.*,
          (SELECT json_agg(json_build_array(extract(epoch FROM b.bucket)::bigint, b.n) ORDER BY b.bucket)
-            FROM (SELECT date_trunc('${bucket}', e.ts) AS bucket, count(*) AS n FROM obs_error_events e
+            FROM (SELECT date_trunc('${bucket}', e.ts) AS bucket, sum(coalesce(e.occurrences, 1)) AS n FROM obs_error_events e
                   WHERE e.fingerprint = g.fingerprint AND e.ts >= $1 AND e.ts <= $2 GROUP BY 1) b) AS spark
        FROM obs_error_groups g WHERE ${where.join(' AND ')}
        ORDER BY g.last_seen DESC LIMIT 200`,
@@ -624,12 +749,12 @@ export class PostgresHistory implements HistoryStore {
     const [group, events, routes] = await Promise.all([
       this.pool.query('SELECT * FROM obs_error_groups WHERE fingerprint = $1', [fingerprint]),
       this.pool.query(
-        `SELECT ts, level, request_id, instance, route, message FROM obs_error_events
+        `SELECT ts, level, request_id, instance, route, message, occurrences, classification FROM obs_error_events
          WHERE fingerprint = $1 ORDER BY ts DESC LIMIT 100`,
         [fingerprint]
       ),
       this.pool.query(
-        `SELECT route, count(*) AS count FROM obs_error_events WHERE fingerprint = $1
+        `SELECT route, sum(coalesce(occurrences, 1)) AS count FROM obs_error_events WHERE fingerprint = $1
          GROUP BY route ORDER BY count DESC LIMIT 20`,
         [fingerprint]
       ),
@@ -657,10 +782,11 @@ export class PostgresHistory implements HistoryStore {
     const [endpoints, recentErrors] = await Promise.all([
       this.pool.query(
         `SELECT provider, method, path, count(*) AS calls,
-           count(*) FILTER (WHERE status = 0 OR status >= 500) AS errors,
-            count(*) FILTER (WHERE status >= 400 AND status < 500 AND status <> 429) AS rejected,
-           count(*) FILTER (WHERE status = 429) AS rate_limited,
-           count(*) FILTER (WHERE timed_out) AS timeouts,
+           count(*) FILTER (WHERE NOT cancelled AND (status = 0 OR status >= 500)) AS errors,
+           count(*) FILTER (WHERE NOT cancelled AND status >= 400 AND status < 500 AND status <> 429) AS rejected,
+           count(*) FILTER (WHERE NOT cancelled AND status = 429) AS rate_limited,
+           count(*) FILTER (WHERE NOT cancelled AND timed_out) AS timeouts,
+           count(*) FILTER (WHERE cancelled) AS cancelled,
            round(avg(duration_ms))::int AS avg_ms,
            percentile_disc(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms,
            max(duration_ms) AS max_ms
@@ -670,20 +796,24 @@ export class PostgresHistory implements HistoryStore {
       ),
       this.pool.query(
         `WITH transport AS (
-           SELECT ts, provider, method, path, status, duration_ms, error, request_id FROM obs_upstream
-           WHERE ts >= $1 AND ts <= $2 ${extra} AND (status = 0 OR status >= 500)
+           SELECT ts, provider, method, path, status, duration_ms, error, request_id, cancelled FROM obs_upstream
+           WHERE ts >= $1 AND ts <= $2 ${extra} AND NOT cancelled AND (status = 0 OR status >= 500)
            ORDER BY ts DESC LIMIT 25
          ), limited AS (
-           SELECT ts, provider, method, path, status, duration_ms, error, request_id FROM obs_upstream
-           WHERE ts >= $1 AND ts <= $2 ${extra} AND status = 429
+           SELECT ts, provider, method, path, status, duration_ms, error, request_id, cancelled FROM obs_upstream
+           WHERE ts >= $1 AND ts <= $2 ${extra} AND NOT cancelled AND status = 429
            ORDER BY ts DESC LIMIT 25
          ), rejected AS (
-           SELECT ts, provider, method, path, status, duration_ms, error, request_id FROM obs_upstream
-           WHERE ts >= $1 AND ts <= $2 ${extra} AND status >= 400 AND status < 500 AND status <> 429
+           SELECT ts, provider, method, path, status, duration_ms, error, request_id, cancelled FROM obs_upstream
+           WHERE ts >= $1 AND ts <= $2 ${extra} AND NOT cancelled AND status >= 400 AND status < 500 AND status <> 429
+           ORDER BY ts DESC LIMIT 25
+         ), cancellations AS (
+           SELECT ts, provider, method, path, status, duration_ms, error, request_id, cancelled FROM obs_upstream
+           WHERE ts >= $1 AND ts <= $2 ${extra} AND cancelled
            ORDER BY ts DESC LIMIT 25
          )
          SELECT * FROM transport UNION ALL SELECT * FROM limited UNION ALL SELECT * FROM rejected
-         ORDER BY ts DESC LIMIT 75`,
+         UNION ALL SELECT * FROM cancellations ORDER BY ts DESC LIMIT 100`,
         params
       ),
     ]);
@@ -702,30 +832,56 @@ export class PostgresHistory implements HistoryStore {
       `COALESCE(SUM(1) FILTER (WHERE duration_ms > ${LATENCY_BUCKETS.at(-1)}), 0)::float AS lat_${LATENCY_BUCKETS.length}`,
     ].join(',');
     const { rows } = await this.pool.query(
-      `SELECT provider, (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket,
+      `WITH filtered AS (
+         SELECT *, (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket
+         FROM obs_upstream WHERE ts >= $1 AND ts <= $2
+       )
+       SELECT provider, bucket, grouping(bucket) AS is_total,
          count(*)::float AS calls,
-         count(*) FILTER (WHERE status = 0 OR status >= 500)::float AS errors,
-         count(*) FILTER (WHERE status = 429)::float AS "rateLimited",
-         count(*) FILTER (WHERE timed_out)::float AS timeouts,
+         count(*) FILTER (WHERE NOT cancelled AND (status = 0 OR status >= 500))::float AS errors,
+         count(*) FILTER (WHERE NOT cancelled AND status = 429)::float AS "rateLimited",
+         count(*) FILTER (WHERE NOT cancelled AND status >= 400 AND status < 500 AND status <> 429)::float AS rejected,
+         count(*) FILTER (WHERE NOT cancelled AND timed_out)::float AS timeouts,
+         count(*) FILTER (WHERE cancelled)::float AS cancelled,
          COALESCE(sum(duration_ms), 0)::float AS duration,
+         percentile_disc(0.5) WITHIN GROUP (ORDER BY duration_ms) AS "p50Ms",
+         percentile_disc(0.95) WITHIN GROUP (ORDER BY duration_ms) AS "p95Ms",
+         percentile_disc(0.99) WITHIN GROUP (ORDER BY duration_ms) AS "p99Ms",
          ${histogram}
-       FROM obs_upstream WHERE ts >= $1 AND ts <= $2 GROUP BY provider, bucket ORDER BY provider, bucket`,
+       FROM filtered GROUP BY GROUPING SETS ((provider, bucket), (provider)) ORDER BY provider, bucket`,
       [new Date(range.from), new Date(range.to), bucketMs]
     );
     return buildHistoryUpstreamOverview(
       range,
-      rows.map((row) => ({
-        provider: String(row.provider),
-        bucket: Number(row.bucket),
-        calls: Number(row.calls),
-        errors: Number(row.errors),
-        rateLimited: Number(row.rateLimited),
-        timeouts: Number(row.timeouts),
-        duration: Number(row.duration),
-        histogram: LATENCY_BUCKETS.map((_, index) => Number(row[`lat_${index}`])).concat(
-          Number(row[`lat_${LATENCY_BUCKETS.length}`])
-        ),
-      }))
+      rows
+        .filter((row) => !row.is_total)
+        .map((row) => ({
+          provider: String(row.provider),
+          bucket: Number(row.bucket),
+          calls: Number(row.calls),
+          errors: Number(row.errors),
+          rateLimited: Number(row.rateLimited),
+          rejected: Number(row.rejected),
+          timeouts: Number(row.timeouts),
+          cancelled: Number(row.cancelled),
+          duration: Number(row.duration),
+          p95Ms: Number(row.p95Ms),
+          histogram: LATENCY_BUCKETS.map((_, index) => Number(row[`lat_${index}`])).concat(
+            Number(row[`lat_${LATENCY_BUCKETS.length}`])
+          ),
+        })),
+      new Map(
+        rows
+          .filter((row) => row.is_total)
+          .map((row) => [
+            row.provider,
+            {
+              p50Ms: Number(row.p50Ms),
+              p95Ms: Number(row.p95Ms),
+              p99Ms: Number(row.p99Ms),
+            },
+          ])
+      )
     );
   }
 
@@ -733,19 +889,27 @@ export class PostgresHistory implements HistoryStore {
     const params = [new Date(range.from), new Date(range.to)];
     const [catalogs, daily] = await Promise.all([
       this.pool.query(
-        `SELECT catalog_id, source, content_type, sum(weight)::bigint AS requests,
+        `WITH ranked AS (
+           SELECT *, sum(weight::double precision) OVER (
+             PARTITION BY catalog_id, source, content_type ORDER BY duration_ms
+           ) AS cumulative, sum(weight::double precision) OVER (
+             PARTITION BY catalog_id, source, content_type
+           ) AS total FROM obs_requests WHERE ts >= $1 AND ts <= $2 AND resource = 'catalog'
+         )
+         SELECT catalog_id, source, content_type, sum(weight::double precision)::bigint AS requests,
            count(DISTINCT user_hash) AS users,
-           COALESCE(sum(weight) FILTER (WHERE status >= 500), 0)::bigint AS errors,
-           percentile_disc(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms
-         FROM obs_requests WHERE ts >= $1 AND ts <= $2 AND resource = 'catalog'
+           COALESCE(sum(weight::double precision) FILTER (WHERE status >= 500), 0)::bigint AS errors,
+           min(duration_ms) FILTER (WHERE cumulative >= total * 0.95) AS p95_ms,
+           bool_or(weight <> 1) AS "percentilesApproximate"
+         FROM ranked
          GROUP BY catalog_id, source, content_type ORDER BY requests DESC LIMIT 50`,
         params
       ),
       this.pool.query(
         `SELECT date_trunc('day', ts) AS day,
            count(DISTINCT user_hash) FILTER (WHERE user_hash <> '') AS users,
-           sum(weight)::bigint AS requests,
-           COALESCE(sum(weight) FILTER (WHERE resource = 'manifest'), 0)::bigint AS manifest_fetches
+           sum(weight::double precision)::bigint AS requests,
+           COALESCE(sum(weight::double precision) FILTER (WHERE resource = 'manifest'), 0)::bigint AS manifest_fetches
          FROM obs_requests WHERE ts >= $1 AND ts <= $2 GROUP BY 1 ORDER BY 1`,
         params
       ),

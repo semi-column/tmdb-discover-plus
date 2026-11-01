@@ -273,8 +273,107 @@ it('distinguishes all-time error-group counts from range sparkline samples', asy
 
   expect(await screen.findByText('All-time')).toBeInTheDocument();
   expect(
-    screen.getByText(/Sparklines cover the selected range and use stored event samples/)
+    screen.getByText(/Sparklines cover the selected range and use stored occurrence weights/)
   ).toBeInTheDocument();
+});
+
+it('sends heaviest sorting and upper-duration filters and shows total stored matches', async () => {
+  window.location.hash = '/requests?range=1h&maxMs=5000&minUpstreamCalls=10';
+  adminApi.requests.mockResolvedValue({ rows: [requestRow], total: 345, nextCursor: null });
+  render(<AdminApp />);
+  expect(await screen.findByText('Requests (1 shown / 345 stored matches)')).toBeInTheDocument();
+  expect(adminApi.requests).toHaveBeenCalledWith(
+    expect.objectContaining({ maxMs: '5000', minUpstreamCalls: '10' })
+  );
+  fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'upstream' } });
+  await waitFor(() =>
+    expect(adminApi.requests).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'upstream', maxMs: '5000' })
+    )
+  );
+});
+
+it('keeps the first page time bounds when loading another page of a rolling range', async () => {
+  window.location.hash = '/requests?range=1h&sort=duration';
+  adminApi.requests
+    .mockResolvedValueOnce({
+      rows: [requestRow],
+      total: 2,
+      nextCursor: 'next',
+      range: { from: 1000, to: 2000 },
+    })
+    .mockResolvedValueOnce({ rows: [], total: 2, nextCursor: null });
+  render(<AdminApp />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+  await waitFor(() =>
+    expect(adminApi.requests).toHaveBeenLastCalledWith({
+      range: 'custom',
+      from: 1000,
+      to: 2000,
+      sort: 'duration',
+      cursor: 'next',
+      limit: 100,
+    })
+  );
+});
+
+it('provides a keyboard-accessible custom interval without chart dragging', async () => {
+  render(<AdminApp />);
+  fireEvent.click(await screen.findByText('Custom interval'));
+  fireEvent.change(screen.getByLabelText('From (local time)'), {
+    target: { value: '2026-11-01T10:00' },
+  });
+
+  fireEvent.change(screen.getByLabelText('To (local time)'), {
+    target: { value: '2026-11-01T11:00' },
+  });
+  fireEvent.submit(screen.getByRole('button', { name: 'Apply interval' }).closest('form'));
+  await waitFor(() =>
+    expect(adminApi.overview).toHaveBeenLastCalledWith({
+      range: 'custom',
+      from: new Date('2026-11-01T10:00').getTime(),
+      to: new Date('2026-11-01T11:00').getTime(),
+    })
+  );
+});
+
+it('does not silently load 1h for an invalid custom interval URL', async () => {
+  window.location.hash = '/overview?range=custom&from=invalid&to=2';
+  render(<AdminApp />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Invalid custom interval');
+  expect(adminApi.overview).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '1h', exact: true }));
+  await waitFor(() => expect(adminApi.overview).toHaveBeenCalledWith({ range: '1h' }));
+});
+
+it('never labels a changed fingerprint as a proven new error', async () => {
+  window.location.hash = '/errors?range=7d';
+  adminApi.errors.mockResolvedValue({
+    version: '2.12.1',
+    groups: [
+      {
+        fingerprint: 'changed',
+        context: 'tmdb',
+        message: 'Invalid API key',
+        classification: 'user_config',
+        first_version: '2.12.1',
+        status: 'open',
+        count: 10,
+        spark: [[1, 10]],
+      },
+    ],
+  });
+  render(<AdminApp />);
+  expect(await screen.findByText('fingerprint first seen v2.12.1')).toBeInTheDocument();
+  expect(screen.queryByText('new in v2.12.1')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Log classification'), {
+    target: { value: 'user_config' },
+  });
+  await waitFor(() =>
+    expect(adminApi.errors).toHaveBeenLastCalledWith(
+      expect.objectContaining({ classification: 'user_config' })
+    )
+  );
 });
 
 it('keeps live-tail omissions separate from omitted history records', async () => {

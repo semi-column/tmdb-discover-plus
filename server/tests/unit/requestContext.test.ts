@@ -4,6 +4,7 @@ import {
   getRequestId,
   abortRequestContext,
   isRequestAborted,
+  getRequestSignal,
   getRequestContextSnapshot,
   getRequestCacheStats,
   trackCacheOperation,
@@ -125,6 +126,18 @@ describe('getRequestId', () => {
     });
 
     expect(aborted).toBe(true);
+  });
+
+  it('preserves a timeout reason separately from explicit cancellation', async () => {
+    const reason = new DOMException('Request timed out', 'TimeoutError');
+    await new Promise<void>((resolve) => {
+      requestIdMiddleware()({ headers: {} } as any, { setHeader() {} } as any, () => {
+        abortRequestContext(reason);
+        expect(getRequestSignal()?.reason).toBe(reason);
+        expect(isRequestAborted()).toBe(true);
+        resolve();
+      });
+    });
   });
 
   it('captures request metadata in context snapshot', async () => {

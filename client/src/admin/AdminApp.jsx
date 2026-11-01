@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from './api.js';
 import { useAsync, useHashRoute, navigate } from './hooks.js';
 import { RANGE_OPTIONS } from './format.js';
-import { Loading } from './components/ui.jsx';
+import { ErrorNote, Loading } from './components/ui.jsx';
 import { TraceDrawer } from './components/TraceDrawer.jsx';
 import { Login } from './pages/Login.jsx';
 import { Overview } from './pages/Overview.jsx';
@@ -47,6 +47,66 @@ const PAGES = [
 
 const HISTORY_LABELS = { postgres: 'Postgres', mongo: 'MongoDB', memory: 'in-memory' };
 
+function CustomRangePicker({ from, to, retentionDays = 7, onSelect }) {
+  const [now, setNow] = useState(Date.now);
+  const localValue = (time) => {
+    const date = new Date(time);
+    return new Date(time - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  };
+  const [start, setStart] = useState(() => localValue(from ?? now - 3_600_000));
+  const [end, setEnd] = useState(() => localValue(to ?? now));
+  const [error, setError] = useState('');
+  return (
+    <details
+      onToggle={(event) => {
+        if (event.currentTarget.open) setNow(Date.now());
+      }}
+    >
+      <summary>Custom interval</summary>
+      <form
+        className="adm-filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const from = new Date(start).getTime();
+          const to = new Date(end).getTime();
+          if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
+            setError('End must be after start.');
+            return;
+          }
+          setError('');
+          onSelect({ from, to });
+        }}
+      >
+        <label className="adm-filter">
+          <span>From (local time)</span>
+          <input
+            type="datetime-local"
+            required
+            min={localValue(now - retentionDays * 86_400_000)}
+            max={localValue(now)}
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+          />
+        </label>
+        <label className="adm-filter">
+          <span>To (local time)</span>
+          <input
+            type="datetime-local"
+            required
+            max={localValue(now)}
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+          />
+        </label>
+        <button type="submit" className="adm-btn">
+          Apply interval
+        </button>
+        {error && <span role="alert">{error}</span>}
+      </form>
+    </details>
+  );
+}
+
 function Dashboard({ onLogout }) {
   const { page, params } = useHashRoute();
   const [navOpen, setNavOpen] = useState(false);
@@ -56,6 +116,8 @@ function Dashboard({ onLogout }) {
     params.range === 'custom' &&
     Number.isFinite(customFrom) &&
     Number.isFinite(customTo) &&
+    Number.isFinite(new Date(customFrom).getTime()) &&
+    Number.isFinite(new Date(customTo).getTime()) &&
     customTo > customFrom;
   const range = hasCustomRange
     ? 'custom'
@@ -187,6 +249,13 @@ function Dashboard({ onLogout }) {
                   </button>
                 ))}
               </div>
+              <CustomRangePicker
+                key={`${customFrom}:${customTo}`}
+                from={hasCustomRange ? customFrom : undefined}
+                to={hasCustomRange ? customTo : undefined}
+                retentionDays={meta.data?.retentionDays}
+                onSelect={selectCustomRange}
+              />
               {hasCustomRange && (
                 <button
                   type="button"
@@ -243,13 +312,34 @@ function Dashboard({ onLogout }) {
             requests of this instance in memory. They are lost on restart.
           </div>
         )}
-        {m?.collector?.storagePaused && (
-          <div className="adm-alert adm-tone-bad">
-            Storage cap reached (OBS_MAX_STORAGE_MB): new request history is paused until older data
-            expires.
+        <ErrorNote error={meta.error} />
+        {m?.sampleRate < 1 && (
+          <div className="adm-alert adm-tone-warn">
+            Request history is sampled ({Math.round(m.sampleRate * 100)}% of ordinary responses).
+            Counts are weighted estimates; percentiles and config counts describe stored requests.
+            Explorer totals are stored matches, not all traffic.
           </div>
         )}
-        {content}
+        {(m?.storage?.paused || m?.collector?.storagePaused) && (
+          <div className="adm-alert adm-tone-bad">
+            Storage cap reached (OBS_MAX_STORAGE_MB): raw request, dependency, log and system
+            history is paused until older data expires.
+          </div>
+        )}
+        {m?.collector?.failedWrites?.historyBatches > 0 && (
+          <div className="adm-alert adm-tone-warn">
+            History writes have failed on {m.collectorScope || m.instance}. Recorded history may
+            have gaps; inspect per-instance counters in System. Missing rows cannot be inferred as
+            zero traffic.
+          </div>
+        )}
+        {params.range === 'custom' && !hasCustomRange ? (
+          <div className="adm-alert adm-tone-bad" role="alert">
+            Invalid custom interval. Choose a preset or enter valid start and end times.
+          </div>
+        ) : (
+          content
+        )}
       </main>
       {traceId && (
         <TraceDrawer

@@ -29,7 +29,7 @@ interface RequestStore {
   method: string;
   path: string;
   startedAt: number;
-  aborted: boolean;
+  abortController: AbortController;
   cache: RequestCacheStats;
   obs: RequestObsState;
 }
@@ -48,13 +48,36 @@ export function getRequestId(): string | undefined {
   return asyncLocalStorage.getStore()?.requestId;
 }
 
-export function abortRequestContext(): void {
-  const store = asyncLocalStorage.getStore();
-  if (store) store.aborted = true;
+export function abortRequestContext(reason?: unknown): void {
+  asyncLocalStorage.getStore()?.abortController.abort(reason);
 }
 
 export function isRequestAborted(): boolean {
-  return asyncLocalStorage.getStore()?.aborted ?? false;
+  return getRequestSignal()?.aborted ?? false;
+}
+
+export function getRequestSignal(): AbortSignal | undefined {
+  return asyncLocalStorage.getStore()?.abortController.signal;
+}
+
+export function throwIfRequestAborted(): void {
+  getRequestSignal()?.throwIfAborted();
+}
+
+export async function awaitWithRequestAbort<T>(promise: Promise<T>): Promise<T> {
+  const signal = getRequestSignal();
+  if (!signal) return promise;
+  let onAbort: () => void = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
 }
 
 export function getRequestContextSnapshot(): RequestContextSnapshot | undefined {
@@ -103,13 +126,13 @@ export function requestIdMiddleware() {
       method: req.method,
       path: req.originalUrl || req.url,
       startedAt: Date.now(),
-      aborted: false,
+      abortController: new AbortController(),
       cache: buildEmptyCacheStats(),
       obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
     };
     asyncLocalStorage.run(store, () => {
       res.once?.('close', () => {
-        if (!res.writableFinished) store.aborted = true;
+        if (!res.writableFinished) store.abortController.abort();
       });
       next();
     });

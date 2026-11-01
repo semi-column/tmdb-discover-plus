@@ -74,14 +74,14 @@ export function Loading() {
   return <div className="adm-empty">Loading…</div>;
 }
 
-export function Sparkline({ points: raw, width = 120, height = 24 }) {
+export function Sparkline({ points: raw, width = 120, height = 24, max }) {
   if (!raw?.length) return <svg width={width} height={height} aria-hidden="true" />;
   const points = raw.length === 1 ? [[raw[0][0] - 1, raw[0][1]], raw[0]] : raw;
   const xs = points.map((p) => p[0]);
   const ys = points.map((p) => p[1]);
   const minX = Math.min(...xs);
   const spanX = Math.max(...xs) - minX || 1;
-  const maxY = Math.max(...ys, 1);
+  const maxY = Math.max(max ?? 0, ...ys, 1);
   const d = points
     .map(
       (p, i) =>

@@ -16,6 +16,7 @@ import {
 } from '../../services/artworkService.ts';
 import { decrypt } from '../../utils/encryption.ts';
 import { filterUnknownGenreMetas } from '../../utils/catalogGenreFilter.ts';
+import { isRequestAborted, throwIfRequestAborted } from '../../utils/requestContext.ts';
 
 const log = createLogger('addon:anilist');
 const PAGE_SIZE = 20;
@@ -40,6 +41,7 @@ async function fetchWithBackfill(
   let pagesChecked = 0;
 
   while (metas.length < PAGE_SIZE && pagesChecked < MAX_BACKFILL_PAGES) {
+    throwIfRequestAborted();
     const result = await fetchPage(currentPage);
     const batch = anilist.batchConvertToStremioMeta(result.media, type, artworkOptions);
     metas.push(...batch);
@@ -67,6 +69,7 @@ export async function handleAnilistCatalogRequest(
     const page = Math.floor(skip / PAGE_SIZE) + 1;
 
     const userConfig = await getUserConfig(userId);
+    throwIfRequestAborted();
     if (!userConfig) {
       res.json({ metas: [] });
       return;
@@ -101,6 +104,7 @@ export async function handleAnilistCatalogRequest(
         artworkOptions
       );
       const resolvedMetas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
+      throwIfRequestAborted();
       res.set(
         'Cache-Control',
         `max-age=${CACHE_TTLS.CATALOG_HEADER}, stale-while-revalidate=${CACHE_TTLS.CATALOG_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
@@ -149,6 +153,7 @@ export async function handleAnilistCatalogRequest(
 
     if (!randomize) {
       const cached = (await cache.get(cacheKey)) as { metas: StremioMetaPreview[] } | null;
+      throwIfRequestAborted();
       if (cached) {
         res.set(
           'Cache-Control',
@@ -186,6 +191,7 @@ export async function handleAnilistCatalogRequest(
     }
 
     metas = await applyArtworkOverridesToMetaPreviews(metas, artworkOptions);
+    throwIfRequestAborted();
 
     const response = { metas };
 
@@ -221,9 +227,10 @@ export async function handleAnilistCatalogRequest(
       staleRevalidate: randomize ? 0 : CACHE_TTLS.CATALOG_STALE_REVALIDATE,
     });
   } catch (err) {
+    if (res.headersSent || res.destroyed || isRequestAborted()) return;
     log.error('AniList catalog error', {
       catalogId,
-      error: (err as Error).message,
+      error: err,
       durationMs: Date.now() - startTime,
     });
     res.json({ metas: [] });

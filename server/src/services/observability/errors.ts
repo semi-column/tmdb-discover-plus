@@ -63,13 +63,38 @@ export function extractDetail(data: Record<string, unknown> | null): {
     return '';
   };
   const detail = pick(data.error) || pick(data.reason) || pick(data.err);
-  const nestedStack =
-    data.error && typeof data.error === 'object' ? (data.error as { stack?: unknown }).stack : '';
-  const stack =
+  const nestedStack = [data.error, data.err, data.reason]
+    .map((value) =>
+      value && typeof value === 'object' ? (value as { stack?: unknown }).stack : undefined
+    )
+    .find((value) => typeof value === 'string' && value);
+  let stack =
     typeof data.stack === 'string'
       ? data.stack
       : typeof nestedStack === 'string'
         ? nestedStack
         : '';
+  let error: unknown = [data.error, data.err, data.reason].find(
+    (value) => value && typeof value === 'object'
+  );
+  for (let depth = 0; depth < 4; depth++) {
+    if (!error || typeof error !== 'object' || !('cause' in error)) break;
+    error = error.cause;
+    if (!error || typeof error !== 'object') break;
+    const cause =
+      'stack' in error && typeof error.stack === 'string'
+        ? error.stack
+        : 'message' in error && typeof error.message === 'string'
+          ? error.message
+          : '';
+    if (cause) stack += `\nCaused by: ${cause}`;
+  }
   return { detail: detail.slice(0, 1000), stack: stack.slice(0, 4000) };
+}
+
+export function classifyError(message: string, data: Record<string, unknown> | null): string {
+  if (data?.classification === 'user_config') return 'user_config';
+  const { detail } = extractDetail(data);
+  if (/invalid api key|collection id required/i.test(`${message} ${detail}`)) return 'user_config';
+  return 'application';
 }

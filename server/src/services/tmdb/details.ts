@@ -8,7 +8,7 @@ import { generateEpisodeThumbnailUrl, isValidPosterConfig } from '../artworkServ
 import * as imdb from '../imdb/index.ts';
 import { CONCURRENCY, DISPLAY } from '../../constants.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
-import { isRequestAborted } from '../../utils/requestContext.ts';
+import { throwIfRequestAborted } from '../../utils/requestContext.ts';
 
 import type {
   ArtworkOptions,
@@ -84,7 +84,8 @@ export async function getLogos(
     }
     return logos;
   } catch (e) {
-    log.warn('Failed to fetch logos', { tmdbId, type, error: (e as Error).message });
+    throwIfRequestAborted();
+    log.warn('Failed to fetch logos', { tmdbId, type, error: e });
     return [];
   }
 }
@@ -122,10 +123,11 @@ export async function getSeasonDetails(
     }
     return data;
   } catch (error) {
+    throwIfRequestAborted();
     log.warn('Failed to fetch season details', {
       tmdbId,
       seasonNumber,
-      error: (error as Error).message,
+      error,
     });
     return null;
   }
@@ -163,7 +165,6 @@ interface ImdbEpisodeEdge {
 }
 
 const IMDB_EPISODE_PAGE_LIMIT = DISPLAY.IMDB_EPISODE_PAGE_LIMIT;
-const IMDB_EPISODE_PAGE_MAX = DISPLAY.IMDB_EPISODE_PAGE_MAX;
 
 async function getImdbEpisodesForSeason(
   imdbId: string,
@@ -171,9 +172,10 @@ async function getImdbEpisodesForSeason(
 ): Promise<ImdbEpisodeEdge[]> {
   const edges: ImdbEpisodeEdge[] = [];
   let endCursor: string | undefined;
+  const cursors = new Set<string>();
 
-  for (let i = 0; i < IMDB_EPISODE_PAGE_MAX; i++) {
-    if (isRequestAborted()) break;
+  while (true) {
+    throwIfRequestAborted();
 
     const response = await imdb.getEpisodesBySeason(imdbId, {
       season,
@@ -188,9 +190,13 @@ async function getImdbEpisodesForSeason(
     const hasNext = Boolean(page?.pageInfo?.hasNextPage);
     const nextCursor = page?.pageInfo?.endCursor || undefined;
     if (!hasNext || !nextCursor) break;
+    if (cursors.has(nextCursor))
+      throw new Error('IMDb episode pagination returned a repeated cursor');
+    cursors.add(nextCursor);
     endCursor = nextCursor;
   }
 
+  throwIfRequestAborted();
   return edges;
 }
 
@@ -298,6 +304,7 @@ export async function getSeriesEpisodes(
   details: TvDetailsForEpisodes,
   options: DetailsOptions = {}
 ): Promise<StremioVideo[]> {
+  throwIfRequestAborted();
   if (!details?.seasons || !Array.isArray(details.seasons)) {
     return [];
   }
@@ -340,19 +347,63 @@ export async function getSeriesEpisodes(
     }
   }
 
-  const seasonQueue = regularSeasons.slice(0, 50);
+  const seasonQueue = regularSeasons;
   const seasonResults: StremioVideo[][] = [];
+  const seasonDataByNumber = new Map<number, SeasonDetailsResult>();
+  const cache = getCache();
+  const seasonCacheKey = (number: number) => `season_${tmdbId}_${number}_${language || 'en'}`;
+  await Promise.all(
+    seasonQueue.map(async (season) => {
+      const cached = (await cache.get(
+        seasonCacheKey(season.season_number)
+      )) as SeasonDetailsResult | null;
+      if (cached?.episodes) seasonDataByNumber.set(season.season_number, cached);
+    })
+  );
+  const missingSeasons = seasonQueue.filter(
+    (season) => !seasonDataByNumber.has(season.season_number)
+  );
+  // TMDB supports up to 20 appended subresources per TV details request.
+  for (let i = 0; i < missingSeasons.length; i += 20) {
+    throwIfRequestAborted();
+    const batch = missingSeasons.slice(i, i + 20);
+    if (batch.length === 1) continue; // The normal season endpoint is smaller for one miss.
+    try {
+      const data = (await tmdbFetch(`/tv/${tmdbId}`, apiKey, {
+        append_to_response: batch.map((season) => `season/${season.season_number}`).join(','),
+        ...(language ? { language } : {}),
+      })) as Record<string, SeasonDetailsResult>;
+      throwIfRequestAborted();
+      for (const season of batch) {
+        const seasonData = data[`season/${season.season_number}`];
+        if (!Array.isArray(seasonData?.episodes)) continue;
+        seasonDataByNumber.set(season.season_number, seasonData);
+        await cache.set(
+          seasonCacheKey(season.season_number),
+          seasonData,
+          seriesEnded || season.season_number < latestSeasonNumber
+            ? CACHE_TTLS.SEASON_COMPLETED
+            : CACHE_TTLS.DETAIL
+        );
+      }
+    } catch (error) {
+      throwIfRequestAborted();
+      log.warn('Season batch fetch failed, falling back to individual seasons', { tmdbId, error });
+    }
+  }
 
   for (let i = 0; i < seasonQueue.length; i += DETAIL_CONCURRENCY) {
-    if (isRequestAborted()) break;
+    throwIfRequestAborted();
 
     const batch = seasonQueue.slice(i, i + DETAIL_CONCURRENCY);
     const batchResults = await Promise.all(
       batch.map(async (season) => {
-        const seasonData = (await getSeasonDetails(apiKey, tmdbId, season.season_number, {
-          ...options,
-          completedSeason: seriesEnded || season.season_number < latestSeasonNumber,
-        })) as SeasonDetailsResult | null;
+        const seasonData =
+          seasonDataByNumber.get(season.season_number) ||
+          ((await getSeasonDetails(apiKey, tmdbId, season.season_number, {
+            ...options,
+            completedSeason: seriesEnded || season.season_number < latestSeasonNumber,
+          })) as SeasonDetailsResult | null);
         if (!seasonData?.episodes) return [];
 
         return seasonData.episodes.map((ep) => {
@@ -403,7 +454,7 @@ export async function getSeriesEpisodes(
     const imdbSeasonQueue = seasonNumbersToProbe.map((season_number) => ({ season_number }));
 
     for (let i = 0; i < imdbSeasonQueue.length; i += IMDB_SEASON_CONCURRENCY) {
-      if (isRequestAborted()) break;
+      throwIfRequestAborted();
 
       const batch = imdbSeasonQueue.slice(i, i + IMDB_SEASON_CONCURRENCY);
       const batchVideos = await Promise.all(
@@ -413,10 +464,11 @@ export async function getSeriesEpisodes(
             if (!episodeEdges.length) return [];
             return mapImdbEpisodesToStremioVideos(imdbId, season.season_number, episodeEdges);
           } catch (error) {
+            throwIfRequestAborted();
             log.debug('IMDb season episode fetch failed', {
               imdbId,
               season: season.season_number,
-              error: (error as Error).message,
+              error,
             });
             return [];
           }
@@ -427,6 +479,7 @@ export async function getSeriesEpisodes(
     }
 
     if (fallbackVideos.length > 0) {
+      throwIfRequestAborted();
       const merged = mergeSeriesVideos(videos, fallbackVideos);
       for (const v of merged) {
         applyEpisodeThumbnailOverride(v);
@@ -454,6 +507,7 @@ export async function getSeriesEpisodes(
     }
   }
 
+  throwIfRequestAborted();
   return videos;
 }
 
@@ -466,7 +520,7 @@ export async function batchGetDetails(
   const results = new Map<number, unknown>();
 
   for (let i = 0; i < tmdbIds.length; i += DETAIL_CONCURRENCY) {
-    if (isRequestAborted()) break;
+    throwIfRequestAborted();
 
     const batch = tmdbIds.slice(i, i + DETAIL_CONCURRENCY);
     await Promise.all(
@@ -477,12 +531,14 @@ export async function batchGetDetails(
           });
           if (details) results.set(tmdbId, details);
         } catch (err) {
+          throwIfRequestAborted();
           logSwallowedError('tmdb-details:catalog-batch-fetch', err);
         }
       })
     );
   }
 
+  throwIfRequestAborted();
   return results;
 }
 
@@ -518,6 +574,7 @@ export async function batchGetPreviewDetails(
   const results = new Map<number, unknown>();
 
   for (let i = 0; i < tmdbIds.length; i += DETAIL_CONCURRENCY) {
+    throwIfRequestAborted();
     const batch = tmdbIds.slice(i, i + DETAIL_CONCURRENCY);
     await Promise.all(
       batch.map(async (tmdbId) => {
@@ -527,11 +584,13 @@ export async function batchGetPreviewDetails(
           });
           if (details) results.set(tmdbId, details);
         } catch (err) {
+          throwIfRequestAborted();
           logSwallowedError('tmdb-details:catalog-preview-batch-fetch', err);
         }
       })
     );
   }
 
+  throwIfRequestAborted();
   return results;
 }

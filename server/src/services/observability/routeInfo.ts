@@ -22,6 +22,14 @@ function safeDecode(value: string): string {
   }
 }
 
+function privateExtra(extra: string): string {
+  const params = new URLSearchParams(extra.includes('=') ? extra : safeDecode(extra));
+  for (const key of params.keys()) {
+    if (/search|token|key|password/i.test(key)) params.set(key, '[redacted]');
+  }
+  return params.toString();
+}
+
 export function sourceFromCatalogId(catalogId: string): string {
   const prefix = catalogId.split('-')[0];
   return KNOWN_SOURCES.has(prefix) ? prefix : 'tmdb';
@@ -74,7 +82,10 @@ export function describePath(pathname: string, expressRoute?: string | null): Ro
     const idParam = kind === 'catalog' ? ':catalogId' : ':id';
     return {
       route: `/:userId/${kind}/:type/${idParam}${extra ? '/:extra' : ''}.json`,
-      path: `/:user/${kind}/${type}/${id}${extra ? `/${extra}` : ''}.json`.slice(0, 400),
+      path: `/:user/${kind}/${type}/${id}${extra ? `/${privateExtra(extra)}` : ''}.json`.slice(
+        0,
+        400
+      ),
       resource: kind,
       source: kind === 'catalog' ? sourceFromCatalogId(decodedId) : sourceFromMetaId(decodedId),
       contentType: safeDecode(type).slice(0, 32),

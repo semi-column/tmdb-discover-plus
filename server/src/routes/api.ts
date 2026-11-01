@@ -2160,6 +2160,16 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
       previewEmpty: filteredPreviewMetas.length === 0,
     });
   } catch (error) {
+    if (error instanceof AppError) {
+      if (error.code === ErrorCodes.VALIDATION_ERROR) {
+        log.warn('Invalid preview configuration', {
+          classification: 'user_config',
+          code: error.code,
+          error,
+        });
+      }
+      return sendError(res, error.statusCode, error.code, error.message);
+    }
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });

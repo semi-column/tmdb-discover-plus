@@ -15,6 +15,7 @@ import {
   bucketForRange,
   encodeCursor,
   percentileSorted,
+  weightedPercentiles,
   type ErrorFilter,
   type ErrorGroupBatch,
   type HistoryStore,
@@ -135,6 +136,7 @@ export class MemoryHistory implements HistoryStore {
         existing.last_seen = new Date(Math.max((existing.last_seen as Date).getTime(), g.lastTs));
         existing.last_version = this.version;
         if (g.first.stack) existing.sample_stack = g.first.stack;
+        if (g.first.classification) existing.classification = g.first.classification;
         if (existing.status === 'resolved') {
           existing.status = 'regressed';
           existing.status_changed_at = new Date();
@@ -145,6 +147,7 @@ export class MemoryHistory implements HistoryStore {
           level: g.first.level,
           context: g.first.context,
           message: g.first.message,
+          classification: g.first.classification ?? '',
           sample_stack: g.first.stack,
           sample_route: g.first.route,
           first_seen: new Date(g.first.ts),
@@ -176,22 +179,42 @@ export class MemoryHistory implements HistoryStore {
     if (f.statusMin !== undefined && (e.status < f.statusMin || e.status > (f.statusMax ?? 999)))
       return false;
     if (f.minMs !== undefined && e.durationMs < f.minMs) return false;
+    if (f.maxMs !== undefined && e.durationMs > f.maxMs) return false;
+    if (f.minUpstreamCalls !== undefined && e.upstreamCalls < f.minUpstreamCalls) return false;
     if (f.errorsOnly && !(e.status >= 500 || e.errorFp)) return false;
     if (f.pathContains && !e.path.toLowerCase().includes(f.pathContains.toLowerCase()))
       return false;
-    if (f.cursor) {
-      const c = f.cursor.ts.getTime();
-      if (!(e.ts < c || (e.ts === c && e.requestId < f.cursor.requestId))) return false;
-    }
     return true;
   }
 
   async listRequests(range: TimeRange, filter: RequestFilter, limit: number) {
-    const rows: Row[] = [];
-    for (let i = this.requests.length - 1; i >= 0 && rows.length < limit; i--) {
-      if (this.matches(this.requests[i], range, filter)) rows.push(toRequestRow(this.requests[i]));
-    }
-    return { rows, nextCursor: encodeCursor(rows, limit) };
+    const sort = filter.sort ?? 'newest';
+    const metric = (e: RequestEvent) =>
+      sort === 'duration' ? e.durationMs : sort === 'upstreamCalls' ? e.upstreamCalls : 0;
+    const compare = (a: RequestEvent, b: RequestEvent) =>
+      metric(b) - metric(a) ||
+      (sort === 'oldest' ? 1 : -1) *
+        (a.ts - b.ts || (a.requestId < b.requestId ? -1 : a.requestId > b.requestId ? 1 : 0));
+    const matching = this.requests.filter((event) => this.matches(event, range, filter));
+    const cursor = filter.cursor;
+    const page = matching
+      .filter((event) => {
+        if (!cursor) return true;
+        if ((sort === 'duration' || sort === 'upstreamCalls') && metric(event) !== cursor.value)
+          return metric(event) < cursor.value!;
+        return sort === 'oldest'
+          ? event.ts > cursor.ts.getTime() ||
+              (event.ts === cursor.ts.getTime() && event.requestId > cursor.requestId)
+          : event.ts < cursor.ts.getTime() ||
+              (event.ts === cursor.ts.getTime() && event.requestId < cursor.requestId);
+      })
+      .sort(compare);
+    const rows = page.slice(0, limit).map(toRequestRow);
+    return {
+      rows,
+      total: matching.length,
+      nextCursor: page.length > limit ? encodeCursor(rows, limit, sort) : null,
+    };
   }
 
   async requestFacets(range: TimeRange) {
@@ -237,6 +260,7 @@ export class MemoryHistory implements HistoryStore {
           duration_ms: u.durationMs,
           error: u.error,
           timed_out: u.timedOut,
+          cancelled: u.cancelled ?? false,
         })),
       errors: this.errorEvents
         .filter((e) => e.requestId === requestId)
@@ -246,15 +270,20 @@ export class MemoryHistory implements HistoryStore {
           level: e.level,
           message: e.message,
           context: e.context,
+          occurrences: e.occurrences ?? 1,
+          classification: e.classification ?? '',
           status: this.groups.get(e.fingerprint)?.status ?? '',
         })),
     };
   }
 
   async routeStats(range: TimeRange) {
+    return this.routeRows(this.requests.filter((event) => inRange(event.ts, range)));
+  }
+
+  private routeRows(events: RequestEvent[]) {
     const byRoute = new Map<string, RequestEvent[]>();
-    for (const e of this.requests) {
-      if (!inRange(e.ts, range)) continue;
+    for (const e of events) {
       const list = byRoute.get(e.route) ?? [];
       list.push(e);
       byRoute.set(e.route, list);
@@ -263,17 +292,20 @@ export class MemoryHistory implements HistoryStore {
       .map(([route, list]) => {
         const sorted = sortedDurations(list);
         const sum = (fn: (e: RequestEvent) => number) => list.reduce((acc, e) => acc + fn(e), 0);
+        const weight = sum((e) => e.weight);
+        const percentiles = weightedPercentiles(list.map((e) => [e.durationMs, e.weight]));
         return {
           route,
           count: Math.round(sum((e) => e.weight)),
           errors5xx: Math.round(sum((e) => (e.status >= 500 ? e.weight : 0))),
           errors4xx: Math.round(sum((e) => (e.status >= 400 && e.status < 500 ? e.weight : 0))),
-          avg_ms: Math.round(sum((e) => e.durationMs) / list.length),
-          p50_ms: percentileSorted(sorted, 0.5),
-          p95_ms: percentileSorted(sorted, 0.95),
-          p99_ms: percentileSorted(sorted, 0.99),
+          avg_ms: Math.round(sum((e) => e.durationMs * e.weight) / weight),
+          p50_ms: percentiles.p50Ms,
+          p95_ms: percentiles.p95Ms,
+          p99_ms: percentiles.p99Ms,
           max_ms: sorted[sorted.length - 1],
-          avg_upstream_calls: (sum((e) => e.upstreamCalls) / list.length).toFixed(1),
+          avg_upstream_calls: (sum((e) => e.upstreamCalls * e.weight) / weight).toFixed(1),
+          percentilesApproximate: list.some((e) => e.weight !== 1),
         };
       })
       .sort((a, b) => b.count - a.count);
@@ -285,6 +317,8 @@ export class MemoryHistory implements HistoryStore {
     const statuses = new Map<number, number>();
     const breakdowns = new Map<string, number>();
     const users = new Set<string>();
+    const events = this.requests.filter((event) => inRange(event.ts, range));
+    const durations = new Map<number, Array<[number, number]>>();
     const getBucket = (ts: number) => {
       const time = Math.floor(ts / bucketMs) * bucketMs;
       let bucket = buckets.get(time);
@@ -304,9 +338,12 @@ export class MemoryHistory implements HistoryStore {
       }
       return bucket;
     };
-    for (const event of this.requests) {
-      if (!inRange(event.ts, range)) continue;
+    for (const event of events) {
       const bucket = getBucket(event.ts);
+      const values = durations.get(bucket.bucket) ?? [];
+      values.push([event.durationMs, event.weight]);
+      durations.set(bucket.bucket, values);
+      bucket.sampled ||= event.weight !== 1;
       const weight = event.weight;
       bucket.requests += weight;
       if (event.status >= 500) bucket.errors5xx += weight;
@@ -335,17 +372,23 @@ export class MemoryHistory implements HistoryStore {
     }
     const logBuckets = new Map<number, OverviewLogBucket>();
     let errors = 0,
-      warnings = 0;
+      warnings = 0,
+      userConfigErrors = 0,
+      userConfigWarnings = 0;
     for (const event of this.errorEvents) {
       if (!inRange(event.ts, range)) continue;
       const time = Math.floor(event.ts / bucketMs) * bucketMs;
       const bucket = logBuckets.get(time) ?? { bucket: time, errors: 0, warnings: 0 };
       if (event.level === 'error') {
-        errors++;
-        bucket.errors++;
+        errors += event.occurrences ?? 1;
+        bucket.errors += event.occurrences ?? 1;
       } else {
-        warnings++;
-        bucket.warnings++;
+        warnings += event.occurrences ?? 1;
+        bucket.warnings += event.occurrences ?? 1;
+      }
+      if (event.classification === 'user_config') {
+        if (event.level === 'error') userConfigErrors += event.occurrences ?? 1;
+        else userConfigWarnings += event.occurrences ?? 1;
       }
       logBuckets.set(time, bucket);
     }
@@ -353,15 +396,18 @@ export class MemoryHistory implements HistoryStore {
       const [kind, key] = composite.split('\0');
       return { kind, key, count };
     });
+    for (const [time, bucket] of buckets)
+      bucket.p95Ms = weightedPercentiles(durations.get(time)!).p95Ms;
     return buildHistoryOverview(
       range,
       [...buckets.values()],
-      await this.routeStats(range),
+      this.routeRows(events),
       [...statuses].map(([status, count]) => ({ status, count })),
       breakdownRows,
       [...logBuckets.values()],
-      { errors, warnings },
-      users.size
+      { errors, warnings, userConfigErrors, userConfigWarnings },
+      users.size,
+      weightedPercentiles(events.map((event) => [event.durationMs, event.weight]))
     );
   }
 
@@ -378,6 +424,7 @@ export class MemoryHistory implements HistoryStore {
             : true
       )
       .filter((g) => !filter.level || g.level === filter.level)
+      .filter((g) => !filter.classification || g.classification === filter.classification)
       .filter((g) => !q || `${g.message} ${g.context}`.toLowerCase().includes(q))
       .sort((a, b) => (b.last_seen as Date).getTime() - (a.last_seen as Date).getTime())
       .slice(0, 200)
@@ -386,7 +433,7 @@ export class MemoryHistory implements HistoryStore {
         for (const e of this.errorEvents) {
           if (e.fingerprint !== g.fingerprint || !inRange(e.ts, range)) continue;
           const b = Math.floor(e.ts / bucketMs) * bucketMs;
-          buckets.set(b, (buckets.get(b) ?? 0) + 1);
+          buckets.set(b, (buckets.get(b) ?? 0) + (e.occurrences ?? 1));
         }
         return {
           ...g,
@@ -400,7 +447,7 @@ export class MemoryHistory implements HistoryStore {
     if (!group) return null;
     const events = this.errorEvents.filter((e) => e.fingerprint === fingerprint);
     const routes = new Map<string, number>();
-    for (const e of events) routes.set(e.route, (routes.get(e.route) ?? 0) + 1);
+    for (const e of events) routes.set(e.route, (routes.get(e.route) ?? 0) + (e.occurrences ?? 1));
     return {
       group,
       events: events
@@ -413,6 +460,8 @@ export class MemoryHistory implements HistoryStore {
           instance: e.instance,
           route: e.route,
           message: e.message,
+          occurrences: e.occurrences ?? 1,
+          classification: e.classification ?? '',
         })),
       routes: [...routes.entries()]
         .map(([route, count]) => ({ route, count }))
@@ -447,11 +496,13 @@ export class MemoryHistory implements HistoryStore {
           method: group[0].method,
           path: group[0].path,
           calls: group.length,
-          errors: group.filter((u) => u.status === 0 || u.status >= 500).length,
-          rejected: group.filter((u) => u.status >= 400 && u.status < 500 && u.status !== 429)
-            .length,
-          rate_limited: group.filter((u) => u.status === 429).length,
-          timeouts: group.filter((u) => u.timedOut).length,
+          errors: group.filter((u) => !u.cancelled && (u.status === 0 || u.status >= 500)).length,
+          rejected: group.filter(
+            (u) => !u.cancelled && u.status >= 400 && u.status < 500 && u.status !== 429
+          ).length,
+          rate_limited: group.filter((u) => !u.cancelled && u.status === 429).length,
+          timeouts: group.filter((u) => !u.cancelled && u.timedOut).length,
+          cancelled: group.filter((u) => u.cancelled).length,
           avg_ms: Math.round(group.reduce((a, u) => a + u.durationMs, 0) / group.length),
           p95_ms: percentileSorted(sorted, 0.95),
           max_ms: sorted[sorted.length - 1],
@@ -460,9 +511,12 @@ export class MemoryHistory implements HistoryStore {
       .sort((a, b) => b.calls - a.calls)
       .slice(0, 100);
     const recentErrors = [
-      ...list.filter((u) => u.status === 0 || u.status >= 500).slice(-25),
-      ...list.filter((u) => u.status === 429).slice(-25),
-      ...list.filter((u) => u.status >= 400 && u.status < 500 && u.status !== 429).slice(-25),
+      ...list.filter((u) => !u.cancelled && (u.status === 0 || u.status >= 500)).slice(-25),
+      ...list.filter((u) => !u.cancelled && u.status === 429).slice(-25),
+      ...list
+        .filter((u) => !u.cancelled && u.status >= 400 && u.status < 500 && u.status !== 429)
+        .slice(-25),
+      ...list.filter((u) => u.cancelled).slice(-25),
     ]
       .sort((a, b) => b.ts - a.ts)
       .map((u) => ({
@@ -473,6 +527,7 @@ export class MemoryHistory implements HistoryStore {
         status: u.status,
         duration_ms: u.durationMs,
         error: u.error,
+        cancelled: u.cancelled ?? false,
         request_id: u.requestId,
       }));
     return { endpoints, recentErrors };
@@ -481,6 +536,8 @@ export class MemoryHistory implements HistoryStore {
   async upstreamOverview(range: TimeRange) {
     const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
     const buckets = new Map<string, UpstreamOverviewBucket>();
+    const durations = new Map<string, Array<[number, number]>>();
+    const providerDurations = new Map<string, Array<[number, number]>>();
 
     for (const event of this.upstream) {
       if (!inRange(event.ts, range)) continue;
@@ -495,20 +552,40 @@ export class MemoryHistory implements HistoryStore {
           errors: 0,
           rateLimited: 0,
           timeouts: 0,
+          rejected: 0,
+          cancelled: 0,
           duration: 0,
           histogram: Array(LATENCY_BUCKETS.length + 1).fill(0),
         };
         buckets.set(key, row);
       }
       row.calls++;
-      if (event.status === 0 || event.status >= 500) row.errors++;
-      if (event.status === 429) row.rateLimited++;
-      if (event.timedOut) row.timeouts++;
+      if (event.cancelled) row.cancelled!++;
+      else {
+        if (event.status === 0 || event.status >= 500) row.errors++;
+        if (event.status === 429) row.rateLimited++;
+        if (event.status >= 400 && event.status < 500 && event.status !== 429) row.rejected!++;
+        if (event.timedOut) row.timeouts++;
+      }
       row.duration += event.durationMs;
       row.histogram[latencyBucket(event.durationMs)]++;
+      const values = durations.get(key) ?? [];
+      values.push([event.durationMs, 1]);
+      durations.set(key, values);
+      const providerValues = providerDurations.get(event.provider) ?? [];
+      providerValues.push([event.durationMs, 1]);
+      providerDurations.set(event.provider, providerValues);
     }
 
-    return buildHistoryUpstreamOverview(range, [...buckets.values()]);
+    for (const [key, bucket] of buckets)
+      bucket.p95Ms = weightedPercentiles(durations.get(key)!).p95Ms;
+    return buildHistoryUpstreamOverview(
+      range,
+      [...buckets.values()],
+      new Map(
+        [...providerDurations].map(([provider, values]) => [provider, weightedPercentiles(values)])
+      )
+    );
   }
 
   async usageStats(range: TimeRange) {
@@ -541,7 +618,9 @@ export class MemoryHistory implements HistoryStore {
           requests: Math.round(c.events.reduce((a, e) => a + e.weight, 0)),
           users: c.users.size,
           errors: Math.round(c.events.reduce((a, e) => a + (e.status >= 500 ? e.weight : 0), 0)),
-          p95_ms: percentileSorted(sortedDurations(c.events), 0.95),
+          p95_ms: weightedPercentiles(c.events.map((event) => [event.durationMs, event.weight]))
+            .p95Ms,
+          percentilesApproximate: c.events.some((event) => event.weight !== 1),
         }))
         .sort((a, b) => b.requests - a.requests)
         .slice(0, 50),

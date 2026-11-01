@@ -2,6 +2,7 @@ import { createLogger } from '../utils/logger.ts';
 import { config as appConfig } from '../config.ts';
 import { TIMEOUTS, metahubUrl } from '../constants.ts';
 import { LOCAL_CACHE_TTLS } from '../cacheTtls.ts';
+import { getRequestSignal, throwIfRequestAborted } from '../utils/requestContext.ts';
 import type {
   ContentType,
   PosterOptions,
@@ -74,6 +75,16 @@ interface ArtworkCheckEntry {
 }
 
 const artworkCheckCache = new Map<string, ArtworkCheckEntry>();
+type ArtworkRequestCache = Map<string, Promise<unknown>>;
+
+function artworkRequestSignal(): AbortSignal {
+  throwIfRequestAborted();
+  const requestSignal = getRequestSignal();
+  return AbortSignal.any([
+    AbortSignal.timeout(TIMEOUTS.RPDB_FETCH_MS),
+    ...(requestSignal ? [requestSignal] : []),
+  ]);
+}
 
 interface TvdbTokenEntry {
   token: string;
@@ -142,6 +153,7 @@ function evictStaleEntries(): void {
 }
 
 export async function checkArtworkExists(url: string): Promise<boolean> {
+  throwIfRequestAborted();
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' || !ALLOWED_CHECK_HOSTS.has(parsed.hostname)) {
@@ -159,15 +171,31 @@ export async function checkArtworkExists(url: string): Promise<boolean> {
   }
 
   try {
-    const response = await fetch(url, {
+    const signal = artworkRequestSignal();
+    let response = await fetch(url, {
       method: 'HEAD',
-      signal: AbortSignal.timeout(TIMEOUTS.RPDB_FETCH_MS),
+      signal,
       redirect: 'follow',
     });
+    if ([401, 405, 501].includes(response.status)) {
+      // Some image endpoints authenticate/route GET but do not implement HEAD.
+      // Reuse the deadline and cancel the body even if the server ignores Range.
+      await response.body?.cancel();
+      response = await fetch(url, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-1023' },
+        signal,
+        redirect: 'follow',
+      });
+      await response.body?.cancel();
+    }
+    throwIfRequestAborted();
 
     if (!response.ok) {
-      artworkCheckCache.set(url, { exists: false, ts: Date.now() });
-      evictStaleEntries();
+      if (response.status === 404 || response.status === 410) {
+        artworkCheckCache.set(url, { exists: false, ts: Date.now() });
+        evictStaleEntries();
+      }
       return false;
     }
 
@@ -189,8 +217,7 @@ export async function checkArtworkExists(url: string): Promise<boolean> {
     evictStaleEntries();
     return true;
   } catch {
-    artworkCheckCache.set(url, { exists: false, ts: Date.now() });
-    evictStaleEntries();
+    throwIfRequestAborted();
     return false;
   }
 }
@@ -393,7 +420,7 @@ async function getTvdbToken(apiKey: string): Promise<string | null> {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ apikey: apiKey }),
-      signal: AbortSignal.timeout(TIMEOUTS.RPDB_FETCH_MS),
+      signal: artworkRequestSignal(),
     });
 
     if (!response.ok) return null;
@@ -402,9 +429,11 @@ async function getTvdbToken(apiKey: string): Promise<string | null> {
     const token = payload?.data?.token;
     if (!token) return null;
 
+    throwIfRequestAborted();
     tvdbTokenCache.set(apiKey, { token, ts: now });
     return token;
   } catch {
+    throwIfRequestAborted();
     return null;
   }
 }
@@ -426,7 +455,7 @@ export async function validateTvdbApiKeyAuthorization(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ apikey: apiKey }),
-      signal: AbortSignal.timeout(TIMEOUTS.RPDB_FETCH_MS),
+      signal: artworkRequestSignal(),
     });
 
     if (!response.ok) {
@@ -458,6 +487,7 @@ export async function validateTvdbApiKeyAuthorization(
     }
 
     const now = Date.now();
+    throwIfRequestAborted();
     tvdbTokenCache.set(apiKey, { token, ts: now });
 
     return {
@@ -467,6 +497,7 @@ export async function validateTvdbApiKeyAuthorization(
       statusCode: response.status,
     };
   } catch (error) {
+    throwIfRequestAborted();
     return {
       valid: false,
       invalidKey: false,
@@ -475,26 +506,38 @@ export async function validateTvdbApiKeyAuthorization(
   }
 }
 
-async function fetchTvdbJson<T>(path: string, token: string): Promise<T | null> {
-  try {
-    const response = await fetch(`${TVDB_API_BASE_URL}${path}`, {
-      headers: {
-        authorization: `Bearer ${token}`,
-        accept: 'application/json',
-      },
-      signal: AbortSignal.timeout(TIMEOUTS.RPDB_FETCH_MS),
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as T;
-  } catch {
-    return null;
-  }
+async function fetchTvdbJson<T>(
+  path: string,
+  token: string,
+  requests: ArtworkRequestCache
+): Promise<T | null> {
+  const key = `tvdb:${token}:${path}`;
+  if (requests.has(key)) return requests.get(key) as Promise<T | null>;
+  const promise = (async () => {
+    try {
+      const response = await fetch(`${TVDB_API_BASE_URL}${path}`, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/json',
+        },
+        signal: artworkRequestSignal(),
+      });
+      if (!response.ok) return null;
+      return (await response.json()) as T;
+    } catch {
+      throwIfRequestAborted();
+      return null;
+    }
+  })();
+  requests.set(key, promise);
+  return promise;
 }
 
 async function resolveTvdbArtworkUrl(
   context: ArtworkContext,
   kind: ArtworkKind,
-  apiKey: string
+  apiKey: string,
+  requests: ArtworkRequestCache
 ): Promise<string | null> {
   const imdbId = context.imdbId;
   if (!imdbId || !imdbId.startsWith('tt')) return null;
@@ -511,7 +554,8 @@ async function resolveTvdbArtworkUrl(
 
   const searchPayload = await fetchTvdbJson<SearchByRemoteIdPayload>(
     `/search/remoteid/${encodeURIComponent(imdbId)}`,
-    token
+    token,
+    requests
   );
   const first = searchPayload?.data?.[0];
   const tvdbMediaType: 'series' | 'movie' = context.type === 'movie' ? 'movie' : 'series';
@@ -530,7 +574,8 @@ async function resolveTvdbArtworkUrl(
     };
     const seriesPayload = await fetchTvdbJson<SeriesArtworksPayload>(
       `/series/${tvdbId}/artworks`,
-      token
+      token,
+      requests
     );
     const fromArtworks = pickArtworkByKind(
       seriesPayload?.data?.artworks || [],
@@ -544,7 +589,8 @@ async function resolveTvdbArtworkUrl(
     };
     const moviePayload = await fetchTvdbJson<MovieExtendedPayload>(
       `/movies/${tvdbId}/extended`,
-      token
+      token,
+      requests
     );
     const fromArtworks = pickArtworkByKind(
       moviePayload?.data?.artworks || [],
@@ -582,24 +628,35 @@ const FANART_TV_KIND_FIELDS: Partial<Record<ArtworkKind, string[]>> = {
   landscape: ['tvthumb', 'tvbanner'],
 };
 
-async function fetchFanartPayload(path: string, apiKey: string): Promise<FanartApiPayload | null> {
-  try {
-    const response = await fetch(
-      `${FANART_API_BASE_URL}/${path}?api_key=${encodeURIComponent(apiKey)}`,
-      {
-        headers: {
-          accept: 'application/json',
-        },
-        signal: AbortSignal.timeout(TIMEOUTS.RPDB_FETCH_MS),
-      }
-    );
+async function fetchFanartPayload(
+  path: string,
+  apiKey: string,
+  requests: ArtworkRequestCache
+): Promise<FanartApiPayload | null> {
+  const key = `fanart:${apiKey}:${path}`;
+  if (requests.has(key)) return requests.get(key) as Promise<FanartApiPayload | null>;
+  const promise = (async () => {
+    try {
+      const response = await fetch(
+        `${FANART_API_BASE_URL}/${path}?api_key=${encodeURIComponent(apiKey)}`,
+        {
+          headers: {
+            accept: 'application/json',
+          },
+          signal: artworkRequestSignal(),
+        }
+      );
 
-    if (!response.ok) return null;
+      if (!response.ok) return null;
 
-    return (await response.json()) as FanartApiPayload;
-  } catch {
-    return null;
-  }
+      return (await response.json()) as FanartApiPayload;
+    } catch {
+      throwIfRequestAborted();
+      return null;
+    }
+  })();
+  requests.set(key, promise);
+  return promise;
 }
 
 function getFanartLookupPaths(context: ArtworkContext): string[] {
@@ -617,7 +674,8 @@ function getFanartLookupPaths(context: ArtworkContext): string[] {
 async function resolveFanartArtworkUrl(
   context: ArtworkContext,
   kind: ArtworkKind,
-  apiKey: string
+  apiKey: string,
+  requests: ArtworkRequestCache
 ): Promise<string | null> {
   if (kind === 'episode') return null;
 
@@ -634,7 +692,7 @@ async function resolveFanartArtworkUrl(
   };
 
   for (const lookupPath of lookupPaths) {
-    const payload = await fetchFanartPayload(lookupPath, apiKey);
+    const payload = await fetchFanartPayload(lookupPath, apiKey, requests);
     if (!payload) continue;
 
     for (const field of kindFields) {
@@ -993,8 +1051,10 @@ export async function applyArtworkOverrides(
   artworkOptions: ArtworkOptions | null | undefined,
   options?: ApplyArtworkOverridesOptions
 ): Promise<ResolvedArtwork> {
+  throwIfRequestAborted();
   const shouldCheck = options?.checkExistence ?? false;
   const kinds: ArtworkKind[] = ['poster', 'backdrop', 'logo', 'landscape', 'episode'];
+  const requests: ArtworkRequestCache = new Map();
 
   const result: ResolvedArtwork = {
     poster: null,
@@ -1017,6 +1077,7 @@ export async function applyArtworkOverrides(
   };
 
   for (const kind of kinds) {
+    throwIfRequestAborted();
     const config = artworkOptions?.[kind] ?? null;
     const service = config?.service || 'none';
     let url: string | null = null;
@@ -1026,11 +1087,21 @@ export async function applyArtworkOverrides(
         let overrideUrl: string | null = null;
         if (service === 'tvdb') {
           if (config?.apiKey) {
-            overrideUrl = await resolveTvdbArtworkUrl(effectiveContext, kind, config.apiKey);
+            overrideUrl = await resolveTvdbArtworkUrl(
+              effectiveContext,
+              kind,
+              config.apiKey,
+              requests
+            );
           }
         } else if (service === 'fanart') {
           if (config?.apiKey) {
-            overrideUrl = await resolveFanartArtworkUrl(effectiveContext, kind, config.apiKey);
+            overrideUrl = await resolveFanartArtworkUrl(
+              effectiveContext,
+              kind,
+              config.apiKey,
+              requests
+            );
           }
         } else {
           overrideUrl = resolveArtworkUrl(effectiveContext, kind, config);
@@ -1074,6 +1145,7 @@ export async function applyArtworkOverrides(
     result[kind] = url;
   }
 
+  throwIfRequestAborted();
   return result;
 }
 

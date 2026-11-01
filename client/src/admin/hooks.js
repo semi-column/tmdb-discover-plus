@@ -7,13 +7,18 @@ export function useAsync(loader, deps, { pollMs } = {}) {
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
     const run = async (silent) => {
+      if (inFlight) return;
+      inFlight = true;
       if (!silent) setState((s) => ({ ...s, loading: true }));
       try {
         const data = await loader();
         if (!cancelled) setState({ data, error: null, loading: false });
       } catch (error) {
         if (!cancelled) setState((s) => ({ ...s, error, loading: false }));
+      } finally {
+        inFlight = false;
       }
     };
     run(false);

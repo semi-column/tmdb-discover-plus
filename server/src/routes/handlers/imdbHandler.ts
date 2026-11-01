@@ -20,6 +20,7 @@ import { DISPLAY, normalizeBaseUrl, buildCatalogId } from '../../constants.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { buildArtworkOptions, getPlaceholderUrls } from './sharedHelpers.ts';
+import { isRequestAborted, throwIfRequestAborted } from '../../utils/requestContext.ts';
 
 const log = createLogger('addon:imdb');
 const IMDB_PAGE_SIZE = DISPLAY.IMDB_PAGE_SIZE;
@@ -43,6 +44,7 @@ export async function handleImdbCatalogRequest(
     const searchQuery = extra.search || null;
 
     const userConfig = await getUserConfig(userId);
+    throwIfRequestAborted();
     if (!userConfig) {
       res.json({ metas: [] });
       return;
@@ -122,6 +124,7 @@ export async function handleImdbCatalogRequest(
       const searchResult = await imdb.search(searchQuery, imdbTypes, IMDB_PAGE_SIZE);
       const searchTitles = (searchResult.titles || []) as ImdbTitle[];
       const metas = await computeEnrichedMetas(searchTitles);
+      throwIfRequestAborted();
       const baseUrl = normalizeBaseUrl(userConfig.baseUrl || getBaseUrl(req));
       const { posterPlaceholder } = getPlaceholderUrls(baseUrl);
       for (const m of metas) {
@@ -264,6 +267,7 @@ export async function handleImdbCatalogRequest(
       CACHE_TTLS.CATALOG_SERVER_DISCOVER,
       { allowStale: true }
     )) as StremioMetaPreview[];
+    throwIfRequestAborted();
 
     const filteredMetas = filterUnknownGenreMetas(metas, !!filters.excludeUnknownGenres);
     const baseUrl = normalizeBaseUrl(userConfig.baseUrl || getBaseUrl(req));
@@ -318,10 +322,11 @@ export async function handleImdbCatalogRequest(
         .catch(() => {});
     }
   } catch (error) {
+    if (res.headersSent || res.destroyed || isRequestAborted()) return;
     log.error('IMDb catalog error', {
       catalogId,
       type,
-      error: (error as Error).message,
+      error,
       durationMs: Date.now() - startTime,
     });
     res.json({ metas: [] });

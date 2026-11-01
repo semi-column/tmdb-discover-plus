@@ -5,6 +5,7 @@ import {
   isValidPosterConfig,
   createArtworkOptions,
   applyArtworkOverridesSync,
+  applyArtworkOverrides,
   checkPosterExists,
   applyArtworkOverridesToMetaPreviews,
   requiresAsyncArtworkResolution,
@@ -439,6 +440,68 @@ describe('checkPosterExists', () => {
     fetchMock.mockReset();
   });
 
+  describe('artwork response reuse', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('fetches a Fanart payload once for all image kinds without losing language choices', async () => {
+      const fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          movieposter: [{ url: 'https://assets.fanart.tv/poster.jpg', lang: 'en' }],
+          moviebackground: [{ url: 'https://assets.fanart.tv/background.jpg', lang: 'en' }],
+          hdmovielogo: [{ url: 'https://assets.fanart.tv/logo.png', lang: 'en' }],
+          moviethumb: [{ url: 'https://assets.fanart.tv/landscape.jpg', lang: 'en' }],
+        }),
+      });
+      vi.stubGlobal('fetch', fetch);
+      const option = { service: 'fanart' as const, apiKey: 'fanart-test-key' };
+      const result = await applyArtworkOverrides(
+        { tmdbId: 550, imdbId: 'tt0137523', type: 'movie', language: 'en' },
+        {},
+        {
+          poster: option,
+          backdrop: option,
+          logo: option,
+          landscape: option,
+        }
+      );
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(result).toMatchObject({
+        poster: 'https://assets.fanart.tv/poster.jpg',
+        backdrop: 'https://assets.fanart.tv/background.jpg',
+        logo: 'https://assets.fanart.tv/logo.png',
+        landscape: 'https://assets.fanart.tv/landscape.jpg',
+      });
+    });
+
+    it('reuses TVDB lookup/artwork responses for all kinds', async () => {
+      const fetch = vi.fn().mockImplementation(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url.endsWith('/login')
+            ? { data: { token: 'test-token' } }
+            : url.includes('/search/')
+              ? { data: [{ series: { id: 1, image: 'https://artwork.thetvdb.com/native.jpg' } }] }
+              : { data: { artworks: [] } },
+      }));
+      vi.stubGlobal('fetch', fetch);
+      const option = { service: 'tvdb' as const, apiKey: 'tvdb-reuse-key' };
+      const result = await applyArtworkOverrides(
+        { imdbId: 'tt0137523', type: 'series' },
+        {},
+        {
+          poster: option,
+          backdrop: option,
+          logo: option,
+          landscape: option,
+        }
+      );
+      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(result.poster).toBe('https://artwork.thetvdb.com/native.jpg');
+      expect(result.logo).toBe(result.poster);
+    });
+  });
+
   afterEach(() => vi.unstubAllGlobals());
 
   it('returns true for a valid image response', async () => {
@@ -507,6 +570,40 @@ describe('checkPosterExists', () => {
     await checkPosterExists(url);
     await checkPosterExists(url);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([401, 405, 501])(
+    'verifies a HEAD %s with one bounded GET before rejecting chosen artwork',
+    async (status) => {
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      fetchMock.mockResolvedValueOnce({ ok: false, status, headers: { get: () => null } });
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 206,
+        headers: { get: (name: string) => (name === 'content-type' ? 'image/jpeg' : '1024') },
+        body: { cancel },
+      });
+      const url = `${trustedPosterBase}/head-${status}.jpg`;
+      expect(await checkPosterExists(url)).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1][1]).toMatchObject({
+        method: 'GET',
+        headers: { Range: 'bytes=0-1023' },
+      });
+      expect(fetchMock.mock.calls[1][1].signal).toBe(fetchMock.mock.calls[0][1].signal);
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(await checkPosterExists(url)).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  it.each([403, 429, 503])('does not cache HEAD %s as a missing image', async (status) => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status, headers: { get: () => null } });
+    fetchMock.mockResolvedValueOnce({ ok: true, headers: { get: () => 'image/jpeg' } });
+    const url = `${trustedPosterBase}/transient-${status}.jpg`;
+    expect(await checkPosterExists(url)).toBe(false);
+    expect(await checkPosterExists(url)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('returns false for untrusted host and does not call fetch', async () => {

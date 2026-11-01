@@ -1,17 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import diagnosticsChannel from 'node:diagnostics_channel';
 import { describePath } from '../../src/services/observability/routeInfo.ts';
 import {
   computeFingerprint,
   normalizeMessage,
   topAppFrame,
+  extractDetail,
+  classifyError,
 } from '../../src/services/observability/errors.ts';
 import { classifyClient } from '../../src/services/observability/identity.ts';
 import {
   providerForHost,
   templateUpstreamPath,
+  startUpstreamCapture,
 } from '../../src/services/observability/upstream.ts';
 import { Collector, latencyBucket } from '../../src/services/observability/collector.ts';
 import { MemoryLiveStore } from '../../src/services/observability/liveStore.ts';
+import { MemoryHistory } from '../../src/services/observability/history/memory.ts';
 import { createLogger, setLogSink } from '../../src/utils/logger.ts';
 import {
   liveOverview,
@@ -47,6 +52,18 @@ describe('describePath', () => {
 
   it('collapses unmatched paths to one route', () => {
     expect(describePath('/wp-login.php', null).route).toBe('(unmatched)');
+  });
+
+  it('redacts search terms including encoded values while preserving pagination', () => {
+    for (const extra of [
+      'search=private%20title&skip=20',
+      'search%3Dprivate%2520title%26skip%3D20',
+    ]) {
+      const info = describePath(`/config/catalog/movie/tmdb-search-movie/${extra}.json`);
+      expect(info.path).not.toContain('private');
+      expect(info.path).toContain('search=%5Bredacted%5D');
+      expect(info.path).toContain('skip=20');
+    }
   });
 });
 
@@ -87,10 +104,12 @@ describe('parseRange', () => {
     expect(range.kind).toBe('h');
   });
 
-  it('rejects empty custom bounds and falls back to the default range', () => {
-    const range = parseRange({ range: 'custom', from: '', to: String(Date.now()) }, 7);
-    expect(range.kind).toBe('m');
-    expect(range.to - range.from).toBeLessThanOrEqual(60 * 60_000);
+  it('rejects invalid custom bounds rather than silently showing another period', () => {
+    expect(() => parseRange({ range: 'custom', from: '', to: String(Date.now()) }, 7)).toThrow(
+      RangeError
+    );
+    expect(() => parseRange({ range: 'custom', from: 1, to: 2 }, 7)).toThrow(RangeError);
+    expect(() => parseRange({ range: 'no-such-range' }, 7)).toThrow(RangeError);
   });
 });
 
@@ -158,6 +177,41 @@ describe('error fingerprints', () => {
     ].join('\n');
     expect(topAppFrame(stack)).toBe('handleCatalog@routes/addon.ts');
   });
+  it('redacts message-only secrets as well as nested Error causes', () => {
+    const sink = vi.fn();
+    setLogSink(sink);
+    try {
+      createLogger('test').warn('Failed /search=private-title?api_key=SECRET', {
+        error: new Error('Failure', { cause: new Error('token=HIDDEN') }),
+      });
+    } finally {
+      setLogSink(null);
+    }
+    const captured = JSON.stringify(sink.mock.calls);
+    expect(captured).not.toContain('private-title');
+    expect(captured).not.toContain('SECRET');
+    expect(captured).not.toContain('HIDDEN');
+    expect(captured).toContain('cause');
+  });
+  it('extracts stacks from all supported Error fields and classifies known configuration failures', () => {
+    for (const key of ['error', 'err', 'reason']) {
+      const data = {
+        [key]: { message: 'Invalid API key', stack: 'Error: invalid\n at app.ts:2:1' },
+      };
+      expect(extractDetail(data).stack).toContain('app.ts:2:1');
+      expect(classifyError('Fetch failed', data)).toBe('user_config');
+    }
+    expect(classifyError('Internal error', null)).toBe('application');
+    expect(
+      extractDetail({
+        error: {
+          message: 'outer',
+          stack: 'Error: outer\n at outer.ts:1:1',
+          cause: { message: 'inner', stack: 'Error: inner\n at inner.ts:2:1' },
+        },
+      }).stack
+    ).toContain('Caused by: Error: inner');
+  });
 });
 
 describe('client and upstream classification', () => {
@@ -166,6 +220,9 @@ describe('client and upstream classification', () => {
     expect(classifyClient('Mozilla/5.0 (Linux; Android 13) Stremio/1.6')).toBe('Stremio Android');
     expect(classifyClient('curl/8.1')).toBe('Bot / script');
     expect(classifyClient('Mozilla/5.0 (Windows NT 10.0)')).toBe('Browser');
+    expect(classifyClient('AIOStreams/2.37.0')).toBe('AIOStreams');
+    expect(classifyClient('Nuvio/1.0 okhttp')).toBe('Nuvio');
+    expect(classifyClient('Omni/1.0')).toBe('Omni');
   });
 
   it('maps hosts and strips query strings (and keys) from upstream paths', () => {
@@ -174,6 +231,33 @@ describe('client and upstream classification', () => {
     expect(templateUpstreamPath('/3/movie/550/credits?api_key=SECRET')).toBe(
       '/3/movie/:id/credits'
     );
+    for (const host of [
+      'api.ratingposterdb.com',
+      'api.top-streaming.stream',
+      'api.top-posters.com',
+    ]) {
+      expect(templateUpstreamPath('/short-key/imdb/poster-default/tt12345.jpg', host)).toBe(
+        '/:credential/imdb/poster-default/tt12345.jpg'
+      );
+    }
+  });
+
+  it('distinguishes caller cancellation from an actual timeout', () => {
+    const record = vi.fn();
+    const stop = startUpstreamCapture(record);
+    try {
+      for (const name of ['AbortError', 'TimeoutError']) {
+        const request = { origin: 'https://api.themoviedb.org', method: 'GET', path: '/3/movie/1' };
+        diagnosticsChannel.channel('undici:request:create').publish({ request });
+        diagnosticsChannel
+          .channel('undici:request:error')
+          .publish({ request, error: new DOMException('Aborted', name) });
+      }
+      expect(record.mock.calls[0][0]).toMatchObject({ timedOut: false, cancelled: true });
+      expect(record.mock.calls[1][0]).toMatchObject({ timedOut: true, cancelled: false });
+    } finally {
+      stop();
+    }
   });
 });
 
@@ -243,6 +327,9 @@ describe('collector + live store', () => {
     expect(upstreams[0]).toMatchObject({ provider: 'tmdb', calls: 1, rateLimited: 1 });
 
     expect((await live.readTail(10)).length).toBe(2);
+    const hourly = await liveOverview(live, { ...range, kind: 'h' });
+    expect(hourly.totals.cacheHitRate).toBe(1);
+    expect(hourly.breakdowns.instances).toEqual([{ key: 'i1', count: 2 }]);
   });
 
   it('computes bucketed percentiles', () => {
@@ -250,6 +337,73 @@ describe('collector + live store', () => {
     expect(latencyBucket(60_000)).toBe(11);
     expect(histPercentile([0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0], 0.95)).toBe(50);
     expect(histPercentile(new Array(12).fill(0), 0.5)).toBeNull();
+  });
+
+  it('uses retained hourly live buckets for an old short interval', async () => {
+    const live = new MemoryLiveStore();
+    const from = Date.now() - 3 * 86_400_000;
+    await live.apply(
+      {
+        minutes: new Map(),
+        hours: new Map([[Math.floor(from / 3_600_000), new Map([['req', 7]])]]),
+        users: new Map(),
+        tail: [],
+      },
+      7 * 86400
+    );
+    const result = await liveOverview(live, { from, to: from + 60000, kind: 'm' });
+    expect(result.totals.requests).toBe(7);
+    expect(result.range.resolution).toBe('hour');
+  });
+
+  it('preserves occurrence totals across sampling and minute boundaries', async () => {
+    const history = new MemoryHistory({ maxEvents: 1000, retentionDays: 7, version: 'test' });
+    const collector = new Collector({
+      sampleRate: 1,
+      slowMs: 1500,
+      maxBuffer: 500,
+      hourTtlSec: 3600,
+    });
+    collector.setHistory(history);
+    const from = Math.floor(Date.now() / 60_000) * 60_000 - 60_000;
+    for (let i = 0; i < 80; i++)
+      collector.recordError({
+        ts: from + (i < 60 ? 1000 : 61000),
+        fingerprint: 'burst',
+        level: 'error',
+        context: 'test',
+        message: 'burst',
+        stack: '',
+        requestId: `r${i}`,
+        instance: 'i1',
+        route: i < 30 ? '/meta' : '/catalog',
+      });
+    await collector.flush();
+    const detail = await history.getErrorGroup('burst');
+    expect(Number(detail?.group.count)).toBe(80);
+    const result = await history.overview({ from, to: from + 119999, kind: 'm' }, 1500);
+    expect(result.totals.logErrors).toBe(80);
+    expect(result.series.logErrors).toEqual([60, 20]);
+    expect(detail?.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ route: '/meta', count: 30 }),
+        expect.objectContaining({ route: '/catalog', count: 50 }),
+      ])
+    );
+  });
+
+  it('marks stale in-memory instances gone and drops them after a day', async () => {
+    vi.useFakeTimers();
+    try {
+      const live = new MemoryLiveStore();
+      await live.heartbeat('pod', { version: 'test' });
+      await vi.advanceTimersByTimeAsync(91_000);
+      expect((await live.listInstances())[0].sample).toBeNull();
+      await vi.advanceTimersByTimeAsync(86_400_000);
+      expect(await live.listInstances()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('counts storage-cap omissions while retaining aggregated error groups', async () => {

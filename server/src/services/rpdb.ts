@@ -3,11 +3,13 @@ import { createLogger } from '../utils/logger.ts';
 import { TIMEOUTS } from '../constants.ts';
 import { CACHE_TTLS } from '../cacheTtls.ts';
 import { logSwallowedError } from '../utils/helpers.ts';
+import { getRequestSignal, throwIfRequestAborted } from '../utils/requestContext.ts';
 
 const log = createLogger('rpdb');
 const RPDB_BASE_URL = 'https://api.ratingposterdb.com';
 
 export async function getRpdbRating(apiKey: string, imdbId: string): Promise<string | null> {
+  throwIfRequestAborted();
   if (!apiKey || !imdbId) return null;
 
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(apiKey)) {
@@ -33,7 +35,13 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
   const url = `${RPDB_BASE_URL}/${apiKey}/imdb/rating/${imdbId}`;
 
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUTS.RPDB_FETCH_MS) });
+    const requestSignal = getRequestSignal();
+    const response = await fetch(url, {
+      signal: AbortSignal.any([
+        AbortSignal.timeout(TIMEOUTS.RPDB_FETCH_MS),
+        ...(requestSignal ? [requestSignal] : []),
+      ]),
+    });
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -41,7 +49,7 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
         return null;
       }
       if (response.status === 403) {
-        log.debug(`RPDB 403 Forbidden (Invalid Key?): ${url}`);
+        log.debug('RPDB 403 Forbidden (Invalid Key?)', { imdbId });
         return null;
       }
       throw new Error(`RPDB Status ${response.status}`);
@@ -57,7 +65,8 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
 
     return null;
   } catch (err) {
-    log.warn('Failed to fetch RPDB rating', { imdbId, error: (err as Error).message });
+    throwIfRequestAborted();
+    log.warn('Failed to fetch RPDB rating', { imdbId, error: err });
     return null;
   }
 }

@@ -189,6 +189,8 @@ export const config = Object.freeze({
     retentionDays: Math.min(Math.max(envInt('OBS_RETENTION_DAYS', 7), 1), 90),
     maxBuffer: 20000,
     maxStorageMb: Math.max(envInt('OBS_MAX_STORAGE_MB', 1024), 0),
+    redisUrl: process.env.OBS_REDIS_URL || '',
+    alertWebhookUrl: process.env.OBS_ALERT_WEBHOOK_URL || '',
     memoryEvents: isNightlyVariant ? 3000 : 10000,
   }),
 

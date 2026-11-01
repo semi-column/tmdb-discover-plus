@@ -39,7 +39,8 @@ import {
   sanitizeFiltersForSource,
 } from '../utils/validation.ts';
 import { buildCatalogExtraFromQuery, isNoSelectionGenre } from '../utils/catalogExtras.ts';
-import { sendError, ErrorCodes } from '../utils/AppError.ts';
+import { AppError, sendError, ErrorCodes } from '../utils/AppError.ts';
+import { isRequestAborted, throwIfRequestAborted } from '../utils/requestContext.ts';
 import { DISPLAY, normalizeBaseUrl, buildCatalogId } from '../constants.ts';
 import { CACHE_LIMITS, CACHE_TTLS, LOCAL_CACHE_TTLS, catalogServerTtl } from '../cacheTtls.ts';
 import { logSwallowedError } from '../utils/helpers.ts';
@@ -48,13 +49,6 @@ import { getEntryByPrefixedId } from '../services/animeIdMap/index.ts';
 import { resolveRequestedMetaId } from '../utils/metaIdResolution.ts';
 import { decrypt } from '../utils/encryption.ts';
 import { filterUnknownGenreMetas } from '../utils/catalogGenreFilter.ts';
-import {
-  createArtworkOptions,
-  resolveContentType,
-  applyArtworkOverrides,
-  applyArtworkOverridesToMetaPreviews,
-  requiresAsyncArtworkResolution,
-} from '../services/artworkService.ts';
 import { buildArtworkOptions, getPlaceholderUrls } from './handlers/sharedHelpers.ts';
 
 const log = createLogger('addon');
@@ -155,6 +149,7 @@ router.get('/:userId/manifest.json', async (req, res) => {
   try {
     const { userId } = req.params;
     const config = await getUserConfig(userId);
+    throwIfRequestAborted();
     const baseUrl = getBaseUrl(req);
 
     const manifest = buildManifest(config, baseUrl);
@@ -162,6 +157,7 @@ router.get('/:userId/manifest.json', async (req, res) => {
     if (config) {
       await enrichManifestWithGenres(manifest, config);
       await enrichManifestWithExtras(manifest, config);
+      throwIfRequestAborted();
 
       if (config.preferences?.shuffleCatalogs) {
         manifest.catalogs = shuffleArray(manifest.catalogs);
@@ -176,10 +172,11 @@ router.get('/:userId/manifest.json', async (req, res) => {
       setNoCacheHeaders(res);
     }
 
-    res.etagJson(manifest, { extra: userId });
+    if (!res.headersSent && !res.destroyed) res.etagJson(manifest, { extra: userId });
   } catch (error) {
-    log.error('Manifest error', { error: (error as Error).message });
-    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, (error as Error).message);
+    if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    log.error('Manifest error', { error });
+    sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Failed to load manifest');
   }
 });
 
@@ -230,7 +227,7 @@ async function resolveGenreFilter(
         });
       } catch (err) {
         log.warn('Could not load static genres for mapping extra.genre', {
-          error: (err as Error).message,
+          error: err,
         });
       }
     }
@@ -372,6 +369,7 @@ async function handleCatalogRequest(
     log.debug('Catalog request', { catalogId, skip, page, extra });
 
     const config = await getUserConfig(userId);
+    throwIfRequestAborted();
     if (!config) {
       log.debug('No config found', { userId });
       return res.json({ metas: [] });
@@ -465,6 +463,7 @@ async function handleCatalogRequest(
 
       if (search) {
         if (/^tt\d{7,8}$/i.test(search.trim())) {
+          if (page > 1) return [];
           try {
             const found = await tmdb.findByImdbId(apiKey, search.trim(), type, {
               language: displayLanguage,
@@ -480,9 +479,10 @@ async function handleCatalogRequest(
               }
             }
           } catch (e) {
+            throwIfRequestAborted();
             log.warn('IMDb direct lookup failed, falling back to search', {
               search,
-              error: (e as Error).message,
+              error: e,
             });
           }
         }
@@ -566,7 +566,8 @@ async function handleCatalogRequest(
         )
       ).filter((m): m is StremioMetaPreview => m !== null);
 
-      return applyArtworkOverridesToMetaPreviews(mapped, artworkOptions);
+      throwIfRequestAborted();
+      return mapped;
     };
 
     const metas = (
@@ -574,6 +575,7 @@ async function handleCatalogRequest(
         ? await computeCatalogMetas()
         : await cache.wrap(catalogCacheKey, computeCatalogMetas, serverTtl, { allowStale: true })
     ) as StremioMetaPreview[];
+    if (res.headersSent || res.destroyed || isRequestAborted()) return;
 
     const baseUrl = normalizeBaseUrl(config.baseUrl || getBaseUrl(req));
     const filteredMetas = filterUnknownGenreMetas(metas, !!resolvedFilters?.excludeUnknownGenres);
@@ -614,7 +616,17 @@ async function handleCatalogRequest(
       { extra: `${userId}:${catalogId}:${skip}` }
     );
   } catch (error) {
-    if (res.headersSent) return;
+    if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (error instanceof AppError && error.code === ErrorCodes.VALIDATION_ERROR) {
+      log.warn('Invalid catalog configuration', {
+        catalogId,
+        type,
+        classification: 'user_config',
+        code: error.code,
+        error,
+      });
+      return sendError(res, error.statusCode, error.code, error.message);
+    }
 
     const durationMs = Date.now() - startTime;
     const errMsg = (error as Error).message;
@@ -623,7 +635,7 @@ async function handleCatalogRequest(
         catalogId,
         type,
         userIdPrefix: userId.slice(0, 8),
-        error: errMsg,
+        error,
         durationMs,
         isTimeout: (error as Error).name === 'AbortError',
         code: (error as Error & { code?: string }).code || 'CATALOG_FETCH_ERROR',
@@ -647,6 +659,7 @@ async function handleMetaRequest(
   const startTime = Date.now();
   try {
     const config = await getUserConfig(userId);
+    throwIfRequestAborted();
     if (!config) {
       if (!res.headersSent) res.json({ meta: {} });
       return;
@@ -759,38 +772,8 @@ async function handleMetaRequest(
         { manifestUrl, genreCatalogId, allLogos, userRegion }
       );
 
-      if (!requiresAsyncArtworkResolution(artworkOptions)) {
-        return fullMeta;
-      }
-
-      const resolvedArtwork = await applyArtworkOverrides(
-        {
-          tmdbId,
-          imdbId,
-          type: stremioType,
-          language,
-        },
-        {
-          poster: fullMeta.poster,
-          backdrop: fullMeta.background,
-          logo: fullMeta.logo || null,
-          landscape: fullMeta.landscapePoster || fullMeta.fanart || fullMeta.background,
-        },
-        artworkOptions,
-        { checkExistence: false }
-      );
-
-      const backdrop = resolvedArtwork.backdrop;
-      const landscape = resolvedArtwork.landscape || backdrop;
-
-      return {
-        ...fullMeta,
-        poster: resolvedArtwork.poster,
-        background: backdrop,
-        fanart: landscape,
-        landscapePoster: landscape,
-        logo: resolvedArtwork.logo || undefined,
-      };
+      throwIfRequestAborted();
+      return fullMeta;
     };
 
     let meta = null as Partial<StremioMeta> | null;
@@ -809,6 +792,7 @@ async function handleMetaRequest(
         },
       })) as Partial<StremioMeta> | null;
     } catch (error) {
+      throwIfRequestAborted();
       if (error instanceof CachedError) {
         log.warn('Bypassing cached meta error and recomputing', {
           id: requestedId,
@@ -861,7 +845,7 @@ async function handleMetaRequest(
       { extra: `${userId}:${id}` }
     );
   } catch (error) {
-    if (res.headersSent) return;
+    if (res.headersSent || res.destroyed || isRequestAborted()) return;
 
     const durationMs = Date.now() - startTime;
     const errMsg = (error as Error).message;
@@ -870,7 +854,7 @@ async function handleMetaRequest(
         id,
         type,
         userIdPrefix: userId.slice(0, 8),
-        error: errMsg,
+        error,
         durationMs,
         isTimeout: (error as Error).name === 'AbortError',
         code: (error as Error & { code?: string }).code || 'META_FETCH_ERROR',

@@ -1,5 +1,11 @@
 import { createLogger } from '../../utils/logger.ts';
-import { trackCacheOperation } from '../../utils/requestContext.ts';
+import {
+  trackCacheOperation,
+  isRequestAborted,
+  throwIfRequestAborted,
+  getRequestSignal,
+  awaitWithRequestAbort,
+} from '../../utils/requestContext.ts';
 import { CACHE_ERROR_TTLS, CACHE_STORAGE } from '../../cacheTtls.ts';
 import type {
   ICacheAdapter,
@@ -57,7 +63,7 @@ export function classifyResult(data: unknown): CacheErrorType | null {
 export class CacheWrapper {
   private adapter: ICacheAdapter;
   private keyPrefix: string;
-  private inFlight: Map<string, Promise<unknown>>;
+  private inFlight: Map<string, { promise: Promise<unknown>; signal?: AbortSignal }>;
   private stats: Record<string, number>;
 
   constructor(adapter: ICacheAdapter, options: { version?: string } = {}) {
@@ -202,6 +208,7 @@ export class CacheWrapper {
     }
   }
   async set(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+    if (isRequestAborted()) return;
     if (value === undefined) {
       this.stats.writeValidationFailures++;
       log.warn('Cache write validation failed: undefined value', { key: key.substring(0, 80) });
@@ -240,6 +247,7 @@ export class CacheWrapper {
     }
   }
   async setError(key: string, errorType: CacheErrorType, errorMessage: string): Promise<void> {
+    if (isRequestAborted()) return;
     const storageKey = this._prefixKey(key);
     const ttl = ERROR_TTLS[errorType] || ERROR_TTLS.TEMPORARY_ERROR;
     try {
@@ -275,8 +283,10 @@ export class CacheWrapper {
     ttlSeconds: number,
     options: CacheWrapOptions = {}
   ): Promise<unknown> {
+    throwIfRequestAborted();
     const { allowStale = true } = options;
     const cached = await this.getEntry(key);
+    throwIfRequestAborted();
     options.onCacheRead?.(cached);
 
     if (cached !== null) {
@@ -291,9 +301,17 @@ export class CacheWrapper {
         return cached.data;
       }
     }
-    if (this.inFlight.has(key)) {
+    const existing = this.inFlight.get(key);
+    if (existing) {
       this.stats.deduplicatedRequests++;
-      return this.inFlight.get(key);
+      try {
+        return await awaitWithRequestAbort(existing.promise);
+      } catch (error) {
+        throwIfRequestAborted();
+        if (!existing.signal?.aborted) throw error;
+        if (this.inFlight.get(key) === existing) this.inFlight.delete(key);
+        return this.wrap(key, fetchFn, ttlSeconds, options);
+      }
     }
 
     if (this.inFlight.size >= MAX_IN_FLIGHT) {
@@ -309,12 +327,13 @@ export class CacheWrapper {
       });
     }
     const promise = this._executeFetch(key, fetchFn, ttlSeconds);
-    this.inFlight.set(key, promise);
+    const entry = { promise, signal: getRequestSignal() };
+    this.inFlight.set(key, entry);
 
     try {
-      return await promise;
+      return await awaitWithRequestAbort(promise);
     } finally {
-      this.inFlight.delete(key);
+      if (this.inFlight.get(key) === entry) this.inFlight.delete(key);
     }
   }
   async _executeFetch(
@@ -323,13 +342,20 @@ export class CacheWrapper {
     ttlSeconds: number
   ): Promise<unknown> {
     try {
-      const result = await fetchFn();
+      throwIfRequestAborted();
+      const result = await awaitWithRequestAbort(fetchFn());
+      throwIfRequestAborted();
       const resultType = classifyResult(result);
       const effectiveTtl = resultType === 'EMPTY_RESULT' ? ERROR_TTLS.EMPTY_RESULT : ttlSeconds;
       await this.set(key, result, effectiveTtl);
       return result;
     } catch (error) {
-      if (!(error instanceof CachedError)) {
+      if (
+        !isRequestAborted() &&
+        (error as Error)?.name !== 'AbortError' &&
+        (error as { code?: string })?.code !== 'VALIDATION_ERROR' &&
+        !(error instanceof CachedError)
+      ) {
         const errorType = classifyError(error as Error);
         await this.setError(key, errorType, (error as Error).message);
       }
@@ -339,14 +365,18 @@ export class CacheWrapper {
   _refreshInBackground(key: string, fetchFn: () => Promise<unknown>, ttlSeconds: number): void {
     if (this.inFlight.has(key)) return;
 
-    const promise = this._executeFetch(key, fetchFn, ttlSeconds).catch((err: unknown) => {
-      log.debug('Background refresh failed', {
-        key: key.substring(0, 80),
-        error: (err as Error).message,
+    const promise = this._executeFetch(key, fetchFn, ttlSeconds);
+    const entry = { promise, signal: getRequestSignal() };
+    this.inFlight.set(key, entry);
+    promise
+      .catch((err: unknown) => {
+        if (!entry.signal?.aborted) {
+          log.debug('Background refresh failed', { key: key.substring(0, 80), error: err });
+        }
+      })
+      .finally(() => {
+        if (this.inFlight.get(key) === entry) this.inFlight.delete(key);
       });
-    });
-    this.inFlight.set(key, promise);
-    promise.finally(() => this.inFlight.delete(key));
   }
   getStats(): CacheWrapperStats {
     const total = this.stats.hits + this.stats.misses;

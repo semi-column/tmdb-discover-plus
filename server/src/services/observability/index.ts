@@ -10,7 +10,8 @@ import type { HistoryStore } from './history/types.ts';
 import { MemoryHistory } from './history/memory.ts';
 import { startUpstreamCapture } from './upstream.ts';
 import { startSystemSampler } from './system.ts';
-import { computeFingerprint, extractDetail } from './errors.ts';
+import { startHealthMonitor } from './health.ts';
+import { classifyError, computeFingerprint, extractDetail } from './errors.ts';
 import { describePath } from './routeInfo.ts';
 import {
   INSTANCE_ID,
@@ -44,6 +45,11 @@ let historyStore: HistoryStore | null = null;
 let liveConnected: Promise<LiveStore> | null = null;
 const stoppers: Array<() => void> = [];
 let started = false;
+let alertingError: string | null = null;
+
+export function getAlertingError() {
+  return alertingError;
+}
 
 export function getCollectorStats() {
   return collector.stats;
@@ -56,23 +62,35 @@ export function getHistory(): HistoryStore | null {
 /** Live store is also used by admin auth (lockout, revocation). */
 export function getLiveStore(): Promise<LiveStore> {
   liveConnected ??= (async () => {
-    const redisUrl = config.cache.redisUrl;
-    if (redisUrl && config.cache.driver !== 'memory') {
+    const redisUrl = config.observability.redisUrl || config.cache.redisUrl;
+    if (redisUrl && (config.observability.redisUrl || config.cache.driver !== 'memory')) {
       try {
         const store = new RedisLiveStore(redisUrl);
         await store.connect();
         return store;
       } catch (err) {
+        if (config.observability.redisUrl) {
+          log.error(
+            'Dedicated observability Redis unavailable; refusing a different session store',
+            { error: err }
+          );
+          throw err;
+        }
         log.warn('Redis unavailable for observability, using in-process store', {
           error: (err as Error).message,
         });
       }
     }
     return new MemoryLiveStore();
-  })().then((store) => {
-    liveStore = store;
-    return store;
-  });
+  })()
+    .then((store) => {
+      liveStore = store;
+      return store;
+    })
+    .catch((error) => {
+      liveConnected = null;
+      throw error;
+    });
   return liveConnected;
 }
 
@@ -86,7 +104,7 @@ export function observabilityMiddleware() {
   return (req: Request, res: Response, next: NextFunction): void => {
     // Routers rewrite req.url while routing, so capture the full path up front.
     const pathname = req.path;
-    if (!config.observability.enabled || !shouldTrack(pathname)) return next();
+    if (!config.observability.enabled || !started || !shouldTrack(pathname)) return next();
     const state = getRequestLiveState();
     const startedAt = performance.now();
     const ts = Date.now();
@@ -126,7 +144,7 @@ export function observabilityMiddleware() {
           errorFp: state?.obs.errorFingerprint ?? '',
         });
       } catch (err) {
-        log.debug('Failed to record request', { error: (err as Error).message });
+        log.warn('Failed to record request', { error: err });
       }
     });
     next();
@@ -158,6 +176,7 @@ function captureLog(
     requestId: state?.requestId ?? '',
     instance: INSTANCE_ID,
     route: pathname ? describePath(pathname).route : '',
+    classification: classifyError(message, data),
   });
 }
 
@@ -165,12 +184,27 @@ export async function initObservability(): Promise<void> {
   if (!config.observability.enabled || started) return;
   started = true;
 
+  let live: LiveStore;
+  try {
+    live = await getLiveStore();
+  } catch (error) {
+    started = false;
+    throw error;
+  }
   setLogSink(captureLog);
   stoppers.push(() => setLogSink(null));
   stoppers.push(startUpstreamCapture((event) => collector.recordUpstream(event)));
 
-  const live = await getLiveStore();
   collector.setLiveStore(live);
+  try {
+    stoppers.push(startHealthMonitor(live, config.observability.alertWebhookUrl));
+  } catch (error) {
+    alertingError = error instanceof Error ? error.message : String(error);
+    log.error('Invalid alert webhook; collection and local health logging remain active', {
+      error,
+    });
+    stoppers.push(startHealthMonitor(live, ''));
+  }
 
   const flushTimer = setInterval(() => void collector.flush(), FLUSH_INTERVAL_MS);
   flushTimer.unref();
@@ -179,10 +213,12 @@ export async function initObservability(): Promise<void> {
   stoppers.push(
     startSystemSampler(
       SYSTEM_SAMPLE_INTERVAL_MS,
-      () => ({ version: ADDON_VERSION, collector: collector.stats }),
+      () => ({ version: ADDON_VERSION, collector: structuredClone(collector.stats) }),
       (data) => {
         collector.recordSystem({ ts: Date.now(), instance: INSTANCE_ID, data });
-        live.heartbeat(INSTANCE_ID, { ts: Date.now(), ...data }).catch(() => undefined);
+        live
+          .heartbeat(INSTANCE_ID, { ts: Date.now(), ...data })
+          .catch((error) => log.warn('Instance heartbeat failed', { error }));
       }
     )
   );

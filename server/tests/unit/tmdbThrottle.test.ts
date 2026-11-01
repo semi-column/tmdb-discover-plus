@@ -103,6 +103,18 @@ describe('TokenBucket', () => {
     expect(bucket.getStats().pausedUntil as number).toBeGreaterThan(0);
   });
 
+  it('removes cancelled requests from the paused queue without consuming a token', async () => {
+    bucket = new TokenBucket({ maxTokens: 1, refillRate: 1 });
+    bucket.notifyRateLimited(1000);
+    const controller = new AbortController();
+    const pending = bucket.acquire(5000, controller.signal);
+    expect(bucket.queue).toHaveLength(1);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(bucket.queue).toHaveLength(0);
+    expect(bucket.getStats().immediateGrants).toBe(0);
+  });
+
   it('resumes after pause expires', async () => {
     bucket = new TokenBucket({ maxTokens: 5, refillRate: 100 });
     bucket.endWarmup();

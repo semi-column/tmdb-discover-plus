@@ -261,17 +261,20 @@ describe('fetchSpecialList', () => {
     expect(result.results.map((item) => item.id)).toEqual([222218, 225067, 229747]);
   });
 
-  it('returns an empty collection page when collectionId is missing', async () => {
-    mockedFetch.mockClear();
+  it.each([undefined, '', '0', '-1', 'abc'])(
+    'rejects invalid collection ID %s before an upstream call',
+    async (collectionId) => {
+      mockedFetch.mockClear();
 
-    await expect(fetchSpecialList('key', 'collection', 'movie')).resolves.toEqual({
-      page: 1,
-      total_pages: 0,
-      total_results: 0,
-      results: [],
-    });
-    expect(mockedFetch).not.toHaveBeenCalled();
-  });
+      await expect(
+        fetchSpecialList('key', 'collection', 'movie', { collectionId })
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'VALIDATION_ERROR',
+      });
+      expect(mockedFetch).not.toHaveBeenCalled();
+    }
+  );
 
   it('throws when studio list is requested without studioId', async () => {
     await expect(fetchSpecialList('key', 'studio', 'collection')).rejects.toThrow(

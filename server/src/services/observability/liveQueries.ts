@@ -33,10 +33,15 @@ export function parseRange(query: Record<string, unknown>, maxDays: number): Tim
       const from = Math.max(retentionStart, Math.min(requestedFrom, to));
       const boundedTo = Math.max(from, Math.min(requestedTo, to));
       const span = boundedTo - from;
+      if (span <= 0) throw new RangeError('Custom time range is outside retained history');
       return { from, to: boundedTo, kind: span <= RANGES['24h'] ? 'm' : 'h' };
     }
+    throw new RangeError('Custom time range requires valid from/to epoch milliseconds');
   }
 
+  if (query.range !== undefined && !Object.hasOwn(RANGES, String(query.range))) {
+    throw new RangeError('Unknown time range');
+  }
   const span = RANGES[String(query.range)] ?? RANGES['1h'];
   const from = Math.max(to - span, to - maxDays * 86_400_000);
   // Minute buckets live 24h in the live store; anything longer uses hourly buckets.
@@ -115,6 +120,10 @@ function userKeys(range: TimeRange): string[] {
 }
 
 export async function liveOverview(live: LiveStore, range: TimeRange) {
+  // Live minute buckets expire by age, not by the width of the selected interval.
+  if (range.kind === 'm' && range.from < Date.now() - 24 * 3_600_000) {
+    range = { ...range, kind: 'h' };
+  }
   const span = bucketSpan(range);
   const buckets = await live.readBuckets(range.kind, span.from, span.to);
   // Breakdowns only exist in hourly buckets.
@@ -212,6 +221,9 @@ export async function liveOverview(live: LiveStore, range: TimeRange) {
 }
 
 export async function liveUpstreams(live: LiveStore, range: TimeRange) {
+  if (range.kind === 'm' && range.from < Date.now() - 24 * 3_600_000) {
+    range = { ...range, kind: 'h' };
+  }
   const span = bucketSpan(range);
   const buckets = await live.readBuckets(range.kind, span.from, span.to);
   const totals: Record<string, number> = {};
@@ -244,6 +256,9 @@ export async function liveUpstreams(live: LiveStore, range: TimeRange) {
         errors: totals[`ue:${p}`] ?? 0,
         rateLimited: totals[`u429:${p}`] ?? 0,
         timeouts: totals[`ut:${p}`] ?? 0,
+        cancelled: totals[`uc:${p}`] ?? 0,
+        rejected: totals[`u4:${p}`] ?? 0,
+        percentilesApproximate: true,
         errorRate: calls ? (totals[`ue:${p}`] ?? 0) / calls : 0,
         avgMs: calls ? Math.round((totals[`ud:${p}`] ?? 0) / calls) : null,
         p50Ms: histPercentile(hist, 0.5),

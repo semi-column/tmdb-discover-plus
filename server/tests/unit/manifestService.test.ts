@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 vi.mock('../../src/services/tmdb/index.ts', () => ({
   getGenres: vi.fn(),
@@ -55,6 +56,22 @@ describe('buildManifest', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('requires configuration and advertises no unsupported root resources', () => {
+    const root = JSON.parse(
+      readFileSync(new URL('../../../client/public/manifest.json', import.meta.url), 'utf8')
+    );
+    for (const manifest of [root, buildManifest(null, baseUrl)]) {
+      expect(manifest.resources).toEqual([]);
+      expect(manifest.idPrefixes).toEqual([]);
+      expect(manifest.catalogs).toEqual([]);
+      expect(manifest.behaviorHints.configurationRequired).toBe(true);
+    }
+    const configured = buildManifest({ catalogs: [] } as any, baseUrl);
+    expect(configured.resources).toEqual(['catalog', 'meta']);
+    expect(configured.idPrefixes).toContain('tt');
+    expect(configured.behaviorHints.configurationRequired).toBe(false);
   });
 
   it('builds manifest with catalogs', () => {
@@ -217,7 +234,7 @@ describe('buildManifest', () => {
 
   it('handles empty/null config gracefully', () => {
     const nullConfigManifest = buildManifest(null, baseUrl);
-    expect(nullConfigManifest.catalogs.length).toBe(2);
+    expect(nullConfigManifest.catalogs.length).toBe(0);
     expect(nullConfigManifest.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(buildManifest({}, baseUrl).catalogs.length).toBe(2);
   });

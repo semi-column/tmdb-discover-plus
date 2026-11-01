@@ -4,6 +4,7 @@ import { getCache } from '../cache/index.ts';
 import { stableStringify } from '../../utils/stableStringify.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
+import { AppError, ErrorCodes } from '../../utils/AppError.ts';
 
 const log = createLogger('tmdb:discover');
 
@@ -461,8 +462,12 @@ export async function fetchSpecialList(
           'TMDB collections are only supported for movies or collection type catalogs'
         );
       }
-      if (!collectionId) {
-        return { page, total_pages: 0, total_results: 0, results: [] };
+      if (!collectionId || !/^[1-9]\d*$/.test(String(collectionId))) {
+        throw new AppError(
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'A valid collection ID is required for collection list type'
+        );
       }
       const collection = (await tmdbFetch(`/collection/${collectionId}`, apiKey, {
         ...(languageParam ? { language: languageParam } : {}),

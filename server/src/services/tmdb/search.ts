@@ -2,6 +2,8 @@ import { tmdbFetch } from './client.ts';
 import { TMDB_IMAGE_BASE } from './constants.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
+import { DISPLAY } from '../../constants.ts';
+import { throwIfRequestAborted } from '../../utils/requestContext.ts';
 
 import type {
   ContentType,
@@ -96,19 +98,23 @@ export async function comprehensiveSearch(
   page: number = 1,
   options: ComprehensiveSearchOptions = {}
 ): Promise<ComprehensiveSearchResponse> {
+  throwIfRequestAborted();
+  page = Math.max(1, Math.floor(page));
   const { displayLanguage, language, includeAdult } = options;
   const languageParam = displayLanguage || language;
   const mediaType = type === 'series' ? 'tv' : 'movie';
 
-  const titleParams: Record<string, string | number | boolean | undefined> = { query, page };
+  const titleParams: Record<string, string | number | boolean | undefined> = { query, page: 1 };
   if (languageParam) titleParams.language = languageParam;
   if (includeAdult !== undefined) titleParams.include_adult = includeAdult;
 
-  const shouldSearchPerson = page === 1 && looksLikePersonQuery(query);
+  const shouldSearchPerson = looksLikePersonQuery(query);
 
   const [titleResult, personResult] = await Promise.all([
     tmdbFetch(`/search/${mediaType}`, apiKey, titleParams) as Promise<{
       results?: Array<{ id: number; [key: string]: unknown }>;
+      total_pages?: number;
+      total_results?: number;
     }>,
     shouldSearchPerson
       ? (
@@ -117,7 +123,8 @@ export async function comprehensiveSearch(
             ...(languageParam ? { language: languageParam } : {}),
           }) as Promise<{ results?: TmdbPersonResult[] }>
         ).catch((err: Error) => {
-          log.warn('Person search failed, continuing with title results', { error: err.message });
+          throwIfRequestAborted();
+          log.warn('Person search failed, continuing with title results', { error: err });
           return { results: [] as TmdbPersonResult[] };
         })
       : Promise.resolve({ results: [] as TmdbPersonResult[] }),
@@ -129,21 +136,24 @@ export async function comprehensiveSearch(
     | { id: number; title?: string; name?: string; popularity?: number; [key: string]: unknown }
     | undefined;
   if (
-    page === 1 &&
     topMatch &&
     (topMatch.popularity ?? 0) > 50 &&
     removeDiacritics((topMatch.title || topMatch.name || '').toLowerCase()) ===
       removeDiacritics(query.toLowerCase())
   ) {
+    const result =
+      page === 1
+        ? titleResult
+        : ((await search(apiKey, query, type, page, options)) as typeof titleResult);
     return {
-      results: titleItems as unknown as TmdbResult[],
-      total_results: titleItems.length,
-      page: 1,
+      results: (result.results || []) as unknown as TmdbResult[],
+      total_results: result.total_results ?? result.results?.length ?? 0,
+      page,
     };
   }
 
   let titlePage2Items: Array<{ id: number; [key: string]: unknown }> = [];
-  if (page === 1 && titleItems.length >= 20) {
+  if (titleItems.length >= DISPLAY.TMDB_PAGE_SIZE) {
     try {
       const page2 = (await tmdbFetch(`/search/${mediaType}`, apiKey, {
         ...titleParams,
@@ -151,6 +161,7 @@ export async function comprehensiveSearch(
       })) as { results?: Array<{ id: number; [key: string]: unknown }> };
       titlePage2Items = page2?.results || [];
     } catch (err) {
+      throwIfRequestAborted();
       logSwallowedError('tmdb-search:page2-fetch', err);
     }
   }
@@ -182,9 +193,10 @@ export async function comprehensiveSearch(
           creditCount: personCredits.length,
         });
       } catch (err) {
+        throwIfRequestAborted();
         log.warn('Failed to fetch person credits', {
           personId: bestPerson.id,
-          error: (err as Error).message,
+          error: err,
         });
       }
     }
@@ -214,8 +226,27 @@ export async function comprehensiveSearch(
     }
   }
 
+  const start = (page - 1) * DISPLAY.TMDB_PAGE_SIZE;
+  const end = start + DISPLAY.TMDB_PAGE_SIZE;
+  // Keep the title/filmography ordering stable across skip pages. Only hydrate
+  // the requested page in the addon, not an entire person's career at once.
+  let titlePage = 3;
+  let moreTitles = titlePage2Items.length >= DISPLAY.TMDB_PAGE_SIZE;
+  while (merged.length < end && moreTitles && titlePage <= (titleResult.total_pages ?? Infinity)) {
+    throwIfRequestAborted();
+    const next = (await search(apiKey, query, type, titlePage++, options)) as typeof titleResult;
+    const items = next.results || [];
+    moreTitles = items.length >= DISPLAY.TMDB_PAGE_SIZE;
+    for (const item of items) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        merged.push(item);
+      }
+    }
+  }
+  throwIfRequestAborted();
   return {
-    results: merged as unknown as TmdbResult[],
+    results: merged.slice(start, end) as unknown as TmdbResult[],
     total_results: merged.length,
     page: page,
   };

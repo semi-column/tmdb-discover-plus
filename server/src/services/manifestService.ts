@@ -279,7 +279,7 @@ export function buildManifest(userConfig: UserConfig | null, baseUrl: string): S
       };
     });
 
-  if (userConfig?.preferences?.disableSearch !== true) {
+  if (userConfig && userConfig.preferences?.disableSearch !== true) {
     // Each source owns its own search catalog definitions.
     // The preference key convention is `disable<SourceId>Search`.
     const SEARCH_PREF_MAP: Record<string, keyof import('../types/config.ts').UserPreferences> = {
@@ -320,13 +320,13 @@ export function buildManifest(userConfig: UserConfig | null, baseUrl: string): S
     description: ADDON_DESCRIPTION,
     version: buildManifestVersion(userConfig),
     logo: `${resolvedBaseUrl.replace(/\/$/, '')}/logo.png`,
-    idPrefixes: SUPPORTED_ID_PREFIXES,
-    resources: ['catalog', 'meta'],
+    idPrefixes: userConfig ? SUPPORTED_ID_PREFIXES : [],
+    resources: userConfig ? ['catalog', 'meta'] : [],
     types: ['movie', 'series', 'anime'],
     catalogs,
     behaviorHints: {
       configurable: true,
-      configurationRequired: false,
+      configurationRequired: !userConfig,
       newEpisodeNotifications: true,
     },
   };
