@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.12.1...v2.13.0) (2026-11-01)
+
+
+### Features
+
+* add custom time range selection to observability ([6c63cf8](https://github.com/semi-column/tmdb-discover-plus/commit/6c63cf857f2f53130f047101ad039e6f90848a99))
+* **admin:** add accessible custom intervals and richer request investigation filters ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+* **admin:** preserve custom intervals across pages and exports ([6c63cf8](https://github.com/semi-column/tmdb-discover-plus/commit/6c63cf857f2f53130f047101ad039e6f90848a99))
+* **observability:** add health notifications and process-start annotations ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+* **overview:** select custom intervals by dragging charts ([6c63cf8](https://github.com/semi-column/tmdb-discover-plus/commit/6c63cf857f2f53130f047101ad039e6f90848a99))
+
+
+### Bug Fixes
+
+* **admin:** expose rejected traffic, stable request pagination and per-instance data loss ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+* **artwork:** handle unsupported HEAD probes and reuse provider payloads ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+* **cache:** propagate cancellation and prevent partial or negative cache poisoning ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+* **collection:** reject invalid IDs consistently in addon and preview requests ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+* **manifest:** require configuration before advertising addon resources ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+* **observability:** correct percentiles, weighted counts, error evidence and cancellation metrics ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+* resolve observability review findings and addon failures ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+* **search:** paginate merged results before enrichment and batch season requests ([220d845](https://github.com/semi-column/tmdb-discover-plus/commit/220d845301e20dd1dc9301805b9a55ab3116f75c))
+
 ## [2.12.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.12.0...v2.12.1) (2026-11-01)
 
 
