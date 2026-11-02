@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.13.0...v2.13.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **addon:** identify configuration-less requests from older installs ([58ca282](https://github.com/semi-column/tmdb-discover-plus/commit/58ca282d938920fcc57ec9aa37f17f395ed6b506))
+* **admin:** add shared filters and grouped request views ([58ca282](https://github.com/semi-column/tmdb-discover-plus/commit/58ca282d938920fcc57ec9aa37f17f395ed6b506))
+* **observability:** count range errors and report recently active users ([58ca282](https://github.com/semi-column/tmdb-discover-plus/commit/58ca282d938920fcc57ec9aa37f17f395ed6b506))
+* **preview:** log unexpected and upstream failures ([58ca282](https://github.com/semi-column/tmdb-discover-plus/commit/58ca282d938920fcc57ec9aa37f17f395ed6b506))
+* **tmdb:** bound IMDb enrichment and classify website failures ([58ca282](https://github.com/semi-column/tmdb-discover-plus/commit/58ca282d938920fcc57ec9aa37f17f395ed6b506))
+* **upstreams:** cache rejected credentials and respect retry deadlines ([58ca282](https://github.com/semi-column/tmdb-discover-plus/commit/58ca282d938920fcc57ec9aa37f17f395ed6b506))
+
 ## [2.13.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.12.1...v2.13.0) (2026-11-01)
 
 
