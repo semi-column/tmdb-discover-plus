@@ -19,5 +19,8 @@ export function createRejectedCredentials(ttlMs = REJECTED_CREDENTIAL_TTL_MS, ma
       if (rejectedAt.size >= maxSize) rejectedAt.delete(rejectedAt.keys().next().value!);
       rejectedAt.set(key, now);
     },
+    delete(key: string): void {
+      rejectedAt.delete(key);
+    },
   };
 }

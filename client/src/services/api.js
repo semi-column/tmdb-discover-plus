@@ -110,10 +110,23 @@ class ApiService {
     }
 
     if (response.status === 401) {
-      this.clearSession();
-      window.dispatchEvent(new CustomEvent('auth:session-expired'));
-      const error = new Error('Session expired');
+      const errorData = await response.json().catch(() => ({ error: 'Session expired' }));
+      const invalidLogin =
+        errorData.code === 'INVALID_API_KEY' && endpoint.startsWith('/auth/login');
+      if (!invalidLogin) {
+        this.clearSession();
+        window.dispatchEvent(
+          new CustomEvent('auth:session-expired', {
+            detail: { recoveryConfigs: errorData.recoveryConfigs || [] },
+          })
+        );
+      }
+      const error = new Error(
+        errorData.code === 'INVALID_API_KEY' ? errorData.error : 'Session expired'
+      );
       error.status = 401;
+      error.code = errorData.code;
+      error.recoveryConfigs = errorData.recoveryConfigs;
       throw error;
     }
 
@@ -154,6 +167,9 @@ class ApiService {
     try {
       return await this.request('/auth/verify');
     } catch (e) {
+      if (e.code === 'INVALID_API_KEY') {
+        return { valid: false, recoveryConfigs: e.recoveryConfigs || [] };
+      }
       console.warn('Session verification failed:', e);
       return { valid: false };
     }

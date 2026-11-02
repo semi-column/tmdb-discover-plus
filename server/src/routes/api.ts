@@ -177,6 +177,9 @@ router.post('/validate-key', strictRateLimit, async (req, res) => {
       return res.json({ valid: false, error: 'Invalid API key format' });
     }
     const result = await tmdb.validateApiKey(apiKey);
+    if (result.unavailable) {
+      return sendError(res, 503, ErrorCodes.TMDB_UNAVAILABLE, 'Could not verify TMDB API key');
+    }
     res.json(result);
   } catch (error) {
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));

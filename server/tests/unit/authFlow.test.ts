@@ -20,8 +20,17 @@ vi.mock('../../src/infrastructure/configCache.ts', () => ({
     set: vi.fn(),
   })),
 }));
+vi.mock('../../src/services/configService.ts', () => ({
+  getConfigsByApiKey: vi.fn().mockResolvedValue([{ userId: 'owner' }]),
+  getApiKeyFromConfig: vi.fn(() => 'valid-api-key'),
+  getUserConfig: vi.fn(),
+}));
+vi.mock('../../src/services/tmdb/index.ts', () => ({
+  validateApiKeyCached: vi.fn().mockResolvedValue({ valid: true }),
+}));
 
 import { requireAuth, optionalAuth } from '../../src/utils/authMiddleware.ts';
+import { validateApiKeyCached } from '../../src/services/tmdb/index.ts';
 
 function mockReq(overrides: Record<string, unknown> = {}) {
   return { headers: {}, params: {}, ...overrides };
@@ -38,6 +47,7 @@ function mockRes() {
 describe('Auth flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(validateApiKeyCached).mockResolvedValue({ valid: true });
   });
 
   describe('JWT generation and verification', () => {
@@ -116,6 +126,40 @@ describe('Auth flow', () => {
       expect(req.apiKeyId).toBeTruthy();
     });
 
+    it('rejects a known-invalid API key', async () => {
+      vi.mocked(validateApiKeyCached).mockResolvedValueOnce({
+        valid: false,
+        invalidApiKey: true,
+      });
+      const { token } = await generateToken('invalid-api-key');
+      const req = mockReq({ headers: { authorization: `Bearer ${token}` } }) as any;
+      const res = mockRes();
+      const next = vi.fn();
+
+      await requireAuth(req, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_API_KEY' }));
+    });
+
+    it('does not classify a failed TMDB check as an invalid key', async () => {
+      vi.mocked(validateApiKeyCached).mockResolvedValueOnce({
+        valid: false,
+        unavailable: true,
+      });
+      const { token } = await generateToken('temporarily-unavailable-key');
+      const req = mockReq({ headers: { authorization: `Bearer ${token}` } }) as any;
+      const res = mockRes();
+      const next = vi.fn();
+
+      await requireAuth(req, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'TMDB_UNAVAILABLE' }));
+    });
+
     it('rejects revoked token', async () => {
       const { token } = await generateToken('to-revoke');
       revokeToken(token);
@@ -146,6 +190,22 @@ describe('Auth flow', () => {
       await optionalAuth(req, res, next);
       expect(next).toHaveBeenCalled();
       expect(req.apiKeyId).toBeTruthy();
+    });
+
+    it('rejects optional authentication when its TMDB key is invalid', async () => {
+      vi.mocked(validateApiKeyCached).mockResolvedValueOnce({
+        valid: false,
+        invalidApiKey: true,
+      });
+      const { token } = await generateToken('invalid-optional-key');
+      const req = mockReq({ headers: { authorization: `Bearer ${token}` } }) as any;
+      const res = mockRes();
+      const next = vi.fn();
+
+      await optionalAuth(req, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
     });
 
     it('passes through with invalid token (no error)', async () => {

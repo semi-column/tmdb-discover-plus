@@ -322,7 +322,7 @@ export function buildManifest(userConfig: UserConfig | null, baseUrl: string): S
     logo: `${resolvedBaseUrl.replace(/\/$/, '')}/logo.png`,
     idPrefixes: userConfig ? SUPPORTED_ID_PREFIXES : [],
     resources: userConfig ? ['catalog', 'meta'] : [],
-    types: ['movie', 'series', 'anime'],
+    types: userConfig ? ['movie', 'series', 'anime'] : [],
     catalogs,
     behaviorHints: {
       configurable: true,

@@ -142,6 +142,7 @@ function App() {
       <div className="app">
         <Header stats={stats} />
         <ApiKeySetup
+          recoveryConfigs={config.recoveryConfigs}
           onLogin={(userId, configs) => {
             state.setWantsToChangeKey(false);
             actions.handleLogin(userId, configs);

@@ -14,18 +14,34 @@ import { TIMEOUTS, CONCURRENCY, CIRCUIT_BREAKER_DEFAULTS } from '../../constants
 import { CACHE_TTLS, tmdbResponseTtl } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { createRejectedCredentials } from '../../utils/rejectedCredentials.ts';
+import { computeApiKeyId } from '../../utils/security.ts';
 import { TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
 
 import type { ApiKeyValidationResult, CacheErrorType, Logger } from '../../types/index.ts';
 
-type TmdbFetchError = Error & { code?: string; statusCode?: number };
+type TmdbFetchError = Error & { code?: string; statusCode?: number; invalidApiKey?: boolean };
 
 type TmdbApiParams = Record<string, string | number | boolean | undefined | null>;
+type TmdbFetchOptions = { skipCache?: boolean };
 
 const log = createLogger('tmdb:client') as Logger;
 /** TMDB status_code 7 = "Invalid API key"; other 401s can be endpoint permissions, not a bad key. */
 const TMDB_INVALID_API_KEY_STATUS = 7;
 const rejectedApiKeys = createRejectedCredentials();
+const API_KEY_STATUS_TTL_SECONDS = 60;
+
+function apiKeyStatusCacheKey(apiKeyId: string): string {
+  return `tmdb:api-key-status:${apiKeyId}`;
+}
+
+async function cacheApiKeyStatus(apiKey: string, valid: boolean): Promise<void> {
+  const apiKeyId = await computeApiKeyId(apiKey);
+  await getCache().set(
+    apiKeyStatusCacheKey(apiKeyId),
+    valid ? 'valid' : 'invalid',
+    API_KEY_STATUS_TTL_SECONDS
+  );
+}
 
 const FETCH_TIMEOUT_MS = TIMEOUTS.TMDB_FETCH_MS;
 const MAX_IN_FLIGHT = CONCURRENCY.MAX_IN_FLIGHT;
@@ -132,7 +148,8 @@ export async function tmdbFetch(
   endpoint: string,
   apiKey: string,
   params: TmdbApiParams = {},
-  retries: number = 3
+  retries: number = 3,
+  options: TmdbFetchOptions = {}
 ): Promise<unknown> {
   throwIfRequestAborted();
   const ep = normalizeEndpoint(endpoint);
@@ -182,6 +199,10 @@ export async function tmdbFetch(
   cacheUrl.searchParams.sort();
   const cacheKey = cacheUrl.toString();
 
+  if (options.skipCache) {
+    return awaitWithRequestAbort(_tmdbFetchInner(url, cacheKey, retries, true));
+  }
+
   const existingRequest = inFlightRequests.get(cacheKey);
   if (existingRequest) {
     try {
@@ -206,8 +227,21 @@ export async function tmdbFetch(
   });
 }
 
-async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Promise<unknown> {
+async function _tmdbFetchInner(
+  url: URL,
+  cacheKey: string,
+  retries: number,
+  skipCache = false
+): Promise<unknown> {
   const cache = getCache();
+  const apiKey = url.searchParams.get('api_key') ?? '';
+
+  if (!skipCache && apiKey && rejectedApiKeys.has(apiKey)) {
+    const err = new Error('Invalid API key: You must be granted a valid key.') as TmdbFetchError;
+    err.statusCode = 401;
+    err.invalidApiKey = true;
+    throw err;
+  }
 
   if (isCircuitOpen()) {
     const err = new Error('TMDB circuit breaker is open') as TmdbFetchError;
@@ -215,31 +249,26 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
     throw err;
   }
 
-  try {
-    const cached = (await cache.getEntry(cacheKey)) as Record<string, unknown> | null;
-    throwIfRequestAborted();
-    if (cached !== null && cached !== undefined) {
-      if (cached.__errorType) {
-        throw new CachedError(
-          cached.__errorType as CacheErrorType,
-          cached.__errorMessage as string
-        );
+  if (!skipCache) {
+    try {
+      const cached = (await cache.getEntry(cacheKey)) as Record<string, unknown> | null;
+      throwIfRequestAborted();
+      if (cached !== null && cached !== undefined) {
+        if (cached.__errorType) {
+          throw new CachedError(
+            cached.__errorType as CacheErrorType,
+            cached.__errorMessage as string
+          );
+        }
+        if (cached.__cacheWrapper) return cached.data;
+        return cached;
       }
-      if (cached.__cacheWrapper) return cached.data;
-      return cached;
+    } catch (err) {
+      throwIfRequestAborted();
+      if (err instanceof CachedError) throw err;
+      const cacheErr = err as Error;
+      log.warn('Cache get failed', { error: cacheErr });
     }
-  } catch (err) {
-    throwIfRequestAborted();
-    if (err instanceof CachedError) throw err;
-    const cacheErr = err as Error;
-    log.warn('Cache get failed', { error: cacheErr });
-  }
-
-  const apiKey = url.searchParams.get('api_key') ?? '';
-  if (apiKey && rejectedApiKeys.has(apiKey)) {
-    const err = new Error('Invalid API key: You must be granted a valid key.') as TmdbFetchError;
-    err.statusCode = 401;
-    throw err;
   }
 
   let lastError: TmdbFetchError | undefined;
@@ -289,6 +318,8 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
         err.statusCode = response.status;
         if (response.status === 401 && errorBody.status_code === TMDB_INVALID_API_KEY_STATUS) {
           rejectedApiKeys.add(apiKey);
+          err.invalidApiKey = true;
+          await cacheApiKeyStatus(apiKey, false);
         }
         throw err;
       }
@@ -297,17 +328,19 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
       throwIfRequestAborted();
       recordCircuitSuccess();
 
-      try {
-        await cache.set(
-          cacheKey,
-          data,
-          tmdbResponseTtl(url.pathname.slice(TMDB_API_BASE_PATH.length), data)
-        );
-      } catch (cacheErr) {
-        log.warn('Failed to cache TMDB response', {
-          key: cacheKey,
-          error: cacheErr,
-        });
+      if (!skipCache) {
+        try {
+          await cache.set(
+            cacheKey,
+            data,
+            tmdbResponseTtl(url.pathname.slice(TMDB_API_BASE_PATH.length), data)
+          );
+        } catch (cacheErr) {
+          log.warn('Failed to cache TMDB response', {
+            key: cacheKey,
+            error: cacheErr,
+          });
+        }
       }
 
       return data;
@@ -469,9 +502,55 @@ export async function tmdbWebsiteFetchJson(
 
 export async function validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
   try {
-    await tmdbFetch('/configuration', apiKey);
+    await tmdbFetch('/configuration', apiKey, {}, 3, { skipCache: true });
+    rejectedApiKeys.delete(apiKey);
+    await cacheApiKeyStatus(apiKey, true);
     return { valid: true };
   } catch (error) {
-    return { valid: false, error: (error as Error).message };
+    const fetchError = error as TmdbFetchError;
+    if (fetchError.invalidApiKey) {
+      return {
+        valid: false,
+        invalidApiKey: true,
+        error: fetchError.message,
+      };
+    }
+    return {
+      valid: false,
+      unavailable: true,
+      error: fetchError.message,
+      statusCode: fetchError.statusCode,
+    };
   }
+}
+
+export async function validateApiKeyCached(apiKey: string): Promise<ApiKeyValidationResult> {
+  if (rejectedApiKeys.has(apiKey)) {
+    return {
+      valid: false,
+      invalidApiKey: true,
+      error: 'Invalid API key: You must be granted a valid key.',
+    };
+  }
+
+  const apiKeyId = await computeApiKeyId(apiKey);
+  const cached = await getCache().getEntry(apiKeyStatusCacheKey(apiKeyId));
+  if (cached && !cached.__errorType && !cached.__isStale) {
+    if (cached.data === 'valid') return { valid: true };
+    if (cached.data === 'invalid') {
+      rejectedApiKeys.add(apiKey);
+      return {
+        valid: false,
+        invalidApiKey: true,
+        error: 'Invalid API key: You must be granted a valid key.',
+      };
+    }
+  }
+  return validateApiKey(apiKey);
+}
+
+export function isInvalidApiKeyError(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as TmdbFetchError).invalidApiKey === true
+  );
 }

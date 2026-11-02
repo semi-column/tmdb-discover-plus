@@ -66,10 +66,12 @@ describe('buildManifest', () => {
       expect(manifest.resources).toEqual([]);
       expect(manifest.idPrefixes).toEqual([]);
       expect(manifest.catalogs).toEqual([]);
+      expect(manifest.types).toEqual([]);
       expect(manifest.behaviorHints.configurationRequired).toBe(true);
     }
     const configured = buildManifest({ catalogs: [] } as any, baseUrl);
     expect(configured.resources).toEqual(['catalog', 'meta']);
+    expect(configured.types).toEqual(['movie', 'series', 'anime']);
     expect(configured.idPrefixes).toContain('tt');
     expect(configured.behaviorHints.configurationRequired).toBe(false);
   });

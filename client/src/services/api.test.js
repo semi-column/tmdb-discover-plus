@@ -117,6 +117,27 @@ describe('ApiService', () => {
     expect(api.getSessionToken()).toBe('new-jwt');
   });
 
+  it('keeps recovery details for an invalid-key login', async () => {
+    const recoveryConfigs = [{ userId: 'old-config', catalogs: [{ name: 'Movies' }] }];
+    const dispatchEvent = vi.spyOn(window, 'dispatchEvent');
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        error: 'Invalid TMDB API key',
+        code: 'INVALID_API_KEY',
+        recoveryConfigs,
+      }),
+    });
+
+    await expect(api.login('invalid-key')).rejects.toMatchObject({
+      code: 'INVALID_API_KEY',
+      recoveryConfigs,
+    });
+    expect(api.getSessionToken()).toBeNull();
+    expect(dispatchEvent).not.toHaveBeenCalled();
+  });
+
   it('calls kitsu preview endpoint', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: true,

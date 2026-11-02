@@ -4,10 +4,7 @@
   "name": "TMDB Discover+",
   "description": "Create custom movie and TV catalogs for Stremio with powerful TMDB filters",
   "resources": [],
-  "types": [
-    "movie",
-    "series"
-  ],
+  "types": [],
   "idPrefixes": [],
   "catalogs": [],
   "logo": "/logo.png",

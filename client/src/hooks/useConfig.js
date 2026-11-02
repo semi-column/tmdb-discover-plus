@@ -26,6 +26,7 @@ export function useConfig(initialUserId = null) {
   const [configName, setConfigName] = useState('');
   const [preferences, setPreferences] = useState(defaultPreferences);
   const [error, setError] = useState(null);
+  const [recoveryConfigs, setRecoveryConfigs] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -52,8 +53,12 @@ export function useConfig(initialUserId = null) {
   useEffect(() => {
     const checkAuth = async () => {
       const sessionResult = await api.verifySession();
+      if (sessionResult.recoveryConfigs?.length) {
+        setRecoveryConfigs(sessionResult.recoveryConfigs);
+      }
       if (sessionResult.valid) {
         setIsAuthenticated(true);
+        setRecoveryConfigs(null);
         if (!initialUserId) {
           setUserId(sessionResult.userId);
         }
@@ -67,10 +72,12 @@ export function useConfig(initialUserId = null) {
           const loginResult = await api.login(legacyKey, initialUserId);
           if (loginResult.token) {
             setIsAuthenticated(true);
+            setRecoveryConfigs(null);
             setUserId(loginResult.userId);
           }
           api.clearLegacyApiKey();
         } catch (e) {
+          if (e.recoveryConfigs?.length) setRecoveryConfigs(e.recoveryConfigs);
           console.warn('Legacy key migration failed:', e);
           api.clearLegacyApiKey();
         }
@@ -89,11 +96,13 @@ export function useConfig(initialUserId = null) {
       try {
         const result = await api.login(key, userId, rememberMe);
         setIsAuthenticated(true);
+        setRecoveryConfigs(null);
         setUserId(result.userId);
         setApiKeyState('');
         return result;
       } catch (err) {
         setError(err.message);
+        if (err.recoveryConfigs?.length) setRecoveryConfigs(err.recoveryConfigs);
         throw err;
       } finally {
         setLoading(false);
@@ -109,6 +118,7 @@ export function useConfig(initialUserId = null) {
     setCatalogs([]);
     setConfigName('');
     setPreferences(defaultPreferences);
+    setRecoveryConfigs(null);
     setIsDirty(false);
   }, []);
 
@@ -248,6 +258,8 @@ export function useConfig(initialUserId = null) {
     setPreferences: setPreferencesAndDirty,
     loading,
     error,
+    recoveryConfigs,
+    setRecoveryConfigs,
     isDirty,
     isAuthenticated,
     authChecked,

@@ -15,6 +15,7 @@ function createMockConfig(overrides = {}) {
     loadConfig: vi.fn().mockResolvedValue({ catalogs: [] }),
     logout: vi.fn(),
     applyConfig: vi.fn(),
+    setRecoveryConfigs: vi.fn(),
     ...overrides,
   };
 }

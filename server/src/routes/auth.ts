@@ -13,10 +13,22 @@ import * as tmdb from '../services/tmdb/index.ts';
 import { createLogger } from '../utils/logger.ts';
 import { strictRateLimit } from '../utils/rateLimit.ts';
 import { isValidApiKeyFormat, isValidUserId } from '../utils/validation.ts';
-import { sendError, ErrorCodes } from '../utils/AppError.ts';
+import { sendError, formatErrorResponse, ErrorCodes } from '../utils/AppError.ts';
+import type { UserConfig } from '../types/index.ts';
 
 const router = Router();
 const log = createLogger('auth');
+
+function toClientConfig(config: UserConfig) {
+  return {
+    userId: config.userId,
+    configName: config.configName || '',
+    catalogs: config.catalogs || [],
+    preferences: config.preferences || {},
+    createdAt: config.createdAt,
+    updatedAt: config.updatedAt,
+  };
+}
 
 router.post('/login', strictRateLimit, async (req, res) => {
   try {
@@ -32,7 +44,16 @@ router.post('/login', strictRateLimit, async (req, res) => {
 
     const validation = await tmdb.validateApiKey(apiKey);
     if (!validation.valid) {
-      return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
+      if (validation.invalidApiKey) {
+        const recoveryConfigs = (await getConfigsByApiKey(apiKey)).map(toClientConfig);
+        res.set('Cache-Control', 'no-store');
+        return res.status(401).json({
+          ...formatErrorResponse(ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key'),
+          ...(recoveryConfigs.length > 0 ? { recoveryConfigs } : {}),
+        });
+      }
+
+      return sendError(res, 503, ErrorCodes.TMDB_UNAVAILABLE, 'Could not verify TMDB API key');
     }
 
     if (requestedUserId) {
@@ -53,14 +74,7 @@ router.post('/login', strictRateLimit, async (req, res) => {
         }
 
         const allConfigsRaw = await getConfigsByApiKey(apiKey);
-        const allConfigs = allConfigsRaw.map((c) => ({
-          userId: c.userId,
-          configName: c.configName || '',
-          catalogs: c.catalogs || [],
-          preferences: c.preferences || {},
-          createdAt: c.createdAt,
-          updatedAt: c.updatedAt,
-        }));
+        const allConfigs = allConfigsRaw.map(toClientConfig);
 
         const tokenData = await generateToken(apiKey, rememberMe);
         log.info('User authenticated for existing config', { userId: requestedUserId });
@@ -88,14 +102,7 @@ router.post('/login', strictRateLimit, async (req, res) => {
         totalConfigs: existingConfigs.length,
       });
 
-      const allConfigs = existingConfigs.map((c) => ({
-        userId: c.userId,
-        configName: c.configName || '',
-        catalogs: c.catalogs || [],
-        preferences: c.preferences || {},
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-      }));
+      const allConfigs = existingConfigs.map(toClientConfig);
 
       return res.json({
         ...tokenData,
@@ -141,6 +148,7 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/verify', strictRateLimit, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   const bearerToken = req.headers.authorization?.replace(/^Bearer\s+/i, '');
 
   if (!bearerToken) {
@@ -163,6 +171,22 @@ router.get('/verify', strictRateLimit, async (req, res) => {
       (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
     );
     const config = allConfigs[0];
+    const apiKey = getApiKeyFromConfig(config);
+    if (!apiKey) {
+      return sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Configuration error');
+    }
+
+    const validation = await tmdb.validateApiKeyCached(apiKey);
+    if (!validation.valid) {
+      if (validation.invalidApiKey) {
+        res.set('Cache-Control', 'no-store');
+        return res.status(401).json({
+          ...formatErrorResponse(ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key'),
+          recoveryConfigs: allConfigs.map(toClientConfig),
+        });
+      }
+      return sendError(res, 503, ErrorCodes.TMDB_UNAVAILABLE, 'Could not verify TMDB API key');
+    }
 
     return res.json({
       valid: true,

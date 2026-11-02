@@ -16,6 +16,7 @@ import type { CatalogConfig, UserConfig } from '../../../src/types/config.ts';
  *   - `requireAuth` / `optionalAuth` verify genuine JWTs (security util),
  *   - ownership checks decrypt the seeded config's API key and compare the
  *     derived apiKeyId against the caller's token,
+ *   - API-key validity is stubbed as successful to avoid depending on TMDB,
  *   - the marketplace service performs the real publish/search/install/like
  *     logic and view counting.
  *
@@ -47,6 +48,10 @@ vi.mock('../../../src/services/storage/index.ts', () => ({
   initStorage: async () => refs.adapter.current,
 }));
 
+vi.mock('../../../src/services/tmdb/index.ts', () => ({
+  validateApiKeyCached: vi.fn().mockResolvedValue({ valid: true }),
+}));
+
 // Imported after the mock is declared so the real router/service/config wiring
 // resolves the mocked storage factory.
 import marketplaceRouter from '../../../src/routes/marketplace.ts';
@@ -62,6 +67,7 @@ const OWNER_API_KEY = 'abcdef0123456789abcdef0123456789';
 const OTHER_API_KEY = '0123456789abcdef0123456789abcdef';
 
 const OWNER_USER = 'owneruser1'; // matches /^[A-Za-z0-9_-]{6,30}$/
+const OTHER_USER = 'otheruser1';
 const CATALOG_ID = crypto.randomUUID(); // valid catalog id ([A-Za-z0-9_-]{1,64})
 const CATALOG_NAME = 'PopularMovies';
 
@@ -115,6 +121,12 @@ beforeAll(async () => {
     preferences: {},
   };
   await saveUserConfig(seed);
+  await saveUserConfig({
+    userId: OTHER_USER,
+    tmdbApiKey: OTHER_API_KEY,
+    catalogs: [],
+    preferences: {},
+  });
 });
 
 // --- Auth rejection (Req 19.3) ---------------------------------------------

@@ -1,14 +1,20 @@
 import { useState } from 'react';
-import { Key, Loader, ArrowRight, ExternalLink, Eye, EyeOff, Coffee, Heart } from 'lucide-react';
+import { Key, Loader, ArrowRight, ExternalLink, Eye, EyeOff, Download } from 'lucide-react';
 import { SocialButtons } from '../social/SocialButtons.jsx';
 import { DonateModal } from '../modals/DonateModal';
 import { api } from '../../services/api';
 
-export function ApiKeySetup({ onLogin, isSessionExpired = false, returnUserId = null }) {
+export function ApiKeySetup({
+  onLogin,
+  isSessionExpired = false,
+  returnUserId = null,
+  recoveryConfigs: initialRecoveryConfigs = null,
+}) {
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [recoveryConfigs, setRecoveryConfigs] = useState(initialRecoveryConfigs);
   const [rememberMe, setRememberMe] = useState(true);
   const [isDonateOpen, setIsDonateOpen] = useState(false);
 
@@ -38,26 +44,82 @@ export function ApiKeySetup({ onLogin, isSessionExpired = false, returnUserId = 
       }
     } catch (err) {
       setError(err.message || 'Failed to authenticate');
+      setRecoveryConfigs(err.recoveryConfigs?.length ? err.recoveryConfigs : null);
     } finally {
       setLoading(false);
     }
+  };
+
+  const downloadConfig = (config) => {
+    const data = {
+      exportedAt: new Date().toISOString(),
+      ...(config.configName ? { configName: config.configName } : {}),
+      ...(config.preferences ? { preferences: config.preferences } : {}),
+      catalogs: Array.isArray(config.catalogs) ? config.catalogs : [],
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const name = (config.configName || config.userId || 'tmdb-discover-plus')
+      .replace(/[^a-z0-9._-]+/gi, '_')
+      .replace(/^_+|_+$/g, '');
+    link.href = url;
+    link.download = `${name || 'tmdb-discover-plus'}_export.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="setup-page">
       <div className="setup-card">
         <div className="setup-icon">
-          <Key size={40} />
+          {recoveryConfigs?.length ? <Download size={40} /> : <Key size={40} />}
         </div>
 
-        <h2>{isSessionExpired ? 'Session Expired' : 'Get Started'}</h2>
+        <h2>
+          {recoveryConfigs?.length
+            ? 'Your TMDB API key is invalid'
+            : isSessionExpired
+              ? 'Session Expired'
+              : 'Get Started'}
+        </h2>
         <p>
-          {isSessionExpired
-            ? 'Your session has expired. Please re-enter your API key to continue.'
-            : "Enter your TMDB API key to start creating custom catalogs. It's free and takes just a minute to get one."}
+          {recoveryConfigs?.length
+            ? 'Export your saved configuration below, then enter a valid API key and import the file into a new account.'
+            : isSessionExpired
+              ? 'Your session has expired. Please re-enter your API key to continue.'
+              : "Enter your TMDB API key to start creating custom catalogs. It's free and takes just a minute to get one."}
         </p>
+        {recoveryConfigs?.length > 0 && (
+          <div className="api-key-form">
+            {recoveryConfigs.map((config) => (
+              <button
+                key={config.userId}
+                type="button"
+                className="btn btn-primary w-full"
+                onClick={() => downloadConfig(config)}
+              >
+                <Download size={18} />
+                Export {config.configName || config.userId}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="btn btn-secondary w-full"
+              onClick={() => {
+                setRecoveryConfigs(null);
+                setError('');
+                setApiKey('');
+              }}
+            >
+              Use another API key
+            </button>
+          </div>
+        )}
 
-        <form className="api-key-form" onSubmit={handleSubmit}>
+        <form className="api-key-form" onSubmit={handleSubmit} hidden={!!recoveryConfigs?.length}>
           <div className="input-group">
             <label htmlFor="apiKey">TMDB API Key</label>
             <div className="input-wrapper">

@@ -132,6 +132,31 @@ router.param('type', (req, res, next, value) => {
   next();
 });
 
+router.use('/:userId', async (req, res, next) => {
+  try {
+    const config = await getUserConfig(req.params.userId);
+    const apiKey = getApiKeyFromConfig(config);
+    if (!apiKey) return next();
+
+    const validation = await tmdb.validateApiKeyCached(apiKey);
+    if (!validation.valid) {
+      res.set('Cache-Control', 'no-store');
+      return sendError(
+        res,
+        validation.invalidApiKey ? 401 : 503,
+        validation.invalidApiKey ? ErrorCodes.INVALID_API_KEY : ErrorCodes.TMDB_UNAVAILABLE,
+        validation.invalidApiKey ? 'Invalid TMDB API key' : 'Could not verify TMDB API key'
+      );
+    }
+
+    next();
+  } catch (error) {
+    log.error('Addon API key validation failed', { error: (error as Error).message });
+    res.set('Cache-Control', 'no-store');
+    return sendError(res, 503, ErrorCodes.TMDB_UNAVAILABLE, 'Could not verify TMDB API key');
+  }
+});
+
 import {
   buildManifest,
   enrichManifestWithGenres,
@@ -175,6 +200,10 @@ router.get('/:userId/manifest.json', async (req, res) => {
     if (!res.headersSent && !res.destroyed) res.etagJson(manifest, { extra: userId });
   } catch (error) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (tmdb.isInvalidApiKeyError(error)) {
+      res.set('Cache-Control', 'no-store');
+      return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
+    }
     log.error('Manifest error', { error });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Failed to load manifest');
   }
@@ -617,6 +646,10 @@ async function handleCatalogRequest(
     );
   } catch (error) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (tmdb.isInvalidApiKeyError(error)) {
+      res.set('Cache-Control', 'no-store');
+      return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
+    }
     if (error instanceof AppError && error.code === ErrorCodes.VALIDATION_ERROR) {
       log.warn('Invalid catalog configuration', {
         catalogId,
@@ -846,6 +879,10 @@ async function handleMetaRequest(
     );
   } catch (error) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (tmdb.isInvalidApiKeyError(error)) {
+      res.set('Cache-Control', 'no-store');
+      return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
+    }
 
     const durationMs = Date.now() - startTime;
     const errMsg = (error as Error).message;

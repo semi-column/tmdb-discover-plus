@@ -1,10 +1,55 @@
 import { createLogger } from './logger.ts';
-import { getUserConfig, getApiKeyFromConfig } from '../services/configService.ts';
+import {
+  getUserConfig,
+  getApiKeyFromConfig,
+  getConfigsByApiKey,
+} from '../services/configService.ts';
 import { verifyToken, computeApiKeyId } from './security.ts';
-import { sendError, ErrorCodes } from './AppError.ts';
+import { sendError, formatErrorResponse, ErrorCodes } from './AppError.ts';
+import { validateApiKeyCached } from '../services/tmdb/index.ts';
 import type { Request, Response, NextFunction } from 'express';
 
 const log = createLogger('auth');
+
+async function resolveValidApiKey(apiKeyId: string, res: Response): Promise<string | null> {
+  try {
+    const configs = await getConfigsByApiKey(null, apiKeyId);
+    const apiKey = getApiKeyFromConfig(configs[0] || null);
+    if (!apiKey) {
+      res.set('Cache-Control', 'no-store');
+      sendError(res, 401, ErrorCodes.UNAUTHORIZED, 'No configuration found');
+      return null;
+    }
+
+    const validation = await validateApiKeyCached(apiKey);
+    if (!validation.valid) {
+      res.set('Cache-Control', 'no-store');
+      if (validation.invalidApiKey) {
+        res.status(401).json({
+          ...formatErrorResponse(ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key'),
+          recoveryConfigs: configs.map((config) => ({
+            userId: config.userId,
+            configName: config.configName || '',
+            catalogs: config.catalogs || [],
+            preferences: config.preferences || {},
+            createdAt: config.createdAt,
+            updatedAt: config.updatedAt,
+          })),
+        });
+        return null;
+      }
+      sendError(res, 503, ErrorCodes.TMDB_UNAVAILABLE, 'Could not verify TMDB API key');
+      return null;
+    }
+
+    return apiKey;
+  } catch (error) {
+    log.error('API key validation failed', { error: (error as Error).message });
+    res.set('Cache-Control', 'no-store');
+    sendError(res, 503, ErrorCodes.TMDB_UNAVAILABLE, 'Could not verify TMDB API key');
+    return null;
+  }
+}
 
 function extractBearerToken(authHeader: string | undefined): string | null {
   if (!authHeader || !authHeader.toLowerCase().startsWith('bearer ')) return null;
@@ -24,7 +69,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return sendError(res, 401, ErrorCodes.UNAUTHORIZED, 'Invalid or expired token');
   }
 
+  const apiKey = await resolveValidApiKey(decoded.apiKeyId, res);
+  if (!apiKey) return;
   req.apiKeyId = decoded.apiKeyId;
+  req.apiKey = apiKey;
   next();
 }
 
@@ -74,7 +122,10 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
   if (bearerToken) {
     const decoded = (await verifyToken(bearerToken)) as { apiKeyId?: string } | null;
     if (decoded?.apiKeyId) {
+      const apiKey = await resolveValidApiKey(decoded.apiKeyId, res);
+      if (!apiKey) return;
       req.apiKeyId = decoded.apiKeyId;
+      req.apiKey = apiKey;
     }
   }
 

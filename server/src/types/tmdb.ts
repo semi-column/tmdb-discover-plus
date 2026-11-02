@@ -464,7 +464,10 @@ export type GenreCache = {
 
 export interface ApiKeyValidationResult {
   valid: boolean;
+  invalidApiKey?: boolean;
+  unavailable?: boolean;
   error?: string;
+  statusCode?: number;
 }
 
 export interface ComprehensiveSearchOptions {

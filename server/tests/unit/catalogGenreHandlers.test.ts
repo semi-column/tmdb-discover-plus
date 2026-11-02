@@ -22,6 +22,7 @@ const {
   mockTmdbFullMeta,
   mockTmdbSpecialList,
   mockBuildArtworkOptions,
+  mockValidateApiKeyCached,
 } = vi.hoisted(() => ({
   mockCacheGet: vi.fn(),
   mockCacheSet: vi.fn(),
@@ -42,6 +43,7 @@ const {
   mockTmdbFullMeta: vi.fn(),
   mockTmdbSpecialList: vi.fn(),
   mockBuildArtworkOptions: vi.fn(),
+  mockValidateApiKeyCached: vi.fn(),
 }));
 
 vi.mock('../../src/services/cache/index.ts', () => ({
@@ -73,6 +75,8 @@ vi.mock('../../src/services/imdb/index.ts', () => ({
 }));
 
 vi.mock('../../src/services/tmdb/index.ts', () => ({
+  validateApiKeyCached: mockValidateApiKeyCached,
+  isInvalidApiKeyError: () => false,
   batchResolveAndFetchDetails: mockTmdbResolve,
   batchGetDetails: mockTmdbDetails,
   batchGetCinemetaRatings: async () => null,
@@ -200,6 +204,7 @@ beforeEach(() => {
   mockKitsuDiscover.mockResolvedValue({ anime: [{}], hasMore: false, total: 1 });
   mockMalDiscover.mockResolvedValue({ anime: [{}], hasMore: false, total: 1, lastPage: 1 });
   mockSimklDiscover.mockResolvedValue({ items: [{}], hasMore: false });
+  mockValidateApiKeyCached.mockResolvedValue({ valid: true });
   mockTmdbResolve.mockResolvedValue({ resolvedIds: new Map(), detailsMap: new Map() });
   mockTmdbDiscover.mockResolvedValue({ results: [{ id: 1 }, { id: 2 }] });
   mockTmdbDetails.mockResolvedValue(
@@ -263,6 +268,42 @@ describe.each(sourceHandlers)('$source catalog handler', ({ source, type, handle
 });
 
 describe('TMDB catalog route', () => {
+  it('rejects invalid keys on manifest and catalog requests', async () => {
+    mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+    mockValidateApiKeyCached.mockResolvedValue({
+      valid: false,
+      invalidApiKey: true,
+      error: 'Invalid API key',
+    });
+    const app = express();
+    app.use(addonRouter);
+
+    for (const path of [
+      '/testuser/manifest.json',
+      '/testuser/catalog/movie/movies.json',
+      '/testuser/meta/movie/tmdb:550.json',
+    ]) {
+      const response = await request(app).get(path);
+      expect(response.status).toBe(401);
+      expect(response.body.code).toBe('INVALID_API_KEY');
+    }
+  });
+
+  it('returns 503 when key validity cannot be verified', async () => {
+    mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+    mockValidateApiKeyCached.mockResolvedValue({
+      valid: false,
+      unavailable: true,
+      error: 'TMDB unavailable',
+    });
+    const app = express();
+    app.use(addonRouter);
+
+    const response = await request(app).get('/testuser/catalog/movie/movies.json');
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe('TMDB_UNAVAILABLE');
+  });
+
   it('returns an explicit validation error on every request for an invalid collection', async () => {
     const warnings: Array<Record<string, unknown> | null> = [];
     setLogSink((_level, _context, message, data) => {

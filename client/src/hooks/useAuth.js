@@ -12,6 +12,7 @@ export const getUrlUserId = () => {
 };
 
 export function useAuth(config, addToast, urlUserId, deps) {
+  const setRecoveryConfigs = config.setRecoveryConfigs;
   const { loadUserConfigs, setUserConfigs, setActiveCatalog, setUrlUserId, setShowMismatchModal } =
     deps;
 
@@ -59,15 +60,18 @@ export function useAuth(config, addToast, urlUserId, deps) {
 
   // Global 401 handler — smoothly redirect to login when any API call gets 401
   useEffect(() => {
-    const handleSessionExpired = () => {
+    const handleSessionExpired = (event) => {
       if (isSetup) return;
+      if (event.detail?.recoveryConfigs?.length) {
+        setRecoveryConfigs(event.detail.recoveryConfigs);
+      }
       setIsSessionExpired(true);
       setIsSetup(true);
       setPageLoading(false);
     };
     window.addEventListener('auth:session-expired', handleSessionExpired);
     return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
-  }, [isSetup]);
+  }, [isSetup, setRecoveryConfigs]);
 
   useEffect(() => {
     if (!urlUserId || !config.authChecked) return;
@@ -186,6 +190,7 @@ export function useAuth(config, addToast, urlUserId, deps) {
         loadUserConfigs();
       }
 
+      setRecoveryConfigs(null);
       window.history.replaceState({}, '', `/?userId=${encodeURIComponent(userId)}`);
       setUrlUserId(userId);
       addToast('Logged in successfully');

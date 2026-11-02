@@ -1,4 +1,4 @@
-export { validateApiKey } from './client.ts';
+export { validateApiKey, validateApiKeyCached, isInvalidApiKeyError } from './client.ts';
 
 export { batchGetCinemetaRatings } from './ratings.ts';
 
