@@ -13,6 +13,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { TIMEOUTS, CONCURRENCY, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
 import { CACHE_TTLS, tmdbResponseTtl } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
+import { createRejectedCredentials } from '../../utils/rejectedCredentials.ts';
 import { TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
 
 import type { ApiKeyValidationResult, CacheErrorType, Logger } from '../../types/index.ts';
@@ -22,6 +23,9 @@ type TmdbFetchError = Error & { code?: string; statusCode?: number };
 type TmdbApiParams = Record<string, string | number | boolean | undefined | null>;
 
 const log = createLogger('tmdb:client') as Logger;
+/** TMDB status_code 7 = "Invalid API key"; other 401s can be endpoint permissions, not a bad key. */
+const TMDB_INVALID_API_KEY_STATUS = 7;
+const rejectedApiKeys = createRejectedCredentials();
 
 const FETCH_TIMEOUT_MS = TIMEOUTS.TMDB_FETCH_MS;
 const MAX_IN_FLIGHT = CONCURRENCY.MAX_IN_FLIGHT;
@@ -231,6 +235,13 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
     log.warn('Cache get failed', { error: cacheErr });
   }
 
+  const apiKey = url.searchParams.get('api_key') ?? '';
+  if (apiKey && rejectedApiKeys.has(apiKey)) {
+    const err = new Error('Invalid API key: You must be granted a valid key.') as TmdbFetchError;
+    err.statusCode = 401;
+    throw err;
+  }
+
   let lastError: TmdbFetchError | undefined;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -276,6 +287,9 @@ async function _tmdbFetchInner(url: URL, cacheKey: string, retries: number): Pro
           statusMessage || `TMDB API error: ${response.status}`
         ) as TmdbFetchError;
         err.statusCode = response.status;
+        if (response.status === 401 && errorBody.status_code === TMDB_INVALID_API_KEY_STATUS) {
+          rejectedApiKeys.add(apiKey);
+        }
         throw err;
       }
 

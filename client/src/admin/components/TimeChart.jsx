@@ -14,7 +14,7 @@ const PALETTE = [
 ];
 
 /** Thin uPlot wrapper. `data` = [timestampsSec[], ...seriesValues[]], `series` = [{ label, color? }]. */
-export function TimeChart({ data, series, height = 220, yLabel, onSelectRange, annotations = [] }) {
+export function TimeChart({ data, series, height = 220, yLabel, onSelectRange }) {
   const ref = useRef(null);
   const plotRef = useRef(null);
   const latest = useRef({});
@@ -22,9 +22,9 @@ export function TimeChart({ data, series, height = 220, yLabel, onSelectRange, a
   const schema = JSON.stringify(series);
 
   useEffect(() => {
-    latest.current = { data, onSelectRange, annotations };
+    latest.current = { data, onSelectRange };
     plotRef.current?.setData(data);
-  }, [data, onSelectRange, annotations]);
+  }, [data, onSelectRange]);
 
   useEffect(() => {
     const el = ref.current;
@@ -46,23 +46,6 @@ export function TimeChart({ data, series, height = 220, yLabel, onSelectRange, a
             };
             plot.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
             if (range.to - range.from >= 60_000) latest.current.onSelectRange(range);
-          },
-        ],
-        draw: [
-          (plot) => {
-            const ctx = plot.ctx;
-            ctx.save();
-            ctx.strokeStyle = '#edc36a';
-            ctx.setLineDash([4, 4]);
-            for (const marker of latest.current.annotations) {
-              const x = plot.valToPos(marker.at / 1000, 'x', true);
-              if (x < plot.bbox.left || x > plot.bbox.left + plot.bbox.width) continue;
-              ctx.beginPath();
-              ctx.moveTo(x, plot.bbox.top);
-              ctx.lineTo(x, plot.bbox.top + plot.bbox.height);
-              ctx.stroke();
-            }
-            ctx.restore();
           },
         ],
       },

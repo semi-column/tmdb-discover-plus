@@ -61,10 +61,6 @@ export function System({ range, rangeParams = { range }, onSelectRange, meta }) 
           </label>
         }
       >
-        <p className="adm-muted">
-          Collector counters are cumulative since each process started; gone instances have no fresh
-          counters.
-        </p>
         <div className="adm-table-wrap">
           <table className="adm-table">
             <thead>
@@ -236,16 +232,6 @@ export function System({ range, rangeParams = { range }, onSelectRange, meta }) 
               />
             )}
           </div>
-          <p className="adm-muted">
-            Flush totals above cover the responding process only. Use the per-instance rows for
-            fleet coverage. Missing heartbeats are not zero loss.
-          </p>
-          <p className="adm-muted">
-            Health thresholds are checked every {meta.alerting?.evaluationSeconds ?? 60}s.
-            {meta.alerting?.webhookConfigured
-              ? ' Webhook notifications configured.'
-              : ' Webhook delivery is off; set OBS_ALERT_WEBHOOK_URL for external notifications. Threshold breaches are logged.'}
-          </p>
           <ErrorNote error={meta.alerting?.error} />
           {c?.lastFlushError && (
             <div className="adm-alert adm-tone-warn">Last flush problem: {c.lastFlushError}</div>
@@ -272,36 +258,38 @@ export function System({ range, rangeParams = { range }, onSelectRange, meta }) 
             </p>
           )}
           {meta.storage?.tables?.length > 0 && (
-            <table className="adm-table">
-              <thead>
-                <tr>
-                  <th>Table / collection</th>
-                  <th className="num">Partitions</th>
-                  <th className="num">Size</th>
-                </tr>
-              </thead>
-              <tbody>
-                {meta.storage.tables.map((t) => (
-                  <tr key={t.table_name}>
-                    <td className="mono">{t.table_name}</td>
-                    <td className="num">{t.partitions ? fmtInt(t.partitions) : '–'}</td>
-                    <td className="num">{fmtBytes(t.bytes)}</td>
+            <div className="adm-table-wrap">
+              <table className="adm-table">
+                <thead>
+                  <tr>
+                    <th>Table / collection</th>
+                    <th className="num">Partitions</th>
+                    <th className="num">Size</th>
                   </tr>
-                ))}
-                <tr>
-                  <td>
-                    <strong>Total</strong>
-                  </td>
-                  <td />
-                  <td className="num">
-                    <strong>
-                      {fmtBytes(meta.storage.totalBytes)}
-                      {meta.storage.capBytes ? ` / ${fmtBytes(meta.storage.capBytes)} cap` : ''}
-                    </strong>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {meta.storage.tables.map((t) => (
+                    <tr key={t.table_name}>
+                      <td className="mono">{t.table_name}</td>
+                      <td className="num">{t.partitions ? fmtInt(t.partitions) : '–'}</td>
+                      <td className="num">{fmtBytes(t.bytes)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td>
+                      <strong>Total</strong>
+                    </td>
+                    <td />
+                    <td className="num">
+                      <strong>
+                        {fmtBytes(meta.storage.totalBytes)}
+                        {meta.storage.capBytes ? ` / ${fmtBytes(meta.storage.capBytes)} cap` : ''}
+                      </strong>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           )}
           <p className="adm-muted">
             Served by instance <span className="mono">{meta.instance}</span> · v{meta.version}

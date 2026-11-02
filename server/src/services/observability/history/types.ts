@@ -11,24 +11,18 @@ export interface ErrorGroupBatch {
   lastTs: number;
 }
 
+export type ExcludableColumn =
+  'route' | 'method' | 'source' | 'resource' | 'content_type' | 'client' | 'country' | 'instance';
+
 /** Backend-neutral request filters, parsed and validated once from the query string. */
 export interface RequestFilter {
-  exact: Partial<
-    Record<
-      | 'route'
-      | 'method'
-      | 'source'
-      | 'resource'
-      | 'client'
-      | 'country'
-      | 'instance'
-      | 'request_id'
-      | 'user_hash',
-      string
-    >
-  >;
+  exact: Partial<Record<ExcludableColumn | 'request_id' | 'user_hash', string>>;
+  /** "is not" filters: rows whose column equals any listed value are dropped. */
+  exclude: Partial<Record<ExcludableColumn, string[]>>;
   statusMin?: number;
   statusMax?: number;
+  /** Inclusive [min, max] status ranges to drop, e.g. 4xx = [400, 499]. */
+  excludeStatus: Array<[number, number]>;
   minMs?: number;
   maxMs?: number;
   minUpstreamCalls?: number;
@@ -36,6 +30,116 @@ export interface RequestFilter {
   errorsOnly: boolean;
   pathContains?: string;
   cursor?: { ts: Date; requestId: string; value?: number };
+}
+
+export const EMPTY_REQUEST_FILTER: RequestFilter = Object.freeze({
+  exact: {},
+  exclude: {},
+  excludeStatus: [],
+  errorsOnly: false,
+}) as RequestFilter;
+
+/** True when the filter narrows rows (sort and cursor only order them). */
+export function hasRequestConditions(filter: RequestFilter): boolean {
+  return Boolean(
+    Object.keys(filter.exact).length ||
+    Object.keys(filter.exclude).length ||
+    filter.excludeStatus.length ||
+    filter.statusMin !== undefined ||
+    filter.minMs !== undefined ||
+    filter.maxMs !== undefined ||
+    filter.minUpstreamCalls !== undefined ||
+    filter.errorsOnly ||
+    filter.pathContains
+  );
+}
+
+/** Request columns the explorer can group by; values are interpolated into SQL, so keep this a closed set. */
+export const REQUEST_GROUP_COLUMNS = {
+  route: 'route',
+  path: 'path',
+  method: 'method',
+  status: 'status',
+  source: 'source',
+  resource: 'resource',
+  contentType: 'content_type',
+  catalog: 'catalog_id',
+  client: 'client',
+  country: 'country',
+  colo: 'colo',
+  instance: 'instance',
+} as const;
+export type RequestGroupColumn = (typeof REQUEST_GROUP_COLUMNS)[keyof typeof REQUEST_GROUP_COLUMNS];
+export const REQUEST_GROUP_LIMIT = 50;
+/** Groups that get their own line in the per-group traffic chart. */
+export const REQUEST_GROUP_SERIES = 6;
+
+export function parseGroupBy(raw: unknown): RequestGroupColumn {
+  const key = typeof raw === 'string' && raw ? raw : 'route';
+  if (!Object.hasOwn(REQUEST_GROUP_COLUMNS, key)) throw new RequestFilterValidationError('by');
+  return REQUEST_GROUP_COLUMNS[key as keyof typeof REQUEST_GROUP_COLUMNS];
+}
+
+export interface RequestGroupRow {
+  key: string;
+  count: number;
+  errors5xx: number;
+  errors4xx: number;
+  avg_ms: number;
+  p50_ms: number | null;
+  p95_ms: number | null;
+  p99_ms: number | null;
+  avg_upstream_calls: number;
+  users: number;
+}
+
+/** Normalises driver output (bigint strings, floats) to the API row shape. */
+export function toGroupRow(raw: Record<string, unknown>): RequestGroupRow {
+  const num = (value: unknown) => (value === null || value === undefined ? null : Number(value));
+  return {
+    key: String(raw.key ?? ''),
+    count: Math.round(Number(raw.count) || 0),
+    errors5xx: Math.round(Number(raw.errors5xx) || 0),
+    errors4xx: Math.round(Number(raw.errors4xx) || 0),
+    avg_ms: Number(raw.avg_ms) || 0,
+    p50_ms: num(raw.p50_ms),
+    p95_ms: num(raw.p95_ms),
+    p99_ms: num(raw.p99_ms),
+    avg_upstream_calls: Math.round((Number(raw.avg_upstream_calls) || 0) * 10) / 10,
+    users: Number(raw.users) || 0,
+  };
+}
+
+export interface RequestGroups {
+  groups: RequestGroupRow[];
+  /** Total matching weighted requests, including groups beyond the limit. */
+  total: number;
+  series: { t: number[]; keys: string[]; values: number[][] };
+}
+
+export function groupSeriesBucketMs(range: TimeRange): number {
+  return range.kind === 'm' ? 60_000 : 3_600_000;
+}
+
+/** Zero-filled per-group counts for the top groups, aligned to the overview's buckets. */
+export function buildGroupSeries(
+  range: TimeRange,
+  groups: RequestGroupRow[],
+  points: Array<{ bucket: number; key: string; n: number }>
+): RequestGroups['series'] {
+  const bucketMs = groupSeriesBucketMs(range);
+  const keys = groups.slice(0, REQUEST_GROUP_SERIES).map((g) => g.key);
+  const start = Math.floor(range.from / bucketMs);
+  const end = Math.floor(range.to / bucketMs);
+  const t: number[] = [];
+  for (let index = start; index <= end; index++) t.push((index * bucketMs) / 1000);
+  const values = keys.map(() => t.map(() => 0));
+  for (const point of points) {
+    const row = keys.indexOf(point.key);
+    const col = Math.floor(point.bucket / bucketMs) - start;
+    if (row >= 0 && col >= 0 && col < t.length) values[row][col] += point.n;
+  }
+  return { t, keys, values: values.map((list) => list.map(Math.round)) };
 }
 
 export type RequestSort = 'newest' | 'oldest' | 'duration' | 'upstreamCalls';
@@ -89,7 +193,12 @@ export interface HistoryStore {
     errors: Record<string, unknown>[];
   }>;
   routeStats(range: TimeRange): Promise<Record<string, unknown>[]>;
-  overview(range: TimeRange, slowMs: number): Promise<HistoryOverview>;
+  groupRequests(
+    range: TimeRange,
+    filter: RequestFilter,
+    by: RequestGroupColumn
+  ): Promise<RequestGroups>;
+  overview(range: TimeRange, slowMs: number, filter?: RequestFilter): Promise<HistoryOverview>;
   upstreamOverview(range: TimeRange): Promise<HistoryUpstreamOverview>;
   listErrorGroups(range: TimeRange, filter: ErrorFilter): Promise<Record<string, unknown>[]>;
   getErrorGroup(fingerprint: string): Promise<{
@@ -134,7 +243,22 @@ export function parseRequestFilter(raw: Record<string, unknown>): RequestFilter 
       throw new RequestFilterValidationError(field);
     return value.trim();
   };
-  const filter: RequestFilter = { exact: {}, errorsOnly: false };
+  /** Comma-separated values; filter values (route templates, labels) never contain commas. */
+  const list = (field: string) => {
+    const value = text(field, MAX_TEXT * 4);
+    if (!value) return [];
+    const values = [
+      ...new Set(
+        value
+          .split(',')
+          .map((v) => v.trim())
+          .filter(Boolean)
+      ),
+    ];
+    if (values.length > 20) throw new RequestFilterValidationError(field);
+    return values;
+  };
+  const filter: RequestFilter = { exact: {}, exclude: {}, excludeStatus: [], errorsOnly: false };
   if (raw.errorsOnly !== undefined) {
     if (!['true', 'false', true, false].includes(raw.errorsOnly as string | boolean))
       throw new RequestFilterValidationError('errorsOnly');
@@ -145,6 +269,7 @@ export function parseRequestFilter(raw: Record<string, unknown>): RequestFilter 
     ['method', 'method'],
     ['source', 'source'],
     ['resource', 'resource'],
+    ['contentType', 'content_type'],
     ['client', 'client'],
     ['country', 'country'],
     ['instance', 'instance'],
@@ -161,6 +286,29 @@ export function parseRequestFilter(raw: Record<string, unknown>): RequestFilter 
     if (filter.exact.user_hash && filter.exact.user_hash !== userHash)
       throw new RequestFilterValidationError('userHash');
     filter.exact.user_hash = userHash;
+  }
+
+  const excludeKeys: Array<[string, ExcludableColumn]> = [
+    ['notRoute', 'route'],
+    ['notMethod', 'method'],
+    ['notSource', 'source'],
+    ['notResource', 'resource'],
+    ['notContentType', 'content_type'],
+    ['notClient', 'client'],
+    ['notCountry', 'country'],
+    ['notInstance', 'instance'],
+  ];
+  for (const [param, field] of excludeKeys) {
+    const values = list(param);
+    if (values.length) filter.exclude[field] = values;
+  }
+  for (const value of list('notStatus')) {
+    if (/^[1-5]xx$/.test(value)) {
+      const min = Number(value[0]) * 100;
+      filter.excludeStatus.push([min, min + 99]);
+    } else if (/^[1-5]\d{2}$/.test(value)) {
+      filter.excludeStatus.push([Number(value), Number(value)]);
+    } else throw new RequestFilterValidationError('notStatus');
   }
 
   const status = text('status');

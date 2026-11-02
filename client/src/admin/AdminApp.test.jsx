@@ -14,12 +14,12 @@ vi.mock('./api.js', () => ({
     overview: vi.fn(),
     requests: vi.fn(),
     facets: vi.fn(),
+    groups: vi.fn(),
     upstreams: vi.fn(),
     usage: vi.fn(),
     errors: vi.fn(),
     errorGroup: vi.fn(),
     trace: vi.fn(),
-    routes: vi.fn(),
   },
   downloadExport: vi.fn(),
 }));
@@ -73,6 +73,23 @@ beforeEach(() => {
     breakdowns: { resources: [] },
   });
   adminApi.facets.mockResolvedValue({});
+  adminApi.groups.mockResolvedValue({
+    by: 'route',
+    total: 30,
+    groups: [
+      {
+        key: requestRow.route,
+        count: 20,
+        errors4xx: 0,
+        errors5xx: 1,
+        users: 3,
+        avg_ms: 50,
+        p95_ms: 90,
+      },
+      { key: '/meta/:type/:id.json', count: 10, errors4xx: 10, errors5xx: 0, users: 0, avg_ms: 5 },
+    ],
+    series: { t: [1, 2], keys: [requestRow.route], values: [[10, 10]] },
+  });
   adminApi.requests.mockImplementation(async (params) => ({
     rows: [{ ...requestRow, status: params.status === '5xx' ? 503 : 200 }],
   }));
@@ -91,17 +108,16 @@ beforeEach(() => {
     routes: [{ route: requestRow.route, count: 10 }],
     events: [log],
   });
-  adminApi.routes.mockResolvedValue([]);
 });
 
-it('drills from attention to filtered requests, a linkable trace, and the dependency endpoint', async () => {
+it('drills from the error rate to failed requests, a linkable trace, and the dependency endpoint', async () => {
   adminApi.trace.mockResolvedValue({
     requests: [{ ...requestRow, status: 503 }],
     upstream: [upstream],
     errors: [log],
   });
   render(<AdminApp />);
-  fireEvent.click(await screen.findByRole('button', { name: /Failed HTTP responses/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Error rate/ }));
   await waitFor(() =>
     expect(adminApi.requests).toHaveBeenCalledWith(
       expect.objectContaining({ range: '24h', status: '5xx' })
@@ -126,7 +142,7 @@ it('keeps endpoint and time context while filtering samples and investigating th
   fireEvent.click(screen.getByRole('button', { name: 'request-1' }));
   expect(await screen.findByText('HTTP succeeded with internal signals')).toBeInTheDocument();
   fireEvent.click(await screen.findByRole('button', { name: 'Retrying TMDB' }));
-  expect(await screen.findByText('Log severity is not response impact')).toBeInTheDocument();
+  expect(await screen.findByText('Retrying TMDB', { selector: 'p' })).toBeInTheDocument();
   expect(window.location.hash).toContain('range=7d');
   fireEvent.click(screen.getByRole('button', { name: requestRow.route }));
   await waitFor(() =>
@@ -156,7 +172,7 @@ it('uses a selected custom interval for overview and requests and preserves it w
   await waitFor(() =>
     expect(adminApi.overview).toHaveBeenCalledWith({ range: 'custom', from, to })
   );
-  fireEvent.click(await screen.findByRole('button', { name: /Failed HTTP responses/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Error rate/ }));
   await waitFor(() =>
     expect(adminApi.requests).toHaveBeenCalledWith(
       expect.objectContaining({ range: 'custom', from, to, status: '5xx' })
@@ -242,7 +258,7 @@ it('labels exact history counts and renders normalized route latency', async () 
 
   render(<AdminApp />);
 
-  expect(await screen.findByText('distinct config hashes')).toBeInTheDocument();
+  expect(await screen.findByText('configs in range')).toBeInTheDocument();
   expect(screen.getByText('40ms')).toBeInTheDocument();
   const zeroCell = screen
     .getAllByText('0')
@@ -272,16 +288,14 @@ it('distinguishes all-time error-group counts from range sparkline samples', asy
   render(<AdminApp />);
 
   expect(await screen.findByText('All-time')).toBeInTheDocument();
-  expect(
-    screen.getByText(/Sparklines cover the selected range and use stored occurrence weights/)
-  ).toBeInTheDocument();
+  expect(screen.getByText('In range')).toBeInTheDocument();
 });
 
 it('sends heaviest sorting and upper-duration filters and shows total stored matches', async () => {
-  window.location.hash = '/requests?range=1h&maxMs=5000&minUpstreamCalls=10';
+  window.location.hash = '/requests?range=1h&view=events&maxMs=5000&minUpstreamCalls=10';
   adminApi.requests.mockResolvedValue({ rows: [requestRow], total: 345, nextCursor: null });
   render(<AdminApp />);
-  expect(await screen.findByText('Requests (1 shown / 345 stored matches)')).toBeInTheDocument();
+  expect(await screen.findByText('345 requests')).toBeInTheDocument();
   expect(adminApi.requests).toHaveBeenCalledWith(
     expect.objectContaining({ maxMs: '5000', minUpstreamCalls: '10' })
   );
@@ -294,7 +308,7 @@ it('sends heaviest sorting and upper-duration filters and shows total stored mat
 });
 
 it('keeps the first page time bounds when loading another page of a rolling range', async () => {
-  window.location.hash = '/requests?range=1h&sort=duration';
+  window.location.hash = '/requests?range=1h&view=events&sort=duration';
   adminApi.requests
     .mockResolvedValueOnce({
       rows: [requestRow],
@@ -346,7 +360,7 @@ it('does not silently load 1h for an invalid custom interval URL', async () => {
   await waitFor(() => expect(adminApi.overview).toHaveBeenCalledWith({ range: '1h' }));
 });
 
-it('never labels a changed fingerprint as a proven new error', async () => {
+it('does not badge fingerprint versions and filters by log classification', async () => {
   window.location.hash = '/errors?range=7d';
   adminApi.errors.mockResolvedValue({
     version: '2.12.1',
@@ -364,8 +378,8 @@ it('never labels a changed fingerprint as a proven new error', async () => {
     ],
   });
   render(<AdminApp />);
-  expect(await screen.findByText('fingerprint first seen v2.12.1')).toBeInTheDocument();
-  expect(screen.queryByText('new in v2.12.1')).not.toBeInTheDocument();
+  expect(await screen.findByText('Invalid API key')).toBeInTheDocument();
+  expect(screen.queryByText(/fingerprint first seen|new in v2\.12\.1/)).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Log classification'), {
     target: { value: 'user_config' },
   });
@@ -405,4 +419,82 @@ it('uses the configured slow threshold for the Overview drilldown', async () => 
   await waitFor(() =>
     expect(adminApi.requests).toHaveBeenCalledWith(expect.objectContaining({ minMs: '2500' }))
   );
+});
+
+it('groups requests by route by default and drills into a group with include or exclude', async () => {
+  window.location.hash = '/requests?range=6h';
+  render(<AdminApp />);
+  await waitFor(() => expect(adminApi.groups).toHaveBeenCalledWith({ range: '6h', by: 'route' }));
+  expect(await screen.findByText('/meta/:type/:id.json')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Exclude /meta/:type/:id.json' }));
+  await waitFor(() =>
+    expect(adminApi.groups).toHaveBeenLastCalledWith({
+      range: '6h',
+      by: 'route',
+      notRoute: '/meta/:type/:id.json',
+    })
+  );
+  expect(
+    screen.getByRole('button', { name: 'Remove filter: Route is not /meta/:type/:id.json' })
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: requestRow.route }));
+  await waitFor(() =>
+    expect(adminApi.requests).toHaveBeenCalledWith(
+      expect.objectContaining({
+        range: '6h',
+        route: requestRow.route,
+        notRoute: '/meta/:type/:id.json',
+      })
+    )
+  );
+  expect(screen.getByRole('tab', { name: 'Events' })).toHaveAttribute('aria-selected', 'true');
+});
+
+it('switches the group-by dimension without losing filters', async () => {
+  window.location.hash = '/requests?range=6h&notStatus=4xx';
+  render(<AdminApp />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Status' }));
+  await waitFor(() =>
+    expect(adminApi.groups).toHaveBeenLastCalledWith({
+      range: '6h',
+      by: 'status',
+      notStatus: '4xx',
+    })
+  );
+});
+
+it('hides config-less and unmatched calls everywhere with one toggle and keeps it across pages', async () => {
+  render(<AdminApp />);
+  fireEvent.click(await screen.findByLabelText('Hide config-less & unmatched'));
+  await waitFor(() =>
+    expect(adminApi.overview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ notRoute: expect.stringContaining('(unmatched)') })
+    )
+  );
+  const notRoute = adminApi.overview.mock.lastCall[0].notRoute.split(',');
+  expect(notRoute).toEqual(expect.arrayContaining(['/meta/:type/:id.json', '(unmatched)']));
+
+  fireEvent.click(screen.getByRole('link', { name: 'Requests' }));
+  await waitFor(() =>
+    expect(adminApi.groups).toHaveBeenCalledWith(
+      expect.objectContaining({ notRoute: notRoute.join(',') })
+    )
+  );
+  expect(screen.getByLabelText('Hide config-less & unmatched')).toBeChecked();
+});
+
+it('starts each page at the top instead of keeping the previous page scroll offset', async () => {
+  const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  render(<AdminApp />);
+  await screen.findByRole('link', { name: 'Errors' });
+  scrollTo.mockClear();
+  fireEvent.click(screen.getByRole('link', { name: 'Errors' }));
+  await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 0));
+  scrollTo.mockClear();
+  navigate('errors', { range: '24h', status: 'all' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(scrollTo).not.toHaveBeenCalled();
+  scrollTo.mockRestore();
 });

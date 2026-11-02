@@ -15,7 +15,14 @@ import {
   type ErrorFilter,
   type ErrorGroupBatch,
   type HistoryStore,
+  EMPTY_REQUEST_FILTER,
+  REQUEST_GROUP_LIMIT,
+  REQUEST_GROUP_SERIES,
+  buildGroupSeries,
+  groupSeriesBucketMs,
+  toGroupRow,
   type RequestFilter,
+  type RequestGroupColumn,
   type StorageInfo,
 } from './types.ts';
 
@@ -427,8 +434,12 @@ export class PostgresHistory implements HistoryStore {
     );
   }
 
-  private requestWhere(range: TimeRange, filter: RequestFilter) {
-    const params: unknown[] = [new Date(range.from), new Date(range.to)];
+  /** `params` may carry leading statement parameters; the time range must be $1/$2. */
+  private requestWhere(
+    range: TimeRange,
+    filter: RequestFilter,
+    params: unknown[] = [new Date(range.from), new Date(range.to)]
+  ) {
     const where: string[] = ['ts >= $1', 'ts <= $2'];
     const add = (sql: string, ...values: unknown[]) => {
       let text = sql;
@@ -440,6 +451,9 @@ export class PostgresHistory implements HistoryStore {
     };
     // Column names come from the RequestFilter type's fixed keys.
     for (const [column, value] of Object.entries(filter.exact)) add(`${column} = ?`, value);
+    for (const [column, values] of Object.entries(filter.exclude))
+      add(`NOT (${column} = ANY(?::text[]))`, values);
+    for (const [min, max] of filter.excludeStatus) add('NOT (status BETWEEN ? AND ?)', min, max);
     if (filter.statusMin !== undefined) add('status >= ?', filter.statusMin);
     if (filter.statusMax !== undefined) add('status <= ?', filter.statusMax);
     if (filter.minMs !== undefined) add('duration_ms >= ?::double precision', filter.minMs);
@@ -524,7 +538,7 @@ export class PostgresHistory implements HistoryStore {
     return { requests: requests.rows, upstream: upstream.rows, errors: errors.rows };
   }
 
-  async overview(range: TimeRange, slowMs: number) {
+  async overview(range: TimeRange, slowMs: number, filter: RequestFilter = EMPTY_REQUEST_FILTER) {
     const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
     const histogram = [
       ...LATENCY_BUCKETS.map((upper, index) => {
@@ -536,6 +550,12 @@ export class PostgresHistory implements HistoryStore {
       `COALESCE(SUM(requests) FILTER (WHERE duration_ms > ${LATENCY_BUCKETS.at(-1)}), 0)::float AS lat_${LATENCY_BUCKETS.length}`,
     ].join(',');
     const timeFilter = 'ts >= $1 AND ts <= $2';
+    const { params, where } = this.requestWhere(range, filter, [
+      new Date(range.from),
+      new Date(range.to),
+      bucketMs,
+      slowMs,
+    ]);
     // One statement gives every panel one MVCC snapshot and reads the request table only once.
     const {
       rows: [result],
@@ -545,7 +565,7 @@ export class PostgresHistory implements HistoryStore {
            cache_hits, cache_misses, upstream_calls, user_hash,
            resource, source, content_type, client, country, colo, instance,
            (floor(extract(epoch FROM ts) * 1000 / $3)::bigint * $3) AS bucket
-         FROM obs_requests WHERE ${timeFilter}
+         FROM obs_requests WHERE ${where.join(' AND ')}
        ), sampling AS MATERIALIZED (
          SELECT coalesce(bool_or(weight <> 1), false) AS sampled FROM filtered
        ), durations AS (
@@ -616,7 +636,7 @@ export class PostgresHistory implements HistoryStore {
          (SELECT json_agg(dimensions) FROM dimensions) AS breakdowns,
          (SELECT json_agg(logs) FROM logs) AS logs,
          (SELECT count(DISTINCT user_hash)::int FROM filtered WHERE user_hash <> '') AS users`,
-      [new Date(range.from), new Date(range.to), bucketMs, slowMs]
+      params
     );
     const metrics: RequestMetric[] = result.metrics ?? [];
     const buckets = metrics
@@ -687,6 +707,59 @@ export class PostgresHistory implements HistoryStore {
     );
   }
 
+  async groupRequests(range: TimeRange, filter: RequestFilter, by: RequestGroupColumn) {
+    const { params, where } = this.requestWhere(range, filter);
+    params.push(groupSeriesBucketMs(range));
+    const bucket = `$${params.length}`;
+    // `by` comes from the REQUEST_GROUP_COLUMNS allowlist.
+    const { rows } = await this.pool.query(
+      `WITH filtered AS MATERIALIZED (
+         SELECT ${by}::text AS key, ts, status, duration_ms, weight::double precision AS weight,
+           upstream_calls, user_hash
+         FROM obs_requests WHERE ${where.join(' AND ')}
+       ), ranked AS (
+         SELECT *, sum(weight) OVER (PARTITION BY key ORDER BY duration_ms) AS cumulative,
+           sum(weight) OVER (PARTITION BY key) AS key_total
+         FROM filtered
+       ), groups AS (
+         SELECT key, sum(weight)::float AS count,
+           COALESCE(sum(weight) FILTER (WHERE status >= 500), 0)::float AS errors5xx,
+           COALESCE(sum(weight) FILTER (WHERE status >= 400 AND status < 500), 0)::float AS errors4xx,
+           round(sum(duration_ms * weight) / sum(weight))::int AS avg_ms,
+           min(duration_ms) FILTER (WHERE cumulative >= key_total * 0.5) AS p50_ms,
+           min(duration_ms) FILTER (WHERE cumulative >= key_total * 0.95) AS p95_ms,
+           min(duration_ms) FILTER (WHERE cumulative >= key_total * 0.99) AS p99_ms,
+           round((sum(upstream_calls * weight) / sum(weight))::numeric, 1)::float AS avg_upstream_calls,
+           count(DISTINCT user_hash) FILTER (WHERE user_hash <> '')::int AS users
+         FROM ranked GROUP BY key ORDER BY count DESC LIMIT ${REQUEST_GROUP_LIMIT}
+       ), series AS (
+         SELECT (floor(extract(epoch FROM ts) * 1000 / ${bucket})::bigint * ${bucket}) AS bucket, key,
+           sum(weight)::float AS n
+         FROM filtered
+         WHERE key IN (SELECT key FROM groups ORDER BY count DESC LIMIT ${REQUEST_GROUP_SERIES})
+         GROUP BY 1, 2
+       )
+       SELECT COALESCE((SELECT json_agg(groups ORDER BY count DESC) FROM groups), '[]'::json) AS groups,
+         COALESCE((SELECT json_agg(series) FROM series), '[]'::json) AS series,
+         (SELECT COALESCE(sum(weight), 0)::float FROM filtered) AS total`,
+      params
+    );
+    const groups = (rows[0].groups as Record<string, unknown>[]).map(toGroupRow);
+    return {
+      groups,
+      total: Math.round(Number(rows[0].total)),
+      series: buildGroupSeries(
+        range,
+        groups,
+        (rows[0].series as Record<string, unknown>[]).map((p) => ({
+          bucket: Number(p.bucket),
+          key: String(p.key ?? ''),
+          n: Number(p.n),
+        }))
+      ),
+    };
+  }
+
   async routeStats(range: TimeRange) {
     const { rows } = await this.pool.query(
       `WITH ranked AS (
@@ -713,7 +786,7 @@ export class PostgresHistory implements HistoryStore {
 
   async listErrorGroups(range: TimeRange, filter: ErrorFilter) {
     const params: unknown[] = [new Date(range.from), new Date(range.to)];
-    const where = ['g.last_seen >= $1'];
+    const where = ['g.last_seen >= $1', 'g.first_seen <= $2'];
     if (filter.status) {
       params.push(filter.status);
       where.push(`g.status = $${params.length}`);

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { MemoryHistory } from '../../src/services/observability/history/memory.ts';
 import {
   parseErrorFilter,
+  parseGroupBy,
   parseRequestFilter,
 } from '../../src/services/observability/history/types.ts';
 import { hashIdentifier } from '../../src/services/observability/identity.ts';
@@ -237,5 +238,88 @@ describe('MemoryHistory', () => {
 
     const trace = await h.getTrace('req-1');
     expect(trace.errors[0]).toMatchObject({ fingerprint: 'fp1' });
+  });
+
+  it('excludes error groups first seen after the end of the range', async () => {
+    const h = newHistory();
+    await h.insertErrors(
+      [errorEvent('later')],
+      new Map([['later', { count: 1, first: errorEvent('later'), lastTs: now }]])
+    );
+    const before = { from: now - 3_600_000, to: now - 60_000, kind: 'm' as const };
+    expect(await h.listErrorGroups(before, parseErrorFilter({}))).toEqual([]);
+    expect(await h.listErrorGroups(range, parseErrorFilter({}))).toHaveLength(1);
+  });
+});
+
+describe('request exclusion filters and grouping', () => {
+  const configless = {
+    route: '/meta/:type/:id.json',
+    status: 404,
+    resource: 'meta',
+    source: 'imdb',
+  };
+  async function seeded() {
+    const h = newHistory();
+    await h.insertRequests([
+      request(1),
+      request(2, { status: 500, durationMs: 900 }),
+      request(3, { ...configless, userHash: '' }),
+      request(4, { ...configless, userHash: '' }),
+      request(5, { route: '/:userId/manifest.json', resource: 'manifest', userHash: 'u2' }),
+    ]);
+    return h;
+  }
+
+  it('parses comma-separated "is not" filters and rejects bad statuses', () => {
+    const filter = parseRequestFilter({ notRoute: 'a, b,a', notStatus: '4xx,302' });
+    expect(filter.exclude.route).toEqual(['a', 'b']);
+    expect(filter.excludeStatus).toEqual([
+      [400, 499],
+      [302, 302],
+    ]);
+    expect(() => parseRequestFilter({ notStatus: 'nope' })).toThrow(/notStatus/);
+    expect(() => parseGroupBy('user_hash')).toThrow(/by/);
+    expect(parseGroupBy('contentType')).toBe('content_type');
+  });
+
+  it('drops excluded rows from lists and the overview', async () => {
+    const h = await seeded();
+    const filter = parseRequestFilter({ notRoute: configless.route });
+    const list = await h.listRequests(range, filter, 50);
+    expect(list.total).toBe(3);
+    const overview = await h.overview(range, 1500, filter);
+    expect(overview.totals.requests).toBe(3);
+    expect(overview.totals.errors4xx).toBe(0);
+    expect(
+      (await h.overview(range, 1500, parseRequestFilter({ notStatus: '4xx' }))).totals.requests
+    ).toBe(3);
+  });
+
+  it('groups by a column with per-group errors, latency, users and series', async () => {
+    const h = await seeded();
+    const result = await h.groupRequests(range, parseRequestFilter({}), 'route');
+    expect(result.total).toBe(5);
+    expect(result.groups[0]).toMatchObject({
+      key: '/:userId/catalog/:type/:catalogId.json',
+      count: 2,
+      errors5xx: 1,
+      users: 1,
+    });
+    expect(result.groups.find((g) => g.key === configless.route)).toMatchObject({
+      count: 2,
+      errors4xx: 2,
+      users: 0,
+    });
+    expect(result.series.keys).toHaveLength(3);
+    expect(result.series.values.map((v) => v.reduce((a, b) => a + b, 0))).toEqual([2, 2, 1]);
+    expect(result.series.t.length).toBe(result.series.values[0].length);
+
+    const byStatus = await h.groupRequests(
+      range,
+      parseRequestFilter({ resource: 'meta' }),
+      'status'
+    );
+    expect(byStatus.groups).toEqual([expect.objectContaining({ key: '404', count: 2 })]);
   });
 });

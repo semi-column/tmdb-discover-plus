@@ -4,9 +4,11 @@ import { TIMEOUTS } from '../constants.ts';
 import { CACHE_TTLS } from '../cacheTtls.ts';
 import { logSwallowedError } from '../utils/helpers.ts';
 import { getRequestSignal, throwIfRequestAborted } from '../utils/requestContext.ts';
+import { createRejectedCredentials } from '../utils/rejectedCredentials.ts';
 
 const log = createLogger('rpdb');
 const RPDB_BASE_URL = 'https://api.ratingposterdb.com';
+const rejectedApiKeys = createRejectedCredentials();
 
 export async function getRpdbRating(apiKey: string, imdbId: string): Promise<string | null> {
   throwIfRequestAborted();
@@ -32,6 +34,8 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
     logSwallowedError('rpdb:cache-get', err);
   }
 
+  if (rejectedApiKeys.has(apiKey)) return null;
+
   const url = `${RPDB_BASE_URL}/${apiKey}/imdb/rating/${imdbId}`;
 
   try {
@@ -50,6 +54,7 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
       }
       if (response.status === 403) {
         log.debug('RPDB 403 Forbidden (Invalid Key?)', { imdbId });
+        rejectedApiKeys.add(apiKey);
         return null;
       }
       throw new Error(`RPDB Status ${response.status}`);

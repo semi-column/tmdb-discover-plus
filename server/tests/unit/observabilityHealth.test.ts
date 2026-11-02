@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  deploymentMarkers,
-  findIncidents,
-  startHealthMonitor,
-} from '../../src/services/observability/health.ts';
+import { findIncidents, startHealthMonitor } from '../../src/services/observability/health.ts';
 import { MemoryLiveStore } from '../../src/services/observability/liveStore.ts';
 
 afterEach(() => {
@@ -31,28 +27,6 @@ describe('observability health', () => {
       requests: 200,
     });
     expect(incidents.find((i) => i.kind === 'errors4xx')?.affected).toBe(55);
-  });
-
-  it('uses explicit starts and labels estimates for historical samples', () => {
-    expect(
-      deploymentMarkers([
-        { instance: 'a', bucket: '2026-11-01T10:00:00Z', data: { version: 'v1', startedAt: 1234 } },
-        { instance: 'a', bucket: '2026-11-01T10:01:00Z', data: { version: 'v1', startedAt: 1234 } },
-        { instance: 'b', bucket: '2026-11-01T10:00:00Z', data: { version: 'v2', uptimeSec: 60 } },
-      ])
-    ).toEqual([
-      { at: 1234, label: 'vv1 · a', estimated: false },
-      { at: Date.parse('2026-11-01T09:59:00Z'), label: 'vv2 · b', estimated: true },
-    ]);
-  });
-
-  it('keeps same-version process restarts on the same instance as distinct markers', () => {
-    expect(
-      deploymentMarkers([
-        { instance: 'pod', data: { version: '1', startedAt: 1000 } },
-        { instance: 'pod', data: { version: '1', startedAt: 2000 } },
-      ])
-    ).toHaveLength(2);
   });
 
   it('deduplicates across monitors and retries failed webhook delivery', async () => {

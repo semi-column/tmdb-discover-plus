@@ -6,9 +6,13 @@ import { TMDB_IMAGE_BASE } from './constants.ts';
 import { formatRuntime } from './stremioMeta.ts';
 import { generateEpisodeThumbnailUrl, isValidPosterConfig } from '../artworkService.ts';
 import * as imdb from '../imdb/index.ts';
-import { CONCURRENCY, DISPLAY } from '../../constants.ts';
+import { CONCURRENCY, DISPLAY, TIMEOUTS } from '../../constants.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
-import { throwIfRequestAborted } from '../../utils/requestContext.ts';
+import {
+  getRequestRemainingMs,
+  isRequestAborted,
+  throwIfRequestAborted,
+} from '../../utils/requestContext.ts';
 
 import type {
   ArtworkOptions,
@@ -165,6 +169,31 @@ interface ImdbEpisodeEdge {
 }
 
 const IMDB_EPISODE_PAGE_LIMIT = DISPLAY.IMDB_EPISODE_PAGE_LIMIT;
+/** IMDb episodes only fill gaps in TMDB data; stop starting new pages once the request is this close to timing out. */
+const IMDB_ENRICHMENT_RESERVE_MS = 8_000;
+
+function hasImdbEnrichmentBudget(): boolean {
+  return getRequestRemainingMs(TIMEOUTS.REQUEST_MS) > IMDB_ENRICHMENT_RESERVE_MS;
+}
+
+/**
+ * Resolves true when `work` settles, false once the enrichment budget runs out. A started page
+ * can wait ~10s for a throttle token plus ~10s to fetch, so checking before each page isn't enough.
+ * Abandoned pages keep running and still fill the cache for the next request.
+ */
+async function settlesWithinImdbBudget(work: Promise<unknown>): Promise<boolean> {
+  const waitMs = getRequestRemainingMs(TIMEOUTS.REQUEST_MS) - IMDB_ENRICHMENT_RESERVE_MS;
+  if (!Number.isFinite(waitMs)) return work.then(() => true);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(false), Math.max(0, waitMs));
+  });
+  try {
+    return await Promise.race([work.then(() => true), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function getImdbEpisodesForSeason(
   imdbId: string,
@@ -176,6 +205,8 @@ async function getImdbEpisodesForSeason(
 
   while (true) {
     throwIfRequestAborted();
+    // Pages already fetched are cached, so a later request picks up where this one stopped.
+    if (!hasImdbEnrichmentBudget()) break;
 
     const response = await imdb.getEpisodesBySeason(imdbId, {
       season,
@@ -455,27 +486,47 @@ export async function getSeriesEpisodes(
 
     for (let i = 0; i < imdbSeasonQueue.length; i += IMDB_SEASON_CONCURRENCY) {
       throwIfRequestAborted();
+      if (!hasImdbEnrichmentBudget()) {
+        log.info('IMDb episode enrichment stopped early to meet request deadline', {
+          imdbId,
+          seasonsFetched: i,
+          seasonsTotal: imdbSeasonQueue.length,
+        });
+        break;
+      }
 
       const batch = imdbSeasonQueue.slice(i, i + IMDB_SEASON_CONCURRENCY);
-      const batchVideos = await Promise.all(
+      // Seasons are kept as they finish, so a deadline cut still merges the ones that made it.
+      const finished: StremioVideo[][] = [];
+      const work = Promise.all(
         batch.map(async (season) => {
           try {
             const episodeEdges = await getImdbEpisodesForSeason(imdbId, season.season_number);
-            if (!episodeEdges.length) return [];
-            return mapImdbEpisodesToStremioVideos(imdbId, season.season_number, episodeEdges);
+            if (episodeEdges.length)
+              finished.push(
+                mapImdbEpisodesToStremioVideos(imdbId, season.season_number, episodeEdges)
+              );
           } catch (error) {
-            throwIfRequestAborted();
+            if (isRequestAborted()) return;
             log.debug('IMDb season episode fetch failed', {
               imdbId,
               season: season.season_number,
               error,
             });
-            return [];
           }
         })
       );
-
-      for (const arr of batchVideos) fallbackVideos.push(...arr);
+      const completed = await settlesWithinImdbBudget(work);
+      throwIfRequestAborted();
+      for (const arr of finished.splice(0)) fallbackVideos.push(...arr);
+      if (!completed) {
+        log.info('IMDb episode enrichment cut off to meet request deadline', {
+          imdbId,
+          seasonsStarted: i + batch.length,
+          seasonsTotal: imdbSeasonQueue.length,
+        });
+        break;
+      }
     }
 
     if (fallbackVideos.length > 0) {

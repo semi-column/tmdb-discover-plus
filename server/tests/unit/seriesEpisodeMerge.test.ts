@@ -5,6 +5,8 @@ vi.mock('../../src/services/imdb/index.ts', () => ({ getEpisodesBySeason: vi.fn(
 vi.mock('../../src/utils/requestContext.ts', () => ({
   getRequestId: vi.fn(),
   throwIfRequestAborted: vi.fn(),
+  getRequestRemainingMs: vi.fn(() => Infinity),
+  isRequestAborted: vi.fn(() => false),
 }));
 vi.mock('../../src/services/cache/index.ts', () => ({
   getCache: vi.fn(() => ({
@@ -27,11 +29,12 @@ vi.mock('../../src/config.ts', () => ({
 import { getSeriesEpisodes } from '../../src/services/tmdb/details.ts';
 import * as imdb from '../../src/services/imdb/index.ts';
 import { tmdbFetch } from '../../src/services/tmdb/client.ts';
-import { throwIfRequestAborted } from '../../src/utils/requestContext.ts';
+import { getRequestRemainingMs, throwIfRequestAborted } from '../../src/utils/requestContext.ts';
 
 const mockedFetch = tmdbFetch as ReturnType<typeof vi.fn>;
 const mockedImdb = imdb.getEpisodesBySeason as ReturnType<typeof vi.fn>;
 const mockedRequestAborted = throwIfRequestAborted as ReturnType<typeof vi.fn>;
+const mockedRemainingMs = getRequestRemainingMs as ReturnType<typeof vi.fn>;
 
 const BASE_DETAILS = {
   seasons: [{ season_number: 1, poster_path: '/season1.jpg' }],
@@ -194,4 +197,37 @@ describe('getSeriesEpisodes — thumbnail priority', () => {
       }
     }
   );
+
+  it('returns TMDB episodes without IMDb enrichment when the request deadline is near', async () => {
+    mockedFetch.mockReset();
+    mockedImdb.mockClear();
+    mockedFetch.mockResolvedValue(makeTmdbSeasonResponse('/tmdb-still.jpg'));
+    mockedRemainingMs.mockReturnValue(5_000);
+
+    const videos = await getSeriesEpisodes('api-key', 123, BASE_DETAILS as any);
+
+    expect(videos).toHaveLength(1);
+    expect(videos[0].overview).toBe('TMDB overview');
+    expect(mockedImdb).not.toHaveBeenCalled();
+    mockedRemainingMs.mockReturnValue(Infinity);
+  });
+
+  it('stops waiting for slow IMDb pages at the deadline and keeps seasons that finished', async () => {
+    mockedFetch.mockReset();
+    mockedImdb.mockReset();
+    mockedFetch.mockResolvedValue(makeTmdbSeasonResponse('/tmdb-still.jpg'));
+    // Season 1 answers; the probe seasons hang like a page stuck behind the throttle queue.
+    mockedImdb.mockImplementation((_id, { season }) =>
+      season === 1 ? Promise.resolve(makeImdbSeasonResponse(IMDB_STILL)) : new Promise(() => {})
+    );
+    mockedRemainingMs.mockReturnValue(8_050);
+
+    const started = Date.now();
+    const videos = await getSeriesEpisodes('api-key', 123, BASE_DETAILS as any);
+
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(videos).toHaveLength(1);
+    expect(videos[0].overview).toBe('IMDb overview');
+    mockedRemainingMs.mockReturnValue(Infinity);
+  });
 });

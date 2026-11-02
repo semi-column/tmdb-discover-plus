@@ -390,6 +390,52 @@ for (const backend of ['memory', 'postgres', 'mongo'] as const) {
       }
     });
 
+    it('applies "is not" filters to lists and the overview, and groups by any column', async () => {
+      await history.insertRequests([
+        request(1, { durationMs: 100 }),
+        request(2, { durationMs: 300, status: 500, upstreamCalls: 5 }),
+        request(3, { route: '/meta', status: 404, userHash: '', durationMs: 5 }),
+        request(4, { route: '/meta', status: 404, userHash: '', durationMs: 7, weight: 3 }),
+        request(5, { route: '/manifest', userHash: 'other', client: 'Nuvio' }),
+      ]);
+      const notMeta = parseRequestFilter({ notRoute: '/meta' });
+      expect((await history.listRequests(range, notMeta, 10)).total).toBe(3);
+      const overview = await history.overview(range, 1000, notMeta);
+      expect(overview.totals).toMatchObject({ requests: 3, errors4xx: 0, errors5xx: 1 });
+      expect(
+        (await history.listRequests(range, parseRequestFilter({ notStatus: '4xx,5xx' }), 10)).total
+      ).toBe(2);
+      expect(
+        (await history.listRequests(range, parseRequestFilter({ notClient: 'Browser,Nuvio' }), 10))
+          .total
+      ).toBe(0);
+
+      const byRoute = await history.groupRequests(range, parseRequestFilter({}), 'route');
+      expect(byRoute.total).toBe(7);
+      expect(byRoute.groups.map((g) => [g.key, g.count])).toEqual([
+        ['/meta', 4],
+        ['/catalog', 2],
+        ['/manifest', 1],
+      ]);
+      expect(byRoute.groups[1]).toMatchObject({
+        errors5xx: 1,
+        avg_ms: 200,
+        p50_ms: 100,
+        p95_ms: 300,
+        avg_upstream_calls: 3,
+        users: 1,
+      });
+      expect(byRoute.groups[0]).toMatchObject({ errors4xx: 4, users: 0 });
+      expect(byRoute.series.keys).toEqual(['/meta', '/catalog', '/manifest']);
+      expect(byRoute.series.values.map((v) => v.reduce((a, b) => a + b, 0))).toEqual([4, 2, 1]);
+
+      const byStatus = await history.groupRequests(range, notMeta, 'status');
+      expect(byStatus.groups.map((g) => [g.key, g.count])).toEqual([
+        ['200', 2],
+        ['500', 1],
+      ]);
+    });
+
     it('counts all filtered rows before the cursor, and applies both duration bounds and fanout', async () => {
       await history.insertRequests([
         request(1, { durationMs: 100, upstreamCalls: 2 }),

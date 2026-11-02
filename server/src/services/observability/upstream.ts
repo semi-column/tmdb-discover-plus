@@ -57,6 +57,9 @@ export function templateUpstreamPath(rawPath: string, host = ''): string {
         // Keep a leading API version like /3/ (TMDB) intact.
         if (/^\d+$/.test(seg) && !(i === 1 && seg.length <= 2)) return ':id';
         if (/^tt\d+$/.test(seg)) return ':imdbId';
+        // Image endpoints (e.g. RPDB) put the id in the file name: tt123.jpg.
+        const file = /^(tt)?\d+(\.[a-z0-9]{2,5})$/i.exec(seg);
+        if (file) return `${file[1] ? ':imdbId' : ':id'}${file[2]}`;
         if (/^[0-9a-f-]{16,}$/i.test(seg)) return ':hash';
         if (seg.length > 40) return ':long';
         return seg;

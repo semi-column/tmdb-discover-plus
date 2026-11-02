@@ -394,6 +394,24 @@ app.use('/api', apiRouter);
 
 app.use('/', addonRouter);
 
+// Installs of the pre-2.13 bare manifest (which advertised catalog/meta without a config)
+// still call these paths. Name the route so they're grouped instead of "(unmatched)".
+app.get(
+  [
+    '/meta/:type/:id.json',
+    '/meta/:type/:id/:extra.json',
+    '/catalog/:type/:catalogId.json',
+    '/catalog/:type/:catalogId/:extra.json',
+  ],
+  (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.status(404).json({
+      error: `This addon was installed without a configuration. Reinstall it from ${getBaseUrl(req)}/configure`,
+      code: 'CONFIG_REQUIRED',
+    });
+  }
+);
+
 app.use(['/api', '/meta', '/catalog'], (_req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });

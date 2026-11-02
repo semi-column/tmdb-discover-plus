@@ -597,12 +597,26 @@ describe('checkPosterExists', () => {
     }
   );
 
-  it.each([403, 429, 503])('does not cache HEAD %s as a missing image', async (status) => {
+  it.each([429, 503])('does not cache HEAD %s as a missing image', async (status) => {
     fetchMock.mockResolvedValueOnce({ ok: false, status, headers: { get: () => null } });
     fetchMock.mockResolvedValueOnce({ ok: true, headers: { get: () => 'image/jpeg' } });
-    const url = `${trustedPosterBase}/transient-${status}.jpg`;
+    const url = `${trustedPosterBase}/key-${status}/poster-default/transient.jpg`;
     expect(await checkPosterExists(url)).toBe(false);
     expect(await checkPosterExists(url)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips the same key and asset type briefly after a 403, without marking images missing', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 403, headers: { get: () => null } });
+    const scope = `${trustedPosterBase}/key-403/imdb/backdrop-default`;
+    expect(await checkPosterExists(`${scope}/tt1.jpg`)).toBe(false);
+    expect(await checkPosterExists(`${scope}/tt2.jpg`)).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockResolvedValueOnce({ ok: true, headers: { get: () => 'image/jpeg' } });
+    expect(
+      await checkPosterExists(`${trustedPosterBase}/key-403/imdb/poster-default/tt1.jpg`)
+    ).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

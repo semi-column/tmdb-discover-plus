@@ -2,6 +2,8 @@ const KNOWN_SOURCES = new Set(['tmdb', 'imdb', 'anilist', 'mal', 'kitsu', 'simkl
 
 const MANIFEST_RE = /^\/([^/]+)\/manifest\.json$/;
 const RESOURCE_RE = /^\/([^/]+)\/(catalog|meta)\/([^/]+)\/([^/]+?)(?:\/([^/]+?))?\.json$/;
+/** Same shape without the config segment: calls from pre-2.13 bare-manifest installs. */
+const CONFIGLESS_RESOURCE_RE = /^\/(catalog|meta)\/([^/]+)\/([^/]+?)(?:\/([^/]+?))?\.json$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface RouteInfo {
@@ -75,14 +77,15 @@ export function describePath(pathname: string, expressRoute?: string | null): Ro
     };
   }
 
-  const resource = RESOURCE_RE.exec(pathname);
+  const configless = CONFIGLESS_RESOURCE_RE.exec(pathname);
+  const resource = configless ? [pathname, '', ...configless.slice(1)] : RESOURCE_RE.exec(pathname);
   if (resource && !pathname.startsWith('/api/')) {
     const [, userId, kind, type, id, extra] = resource;
     const decodedId = safeDecode(id);
     const idParam = kind === 'catalog' ? ':catalogId' : ':id';
     return {
-      route: `/:userId/${kind}/:type/${idParam}${extra ? '/:extra' : ''}.json`,
-      path: `/:user/${kind}/${type}/${id}${extra ? `/${privateExtra(extra)}` : ''}.json`.slice(
+      route: `${userId ? '/:userId' : ''}/${kind}/:type/${idParam}${extra ? '/:extra' : ''}.json`,
+      path: `${userId ? '/:user' : ''}/${kind}/${type}/${id}${extra ? `/${privateExtra(extra)}` : ''}.json`.slice(
         0,
         400
       ),

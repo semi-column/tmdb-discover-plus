@@ -19,7 +19,13 @@ import {
   type ErrorFilter,
   type ErrorGroupBatch,
   type HistoryStore,
+  EMPTY_REQUEST_FILTER,
+  REQUEST_GROUP_LIMIT,
+  buildGroupSeries,
+  groupSeriesBucketMs,
+  toGroupRow,
   type RequestFilter,
+  type RequestGroupColumn,
   type StorageInfo,
 } from './types.ts';
 
@@ -176,6 +182,9 @@ export class MemoryHistory implements HistoryStore {
     if (!inRange(e.ts, range)) return false;
     const row = toRequestRow(e);
     for (const [field, value] of Object.entries(f.exact)) if (row[field] !== value) return false;
+    for (const [field, values] of Object.entries(f.exclude))
+      if (values.includes(row[field] as string)) return false;
+    if (f.excludeStatus.some(([min, max]) => e.status >= min && e.status <= max)) return false;
     if (f.statusMin !== undefined && (e.status < f.statusMin || e.status > (f.statusMax ?? 999)))
       return false;
     if (f.minMs !== undefined && e.durationMs < f.minMs) return false;
@@ -277,6 +286,52 @@ export class MemoryHistory implements HistoryStore {
     };
   }
 
+  async groupRequests(range: TimeRange, filter: RequestFilter, by: RequestGroupColumn) {
+    const byKey = new Map<string, RequestEvent[]>();
+    const matching = this.requests.filter((event) => this.matches(event, range, filter));
+    const keyOf = (e: RequestEvent) => String(toRequestRow(e)[by] ?? '');
+    for (const e of matching) {
+      const key = keyOf(e);
+      const list = byKey.get(key) ?? [];
+      list.push(e);
+      byKey.set(key, list);
+    }
+    const groups = [...byKey.entries()]
+      .map(([key, list]) => {
+        const sum = (fn: (e: RequestEvent) => number) => list.reduce((acc, e) => acc + fn(e), 0);
+        const weight = sum((e) => e.weight);
+        const percentiles = weightedPercentiles(list.map((e) => [e.durationMs, e.weight]));
+        return toGroupRow({
+          key,
+          count: weight,
+          errors5xx: sum((e) => (e.status >= 500 ? e.weight : 0)),
+          errors4xx: sum((e) => (e.status >= 400 && e.status < 500 ? e.weight : 0)),
+          avg_ms: Math.round(sum((e) => e.durationMs * e.weight) / weight),
+          p50_ms: percentiles.p50Ms,
+          p95_ms: percentiles.p95Ms,
+          p99_ms: percentiles.p99Ms,
+          avg_upstream_calls: sum((e) => e.upstreamCalls * e.weight) / weight,
+          users: new Set(list.map((e) => e.userHash).filter(Boolean)).size,
+        });
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, REQUEST_GROUP_LIMIT);
+    const bucketMs = groupSeriesBucketMs(range);
+    return {
+      groups,
+      total: Math.round(matching.reduce((acc, e) => acc + e.weight, 0)),
+      series: buildGroupSeries(
+        range,
+        groups,
+        matching.map((e) => ({
+          bucket: Math.floor(e.ts / bucketMs) * bucketMs,
+          key: keyOf(e),
+          n: e.weight,
+        }))
+      ),
+    };
+  }
+
   async routeStats(range: TimeRange) {
     return this.routeRows(this.requests.filter((event) => inRange(event.ts, range)));
   }
@@ -311,13 +366,13 @@ export class MemoryHistory implements HistoryStore {
       .sort((a, b) => b.count - a.count);
   }
 
-  async overview(range: TimeRange, slowMs: number) {
+  async overview(range: TimeRange, slowMs: number, filter: RequestFilter = EMPTY_REQUEST_FILTER) {
     const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
     const buckets = new Map<number, OverviewBucket>();
     const statuses = new Map<number, number>();
     const breakdowns = new Map<string, number>();
     const users = new Set<string>();
-    const events = this.requests.filter((event) => inRange(event.ts, range));
+    const events = this.requests.filter((event) => this.matches(event, range, filter));
     const durations = new Map<number, Array<[number, number]>>();
     const getBucket = (ts: number) => {
       const time = Math.floor(ts / bucketMs) * bucketMs;
@@ -415,7 +470,11 @@ export class MemoryHistory implements HistoryStore {
     const bucketMs = bucketForRange(range);
     const q = filter.q?.toLowerCase();
     return [...this.groups.values()]
-      .filter((g) => (g.last_seen as Date).getTime() >= range.from)
+      .filter(
+        (g) =>
+          (g.last_seen as Date).getTime() >= range.from &&
+          (g.first_seen as Date).getTime() <= range.to
+      )
       .filter((g) =>
         filter.status
           ? g.status === filter.status

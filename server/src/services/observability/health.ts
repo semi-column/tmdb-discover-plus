@@ -52,31 +52,6 @@ export function findIncidents(series: HealthSeries, bucketMs: number) {
   }).sort((a, b) => b.from - a.from);
 }
 
-export function deploymentMarkers(rows: Record<string, unknown>[]) {
-  const starts = new Map<string, { at: number; label: string; estimated: boolean }>();
-  for (const row of rows) {
-    const data = row.data;
-    if (!data || typeof data !== 'object') continue;
-    const sample = data as Record<string, unknown>;
-    const bucket = new Date(String(row.bucket)).getTime();
-    const explicit = Number(sample.startedAt);
-    const at =
-      Number.isFinite(explicit) && explicit > 0
-        ? explicit
-        : bucket - Number(sample.uptimeSec) * 1000;
-    if (!Number.isFinite(at)) continue;
-    const key = `${row.instance}:${sample.version}:${explicit || 'legacy'}`;
-    if (!starts.has(key))
-      starts.set(key, {
-        at,
-        label: `v${sample.version ?? '?'} · ${row.instance}`,
-        estimated: !explicit,
-      });
-  }
-  return [...starts.values()].sort((a, b) => a.at - b.at);
-}
-
-/** Evaluates completed minutes even when no dashboard is open. No request paths leave the app. */
 export function startHealthMonitor(live: LiveStore, webhook: string): () => void {
   if (webhook) {
     const url = new URL(webhook);

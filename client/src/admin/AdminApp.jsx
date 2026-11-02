@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from './api.js';
 import { useAsync, useHashRoute, navigate } from './hooks.js';
 import { RANGE_OPTIONS } from './format.js';
+import { pickFilters } from './filters.js';
 import { ErrorNote, Loading } from './components/ui.jsx';
 import { TraceDrawer } from './components/TraceDrawer.jsx';
 import { Login } from './pages/Login.jsx';
@@ -16,9 +17,7 @@ import { Diagnostics } from './pages/Diagnostics.jsx';
 import { Security } from './pages/Security.jsx';
 import {
   Activity,
-  ArrowLeft,
   ArrowUpRight,
-  ChevronRight,
   Menu,
   X,
   LayoutDashboard,
@@ -36,14 +35,17 @@ import {
 const PAGES = [
   ['overview', 'Overview', LayoutDashboard],
   ['requests', 'Requests', ListFilter],
-  ['live', 'Live tail', Radio],
-  ['errors', 'Application logs', FileWarning],
+  ['errors', 'Errors', FileWarning],
   ['upstreams', 'Dependencies', Network],
+  ['live', 'Live tail', Radio],
   ['usage', 'Usage', ChartNoAxesCombined],
   ['system', 'System', Cpu],
   ['diagnostics', 'Proxy diagnostics', Route],
   ['security', 'Security', ShieldCheck],
 ];
+const NAV_SECTIONS = { 0: 'Monitor', 5: 'Insights', 6: 'Administration' };
+/** Pages that share the request filter bar keep its filters when you switch between them. */
+const FILTERED_PAGES = new Set(['overview', 'requests']);
 
 const HISTORY_LABELS = { postgres: 'Postgres', mongo: 'MongoDB', memory: 'in-memory' };
 
@@ -136,6 +138,10 @@ function Dashboard({ onLogout }) {
     });
   const traceId = params.trace || null;
   const meta = useAsync(() => adminApi.meta(), [], { pollMs: 60_000 });
+  // Hash routing keeps the old scroll offset; a new page should start at its header.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [page]);
   const closeTrace = useCallback(
     () => navigate(page, { ...params, trace: undefined }),
     [page, params]
@@ -166,7 +172,14 @@ function Dashboard({ onLogout }) {
   }[page] ?? <Overview {...pageProps} />;
 
   const showRange = !['live', 'diagnostics', 'security'].includes(page);
-  const rangeQuery = new URLSearchParams(rangeParams).toString();
+  const sharedFilters = FILTERED_PAGES.has(page) ? pickFilters(params) : {};
+  const linkQuery = (id) => {
+    const query = new URLSearchParams({
+      ...(range !== '1h' || hasCustomRange ? rangeParams : {}),
+      ...(FILTERED_PAGES.has(id) ? sharedFilters : {}),
+    }).toString();
+    return query ? `?${query}` : '';
+  };
   const m = meta.data;
   const caps = m?.capabilities;
 
@@ -197,11 +210,9 @@ function Dashboard({ onLogout }) {
         <div id="adm-nav-links" className="adm-nav-links">
           {PAGES.map(([id, label, Icon], index) => (
             <div key={id}>
-              {(index === 0 || index === 6) && (
-                <div className="adm-nav-section">{index === 0 ? 'Monitor' : 'Administration'}</div>
-              )}
+              {NAV_SECTIONS[index] && <div className="adm-nav-section">{NAV_SECTIONS[index]}</div>}
               <a
-                href={`#/${id}${range !== '1h' || hasCustomRange ? `?${rangeQuery}` : ''}`}
+                href={`#/${id}${linkQuery(id)}`}
                 className={page === id ? 'active' : ''}
                 aria-current={page === id ? 'page' : undefined}
                 onClick={() => setNavOpen(false)}
@@ -275,37 +286,6 @@ function Dashboard({ onLogout }) {
             </div>
           )}
         </header>
-        {page !== 'overview' && (
-          <nav className="adm-breadcrumbs" aria-label="Investigation path">
-            <button
-              type="button"
-              className="adm-link"
-              onClick={() => navigate('overview', { range })}
-            >
-              <ArrowLeft size={14} /> Overview
-            </button>
-            <ChevronRight size={14} aria-hidden="true" />
-            <span>{PAGES.find(([id]) => id === page)?.[1]}</span>
-            {params.provider && (
-              <>
-                <ChevronRight size={14} aria-hidden="true" />
-                <button
-                  type="button"
-                  className="adm-link"
-                  onClick={() => navigate(page, { range, provider: params.provider })}
-                >
-                  {params.provider}
-                </button>
-              </>
-            )}
-            {params.endpoint && (
-              <>
-                <ChevronRight size={14} aria-hidden="true" />
-                <span className="mono">{params.endpoint}</span>
-              </>
-            )}
-          </nav>
-        )}
         {caps?.history === 'memory' && (
           <div className="adm-alert adm-tone-warn">
             No database for history: keeping the last {caps.memoryCapacity?.toLocaleString()}{' '}

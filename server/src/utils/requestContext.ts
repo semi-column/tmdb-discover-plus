@@ -80,6 +80,12 @@ export async function awaitWithRequestAbort<T>(promise: Promise<T>): Promise<T> 
   }
 }
 
+/** Milliseconds left before a request started at `startedAt` hits `budgetMs`; Infinity outside a request. */
+export function getRequestRemainingMs(budgetMs: number, now = Date.now()): number {
+  const store = asyncLocalStorage.getStore();
+  return store ? store.startedAt + budgetMs - now : Infinity;
+}
+
 export function getRequestContextSnapshot(): RequestContextSnapshot | undefined {
   const store = asyncLocalStorage.getStore();
   if (!store) return undefined;

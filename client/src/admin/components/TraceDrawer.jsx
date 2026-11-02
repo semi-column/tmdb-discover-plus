@@ -82,7 +82,9 @@ export function TraceDrawer({ requestId, onClose, onOpenError, onInvestigate }) 
                   <button
                     type="button"
                     className="adm-btn"
-                    onClick={() => onInvestigate('requests', { userHash: req.user_hash })}
+                    onClick={() =>
+                      onInvestigate('requests', { userHash: req.user_hash, view: 'events' })
+                    }
                   >
                     <ArrowUpRight size={14} /> Same configuration
                   </button>
@@ -90,14 +92,16 @@ export function TraceDrawer({ requestId, onClose, onOpenError, onInvestigate }) 
                 <button
                   type="button"
                   className="adm-btn"
-                  onClick={() => onInvestigate('requests', { route: req.route })}
+                  onClick={() => onInvestigate('requests', { route: req.route, view: 'events' })}
                 >
                   <ArrowUpRight size={14} /> Same route
                 </button>
                 <button
                   type="button"
                   className="adm-btn"
-                  onClick={() => onInvestigate('requests', { route: req.route, status: '5xx' })}
+                  onClick={() =>
+                    onInvestigate('requests', { route: req.route, status: '5xx', view: 'events' })
+                  }
                 >
                   <ArrowUpRight size={14} /> Failed responses on this route
                 </button>

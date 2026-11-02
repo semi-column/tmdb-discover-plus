@@ -110,7 +110,7 @@ export function Live({ onOpenTrace, meta }) {
         {meta?.capabilities?.sharedLive
           ? 'Requests from all instances'
           : 'Requests on this instance'}
-        , delivered in ~5s batches (up to 200 per instance per batch).
+        · updates every ~5s
       </p>
       <div className="adm-table-wrap">
         <table className="adm-table">

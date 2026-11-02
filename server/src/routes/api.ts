@@ -2167,9 +2167,12 @@ router.post('/preview', requireAuth, resolveApiKey, async (req, res) => {
           code: error.code,
           error,
         });
+      } else if (error.statusCode >= 500) {
+        log.warn('Preview upstream failure', { code: error.code, error });
       }
       return sendError(res, error.statusCode, error.code, error.message);
     }
+    log.error('Preview failed', { error });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, safeErrorMessage(error as Error));
   }
 });

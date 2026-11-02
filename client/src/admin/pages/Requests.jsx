@@ -1,130 +1,201 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Ban, Filter } from 'lucide-react';
 import { adminApi, downloadExport } from '../api.js';
 import { useAsync, navigate } from '../hooks.js';
+import { TimeChart } from '../components/TimeChart.jsx';
+import { FilterBar } from '../components/FilterBar.jsx';
 import { Badge, ErrorNote, Loading, Panel } from '../components/ui.jsx';
-import { fmtBucketMs, fmtInt, fmtMs, fmtTime, statusTone } from '../format.js';
+import { fmtInt, fmtMs, fmtPct, fmtTime, statusTone } from '../format.js';
+import { addFilter, pickFilters } from '../filters.js';
 
-const FILTER_KEYS = [
-  'route',
-  'status',
-  'method',
-  'source',
-  'resource',
-  'client',
-  'country',
-  'instance',
-  'minMs',
-  'maxMs',
-  'minUpstreamCalls',
-  'sort',
-  'userHash',
-  'userId',
-  'requestId',
-  'q',
-  'errorsOnly',
+/** Group-by dimensions; `filter` names the filter param that narrows to one group. */
+const GROUP_BY = [
+  { key: 'route', label: 'Route', filter: 'route', mono: true },
+  { key: 'path', label: 'Path', filter: 'q', mono: true },
+  { key: 'status', label: 'Status', filter: 'status' },
+  { key: 'source', label: 'Source', filter: 'source' },
+  { key: 'resource', label: 'Resource', filter: 'resource' },
+  { key: 'contentType', label: 'Content type', filter: 'contentType' },
+  { key: 'catalog', label: 'Catalog', filter: 'q', mono: true },
+  { key: 'client', label: 'Client', filter: 'client' },
+  { key: 'country', label: 'Country', filter: 'country' },
+  { key: 'colo', label: 'Edge' },
+  { key: 'instance', label: 'Instance', filter: 'instance', mono: true },
+  { key: 'method', label: 'Method', filter: 'method' },
 ];
 
-function pickFilters(params) {
-  return Object.fromEntries(FILTER_KEYS.filter((k) => params[k]).map((k) => [k, params[k]]));
-}
+const SORTS = [
+  ['newest', 'Newest first'],
+  ['duration', 'Longest duration'],
+  ['upstream', 'Most upstream calls'],
+];
 
-function FacetSelect({ label, name, value, options, onChange }) {
-  return (
-    <label className="adm-filter">
-      <span>{label}</span>
-      <select value={value || ''} onChange={(e) => onChange(name, e.target.value)}>
-        <option value="">Any</option>
-        {value && !options?.some((o) => o.value === value) && (
-          <option value={value}>{value}</option>
-        )}
-        {options?.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.value || '(none)'} · {fmtInt(o.count)}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function TextFilter({ label, name, value, onChange, placeholder, type = 'text' }) {
-  const [draft, setDraft] = useState(value || '');
-  return (
-    <label className="adm-filter">
-      <span>{label}</span>
-      <input
-        type={type}
-        value={draft}
-        placeholder={placeholder}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => draft !== (value || '') && onChange(name, draft)}
-        onKeyDown={(e) => e.key === 'Enter' && onChange(name, draft)}
-      />
-    </label>
-  );
-}
-
-function RoutePerformance({ range, rangeParams, approximatePercentiles }) {
-  const formatPercentile = approximatePercentiles ? fmtBucketMs : fmtMs;
+function GroupView({ range, rangeParams, filters, by, onFilter, onEvents, onSelectRange }) {
+  const dimension = GROUP_BY.find((g) => g.key === by) ?? GROUP_BY[0];
+  const filterKey = JSON.stringify(filters);
   const { data, error, loading } = useAsync(
-    () => adminApi.routes(rangeParams),
-    [range, rangeParams.from, rangeParams.to]
+    () => adminApi.groups({ ...rangeParams, ...filters, by: dimension.key }),
+    [range, rangeParams.from, rangeParams.to, filterKey, dimension.key],
+    { pollMs: 60_000 }
   );
-  if (loading && !data) return <Loading />;
+  const chart = useMemo(
+    () =>
+      data?.series?.keys?.length
+        ? {
+            data: [data.series.t, ...data.series.values],
+            series: data.series.keys.map((key) => ({ label: key || '(none)' })),
+          }
+        : null,
+    [data]
+  );
+
   return (
     <>
-      <ErrorNote error={error} />
-      <div className="adm-table-wrap">
-        <table className="adm-table">
-          <thead>
-            <tr>
-              <th>Route</th>
-              <th className="num">Requests</th>
-              <th className="num">5xx</th>
-              <th className="num">4xx</th>
-              <th className="num">Avg</th>
-              <th className="num">p50</th>
-              <th className="num">p95</th>
-              <th className="num">p99</th>
-              <th className="num">Max</th>
-              <th className="num">Upstream/req</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data || []).map((r) => (
-              <tr key={r.route} className="adm-clickable">
-                <td className="mono">
-                  <button
-                    type="button"
-                    className="adm-link mono"
-                    onClick={() => navigate('requests', { range, route: r.route })}
-                  >
-                    {r.route}
-                  </button>
-                </td>
-                <td className="num">{fmtInt(r.count)}</td>
-                <td className={`num ${Number(r.errors5xx) ? 'adm-text-bad' : ''}`}>
-                  {fmtInt(r.errors5xx ?? 0)}
-                </td>
-                <td className="num">{fmtInt(r.errors4xx ?? 0)}</td>
-                <td className="num">{fmtMs(r.avg_ms)}</td>
-                <td className="num">{formatPercentile(r.p50_ms)}</td>
-                <td className="num">{formatPercentile(r.p95_ms)}</td>
-                <td className="num">{formatPercentile(r.p99_ms)}</td>
-                <td className="num">{fmtMs(r.max_ms)}</td>
-                <td className="num">{r.avg_upstream_calls}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="adm-segmented" role="group" aria-label="Group by">
+        <span className="adm-muted">Group by</span>
+        {GROUP_BY.map((g) => (
+          <button
+            type="button"
+            key={g.key}
+            className={g.key === dimension.key ? 'active' : ''}
+            aria-pressed={g.key === dimension.key}
+            onClick={() => navigate('requests', { ...rangeParams, ...filters, by: g.key })}
+          >
+            {g.label}
+          </button>
+        ))}
       </div>
+      <ErrorNote error={error} />
+      {loading && !data ? (
+        <Loading />
+      ) : (
+        <>
+          <Panel title={`Requests by ${dimension.label.toLowerCase()}`}>
+            {chart ? (
+              <TimeChart data={chart.data} series={chart.series} onSelectRange={onSelectRange} />
+            ) : (
+              <div className="adm-empty">No requests match these filters.</div>
+            )}
+          </Panel>
+          <Panel
+            title={`${fmtInt(data?.groups?.length)} ${dimension.label.toLowerCase()} groups`}
+            actions={<span className="adm-muted">{fmtInt(data?.total)} requests</span>}
+          >
+            <div className="adm-table-wrap">
+              <table className="adm-table adm-table-stack">
+                <thead>
+                  <tr>
+                    <th>{dimension.label}</th>
+                    <th className="num">Requests</th>
+                    <th className="num">Share</th>
+                    <th className="num adm-col-optional">Users</th>
+                    <th className="num">4xx</th>
+                    <th className="num">5xx</th>
+                    <th className="num adm-col-optional">Avg</th>
+                    <th className="num">p95</th>
+                    <th className="num adm-col-optional">p99</th>
+                    <th className="num adm-col-optional">Upstream/req</th>
+                    <th aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data?.groups || []).map((g) => (
+                    <tr key={g.key}>
+                      <td className={`adm-ellipsis ${dimension.mono ? 'mono' : ''}`} title={g.key}>
+                        {dimension.filter ? (
+                          <button
+                            type="button"
+                            className={`adm-link ${dimension.mono ? 'mono' : ''}`}
+                            onClick={() => onEvents(dimension, g.key)}
+                            title="Show these requests"
+                          >
+                            {g.key || '(none)'}
+                          </button>
+                        ) : (
+                          g.key || '(none)'
+                        )}
+                      </td>
+                      <td data-label="Requests" className="num">
+                        {fmtInt(g.count)}
+                      </td>
+                      <td data-label="Share" className="num">
+                        <span className="adm-share">
+                          <span className="adm-share-track" aria-hidden="true">
+                            <span
+                              className="adm-share-fill"
+                              style={{ width: `${data.total ? (g.count / data.total) * 100 : 0}%` }}
+                            />
+                          </span>
+                          {fmtPct(data.total ? g.count / data.total : 0, 1)}
+                        </span>
+                      </td>
+                      <td data-label="Users" className="adm-col-optional num">
+                        {fmtInt(g.users)}
+                      </td>
+                      <td
+                        data-label="4xx"
+                        className={`num ${g.errors4xx ? 'adm-text-warn' : 'adm-muted'}`}
+                      >
+                        {g.errors4xx ? fmtPct(g.errors4xx / g.count, 1) : '–'}
+                      </td>
+                      <td
+                        data-label="5xx"
+                        className={`num ${g.errors5xx ? 'adm-text-bad' : 'adm-muted'}`}
+                      >
+                        {g.errors5xx ? fmtPct(g.errors5xx / g.count, 1) : '–'}
+                      </td>
+                      <td data-label="Avg" className="adm-col-optional num">
+                        {fmtMs(g.avg_ms)}
+                      </td>
+                      <td data-label="p95" className="num">
+                        {fmtMs(g.p95_ms)}
+                      </td>
+                      <td data-label="p99" className="adm-col-optional num">
+                        {fmtMs(g.p99_ms)}
+                      </td>
+                      <td data-label="Upstream/req" className="adm-col-optional num">
+                        {g.avg_upstream_calls}
+                      </td>
+                      <td className="adm-row-actions">
+                        {dimension.filter && dimension.filter !== 'q' && (
+                          <>
+                            <button
+                              type="button"
+                              className="adm-btn adm-icon-btn-sm"
+                              title={`Only ${dimension.label.toLowerCase()} ${g.key}`}
+                              aria-label={`Filter to ${g.key}`}
+                              onClick={() => onFilter(dimension.filter, g.key, false)}
+                            >
+                              <Filter size={13} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              className="adm-btn adm-icon-btn-sm"
+                              title={`Exclude ${dimension.label.toLowerCase()} ${g.key}`}
+                              aria-label={`Exclude ${g.key}`}
+                              onClick={() => onFilter(dimension.filter, g.key, true)}
+                            >
+                              <Ban size={13} aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        </>
+      )}
     </>
   );
 }
 
 /** Keyed by range+filters by the parent, so its paging state resets when they change. */
-function RequestList({ rangeParams, filters, onOpenTrace }) {
-  const first = useAsync(() => adminApi.requests({ ...rangeParams, ...filters, limit: 100 }), []);
+function RequestList({ rangeParams, filters, sort, onSort, onOpenTrace }) {
+  const query = { ...filters, ...(sort && sort !== 'newest' ? { sort } : {}) };
+  const first = useAsync(() => adminApi.requests({ ...rangeParams, ...query, limit: 100 }), []);
   const [more, setMore] = useState({ rows: [], cursor: undefined });
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState(null);
@@ -137,7 +208,7 @@ function RequestList({ rangeParams, filters, onOpenTrace }) {
     setMoreError(null);
     try {
       const bounds = first.data?.range ? { range: 'custom', ...first.data.range } : rangeParams;
-      const next = await adminApi.requests({ ...bounds, ...filters, cursor, limit: 100 });
+      const next = await adminApi.requests({ ...bounds, ...query, cursor, limit: 100 });
       setMore((m) => ({ rows: [...m.rows, ...next.rows], cursor: next.nextCursor }));
     } catch (err) {
       setMoreError(err);
@@ -148,7 +219,28 @@ function RequestList({ rangeParams, filters, onOpenTrace }) {
 
   return (
     <Panel
-      title={`Requests (${fmtInt(rows.length)} shown${first.data?.total != null ? ` / ${fmtInt(first.data.total)} stored matches` : cursor ? '+' : ''})`}
+      title={`${fmtInt(first.data?.total ?? rows.length)} requests`}
+      actions={
+        <>
+          <label className="adm-inline-select">
+            <span>Sort by</span>
+            <select value={sort || 'newest'} onChange={(e) => onSort(e.target.value)}>
+              {SORTS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="adm-btn"
+            onClick={() => downloadExport({ kind: 'requests', ...rangeParams, ...query })}
+          >
+            Export CSV
+          </button>
+        </>
+      }
     >
       <ErrorNote error={first.error} />
       {first.loading && !rows.length ? (
@@ -157,7 +249,7 @@ function RequestList({ rangeParams, filters, onOpenTrace }) {
         <div className="adm-empty">No requests match these filters.</div>
       ) : (
         <div className="adm-table-wrap">
-          <table className="adm-table">
+          <table className="adm-table adm-table-stack adm-table-stack-events">
             <thead>
               <tr>
                 <th>Time</th>
@@ -174,20 +266,22 @@ function RequestList({ rangeParams, filters, onOpenTrace }) {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={`${r.request_id}-${r.ts}`} className="adm-clickable">
-                  <td className="nowrap">{fmtTime(r.ts)}</td>
-                  <td>
+                <tr key={`${r.request_id}-${r.ts}`}>
+                  <td data-label="Time" className="nowrap">
+                    {fmtTime(r.ts)}
+                  </td>
+                  <td data-label="Status">
                     <Badge tone={statusTone(r.status)}>{r.status}</Badge>
                     {r.error_fp && (
                       <Badge
                         tone={r.status >= 500 ? 'bad' : 'warn'}
-                        title="An application error was logged; open the trace to check the HTTP outcome"
+                        title="An application error was logged; open the trace for details"
                       >
                         log
                       </Badge>
                     )}
                   </td>
-                  <td>{r.method}</td>
+                  <td data-label="Method">{r.method}</td>
                   <td className="mono adm-ellipsis" title={r.path}>
                     <button
                       type="button"
@@ -197,12 +291,21 @@ function RequestList({ rangeParams, filters, onOpenTrace }) {
                       {r.path}
                     </button>
                   </td>
-                  <td className="num">{fmtMs(r.duration_ms)}</td>
-                  <td>{r.source}</td>
-                  <td className="nowrap">{r.client}</td>
-                  <td>{r.country}</td>
-                  <td className="num">{`${r.cache_hits}/${r.cache_misses}`}</td>
-                  <td className="num">{r.upstream_calls}</td>
+                  <td data-label="Duration" className="num">
+                    {fmtMs(r.duration_ms)}
+                  </td>
+                  <td data-label="Source">{r.source}</td>
+                  <td data-label="Client" className="nowrap">
+                    {r.client}
+                  </td>
+                  <td data-label="Country">{r.country}</td>
+                  <td
+                    data-label="Cache h/m"
+                    className="num"
+                  >{`${r.cache_hits}/${r.cache_misses}`}</td>
+                  <td data-label="Upstream" className="num">
+                    {r.upstream_calls}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -224,287 +327,71 @@ function RequestList({ rangeParams, filters, onOpenTrace }) {
   );
 }
 
-export function Requests({ range, rangeParams = { range }, params, onOpenTrace, meta }) {
-  const caps = meta?.capabilities;
+export function Requests({ range, rangeParams = { range }, params, onOpenTrace, onSelectRange }) {
   const filters = pickFilters(params);
   const filterKey = JSON.stringify(filters);
-  const tab = params.tab === 'routes' ? 'routes' : 'explorer';
-
+  const view = params.view === 'events' ? 'events' : 'groups';
+  const by = params.by || 'route';
+  const sort = params.sort;
   const facets = useAsync(
     () => adminApi.facets(rangeParams),
     [range, rangeParams.from, rangeParams.to]
   );
-
-  const setFilter = (name, value) =>
-    navigate('requests', { range, ...filters, [name]: value || undefined });
-  const activeCount = Object.keys(filters).length;
-  const f = facets.data || {};
+  const go = (next) => navigate('requests', { ...rangeParams, ...next });
+  const viewState = view === 'events' ? { view, sort } : { by };
 
   return (
     <div className="adm-stack">
-      <div className="adm-investigation-bar" role="group" aria-label="Request investigation">
-        {[
-          ['All responses', {}],
-          ['HTTP failures', { status: '5xx' }],
-          ['Rejected responses', { status: '4xx' }],
-          ['Unmatched routes', { route: '(unmatched)' }],
-          ['Slow responses', { minMs: meta?.slowMs ?? 1500, sort: 'duration' }],
-          ['Heaviest requests', { sort: 'upstream' }],
-          ['5xx or logged errors', { errorsOnly: 'true' }],
-        ].map(([label, preset]) => (
-          <button
-            type="button"
-            className="adm-btn"
-            key={label}
-            onClick={() => navigate('requests', { range, ...preset })}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {activeCount > 0 && (
-        <div className="adm-filter-summary" aria-label="Active filters">
-          {Object.entries(filters).map(([name, value]) => (
-            <button
-              type="button"
-              className="adm-filter-chip"
-              key={name}
-              title={`Remove ${name} filter`}
-              onClick={() => setFilter(name, '')}
-            >
-              {name}: {value} <span aria-hidden="true">×</span>
-            </button>
-          ))}
-        </div>
-      )}
+      <FilterBar
+        filters={filters}
+        facets={facets.data}
+        onChange={(next) => go({ ...next, ...viewState })}
+      />
       <div className="adm-tabs" role="tablist">
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'explorer'}
-          className={tab === 'explorer' ? 'active' : ''}
-          onClick={() => navigate('requests', { range, ...filters })}
+          aria-selected={view === 'groups'}
+          className={view === 'groups' ? 'active' : ''}
+          onClick={() => go({ ...filters, by })}
         >
-          Explorer
+          Group by
         </button>
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'routes'}
-          className={tab === 'routes' ? 'active' : ''}
-          onClick={() => navigate('requests', { range, ...filters, tab: 'routes' })}
+          aria-selected={view === 'events'}
+          className={view === 'events' ? 'active' : ''}
+          onClick={() => go({ ...filters, view: 'events', sort })}
         >
-          Route performance
+          Events
         </button>
       </div>
 
-      {tab === 'routes' ? (
-        <Panel
-          title={
-            caps?.approximatePercentiles
-              ? 'Route performance (percentiles are latency-bucket upper bounds)'
-              : 'Route performance (exact percentiles from stored requests)'
+      {view === 'groups' ? (
+        <GroupView
+          range={range}
+          rangeParams={rangeParams}
+          filters={filters}
+          by={by}
+          onSelectRange={onSelectRange}
+          onFilter={(key, value, exclude) => go({ ...addFilter(filters, key, value, exclude), by })}
+          onEvents={(dimension, value) =>
+            go({
+              ...(dimension.filter ? addFilter(filters, dimension.filter, value) : filters),
+              view: 'events',
+            })
           }
-        >
-          <RoutePerformance
-            range={range}
-            rangeParams={rangeParams}
-            approximatePercentiles={caps?.approximatePercentiles}
-          />
-        </Panel>
+        />
       ) : (
-        <>
-          <Panel
-            title="Filters"
-            actions={
-              <>
-                {activeCount > 0 && (
-                  <button
-                    type="button"
-                    className="adm-btn"
-                    onClick={() => navigate('requests', { range })}
-                  >
-                    Clear ({activeCount})
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="adm-btn"
-                  onClick={() => downloadExport({ kind: 'requests', ...rangeParams, ...filters })}
-                >
-                  Export CSV
-                </button>
-              </>
-            }
-          >
-            <div className="adm-filters">
-              <label className="adm-filter">
-                <span>Sort by</span>
-                <select
-                  value={filters.sort || 'newest'}
-                  onChange={(e) => setFilter('sort', e.target.value)}
-                >
-                  <option value="newest">Newest first</option>
-                  <option value="duration">Longest duration</option>
-                  <option value="upstream">Most upstream calls</option>
-                </select>
-              </label>
-              <FacetSelect
-                label="Route"
-                name="route"
-                value={filters.route}
-                options={f.route}
-                onChange={setFilter}
-              />
-              <label className="adm-filter">
-                <span>Status</span>
-                <select
-                  value={filters.status || ''}
-                  onChange={(e) => setFilter('status', e.target.value)}
-                >
-                  <option value="">Any</option>
-                  {['2xx', '3xx', '4xx', '5xx'].map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                  {filters.status && !/xx$/.test(filters.status) && (
-                    <option value={filters.status}>{filters.status}</option>
-                  )}
-                </select>
-              </label>
-              <label className="adm-filter">
-                <span>Method</span>
-                <select
-                  value={filters.method || ''}
-                  onChange={(e) => setFilter('method', e.target.value)}
-                >
-                  <option value="">Any</option>
-                  {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'].map((m) => (
-                    <option key={m}>{m}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="adm-filter">
-                <span>Source</span>
-                <select
-                  value={filters.source || ''}
-                  onChange={(e) => setFilter('source', e.target.value)}
-                >
-                  <option value="">Any</option>
-                  {['tmdb', 'imdb', 'anilist', 'mal', 'kitsu', 'simkl', 'other'].map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="adm-filter">
-                <span>Resource</span>
-                <select
-                  value={filters.resource || ''}
-                  onChange={(e) => setFilter('resource', e.target.value)}
-                >
-                  <option value="">Any</option>
-                  {['manifest', 'catalog', 'meta'].map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </select>
-              </label>
-              <FacetSelect
-                label="Client"
-                name="client"
-                value={filters.client}
-                options={f.client}
-                onChange={setFilter}
-              />
-              {caps?.cloudflare && (
-                <FacetSelect
-                  label="Country"
-                  name="country"
-                  value={filters.country}
-                  options={f.country}
-                  onChange={setFilter}
-                />
-              )}
-              {caps?.sharedLive && (
-                <FacetSelect
-                  label="Instance"
-                  name="instance"
-                  value={filters.instance}
-                  options={f.instance}
-                  onChange={setFilter}
-                />
-              )}
-              <TextFilter
-                key={`minMs:${filters.minMs}`}
-                label="Min duration (ms)"
-                name="minMs"
-                type="number"
-                value={filters.minMs}
-                onChange={setFilter}
-              />
-              <TextFilter
-                key={`maxMs:${filters.maxMs}`}
-                label="Max duration (ms)"
-                name="maxMs"
-                type="number"
-                value={filters.maxMs}
-                onChange={setFilter}
-              />
-              <TextFilter
-                key={`minUpstreamCalls:${filters.minUpstreamCalls}`}
-                label="Min upstream calls"
-                name="minUpstreamCalls"
-                type="number"
-                value={filters.minUpstreamCalls}
-                onChange={setFilter}
-              />
-              <TextFilter
-                key={`userHash:${filters.userHash}`}
-                label="Config hash"
-                name="userHash"
-                value={filters.userHash}
-                onChange={setFilter}
-              />
-              <TextFilter
-                key={`userId:${filters.userId}`}
-                label="Config ID (user)"
-                name="userId"
-                value={filters.userId}
-                onChange={setFilter}
-                placeholder="raw ID, hashed server-side"
-              />
-              <TextFilter
-                key={`requestId:${filters.requestId}`}
-                label="Request ID"
-                name="requestId"
-                value={filters.requestId}
-                onChange={setFilter}
-              />
-              <TextFilter
-                key={`q:${filters.q}`}
-                label="Path contains"
-                name="q"
-                value={filters.q}
-                onChange={setFilter}
-              />
-              <label className="adm-filter adm-filter-check">
-                <input
-                  type="checkbox"
-                  checked={filters.errorsOnly === 'true'}
-                  onChange={(e) => setFilter('errorsOnly', e.target.checked ? 'true' : '')}
-                />
-                <span>Errors only (5xx or logged error)</span>
-              </label>
-            </div>
-          </Panel>
-
-          <RequestList
-            key={`${range}|${rangeParams.from ?? ''}|${rangeParams.to ?? ''}|${filterKey}`}
-            rangeParams={rangeParams}
-            filters={filters}
-            onOpenTrace={onOpenTrace}
-          />
-        </>
+        <RequestList
+          key={`${range}|${rangeParams.from ?? ''}|${rangeParams.to ?? ''}|${filterKey}|${sort}`}
+          rangeParams={rangeParams}
+          filters={filters}
+          sort={sort}
+          onSort={(value) => go({ ...filters, view: 'events', sort: value })}
+          onOpenTrace={onOpenTrace}
+        />
       )}
     </div>
   );

@@ -45,7 +45,12 @@ async function fetchCompanyFilmographyList(
   });
 
   if (!response.ok) {
-    throw new Error(`TMDB website company filmography request failed with ${response.status}`);
+    // The website (not the API) is behind bot protection; a block is an upstream outage, not a crash.
+    throw new AppError(
+      502,
+      ErrorCodes.TMDB_UNAVAILABLE,
+      `TMDB website company filmography request failed with ${response.status}`
+    );
   }
 
   const html = await response.text();

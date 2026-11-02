@@ -37,6 +37,19 @@ describe('describePath', () => {
     expect(info.path).not.toContain('AbC123xyz0');
   });
 
+  it('groups config-less calls from old bare-manifest installs under their own route', () => {
+    const info = describePath('/meta/series/tt13951052.json');
+    expect(info).toMatchObject({
+      route: '/meta/:type/:id.json',
+      path: '/meta/series/tt13951052.json',
+      resource: 'meta',
+      source: 'imdb',
+      contentType: 'series',
+      userId: '',
+    });
+    expect(describePath('/meta/movie/tmdb%3A550.json').source).toBe('tmdb');
+  });
+
   it('defaults unprefixed catalogs to tmdb and detects meta id sources', () => {
     expect(describePath('/u/catalog/series/custom-1.json').source).toBe('tmdb');
     expect(describePath('/u/meta/movie/tt0111161.json').source).toBe('imdb');
@@ -237,9 +250,10 @@ describe('client and upstream classification', () => {
       'api.top-posters.com',
     ]) {
       expect(templateUpstreamPath('/short-key/imdb/poster-default/tt12345.jpg', host)).toBe(
-        '/:credential/imdb/poster-default/tt12345.jpg'
+        '/:credential/imdb/poster-default/:imdbId.jpg'
       );
     }
+    expect(templateUpstreamPath('/t/p/w500/12345.png', 'image.tmdb.org')).toBe('/t/p/w500/:id.png');
   });
 
   it('distinguishes caller cancellation from an actual timeout', () => {

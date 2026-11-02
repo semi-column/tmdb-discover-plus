@@ -39,11 +39,12 @@ import {
 } from '../services/observability/liveQueries.ts';
 import {
   parseErrorFilter,
+  hasRequestConditions,
+  parseGroupBy,
   parseRequestFilter,
   type HistoryStore,
 } from '../services/observability/history/types.ts';
 import type { TailItem } from '../services/observability/types.ts';
-import { deploymentMarkers, findIncidents } from '../services/observability/health.ts';
 
 const log = createLogger('admin');
 const router = Router();
@@ -53,6 +54,7 @@ const MAX_FAILS_PER_IP = 5;
 const GLOBAL_SLOWDOWN_AFTER = 20;
 const GLOBAL_SLOWDOWN_MS = 2000;
 const EXPORT_LIMIT = 50_000;
+const ACTIVE_NOW_WINDOW_MS = 15 * 60_000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -247,6 +249,7 @@ router.get(
   '/overview',
   handle(async (req) => {
     const range = parseRange(req.query, retention());
+    const filter = parseRequestFilter(req.query);
     const live = await getLiveStore();
     const history = getHistory();
     const previousRange = previousRangeIfRetained(range, retention());
@@ -260,34 +263,23 @@ router.get(
         previous: previous?.totals ?? null,
         comparisonAvailable: previous !== null,
         dataSource: 'redis-live-fallback',
+        // Live counters are pre-aggregated, so request filters can't apply.
+        filtersIgnored: hasRequestConditions(filter),
         percentilesApproximate: true,
         routePercentilesApproximate: true,
         uniqueUsersApproximate: true,
-        incidents: findIncidents(
-          current.series,
-          current.range.resolution === 'minute' ? 60_000 : 3_600_000
-        ),
-        deployments: [],
+        activeUsersNow: null,
       };
     };
     if (!history) return liveFallback();
     try {
-      const [current, previous] = await Promise.all([
-        history.overview(range, config.observability.slowMs),
-        previousRange
-          ? history.overview(previousRange, config.observability.slowMs)
-          : Promise.resolve(null),
+      const slowMs = config.observability.slowMs;
+      const now = Date.now();
+      const [current, previous, recent] = await Promise.all([
+        history.overview(range, slowMs, filter),
+        previousRange ? history.overview(previousRange, slowMs, filter) : Promise.resolve(null),
+        history.overview({ from: now - ACTIVE_NOW_WINDOW_MS, to: now, kind: 'm' }, slowMs, filter),
       ]);
-      let deployments: ReturnType<typeof deploymentMarkers> = [];
-      let deploymentsUnavailable = false;
-      try {
-        deployments = deploymentMarkers(await history.systemSeries(range)).filter(
-          (marker) => marker.at >= range.from && marker.at <= range.to
-        );
-      } catch (error) {
-        deploymentsUnavailable = true;
-        log.warn('Deployment annotations unavailable', { error });
-      }
       return {
         ...current,
         previous: previous?.totals ?? null,
@@ -295,9 +287,8 @@ router.get(
         dataSource: 'history',
         routePercentilesApproximate: history.approximatePercentiles,
         uniqueUsersApproximate: history.kind === 'memory' || config.observability.sampleRate < 1,
-        incidents: findIncidents(current.series, range.kind === 'm' ? 60_000 : 3_600_000),
-        deployments,
-        deploymentsUnavailable,
+        activeUsersNow: recent.totals.uniqueUsers,
+        activeWindowMinutes: ACTIVE_NOW_WINDOW_MS / 60_000,
       };
     } catch (error) {
       log.warn('History overview failed; falling back to Redis live aggregates', {
@@ -344,6 +335,21 @@ router.get(
 );
 
 router.get(
+  '/requests/groups',
+  handle(async (req, res) => {
+    const history = requireHistory(res);
+    if (!history) return;
+    const range = parseRange(req.query, retention());
+    const by = parseGroupBy(req.query.by);
+    return {
+      by,
+      ...(await history.groupRequests(range, parseRequestFilter(req.query), by)),
+      range: { from: range.from, to: range.to },
+    };
+  })
+);
+
+router.get(
   '/requests/:requestId',
   handle(async (req, res) => {
     const history = requireHistory(res);
@@ -358,7 +364,16 @@ router.get(
     const history = requireHistory(res);
     if (!history) return;
     const range = parseRange(req.query, retention());
-    const groups = await history.listErrorGroups(range, parseErrorFilter(req.query));
+    const groups = (await history.listErrorGroups(range, parseErrorFilter(req.query))).map(
+      (group) => ({
+        ...group,
+        // `count` is all-time; the spark only covers the selected range.
+        range_count: ((group.spark ?? []) as Array<[unknown, unknown]>).reduce(
+          (sum, [, n]) => sum + Number(n),
+          0
+        ),
+      })
+    );
     return { version: ADDON_VERSION, groups };
   })
 );

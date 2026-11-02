@@ -2,10 +2,10 @@ import { useMemo } from 'react';
 import { adminApi } from '../api.js';
 import { useAsync, navigate } from '../hooks.js';
 import { TimeChart } from '../components/TimeChart.jsx';
-import { BarList, ErrorNote, Loading, Panel, StatCard } from '../components/ui.jsx';
+import { BarList, ErrorNote, Panel, StatCard } from '../components/ui.jsx';
 import { fmtBucketMs, fmtInt, fmtMs, fmtTime } from '../format.js';
 
-const DAILY_SERIES = [{ label: 'Active configs' }, { label: 'Manifest fetches', color: '#4ade80' }];
+const DAILY_SERIES = [{ label: 'Active users' }, { label: 'Manifest fetches', color: '#4ade80' }];
 const ACTIVITY_SERIES = [{ label: 'Configs by last update', color: '#c084fc' }];
 
 const toDay = (value) => Math.floor(new Date(value).getTime() / 1000);
@@ -13,10 +13,6 @@ const toDay = (value) => Math.floor(new Date(value).getTime() / 1000);
 export function Usage({ range, rangeParams = { range }, onSelectRange, meta }) {
   const caps = meta?.capabilities;
   const formatPercentile = caps?.approximatePercentiles ? fmtBucketMs : fmtMs;
-  const overview = useAsync(
-    () => adminApi.overview(rangeParams),
-    [range, rangeParams.from, rangeParams.to]
-  );
   const usage = useAsync(
     () => adminApi.usage(rangeParams),
     [range, rangeParams.from, rangeParams.to]
@@ -35,13 +31,12 @@ export function Usage({ range, rangeParams = { range }, onSelectRange, meta }) {
     };
   }, [usage.data]);
 
-  const b = overview.data?.breakdowns;
   const business = usage.data?.business;
-  const go = (key, value) => navigate('requests', { range, [key]: value });
+  const go = (key, value) => navigate('requests', { range, [key]: value, view: 'events' });
 
   return (
     <div className="adm-stack">
-      <ErrorNote error={overview.error || usage.error} />
+      <ErrorNote error={usage.error} />
 
       {business && (
         <>
@@ -53,16 +48,9 @@ export function Usage({ range, rangeParams = { range }, onSelectRange, meta }) {
             />
             <StatCard label="Catalogs" value={fmtInt(business.summary.catalogs)} />
             <StatCard
-              label="Configs last updated (24h)"
+              label="Configs updated (24h)"
               value={fmtInt(business.summary.updated_1d)}
-            />
-            <StatCard
-              label="Configs last updated (7d)"
-              value={fmtInt(business.summary.updated_7d)}
-            />
-            <StatCard
-              label="Configs last updated (30d)"
-              value={fmtInt(business.summary.updated_30d)}
+              sub={`${fmtInt(business.summary.updated_7d)} in 7d · ${fmtInt(business.summary.updated_30d)} in 30d`}
             />
             {business.marketplace.totals && (
               <StatCard
@@ -84,7 +72,7 @@ export function Usage({ range, rangeParams = { range }, onSelectRange, meta }) {
       )}
 
       {usage.data?.traffic && (
-        <Panel title="Daily active configs (requests carrying a config ID)">
+        <Panel title="Daily active users">
           <TimeChart
             data={charts.daily}
             series={DAILY_SERIES}
@@ -92,43 +80,6 @@ export function Usage({ range, rangeParams = { range }, onSelectRange, meta }) {
             onSelectRange={onSelectRange}
           />
         </Panel>
-      )}
-
-      {overview.loading && !b ? (
-        <Loading />
-      ) : (
-        b && (
-          <div className="adm-grid-3">
-            <Panel title="Catalog sources requested">
-              <BarList items={b.sources} onSelect={(v) => go('source', v)} />
-            </Panel>
-            <Panel title="Content types">
-              <BarList items={b.contentTypes} />
-            </Panel>
-            <Panel title="Clients">
-              <BarList items={b.clients} onSelect={(v) => go('client', v)} />
-            </Panel>
-            {caps?.cloudflare && (
-              <Panel title="Countries (Cloudflare)">
-                <BarList
-                  items={b.countries}
-                  onSelect={(v) => go('country', v)}
-                  empty="No CF-IPCountry header seen"
-                />
-              </Panel>
-            )}
-            {caps?.cloudflare && (
-              <Panel title="Cloudflare edge locations">
-                <BarList items={b.colos} empty="No CF-Ray header seen" />
-              </Panel>
-            )}
-            {caps?.sharedLive && (
-              <Panel title="Instances">
-                <BarList items={b.instances} onSelect={(v) => go('instance', v)} />
-              </Panel>
-            )}
-          </div>
-        )
       )}
 
       {usage.data?.traffic && (

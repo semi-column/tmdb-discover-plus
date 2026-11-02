@@ -3,6 +3,7 @@ import { config as appConfig } from '../config.ts';
 import { TIMEOUTS, metahubUrl } from '../constants.ts';
 import { LOCAL_CACHE_TTLS } from '../cacheTtls.ts';
 import { getRequestSignal, throwIfRequestAborted } from '../utils/requestContext.ts';
+import { createRejectedCredentials } from '../utils/rejectedCredentials.ts';
 import type {
   ContentType,
   PosterOptions,
@@ -75,6 +76,15 @@ interface ArtworkCheckEntry {
 }
 
 const artworkCheckCache = new Map<string, ArtworkCheckEntry>();
+/** Hosts whose first path segment is the user's API key. */
+const CREDENTIALED_CHECK_HOSTS = new Set(['api.ratingposterdb.com', 'api.top-streaming.stream']);
+/** Keyed by URL minus the item segment: a 401/403 means this key can't use this asset type. */
+const rejectedArtworkScopes = createRejectedCredentials();
+
+function artworkCredentialScope(parsed: URL): string | null {
+  if (!CREDENTIALED_CHECK_HOSTS.has(parsed.hostname)) return null;
+  return `${parsed.hostname}${parsed.pathname.slice(0, parsed.pathname.lastIndexOf('/'))}`;
+}
 type ArtworkRequestCache = Map<string, Promise<unknown>>;
 
 function artworkRequestSignal(): AbortSignal {
@@ -93,6 +103,7 @@ interface TvdbTokenEntry {
 
 const tvdbTokenCache = new Map<string, TvdbTokenEntry>();
 const TVDB_TOKEN_TTL_MS = LOCAL_CACHE_TTLS.TVDB_TOKEN;
+const rejectedTvdbKeys = createRejectedCredentials();
 
 interface TvdbArtworkRecord {
   image?: string;
@@ -154,14 +165,17 @@ function evictStaleEntries(): void {
 
 export async function checkArtworkExists(url: string): Promise<boolean> {
   throwIfRequestAborted();
+  let credentialScope: string | null;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' || !ALLOWED_CHECK_HOSTS.has(parsed.hostname)) {
       return false;
     }
+    credentialScope = artworkCredentialScope(parsed);
   } catch {
     return false;
   }
+  if (credentialScope && rejectedArtworkScopes.has(credentialScope)) return false;
 
   const cached = artworkCheckCache.get(url);
   if (cached) {
@@ -192,6 +206,9 @@ export async function checkArtworkExists(url: string): Promise<boolean> {
     throwIfRequestAborted();
 
     if (!response.ok) {
+      if (credentialScope && (response.status === 401 || response.status === 403)) {
+        rejectedArtworkScopes.add(credentialScope);
+      }
       if (response.status === 404 || response.status === 410) {
         artworkCheckCache.set(url, { exists: false, ts: Date.now() });
         evictStaleEntries();
@@ -414,6 +431,7 @@ async function getTvdbToken(apiKey: string): Promise<string | null> {
   if (cached && now - cached.ts < TVDB_TOKEN_TTL_MS) {
     return cached.token;
   }
+  if (rejectedTvdbKeys.has(apiKey)) return null;
 
   try {
     const response = await fetch(`${TVDB_API_BASE_URL}/login`, {
@@ -423,7 +441,10 @@ async function getTvdbToken(apiKey: string): Promise<string | null> {
       signal: artworkRequestSignal(),
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) rejectedTvdbKeys.add(apiKey);
+      return null;
+    }
 
     const payload = (await response.json()) as { data?: { token?: string } };
     const token = payload?.data?.token;

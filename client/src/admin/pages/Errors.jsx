@@ -84,23 +84,10 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
       }
     >
       <ErrorNote error={actionError} />
-      <div className="adm-context-note">
-        <strong>Log severity is not response impact</strong>
-        <p>
-          A linked request trace can establish the HTTP outcome. Background events have no parent
-          response; successful HTTP responses may still contain incomplete results.
-        </p>
-      </div>
       <p className="mono adm-error-message">{g.message}</p>
       <Badge tone={g.classification === 'user_config' ? 'warn' : 'muted'}>
         {g.classification || 'Unclassified historical event'}
       </Badge>
-      {g.classification === 'user_config' && (
-        <p>
-          Check the affected configuration or API key. This is not automatically an application
-          defect.
-        </p>
-      )}
       <div className="adm-trace-grid">
         <div className="adm-trace-field">
           <span className="adm-muted">Status</span>
@@ -133,12 +120,6 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
           <pre className="adm-pre">{g.sample_stack}</pre>
         </details>
       )}
-      {!g.sample_stack && (
-        <p className="adm-muted">
-          No stack was captured for this group. Historical message-only logs cannot be
-          reconstructed.
-        </p>
-      )}
       <button
         type="button"
         className="adm-btn"
@@ -163,7 +144,12 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
                     type="button"
                     className="adm-link mono"
                     onClick={() =>
-                      navigate('requests', { range, route: r.route, errorsOnly: 'true' })
+                      navigate('requests', {
+                        range,
+                        route: r.route,
+                        errorsOnly: 'true',
+                        view: 'events',
+                      })
                     }
                   >
                     {r.route}
@@ -231,8 +217,10 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
   }
 
   const go = (next) => navigate('errors', { range, status, level, q, classification, ...next });
-  const groups = list.data?.groups || [];
-  const version = list.data?.version;
+  // Busiest in the selected range first; `count` is all-time.
+  const groups = [...(list.data?.groups || [])].sort(
+    (a, b) => Number(b.range_count ?? 0) - Number(a.range_count ?? 0)
+  );
   const sparkMax = Math.max(
     1,
     ...groups.flatMap((g) => (g.spark || []).map((point) => Number(point[1])))
@@ -297,16 +285,6 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
       }
     >
       <ErrorNote error={list.error} />
-      <div className="adm-context-note">
-        <strong>Uncorrelated signals</strong>
-        <p>
-          Open and regressed are triage states, not proof of an outage. Transport warnings may be
-          retried; missing-resource lookups may be expected. Confirm the parent response before
-          resolving or ignoring a group. First-seen versions describe fingerprint identity, not
-          proof of a new regression. The 2.12.1 fingerprint change split historical groups; old
-          groups are not auto-resolved.
-        </p>
-      </div>
       {list.loading && !list.data ? (
         <Loading />
       ) : groups.length === 0 ? (
@@ -318,6 +296,7 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
               <tr>
                 <th>Issue</th>
                 <th>Triage</th>
+                <th className="num">In range</th>
                 <th className="num">All-time</th>
                 <th>Trend</th>
                 <th>Last seen</th>
@@ -332,11 +311,6 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
                       <Badge tone={g.level === 'error' ? 'bad' : 'warn'}>{g.level}</Badge>{' '}
                       <span className="adm-muted">{g.context}</span>{' '}
                       {g.classification && <Badge>{g.classification}</Badge>}
-                      {g.first_version === version && (
-                        <Badge title="This fingerprint was first observed in this version; the underlying issue may be older">
-                          fingerprint first seen v{version}
-                        </Badge>
-                      )}
                     </div>
                     <div className="mono adm-ellipsis adm-error-line" title={g.message}>
                       <button
@@ -352,6 +326,7 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
                   <td>
                     <Badge tone={STATUS_TONES[g.status]}>{g.status}</Badge>
                   </td>
+                  <td className="num">{fmtInt(g.range_count)}</td>
                   <td className="num">{fmtInt(g.count)}</td>
                   <td className={g.level === 'error' ? 'adm-text-bad' : 'adm-text-warn'}>
                     <span
@@ -368,11 +343,6 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
           </table>
         </div>
       )}
-      <p className="adm-muted">
-        Counts are all-time per fingerprint. Sparklines cover the selected range and use stored
-        occurrence weights on a shared vertical scale. Older, unweighted history remains a lower
-        bound because event detail was capped at 50 per group per 5s per instance.
-      </p>
     </Panel>
   );
 }

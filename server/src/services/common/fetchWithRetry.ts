@@ -1,3 +1,6 @@
+import { TIMEOUTS } from '../../constants.ts';
+import { getRequestRemainingMs, throwIfRequestAborted } from '../../utils/requestContext.ts';
+
 export interface FetchWithRetryConfig {
   /** Provider name used in generated error messages, e.g. "AniList API error: 500". */
   providerName: string;
@@ -80,7 +83,15 @@ export async function fetchWithRetry<T>(
         const delayMs = getRetryDelayMs
           ? getRetryDelayMs(response, attempt)
           : backoffBaseMs * Math.pow(2, attempt);
+        // Waiting past the parent request's timeout only turns a 429 into a 504.
+        if (delayMs >= getRequestRemainingMs(TIMEOUTS.REQUEST_MS)) {
+          throw Object.assign(new Error(`${providerName} API rate limited`), {
+            statusCode: response.status,
+            rateLimitExhausted: true,
+          });
+        }
         await sleep(delayMs);
+        throwIfRequestAborted();
         continue;
       }
 
@@ -94,6 +105,8 @@ export async function fetchWithRetry<T>(
       return (await response.json()) as T;
     } catch (err) {
       lastError = err as Error;
+      throwIfRequestAborted();
+      if ((err as { rateLimitExhausted?: boolean }).rateLimitExhausted) throw err;
       const statusCode = (err as { statusCode?: number }).statusCode;
       if (statusCode !== undefined && isRateLimited(statusCode)) continue;
       if (attempt < maxAttempts - 1) {

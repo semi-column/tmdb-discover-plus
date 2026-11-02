@@ -56,13 +56,6 @@ export function Upstreams({
   return (
     <div className="adm-stack">
       <ErrorNote error={error} />
-      <div className="adm-context-note">
-        <strong>Dependency attempts, not failed user responses</strong>
-        <p>
-          Retries, fallbacks, and background jobs can generate failures here. Parent request traces
-          show the recorded HTTP outcome.
-        </p>
-      </div>
       {(provider || endpoint) && (
         <div className="adm-filter-summary">
           {provider && (

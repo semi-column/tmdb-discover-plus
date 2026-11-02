@@ -14,7 +14,14 @@ import {
   type ErrorFilter,
   type ErrorGroupBatch,
   type HistoryStore,
+  EMPTY_REQUEST_FILTER,
+  REQUEST_GROUP_LIMIT,
+  REQUEST_GROUP_SERIES,
+  buildGroupSeries,
+  groupSeriesBucketMs,
+  toGroupRow,
   type RequestFilter,
+  type RequestGroupColumn,
   type StorageInfo,
 } from './types.ts';
 
@@ -288,6 +295,10 @@ export class MongoHistory implements HistoryStore {
     const and: Doc[] = [this.rangeMatch(range)];
     // Values are plain strings from parseRequestFilter, so they can't carry query operators.
     for (const [field, value] of Object.entries(filter.exact)) and.push({ [field]: value });
+    for (const [field, values] of Object.entries(filter.exclude))
+      and.push({ [field]: { $nin: values } });
+    for (const [min, max] of filter.excludeStatus)
+      and.push({ $or: [{ status: { $lt: min } }, { status: { $gt: max } }] });
     if (filter.statusMin !== undefined)
       and.push({ status: { $gte: filter.statusMin, $lte: filter.statusMax } });
     if (filter.minMs !== undefined) and.push({ duration_ms: { $gte: filter.minMs } });
@@ -468,7 +479,7 @@ export class MongoHistory implements HistoryStore {
     return [...merged.values()];
   }
 
-  async overview(range: TimeRange, slowMs: number) {
+  async overview(range: TimeRange, slowMs: number, filter: RequestFilter = EMPTY_REQUEST_FILTER) {
     const bucketMs = range.kind === 'm' ? 60_000 : 3_600_000;
     const bucketExpr = {
       $multiply: [{ $floor: { $divide: [{ $toLong: '$ts' }, bucketMs] } }, bucketMs],
@@ -493,7 +504,7 @@ export class MongoHistory implements HistoryStore {
       colo: 'colo',
       instance: 'instance',
     };
-    const match = this.rangeMatch(range);
+    const match = this.requestMatch(range, filter);
     const latencyDimension = { $in: ['$dimension.kind', ['bucket', 'routes']] };
     const [requestRows, logRows] = await Promise.all([
       this.coll(C.requests)
@@ -642,6 +653,105 @@ export class MongoHistory implements HistoryStore {
       weightedPercentiles(bucketGroups.flatMap((group) => group.durations))
     );
   }
+  async groupRequests(range: TimeRange, filter: RequestFilter, by: RequestGroupColumn) {
+    const match = this.requestMatch(range, filter);
+    const key = { $toString: `$${by}` };
+    const [grouped, userRows, totalRows] = await Promise.all([
+      this.groupedWithDurations(
+        C.requests,
+        match,
+        { key },
+        {
+          e5: { $sum: { $cond: [{ $gte: ['$status', 500] }, '$weight', 0] } },
+          e4: {
+            $sum: {
+              $cond: [
+                { $and: [{ $gte: ['$status', 400] }, { $lt: ['$status', 500] }] },
+                '$weight',
+                0,
+              ],
+            },
+          },
+          dur: { $sum: { $multiply: ['$duration_ms', '$weight'] } },
+          up: { $sum: { $multiply: ['$upstream_calls', '$weight'] } },
+        }
+      ),
+      this.coll(C.requests)
+        .aggregate(
+          [
+            { $match: { $and: [match, { user_hash: { $ne: '' } }] } },
+            { $group: { _id: { k: key, u: '$user_hash' } } },
+            { $group: { _id: '$_id.k', users: { $sum: 1 } } },
+          ],
+          AGG_OPTS
+        )
+        .toArray(),
+      this.coll(C.requests)
+        .aggregate([{ $match: match }, { $group: { _id: null, n: { $sum: '$weight' } } }], AGG_OPTS)
+        .toArray(),
+    ]);
+    const users = new Map(userRows.map((row) => [String(row._id), Number(row.users)]));
+    const groups = grouped
+      .map((g) => {
+        const k = String((g.key as { key?: unknown }).key ?? '');
+        const percentiles = weightedPercentiles(g.durations);
+        return toGroupRow({
+          key: k,
+          count: g.sums.n,
+          errors5xx: g.sums.e5,
+          errors4xx: g.sums.e4,
+          avg_ms: Math.round(g.sums.dur / g.sums.n),
+          p50_ms: percentiles.p50Ms,
+          p95_ms: percentiles.p95Ms,
+          p99_ms: percentiles.p99Ms,
+          avg_upstream_calls: g.sums.up / g.sums.n,
+          users: users.get(k) ?? 0,
+        });
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, REQUEST_GROUP_LIMIT);
+    const bucketMs = groupSeriesBucketMs(range);
+    const top = groups.slice(0, REQUEST_GROUP_SERIES).map((g) => g.key);
+    const points = top.length
+      ? await this.coll(C.requests)
+          .aggregate(
+            [
+              { $match: match },
+              { $set: { _key: key } },
+              { $match: { _key: { $in: top } } },
+              {
+                $group: {
+                  _id: {
+                    k: '$_key',
+                    b: {
+                      $multiply: [
+                        { $floor: { $divide: [{ $toLong: '$ts' }, bucketMs] } },
+                        bucketMs,
+                      ],
+                    },
+                  },
+                  n: { $sum: '$weight' },
+                },
+              },
+            ],
+            AGG_OPTS
+          )
+          .toArray()
+      : [];
+    return {
+      groups,
+      total: Math.round(Number(totalRows[0]?.n ?? 0)),
+      series: buildGroupSeries(
+        range,
+        groups,
+        points.map((p) => {
+          const id = p._id as { k: string; b: number };
+          return { bucket: Number(id.b), key: String(id.k), n: Number(p.n) };
+        })
+      ),
+    };
+  }
+
   async routeStats(range: TimeRange) {
     const groups = await this.groupedWithDurations(
       C.requests,
@@ -683,7 +793,10 @@ export class MongoHistory implements HistoryStore {
   }
 
   async listErrorGroups(range: TimeRange, filter: ErrorFilter) {
-    const query: Doc = { last_seen: { $gte: new Date(range.from) } };
+    const query: Doc = {
+      last_seen: { $gte: new Date(range.from) },
+      first_seen: { $lte: new Date(range.to) },
+    };
     if (filter.status) query.status = filter.status;
     else if (filter.active) query.status = { $in: ['open', 'regressed'] };
     if (filter.level) query.level = filter.level;
