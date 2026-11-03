@@ -48,8 +48,9 @@ atomic shared Redis state when `REDIS_URL` is set and `CACHE_DRIVER` is not
 and the default 35 TMDB requests/second token refill. Memory mode retains
 process-local limits, so account for worker count there.
 
-Shared admission fails closed on Redis errors (503, no memory fallback);
-restart affected processes after restoring Redis. Active work uses 30-second
+Shared admission fails closed on Redis errors (503, no memory fallback). The
+failed connection is discarded and a fresh one is tried after 5 seconds, so
+processes recover automatically once Redis is reachable. Active work uses 30-second
 leases renewed every 10 seconds. Shutdown/lost renewal cancels request contexts;
 background refresh/prefetch work also receives an abortable context through
 `withAddonWork()`. Crashed replicas' slots expire. Cancellation must be honored: leases cannot fence

@@ -242,22 +242,26 @@ export class RedisTokenBucket {
     );
   }
 
+  // Keep the queue chain usable after a failed mutation so Redis recovery also recovers acquire().
+  private mutate(action: string, pause = 0): Promise<number> {
+    const operation = this.pending.then(() => this.command(action, pause));
+    this.pending = operation.catch(() => {});
+    observeAdmissionMutation(operation);
+    return operation;
+  }
+
   notifyRateLimited(retryAfterMs: number): Promise<unknown> {
     const pause = Math.min(
       Math.max(Number.isFinite(retryAfterMs) ? retryAfterMs : 1000, 1000),
       10000
     );
     this.stats.globalPauses++;
-    this.pending = this.pending.then(() => this.command('pause', pause));
-    observeAdmissionMutation(this.pending);
-    return this.pending;
+    return this.mutate('pause', pause);
   }
 
   endWarmup(): Promise<unknown> {
     this.warmup = false;
-    this.pending = this.pending.then(() => this.command('warm'));
-    observeAdmissionMutation(this.pending);
-    return this.pending;
+    return this.mutate('warm');
   }
 
   async acquire(timeoutMs = 10000, requestSignal = getRequestSignal()): Promise<void> {

@@ -135,13 +135,14 @@ export class RedisAddonWork {
           let releasing: Promise<void> | undefined;
           let renewing: Promise<unknown> = Promise.resolve();
           const abortWork = AsyncResource.bind((reason: unknown) => abortRequestContext(reason));
+          const generation = this.redis.shutdown.signal;
           const stop = () => {
             clearInterval(timer);
-            this.redis.shutdown.signal.removeEventListener('abort', onShutdown);
+            generation.removeEventListener('abort', onShutdown);
           };
           const onShutdown = () => {
             stop();
-            abortWork(this.redis.shutdown.signal.reason);
+            abortWork(generation.reason);
           };
           const timer = setInterval(
             () => {
@@ -156,15 +157,16 @@ export class RedisAddonWork {
                     'Addon work lease renewal failed',
                     error
                   );
-                  this.redis.fail(failure);
                   abortWork(failure);
-                  log.error('Addon work lease renewal failed; admission is closed');
+                  log.error('Addon work lease renewal failed; work aborted', {
+                    error: error instanceof Error ? error.message : String(error),
+                  });
                 });
             },
             Math.max(1, Math.floor(this.leaseMs / 3))
           );
           timer.unref();
-          this.redis.shutdown.signal.addEventListener('abort', onShutdown, { once: true });
+          generation.addEventListener('abort', onShutdown, { once: true });
           return () => {
             if (releasing) return releasing;
             released = true;

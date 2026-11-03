@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import {
+  ADMISSION_RECOVERY_MS,
   AdmissionRedis,
   SharedAdmissionError,
   admissionDelay,
 } from '../../src/infrastructure/sharedAdmission.ts';
+import { RedisTokenBucket } from '../../src/infrastructure/tmdbThrottle.ts';
 import { withAddonWork, sendAddonWorkLimit } from '../../src/utils/addonWork.ts';
 import {
   getRequestId,
@@ -105,5 +107,38 @@ describe('addon work renewal context', () => {
       res.json({ result });
     });
     expect((await request(app).get('/')).body).toEqual({ result: 'done' });
+  });
+});
+
+describe('shared admission recovery', () => {
+  it('rejects during the cooldown, then opens a fresh connection generation', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    const first = redis.shutdown.signal;
+    await expect(redis.eval('return 1', [], [])).rejects.toBeInstanceOf(SharedAdmissionError);
+    expect(first.aborted).toBe(true);
+    await expect(redis.eval('return 1', [], [])).rejects.toBe(first.reason);
+    expect(redis.shutdown.signal).toBe(first);
+
+    vi.setSystemTime(Date.now() + ADMISSION_RECOVERY_MS);
+    const retry = redis.eval('return 1', [], []);
+    const second = redis.shutdown.signal;
+    expect(second).not.toBe(first);
+    await expect(retry).rejects.toBeInstanceOf(SharedAdmissionError);
+    expect(second.aborted).toBe(true);
+  });
+
+  it('keeps TMDB acquire usable after a failed shared pause', async () => {
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    vi.spyOn(redis, 'eval').mockImplementation(async (_script, _keys, args) => {
+      if (args[0] === 'pause') throw new SharedAdmissionError();
+      return 0;
+    });
+    const bucket = new RedisTokenBucket(redis, { maxTokens: 5, refillRate: 5 });
+    await expect(bucket.notifyRateLimited(1000)).rejects.toBeInstanceOf(SharedAdmissionError);
+    await expect(bucket.acquire()).resolves.toBeUndefined();
+    bucket.destroy();
   });
 });
