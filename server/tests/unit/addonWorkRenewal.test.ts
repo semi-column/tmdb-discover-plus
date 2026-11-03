@@ -6,9 +6,15 @@ import {
   AdmissionRedis,
   SharedAdmissionError,
   admissionDelay,
+  observeAdmissionMutation,
 } from '../../src/infrastructure/sharedAdmission.ts';
 import { RedisTokenBucket } from '../../src/infrastructure/tmdbThrottle.ts';
-import { withAddonWork, sendAddonWorkLimit } from '../../src/utils/addonWork.ts';
+import {
+  AddonWorkLimitError,
+  RedisAddonWork,
+  withAddonWork,
+  sendAddonWorkLimit,
+} from '../../src/utils/addonWork.ts';
 import {
   getRequestId,
   getRequestSignal,
@@ -16,6 +22,7 @@ import {
 } from '../../src/utils/requestContext.ts';
 
 const selected = vi.hoisted(() => ({ redis: undefined as AdmissionRedis | undefined }));
+const logged = vi.hoisted(() => ({ error: vi.fn(), warn: vi.fn() }));
 vi.mock('../../src/infrastructure/sharedAdmission.ts', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('../../src/infrastructure/sharedAdmission.ts')>();
@@ -23,7 +30,7 @@ vi.mock('../../src/infrastructure/sharedAdmission.ts', async (importOriginal) =>
 });
 
 vi.mock('../../src/utils/logger.ts', () => ({
-  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: logged.warn, error: logged.error }),
 }));
 
 afterEach(() => {
@@ -111,6 +118,131 @@ describe('addon work renewal context', () => {
 });
 
 describe('shared admission recovery', () => {
+  it('logs the cause when a background admission mutation fails', async () => {
+    const error = new Error('release failed');
+    logged.warn.mockClear();
+    observeAdmissionMutation(Promise.reject(error));
+    await Promise.resolve();
+    expect(logged.warn).toHaveBeenCalledWith('Shared admission mutation failed', { error });
+  });
+
+  it('does not report a Redis failure after admission is closed', () => {
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    redis.close();
+    logged.error.mockClear();
+    redis.fail(new Error('Connection closed during shutdown'));
+    expect(logged.error).not.toHaveBeenCalled();
+  });
+
+  it('releases a work grant that arrives after the queue deadline', async () => {
+    vi.useFakeTimers();
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    let resolveGrant!: (value: number) => void;
+    const grant = new Promise<number>((resolve) => {
+      resolveGrant = resolve;
+    });
+    const command = vi.spyOn(redis, 'eval').mockImplementation((_script, _keys, args) => {
+      return args[0] === 'acquire' ? grant : Promise.resolve(1);
+    });
+    const waiting = new RedisAddonWork(redis).acquire('late-grant');
+    const rejection = expect(waiting).rejects.toBeInstanceOf(AddonWorkLimitError);
+    await vi.advanceTimersByTimeAsync(5000);
+    await rejection;
+    expect(command.mock.calls.map((call) => call[2][0])).toEqual(['acquire']);
+    resolveGrant(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(command.mock.calls.map((call) => call[2][0])).toEqual(['acquire', 'release']);
+    expect(redis.shutdown.signal.aborted).toBe(false);
+  });
+
+  it('counts cancelled work until its pending Redis commands settle', async () => {
+    vi.useFakeTimers();
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    let resolveGrant!: (value: number) => void;
+    const grant = new Promise<number>((resolve) => {
+      resolveGrant = resolve;
+    });
+    const command = vi.spyOn(redis, 'eval').mockReturnValue(grant);
+    const work = new RedisAddonWork(redis);
+    const controller = new AbortController();
+    const waiting = Array.from({ length: 100 }, () =>
+      work.acquire('cancelled-user', controller.signal).catch((error: unknown) => error)
+    );
+    controller.abort();
+    expect(
+      (await Promise.all(waiting)).every(
+        (error) => error instanceof Error && error.name === 'AbortError'
+      )
+    ).toBe(true);
+    await expect(work.acquire('cancelled-user')).rejects.toBeInstanceOf(AddonWorkLimitError);
+    expect(command).toHaveBeenCalledTimes(100);
+
+    resolveGrant(0);
+    await vi.advanceTimersByTimeAsync(0);
+    command.mockResolvedValue(1);
+    const release = await work.acquire('cancelled-user');
+    await release();
+  });
+
+  it('counts a cancelled token request until its Redis command settles', async () => {
+    vi.useFakeTimers();
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    let resolveToken!: (value: number) => void;
+    const token = new Promise<number>((resolve) => {
+      resolveToken = resolve;
+    });
+    const command = vi.spyOn(redis, 'eval').mockReturnValue(token);
+    const bucket = new RedisTokenBucket(redis, { maxTokens: 5, refillRate: 5, maxQueueSize: 1 });
+    const controller = new AbortController();
+    const waiting = bucket.acquire(5000, controller.signal);
+    const rejection = expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(command).toHaveBeenCalledOnce();
+    controller.abort();
+    await rejection;
+    expect(bucket.getStats().queueDepth).toBe(1);
+    await expect(bucket.acquire()).rejects.toThrow('queue full');
+
+    resolveToken(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(bucket.getStats().queueDepth).toBe(0);
+    bucket.destroy();
+  });
+
+  it.each(['addon', 'tmdb'] as const)(
+    'recovers %s admission before capturing its cancellation signal',
+    async (kind) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const redis = new AdmissionRedis('redis://127.0.0.1:1');
+      selected.redis = redis;
+      const bucket = new RedisTokenBucket(redis, { maxTokens: 5, refillRate: 5 });
+      const work = new RedisAddonWork(redis);
+      const acquire = () => (kind === 'addon' ? work.acquire('recovery') : bucket.acquire());
+      const first = redis.shutdown.signal;
+      redis.fail(new Error('Transient Redis failure'));
+      const command = vi.spyOn(redis, 'eval').mockResolvedValue(kind === 'addon' ? 1 : 0);
+      try {
+        await expect(acquire()).rejects.toBeInstanceOf(SharedAdmissionError);
+        expect(command).not.toHaveBeenCalled();
+        vi.setSystemTime(Date.now() + ADMISSION_RECOVERY_MS);
+        const release = await acquire();
+        expect(redis.shutdown.signal).not.toBe(first);
+        expect(redis.shutdown.signal.aborted).toBe(false);
+        expect(first.aborted).toBe(true);
+        expect(command).toHaveBeenCalledOnce();
+        if (release) await release();
+        redis.close();
+        await expect(acquire()).rejects.toThrow('shutting down');
+      } finally {
+        bucket.destroy();
+      }
+    }
+  );
+
   it('rejects during the cooldown, then opens a fresh connection generation', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const redis = new AdmissionRedis('redis://127.0.0.1:1');

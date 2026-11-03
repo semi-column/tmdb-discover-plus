@@ -53,7 +53,7 @@ export class AdmissionRedis {
   }
 
   fail(error: Error): void {
-    if (this.failure) return;
+    if (this.closed || this.failure) return;
     this.failure =
       error instanceof SharedAdmissionError ? error : new SharedAdmissionError(undefined, error);
     this.failedAt = Date.now();
@@ -66,7 +66,7 @@ export class AdmissionRedis {
     if (this.client.isOpen) this.client.destroy();
   }
 
-  async eval(script: string, keys: string[], args: string[], timeoutMs = 1000): Promise<number> {
+  getSignal(): AbortSignal {
     if (this.closed) throw new SharedAdmissionError('Shared admission shutting down');
     if (this.failure) {
       if (Date.now() - this.failedAt < ADMISSION_RECOVERY_MS) throw this.failure;
@@ -74,6 +74,11 @@ export class AdmissionRedis {
       this.shutdown = new AbortController();
       this.open();
     }
+    return this.shutdown.signal;
+  }
+
+  async eval(script: string, keys: string[], args: string[], timeoutMs = 1000): Promise<number> {
+    this.getSignal();
     const client = this.client;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -175,5 +180,5 @@ export function closeAdmissionRedis(): void {
 
 export function observeAdmissionMutation(operation: Promise<unknown>): void {
   // Existing notification/release callers are synchronous. Never lose a rejection.
-  void operation.catch(() => log.warn('Shared admission mutation failed'));
+  void operation.catch((error: unknown) => log.warn('Shared admission mutation failed', { error }));
 }

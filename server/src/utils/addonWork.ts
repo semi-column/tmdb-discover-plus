@@ -12,6 +12,7 @@ import {
   ADMISSION_PREFIX,
   AdmissionRedis,
   SharedAdmissionError,
+  admissionAwait,
   admissionDelay,
   getAdmissionRedis,
   observeAdmissionMutation,
@@ -96,10 +97,8 @@ export class RedisAddonWork {
   }
 
   async acquire(userId: string, requestSignal = getRequestSignal()): Promise<WorkRelease> {
-    const signal = AbortSignal.any([
-      this.redis.shutdown.signal,
-      ...(requestSignal ? [requestSignal] : []),
-    ]);
+    const generation = this.redis.getSignal();
+    const signal = AbortSignal.any([generation, ...(requestSignal ? [requestSignal] : [])]);
     signal.throwIfAborted();
     if (this.totalWaiting >= GLOBAL_QUEUED || (this.waiting.get(userId) ?? 0) >= PER_USER_QUEUED)
       throw new AddonWorkLimitError();
@@ -111,23 +110,33 @@ export class RedisAddonWork {
       `${ADMISSION_PREFIX}addon:global`,
       `${ADMISSION_PREFIX}addon:user:${createHash('sha256').update(userId).digest('hex')}`,
     ];
-    const command = (action: string, timeout = 1000) =>
-      this.redis.eval(
-        ADDON_WORK_SCRIPT,
-        keys,
-        [action, id, String(this.leaseMs), String(GLOBAL_ACTIVE), String(PER_USER_ACTIVE)],
-        timeout
-      );
+    const command = (action: string) =>
+      this.redis.eval(ADDON_WORK_SCRIPT, keys, [
+        action,
+        id,
+        String(this.leaseMs),
+        String(GLOBAL_ACTIVE),
+        String(PER_USER_ACTIVE),
+      ]);
     const deadline = Date.now() + WAIT_MS;
+    let cleanup: Promise<unknown> | undefined;
     try {
       for (;;) {
         signal.throwIfAborted();
         const remaining = deadline - Date.now();
         if (remaining <= 0) throw new AddonWorkLimitError();
-        const granted = await command('acquire', Math.min(1000, remaining));
+        const pending = command('acquire');
+        let granted: number;
+        try {
+          granted = await admissionAwait(pending, remaining, signal, new AddonWorkLimitError());
+        } catch (error) {
+          // A grant can arrive after the caller has stopped waiting.
+          cleanup = pending.then((result) => (result === 1 ? command('release') : undefined));
+          throw error;
+        }
         if (granted === 1) {
           if (signal.aborted || Date.now() >= deadline) {
-            await command('release');
+            cleanup = command('release');
             signal.throwIfAborted();
             throw new AddonWorkLimitError();
           }
@@ -135,7 +144,6 @@ export class RedisAddonWork {
           let releasing: Promise<void> | undefined;
           let renewing: Promise<unknown> = Promise.resolve();
           const abortWork = AsyncResource.bind((reason: unknown) => abortRequestContext(reason));
-          const generation = this.redis.shutdown.signal;
           const stop = () => {
             clearInterval(timer);
             generation.removeEventListener('abort', onShutdown);
@@ -181,10 +189,15 @@ export class RedisAddonWork {
         await admissionDelay(Math.min(50, Math.max(1, deadline - Date.now())), signal);
       }
     } finally {
-      this.totalWaiting--;
-      const remaining = (this.waiting.get(userId) ?? 1) - 1;
-      if (remaining) this.waiting.set(userId, remaining);
-      else this.waiting.delete(userId);
+      const removeWaiting = () => {
+        this.totalWaiting--;
+        const remaining = (this.waiting.get(userId) ?? 1) - 1;
+        if (remaining) this.waiting.set(userId, remaining);
+        else this.waiting.delete(userId);
+      };
+      // Keep late Redis work within the queue bounds until cleanup finishes.
+      if (cleanup) observeAdmissionMutation(cleanup.finally(removeWaiting));
+      else removeWaiting();
     }
   }
 }

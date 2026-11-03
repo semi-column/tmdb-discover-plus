@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdirSync, rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -9,11 +9,16 @@ import express from 'express';
 import request from 'supertest';
 import {
   ADMISSION_PREFIX,
+  ADMISSION_RECOVERY_MS,
   AdmissionRedis,
   SharedAdmissionError,
   admissionDelay,
 } from '../../src/infrastructure/sharedAdmission.ts';
-import { RedisTokenBucket, TMDB_BUDGET_SCRIPT } from '../../src/infrastructure/tmdbThrottle.ts';
+import {
+  RATE_LIMITER_TIMEOUT_CODE,
+  RedisTokenBucket,
+  TMDB_BUDGET_SCRIPT,
+} from '../../src/infrastructure/tmdbThrottle.ts';
 import {
   RedisAddonWork,
   ADDON_WORK_SCRIPT,
@@ -141,12 +146,29 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     await expect(a.acquire()).rejects.toThrow('queue full');
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    expect(a.getStats().queueDepth).toBe(0);
+    await vi.waitFor(() => expect(a.getStats().queueDepth).toBe(0), {
+      interval: 10,
+      timeout: 1000,
+    });
     await expect(a.acquire(20)).rejects.toMatchObject({ code: 'RATE_LIMITER_TIMEOUT' });
     const shuttingDown = a.acquire();
     a.destroy();
     await expect(shuttingDown).rejects.toThrow('shutting down');
-    expect(a.getStats().queueDepth).toBe(0);
+    await vi.waitFor(() => expect(a.getStats().queueDepth).toBe(0), {
+      interval: 10,
+      timeout: 1000,
+    });
+  });
+
+  it('does not close admission when only a token wait deadline expires', async () => {
+    const client = connection();
+    const throttle = bucket(client);
+    await client.eval('return 1', [], []);
+    await inspector.sendCommand(['CLIENT', 'PAUSE', '250', 'ALL']);
+    await expect(throttle.acquire(30)).rejects.toMatchObject({ code: RATE_LIMITER_TIMEOUT_CODE });
+    expect(client.shutdown.signal.aborted).toBe(false);
+    await sleep(300);
+    await expect(throttle.acquire()).resolves.toBeUndefined();
   });
 
   it('shares six per user and sixty global active slots; release is idempotent', async () => {
@@ -184,8 +206,10 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
 
   it('bounds work queues, removes aborts and expires waiting work after five seconds', async () => {
     const a = new RedisAddonWork(connection());
-    const b = new RedisAddonWork(connection());
+    const client = connection();
+    const b = new RedisAddonWork(client);
     await occupy(a, 'full', 6);
+    const evaluations = vi.spyOn(client, 'eval');
     const controller = new AbortController();
     const queued = Array.from({ length: 100 }, () =>
       b.acquire('full', controller.signal).catch((error: unknown) => error)
@@ -193,10 +217,16 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     await expect(b.acquire('full')).rejects.toBeInstanceOf(AddonWorkLimitError);
     controller.abort();
     expect((await Promise.all(queued)).every((error) => error.name === 'AbortError')).toBe(true);
+    await Promise.all(evaluations.mock.results.map((result) => result.value));
+    await sleep(0);
     const started = Date.now();
-    await expect(b.acquire('full')).rejects.toBeInstanceOf(AddonWorkLimitError);
+    const waiting = expect(b.acquire('full')).rejects.toBeInstanceOf(AddonWorkLimitError);
+    await sleep(4850);
+    await inspector.sendCommand(['CLIENT', 'PAUSE', '300', 'ALL']);
+    await waiting;
     expect(Date.now() - started).toBeGreaterThanOrEqual(4900);
     expect(Date.now() - started).toBeLessThan(5700);
+    expect(client.shutdown.signal.aborted).toBe(false);
     const release = releases.shift()!;
     await release();
     releases.push(await b.acquire('full'));
@@ -250,11 +280,19 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     const client = connection();
     await client.eval('return 1', [], []);
     const work = new RedisAddonWork(client);
+    const evaluations = vi.spyOn(client, 'eval');
     await inspector.sendCommand(['CLIENT', 'PAUSE', '150', 'ALL']);
     const controller = new AbortController();
     const pending = work.acquire('aborted-in-flight', controller.signal);
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(await evaluations.mock.results[0].value).toBe(1);
+    await vi.waitFor(() => expect(evaluations).toHaveBeenCalledTimes(2), {
+      interval: 10,
+      timeout: 1000,
+    });
+    expect(evaluations.mock.calls[1][2][0]).toBe('release');
+    await evaluations.mock.results[1].value;
     expect(await inspector.keys(`${ADMISSION_PREFIX}addon:*`)).toEqual([]);
     releases.push(await work.acquire('aborted-in-flight'));
   });
@@ -270,6 +308,54 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     expect(await inspector.keys(`${ADMISSION_PREFIX}addon:*`)).toEqual([]);
   });
 
+  it('recovers addon and TMDB admission after a real socket outage', async () => {
+    const addonClient = connection();
+    const tmdbClient = connection();
+    const work = new RedisAddonWork(addonClient);
+    const throttle = bucket(tmdbClient);
+    const release = await work.acquire('before-outage');
+    await release();
+    await throttle.acquire();
+    const oldAddonSignal = addonClient.shutdown.signal;
+    const oldTmdbSignal = tmdbClient.shutdown.signal;
+    await inspector.sendCommand(['CLIENT', 'KILL', 'TYPE', 'normal', 'SKIPME', 'yes']);
+    await sleep(30);
+    expect(oldAddonSignal.aborted).toBe(true);
+    expect(oldTmdbSignal.aborted).toBe(true);
+    await expect(work.acquire('during-outage')).rejects.toBeInstanceOf(SharedAdmissionError);
+    await expect(throttle.acquire()).rejects.toBeInstanceOf(SharedAdmissionError);
+
+    await sleep(ADMISSION_RECOVERY_MS);
+    releases.push(await work.acquire('after-outage'));
+    await throttle.acquire();
+    expect(addonClient.shutdown.signal).not.toBe(oldAddonSignal);
+    expect(tmdbClient.shutdown.signal).not.toBe(oldTmdbSignal);
+    expect(oldAddonSignal.aborted).toBe(true);
+    expect(oldTmdbSignal.aborted).toBe(true);
+  }, 10000);
+
+  it('recovers both limiters on one connection after a Redis command timeout', async () => {
+    const client = connection();
+    const work = new RedisAddonWork(client);
+    const throttle = bucket(client);
+    const before = await work.acquire('before-timeout');
+    await before();
+    await throttle.acquire();
+    const oldSignal = client.shutdown.signal;
+    await inspector.sendCommand(['CLIENT', 'PAUSE', '1200', 'ALL']);
+    await expect(throttle.notifyRateLimited(1000)).rejects.toBeInstanceOf(SharedAdmissionError);
+    expect(oldSignal.aborted).toBe(true);
+    await expect(work.acquire('during-cooldown')).rejects.toBeInstanceOf(SharedAdmissionError);
+    await expect(throttle.acquire()).rejects.toBeInstanceOf(SharedAdmissionError);
+
+    await sleep(ADMISSION_RECOVERY_MS);
+    const [release] = await Promise.all([work.acquire('after-timeout'), throttle.acquire()]);
+    releases.push(release);
+    expect(client.shutdown.signal).not.toBe(oldSignal);
+    expect(client.shutdown.signal.aborted).toBe(false);
+    expect(oldSignal.aborted).toBe(true);
+  }, 10000);
+
   it('aborts active request contexts when renewal loses a lease, without resurrecting it', async () => {
     const client = connection();
     const work = new RedisAddonWork(client, 300);
@@ -283,7 +369,7 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
       expect(signal.aborted).toBe(true);
       expect(signal.reason).toBeInstanceOf(SharedAdmissionError);
       await expect(work.acquire('next')).rejects.toBeInstanceOf(SharedAdmissionError);
-      await expect(release()).rejects.toBeInstanceOf(SharedAdmissionError);
+      await expect(release()).resolves.toBeUndefined();
       res.json({ ok: true });
     });
     const response = await request(app).get('/');

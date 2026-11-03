@@ -233,12 +233,11 @@ export class RedisTokenBucket {
     }
   }
 
-  private command(action: string, pause = 0, timeoutMs = 1000): Promise<number> {
+  private command(action: string, pause = 0): Promise<number> {
     return this.redis.eval(
       TMDB_BUDGET_SCRIPT,
       [`${ADMISSION_PREFIX}tmdb`],
-      [action, String(this.options.maxTokens), String(this.options.refillRate), String(pause)],
-      timeoutMs
+      [action, String(this.options.maxTokens), String(this.options.refillRate), String(pause)]
     );
   }
 
@@ -267,7 +266,7 @@ export class RedisTokenBucket {
   async acquire(timeoutMs = 10000, requestSignal = getRequestSignal()): Promise<void> {
     const signal = AbortSignal.any([
       this.controller.signal,
-      this.redis.shutdown.signal,
+      this.redis.getSignal(),
       ...(requestSignal ? [requestSignal] : []),
     ]);
     signal.throwIfAborted();
@@ -279,26 +278,23 @@ export class RedisTokenBucket {
     this.queued++;
     const started = Date.now();
     const deadline = started + timeoutMs;
+    const timeoutError = Object.assign(
+      new Error('Rate limiter timeout — waited too long for token'),
+      { code: RATE_LIMITER_TIMEOUT_CODE }
+    );
     let waited = false;
+    let command: Promise<number> | undefined;
     try {
-      await admissionAwait(
-        this.pending,
-        timeoutMs,
-        signal,
-        Object.assign(new Error('Rate limiter timeout — waited too long for token'), {
-          code: RATE_LIMITER_TIMEOUT_CODE,
-        })
-      );
+      await admissionAwait(this.pending, timeoutMs, signal, timeoutError);
       for (;;) {
         signal.throwIfAborted();
         const remaining = deadline - Date.now();
-        if (remaining <= 0) {
-          throw Object.assign(new Error('Rate limiter timeout — waited too long for token'), {
-            code: RATE_LIMITER_TIMEOUT_CODE,
-          });
-        }
-        const wait = await this.command('acquire', 0, Math.min(1000, remaining));
+        if (remaining <= 0) throw timeoutError;
+        command = this.command('acquire');
+        const wait = await admissionAwait(command, remaining, signal, timeoutError);
+        command = undefined;
         signal.throwIfAborted();
+        if (Date.now() >= deadline) throw timeoutError;
         if (wait === 0) {
           if (!waited) this.stats.immediateGrants++;
           else this.stats.totalWaitMs += Date.now() - started;
@@ -314,7 +310,10 @@ export class RedisTokenBucket {
       this.stats.rejectedRequests++;
       throw error;
     } finally {
-      this.queued--;
+      const removeWaiting = () => this.queued--;
+      // A caller can stop waiting before its Redis command settles.
+      if (command) void command.then(removeWaiting, removeWaiting);
+      else removeWaiting();
     }
   }
 
