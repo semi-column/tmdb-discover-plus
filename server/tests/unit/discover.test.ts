@@ -224,24 +224,22 @@ describe('fetchSpecialList', () => {
     expect(result.results[0].id).toBe(21);
   });
 
-  it('fetches studio filmography from the TMDB website for collection-only studio mode', async () => {
-    mockWebsiteFetch.mockResolvedValue({
-      ok: true,
-      text: vi.fn().mockResolvedValue(`
-        <html>
-          <body>
-            <h3>147 movies</h3>
-            <a href="/movie/222218-wcw-starrcade-1990">WCW Starrcade 1990</a>
-            <a href="/movie/225067-wcw-halloween-havoc-1994">WCW Halloween Havoc 1994</a>
-            <a href="/movie/229747-wcw-fall-brawl-1997">WCW Fall Brawl 1997</a>
-          </body>
-        </html>
-      `),
+  it('fetches studio credits through the official API without narrowing Discover filters', async () => {
+    mockedFetch.mockResolvedValue({
+      page: 2,
+      results: [{ id: 222218, genre_ids: [28] }, { id: 225067 }],
+      total_results: 147,
+      total_pages: 8,
     });
 
     const result = (await fetchSpecialList('key', 'studio', 'collection', {
       studioId: 13510,
       page: 2,
+      displayLanguage: 'de-DE',
+      region: 'US',
+      genres: ['28'],
+      ratingMin: 8,
+      releasedOnly: true,
     })) as {
       page: number;
       total_pages: number;
@@ -250,24 +248,92 @@ describe('fetchSpecialList', () => {
       __companyFilmographyIdsOnly?: boolean;
     };
 
-    expect(mockWebsiteFetch).toHaveBeenCalledWith(
-      'https://www.themoviedb.org/company/13510/movie?page=2',
-      expect.objectContaining({ headers: expect.any(Object) })
-    );
-    expect(mockedFetch).not.toHaveBeenCalled();
+    expect(mockWebsiteFetch).not.toHaveBeenCalled();
+    expect(mockedFetch).toHaveBeenCalledExactlyOnceWith('/discover/movie', 'key', {
+      page: 2,
+      with_companies: '13510',
+      sort_by: 'popularity.desc',
+      language: 'de-DE',
+      include_image_language: 'de-DE,null',
+      include_adult: false,
+      include_video: true,
+      'vote_count.gte': 0,
+    });
     expect(result.__companyFilmographyIdsOnly).toBe(true);
     expect(result.total_results).toBe(147);
     expect(result.total_pages).toBe(8);
-    expect(result.results.map((item) => item.id)).toEqual([222218, 225067, 229747]);
+    expect(result.results).toEqual([{ id: 222218 }, { id: 225067 }]);
+    expect(result.page).toBe(2);
   });
 
-  it.each([undefined, '', '0', '-1', 'abc'])(
+  it('honors a supported studio sort and accepts an empty filmography', async () => {
+    mockedFetch.mockResolvedValue({ page: 1, results: [], total_results: 0, total_pages: 0 });
+    const result = await fetchSpecialList('key', 'studio', 'collection', {
+      studioId: '42',
+      sortBy: 'release_date.asc',
+    });
+    expect(mockedFetch.mock.calls[0][2].sort_by).toBe('primary_release_date.asc');
+    expect(result).toMatchObject({ results: [], total_results: 0 });
+  });
+
+  it('propagates API failures without a website or unfiltered fallback', async () => {
+    const error = new Error('TMDB unavailable');
+    mockedFetch.mockRejectedValueOnce(error);
+    await expect(fetchSpecialList('key', 'studio', 'collection', { studioId: '42' })).rejects.toBe(
+      error
+    );
+    expect(mockedFetch).toHaveBeenCalledTimes(1);
+    expect(mockWebsiteFetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps studio randomization company-scoped and within the API page limit', async () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.999);
+    mockedFetch
+      .mockResolvedValueOnce({ page: 1, results: [], total_pages: 600 })
+      .mockResolvedValueOnce({
+        page: 500,
+        results: [{ id: 42 }],
+        total_pages: 600,
+        total_results: 12000,
+      });
+    try {
+      const result = await fetchSpecialList('key', 'studio', 'collection', {
+        studioId: '42',
+        sortBy: 'random',
+      });
+      expect(mockedFetch).toHaveBeenCalledTimes(2);
+      for (const call of mockedFetch.mock.calls) {
+        expect(call[0]).toBe('/discover/movie');
+        expect(call[2].with_companies).toBe('42');
+      }
+      expect(mockedFetch.mock.calls[1][2].page).toBe(500);
+      expect(result).toMatchObject({
+        page: 500,
+        results: [{ id: 42 }],
+        __companyFilmographyIdsOnly: true,
+      });
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  it('rejects unsupported studio sorting rather than changing it silently', async () => {
+    await expect(
+      fetchSpecialList('key', 'studio', 'collection', {
+        studioId: '42',
+        sortBy: 'collection_order',
+      })
+    ).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, '', '0', '-1', 'abc', '1|2', ['1'], {}, 1.5, '9007199254740992'])(
     'rejects invalid collection ID %s before an upstream call',
     async (collectionId) => {
       mockedFetch.mockClear();
 
       await expect(
-        fetchSpecialList('key', 'collection', 'movie', { collectionId })
+        fetchSpecialList('key', 'collection', 'movie', { collectionId: collectionId as any })
       ).rejects.toMatchObject({
         statusCode: 400,
         code: 'VALIDATION_ERROR',
@@ -276,11 +342,16 @@ describe('fetchSpecialList', () => {
     }
   );
 
-  it('throws when studio list is requested without studioId', async () => {
-    await expect(fetchSpecialList('key', 'studio', 'collection')).rejects.toThrow(
-      'Studio ID required for studio list type'
-    );
-  });
+  it.each([undefined, '', '0', '-1', 'abc', '1|2', ['1'], {}, 1.5])(
+    'rejects invalid studio ID %s before any upstream call',
+    async (studioId) => {
+      await expect(
+        fetchSpecialList('key', 'studio', 'collection', { studioId: studioId as any })
+      ).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+      expect(mockedFetch).not.toHaveBeenCalled();
+      expect(mockWebsiteFetch).not.toHaveBeenCalled();
+    }
+  );
 
   it('throws when collection list is requested for series type', async () => {
     await expect(

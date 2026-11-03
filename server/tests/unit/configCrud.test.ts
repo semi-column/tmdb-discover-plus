@@ -45,6 +45,59 @@ describe('Config CRUD lifecycle', () => {
     vi.clearAllMocks();
   });
 
+  it.each([
+    { type: 'collection', filters: {} },
+    { type: 'collection', filters: { listType: 'discover' } },
+    { type: 'collection', filters: { listType: 'collection' } },
+    { type: 'movie', filters: { listType: 'collection', collectionId: '0' } },
+    { type: 'collection', filters: { listType: 'studio', studioId: ['42'] } },
+    { type: 'series', filters: { listType: 'collection', collectionId: '42' } },
+    { type: 'movie', filters: { listType: 'studio', studioId: '42' } },
+  ])('rejects invalid catalog selection without persisting: %j', async (catalog) => {
+    await expect(
+      saveUserConfig({
+        userId: USER_ID,
+        catalogs: [{ name: 'Invalid', ...catalog }] as any,
+        preferences: {},
+      })
+    ).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+    expect(mockStorage.configs.size).toBe(0);
+  });
+
+  it('keeps the last valid config when an update has no collection ID', async () => {
+    await saveUserConfig({
+      userId: USER_ID,
+      catalogs: [
+        {
+          name: 'Collection',
+          type: 'collection',
+          filters: { listType: 'collection', collectionId: '42' },
+        },
+      ] as any,
+      preferences: {},
+    });
+    await expect(
+      saveUserConfig({
+        userId: USER_ID,
+        catalogs: [
+          { name: 'Invalid', type: 'collection', filters: { listType: 'collection' } },
+        ] as any,
+        preferences: {},
+      })
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(mockStorage.configs.get(USER_ID)?.catalogs[0].filters.collectionId).toBe('42');
+  });
+
+  it('allows valid studio IDs, disabled incomplete drafts and other sources', async () => {
+    const catalogs = [
+      { name: 'Studio', type: 'collection', filters: { listType: 'studio', studioId: '42' } },
+      { name: 'Draft', type: 'collection', enabled: false, filters: {} },
+      { name: 'Other', type: 'series', source: 'simkl', filters: {} },
+    ];
+    await saveUserConfig({ userId: USER_ID, catalogs: catalogs as any, preferences: {} });
+    expect(mockStorage.configs.get(USER_ID)?.catalogs).toHaveLength(3);
+  });
+
   it('creates a new user config', async () => {
     const encKey = encrypt(TEST_API_KEY);
     await saveUserConfig({

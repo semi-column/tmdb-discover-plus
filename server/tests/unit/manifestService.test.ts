@@ -5,10 +5,6 @@ vi.mock('../../src/services/tmdb/index.ts', () => ({
   getGenres: vi.fn(),
   getCertifications: vi.fn(),
 }));
-vi.mock('../../src/utils/helpers.ts', () => ({
-  normalizeGenreName: vi.fn((s: string) => s.toLowerCase()),
-  parseIdArray: vi.fn((s: string) => s.split(',')),
-}));
 vi.mock('../../src/services/configService.ts', () => ({
   getApiKeyFromConfig: vi.fn(),
   updateCatalogGenres: vi.fn(),
@@ -49,7 +45,72 @@ import { buildManifest } from '../../src/services/manifestService.ts';
 import { enrichManifestWithGenres } from '../../src/services/manifestService.ts';
 import { enrichManifestWithExtras } from '../../src/services/manifestService.ts';
 import * as tmdb from '../../src/services/tmdb/index.ts';
-import { getApiKeyFromConfig } from '../../src/services/configService.ts';
+import { getApiKeyFromConfig, updateCatalogGenres } from '../../src/services/configService.ts';
+
+describe('TMDB manifest genre mapping', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getApiKeyFromConfig).mockReturnValue(null);
+  });
+
+  it.each([
+    ['movie', [' 28 ', 'science fiction', 'Drama'], ['Action', 'Drama', 'Science Fiction']],
+    [
+      'series',
+      ['10759', 'sci-fi & fantasy', ' Drama '],
+      ['Action & Adventure', 'Drama', 'Sci-Fi & Fantasy'],
+    ],
+  ])('maps mixed names and IDs using real parsing for %s', async (type, genres, expected) => {
+    const userConfig = {
+      userId: 'test-user',
+      catalogs: [{ _id: 'mixed', name: 'Mixed', source: 'tmdb', type, filters: { genres } }],
+      preferences: { disableSearch: true },
+    };
+    const manifest = buildManifest(userConfig as any, 'https://example.com');
+    await enrichManifestWithGenres(manifest, userConfig as any);
+    expect(manifest.catalogs[0].extra?.find((extra) => extra.name === 'genre')?.options).toEqual([
+      'All',
+      ...expected,
+    ]);
+    expect(updateCatalogGenres).not.toHaveBeenCalled();
+  });
+
+  it('applies exclusions expressed as names and padded IDs', async () => {
+    const userConfig = {
+      userId: 'test-user',
+      catalogs: [
+        {
+          _id: 'excluded',
+          name: 'Excluded',
+          type: 'movie',
+          filters: { excludeGenres: [' 28 ', 'Science Fiction'] },
+        },
+      ],
+      preferences: { disableSearch: true },
+    };
+    const manifest = buildManifest(userConfig as any, 'https://example.com');
+    await enrichManifestWithGenres(manifest, userConfig as any);
+    const options = manifest.catalogs[0].extra?.find((extra) => extra.name === 'genre')?.options;
+    expect(options).toContain('Drama');
+    expect(options).not.toContain('Action');
+    expect(options).not.toContain('Science Fiction');
+  });
+
+  it('does not broaden unmappable selections, retry the same data, or persist repairs', async () => {
+    vi.mocked(getApiKeyFromConfig).mockReturnValue('key');
+    vi.mocked(tmdb.getGenres).mockResolvedValue([{ id: 28, name: 'Action' }]);
+    const userConfig = {
+      userId: 'test-user',
+      catalogs: [{ _id: 'unknown', name: 'Unknown', type: 'movie', filters: { genres: [99999] } }],
+      preferences: { disableSearch: true },
+    };
+    const manifest = buildManifest(userConfig as any, 'https://example.com');
+    await enrichManifestWithGenres(manifest, userConfig as any);
+    expect(manifest.catalogs[0].extra).toEqual([{ name: 'skip' }]);
+    expect(tmdb.getGenres).toHaveBeenCalledTimes(1);
+    expect(updateCatalogGenres).not.toHaveBeenCalled();
+  });
+});
 
 describe('buildManifest', () => {
   const baseUrl = 'https://example.com';

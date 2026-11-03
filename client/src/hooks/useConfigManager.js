@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 import { logger } from '../utils/logger';
 import { MOVIE_ONLY_FILTER_KEYS, SERIES_ONLY_FILTER_KEYS } from './catalogEditor.constants';
+import { validateCatalogSelections } from '../utils/catalogValidation';
 
 function prepareForSave(catalog) {
   const isMovie = catalog.type === 'movie';
@@ -125,6 +126,7 @@ export function useConfigManager(config, addToast, deps) {
       }
 
       if (importedData.catalogs) {
+        validateCatalogSelections(importedData.catalogs);
         const newCatalogs = importedData.catalogs.map((c) => ({
           ...c,
           _id: crypto.randomUUID(),

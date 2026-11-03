@@ -24,15 +24,16 @@ const MAX_IN_FLIGHT = 5000;
 const IN_FLIGHT_WARN_THRESHOLD = MAX_IN_FLIGHT * 0.8;
 const ERROR_TTLS = CACHE_ERROR_TTLS;
 export function classifyError(
-  error: { message?: string; code?: string; name?: string } | null | undefined,
+  error: { message?: string; code?: string; name?: string; statusCode?: number } | null | undefined,
   statusCode?: number
 ): CacheErrorType {
   const msg = error?.message || '';
+  statusCode ??= error?.statusCode;
 
   if (statusCode === 429 || msg.includes('429') || msg.toLowerCase().includes('rate limit')) {
     return 'RATE_LIMITED';
   }
-  if (statusCode === 404 || msg.includes('404') || msg.toLowerCase().includes('not found')) {
+  if (statusCode === 404 || msg.includes('404') || /not found|could not be found/i.test(msg)) {
     return 'NOT_FOUND';
   }
   if ((statusCode !== undefined && statusCode >= 500) || /\b5\d{2}\b/.test(msg)) {
@@ -146,6 +147,11 @@ export class CacheWrapper {
         }
 
         if (entry.__errorType) {
+          if (Date.now() >= entry.__storedAt + entry.__ttl * 1000) {
+            this.stats.misses++;
+            trackCacheRead(cacheReadLayer(key), 'misses');
+            return null;
+          }
           this.stats.cachedErrors++;
           trackCacheRead(cacheReadLayer(key), 'cachedErrors');
           return entry;
@@ -342,7 +348,8 @@ export class CacheWrapper {
   async _executeFetch(
     key: string,
     fetchFn: () => Promise<unknown>,
-    ttlSeconds: number
+    ttlSeconds: number,
+    preserveStale = false
   ): Promise<unknown> {
     try {
       throwIfRequestAborted();
@@ -354,9 +361,13 @@ export class CacheWrapper {
       return result;
     } catch (error) {
       if (
+        !preserveStale &&
         !isRequestAborted() &&
         (error as Error)?.name !== 'AbortError' &&
         (error as { code?: string })?.code !== 'VALIDATION_ERROR' &&
+        (error as { code?: string })?.code !== 'SHARED_ADMISSION_UNAVAILABLE' &&
+        (error as { statusCode?: number })?.statusCode !== 401 &&
+        (error as { statusCode?: number })?.statusCode !== 403 &&
         !(error instanceof AddonWorkLimitError) &&
         !(error instanceof CachedError)
       ) {
@@ -369,7 +380,7 @@ export class CacheWrapper {
   _refreshInBackground(key: string, fetchFn: () => Promise<unknown>, ttlSeconds: number): void {
     if (this.inFlight.has(key)) return;
 
-    const promise = this._executeFetch(key, fetchFn, ttlSeconds);
+    const promise = this._executeFetch(key, fetchFn, ttlSeconds, true);
     const entry = { promise, signal: getRequestSignal() };
     this.inFlight.set(key, entry);
     promise
@@ -399,9 +410,18 @@ export class CacheWrapper {
 }
 export class CachedError extends Error {
   errorType: CacheErrorType;
+  statusCode?: number;
   constructor(errorType: CacheErrorType, message?: string) {
     super(message || `Cached error: ${errorType}`);
     this.name = 'CachedError';
     this.errorType = errorType;
+    this.statusCode =
+      errorType === 'NOT_FOUND'
+        ? 404
+        : errorType === 'RATE_LIMITED'
+          ? 429
+          : errorType === 'TEMPORARY_ERROR'
+            ? 503
+            : undefined;
   }
 }

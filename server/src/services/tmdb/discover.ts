@@ -5,6 +5,7 @@ import { stableStringify } from '../../utils/stableStringify.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { AppError, ErrorCodes } from '../../utils/AppError.ts';
+import { isValidTmdbId } from '../../utils/validation.ts';
 
 const log = createLogger('tmdb:discover');
 
@@ -25,58 +26,44 @@ type CompanyFilmographyListResult = {
 };
 
 async function fetchCompanyFilmographyList(
+  apiKey: string,
   companyId: string,
-  page: number
+  page: number,
+  options: SpecialListOptions
 ): Promise<CompanyFilmographyListResult> {
-  if (!/^\d+$/.test(companyId)) {
-    throw new Error('Invalid TMDB company id');
+  const randomize = options.randomize || options.sortBy === 'random';
+  const sortBy =
+    !options.sortBy || options.sortBy === 'random'
+      ? 'popularity.desc'
+      : options.sortBy.replace(/^release_date\./, 'primary_release_date.');
+  if (
+    !/^(original_title|title|popularity|revenue|primary_release_date|vote_average|vote_count)\.(asc|desc)$/.test(
+      sortBy
+    )
+  ) {
+    throw new AppError(400, ErrorCodes.VALIDATION_ERROR, 'Unsupported studio sort order');
   }
 
-  const url = new URL(`https://www.themoviedb.org/company/${companyId}/movie`);
-  url.searchParams.set('page', String(page));
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      accept: 'text/html,application/xhtml+xml',
-      'accept-language': 'en-US,en;q=0.9',
-      'user-agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-    },
-  });
-
-  if (!response.ok) {
-    // The website (not the API) is behind bot protection; a block is an upstream outage, not a crash.
-    throw new AppError(
-      502,
-      ErrorCodes.TMDB_UNAVAILABLE,
-      `TMDB website company filmography request failed with ${response.status}`
-    );
-  }
-
-  const html = await response.text();
-  const totalResultsMatch = html.match(/(\d[\d,]*)\s+movies/i);
-  const totalResults = totalResultsMatch ? parseInt(totalResultsMatch[1].replace(/,/g, ''), 10) : 0;
-
-  const seenIds = new Set<number>();
-  const results: Array<{ id: number }> = [];
-  const movieLinkPattern = /href="\/movie\/(\d+)(?:-[^"]*)?"/g;
-
-  for (const match of html.matchAll(movieLinkPattern)) {
-    const id = Number(match[1]);
-    if (!Number.isInteger(id) || seenIds.has(id)) continue;
-    seenIds.add(id);
-    results.push({ id });
-  }
-
-  if (results.length === 0) {
-    throw new Error('TMDB website company filmography returned no movie IDs');
-  }
-
-  return {
+  // Studio mode intentionally ignores Discover filters. Include videos and unrated
+  // titles; keep ID-only results so callers retain their existing hydration path.
+  const result = (await discover(apiKey, {
+    type: 'movie',
+    withCompanies: companyId,
     page,
-    results,
-    total_pages: Math.max(1, Math.ceil(totalResults / 20)),
-    total_results: totalResults || results.length,
+    displayLanguage: options.displayLanguage || options.language,
+    includeVideo: true,
+    voteCountMin: 0,
+    sortBy,
+    randomize,
+  })) as {
+    page: number;
+    results: Array<{ id: number }>;
+    total_pages: number;
+    total_results: number;
+  };
+  return {
+    ...result,
+    results: result.results.map(({ id }) => ({ id })),
     __companyFilmographyIdsOnly: true,
   };
 }
@@ -467,7 +454,7 @@ export async function fetchSpecialList(
           'TMDB collections are only supported for movies or collection type catalogs'
         );
       }
-      if (!collectionId || !/^[1-9]\d*$/.test(String(collectionId))) {
+      if (!isValidTmdbId(collectionId)) {
         throw new AppError(
           400,
           ErrorCodes.VALIDATION_ERROR,
@@ -483,10 +470,14 @@ export async function fetchSpecialList(
       if (type !== 'collection') {
         throw new Error('TMDB studio lists are only supported for collection type catalogs');
       }
-      if (!studioId) {
-        throw new Error('Studio ID required for studio list type');
+      if (!isValidTmdbId(studioId)) {
+        throw new AppError(
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'A valid studio ID is required for studio list type'
+        );
       }
-      return fetchCompanyFilmographyList(String(studioId), page);
+      return fetchCompanyFilmographyList(apiKey, String(studioId), page, options);
     }
     case 'random':
       return discover(apiKey, { type, page, ...options, randomize: true });

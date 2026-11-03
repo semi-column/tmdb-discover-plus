@@ -330,9 +330,9 @@ export const TmdbFilterPanel = memo(function TmdbFilterPanel({
                   lineHeight: 1.5,
                 }}
               >
-                Full studio mode shows the complete TMDB company filmography. Discover filters are
-                intentionally disabled here because TMDB does not reliably expose them for this
-                view.
+                Studio mode lists non-adult movies credited to this company using the official TMDB
+                API, including video titles, ordered by popularity. Discover filters are disabled.
+                Streaming availability is not the same as a studio credit.
               </div>
             </>
           )}

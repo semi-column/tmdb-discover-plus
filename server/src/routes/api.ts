@@ -2250,6 +2250,9 @@ router.post('/config', requireAuth, resolveApiKey, strictRateLimit, async (req, 
     res.json(response);
   } catch (error) {
     log.error('POST /config error', { error: (error as Error).message });
+    if (error instanceof AppError) {
+      return sendError(res, error.statusCode, error.code, error.message);
+    }
     const message = safeErrorMessage(error as Error);
     if (
       (error as Error).message.includes('Invalid artwork API key') ||
@@ -2353,6 +2356,9 @@ router.put(
       res.json(response);
     } catch (error) {
       log.error('PUT /config/:userId error', { error: (error as Error).message });
+      if (error instanceof AppError) {
+        return sendError(res, error.statusCode, error.code, error.message);
+      }
       const message = safeErrorMessage(error as Error);
       if (
         (error as Error).message.includes('Invalid artwork API key') ||

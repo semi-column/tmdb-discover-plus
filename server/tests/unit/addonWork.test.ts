@@ -14,6 +14,13 @@ import { MockCacheAdapter } from './helpers/mocks.ts';
 vi.mock('../../src/utils/logger.ts', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
+vi.mock('../../src/config.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/config.ts')>();
+  return {
+    ...actual,
+    config: { ...actual.config, cache: { ...actual.config.cache, driver: 'memory' } },
+  };
+});
 
 const releases: (() => void)[] = [];
 afterEach(() => {

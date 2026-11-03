@@ -17,6 +17,13 @@ describe('classifyError', () => {
   });
   it('detects not found', () => {
     expect(classifyError(new Error('fail'), 404)).toBe('NOT_FOUND');
+    expect(classifyError(Object.assign(new Error('missing'), { statusCode: 404 }))).toBe(
+      'NOT_FOUND'
+    );
+    expect(classifyError(new Error('The resource you requested could not be found.'))).toBe(
+      'NOT_FOUND'
+    );
+    expect(classifyError(new CachedError('NOT_FOUND', 'missing'))).toBe('NOT_FOUND');
   });
   it('detects temporary errors from connection codes', () => {
     const err = new Error('connection refused');
@@ -194,6 +201,45 @@ describe('CacheWrapper', () => {
   });
 
   describe('wrap()', () => {
+    it('does not cache shared admission outages', async () => {
+      const fetcher = vi.fn().mockRejectedValue(
+        Object.assign(new Error('Shared admission unavailable'), {
+          code: 'SHARED_ADMISSION_UNAVAILABLE',
+          statusCode: 503,
+        })
+      );
+      await expect(cache.wrap('admission-outage', fetcher, 60)).rejects.toHaveProperty(
+        'code',
+        'SHARED_ADMISSION_UNAVAILABLE'
+      );
+      await expect(cache.wrap('admission-outage', fetcher, 60)).rejects.toHaveProperty(
+        'code',
+        'SHARED_ADMISSION_UNAVAILABLE'
+      );
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(await cache.getEntry('admission-outage')).toBeNull();
+    });
+
+    it('does not replace stale successful metadata with a refresh error', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+      try {
+        await cache.set('stale-meta', { id: 550 }, 60);
+        now.mockReturnValue(1_061_000);
+        const fetcher = vi
+          .fn()
+          .mockRejectedValue(Object.assign(new Error('Upstream unavailable'), { statusCode: 503 }));
+        expect(await cache.wrap('stale-meta', fetcher, 60)).toEqual({ id: 550 });
+        await vi.waitFor(() => expect(cache.getStats().inFlightRequests).toBe(0));
+        expect(await cache.getEntry('stale-meta')).toMatchObject({
+          data: { id: 550 },
+          __isStale: true,
+        });
+        expect(await cache.getEntry('stale-meta')).not.toHaveProperty('__errorType');
+      } finally {
+        now.mockRestore();
+      }
+    });
+
     it('reports the existing lookup without reading the adapter twice', async () => {
       const read = vi.spyOn(adapter, 'get');
       const onCacheRead = vi.fn();
@@ -247,12 +293,47 @@ describe('CacheWrapper', () => {
       await expect(cache.wrap('fail', vi.fn(), 300)).rejects.toThrow(CachedError);
     });
 
+    it('preserves HTTP failure classifications and retries only after the negative TTL', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+      try {
+        const fetcher = vi
+          .fn()
+          .mockRejectedValue(Object.assign(new Error('Missing title'), { statusCode: 404 }));
+        await expect(cache.wrap('missing-title', fetcher, 300)).rejects.toMatchObject({
+          statusCode: 404,
+        });
+        expect(await cache.getEntry('missing-title')).toMatchObject({
+          __errorType: 'NOT_FOUND',
+          __ttl: 3600,
+        });
+        await expect(cache.wrap('missing-title', fetcher, 300)).rejects.toMatchObject({
+          errorType: 'NOT_FOUND',
+          statusCode: 404,
+        });
+        expect(fetcher).toHaveBeenCalledOnce();
+        now.mockReturnValue(4_600_000);
+        fetcher.mockResolvedValue({ id: 1 });
+        expect(await cache.wrap('missing-title', fetcher, 300)).toEqual({ id: 1 });
+        expect(fetcher).toHaveBeenCalledTimes(2);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
     it('caches fetch failures', async () => {
       const fn = vi.fn().mockRejectedValue(new Error('network error'));
       await expect(cache.wrap('net-err', fn, 300)).rejects.toThrow('network error');
 
       const cached = await cache.getEntry('net-err');
       expect(cached.__errorType).toBe('TEMPORARY_ERROR');
+    });
+
+    it.each([401, 403])('does not store credential-specific %i errors', async (statusCode) => {
+      const fetcher = vi
+        .fn()
+        .mockRejectedValue(Object.assign(new Error('Access denied'), { statusCode }));
+      await expect(cache.wrap('auth-failure', fetcher, 300)).rejects.toMatchObject({ statusCode });
+      expect(await cache.getEntry('auth-failure')).toBeNull();
     });
 
     it('uses short TTL for empty results', async () => {

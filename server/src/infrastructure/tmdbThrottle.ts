@@ -1,6 +1,15 @@
 import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
 import { getRequestSignal } from '../utils/requestContext.ts';
+import {
+  ADMISSION_PREFIX,
+  AdmissionRedis,
+  admissionDelay,
+  admissionAwait,
+  getAdmissionRedis,
+  closeAdmissionRedis,
+  observeAdmissionMutation,
+} from './sharedAdmission.ts';
 
 const log = createLogger('TmdbThrottle');
 export const RATE_LIMITER_TIMEOUT_CODE = 'RATE_LIMITER_TIMEOUT';
@@ -168,15 +177,168 @@ class TokenBucket {
   }
 }
 
-// Singleton
-let instance: TokenBucket | null = null;
+export const TMDB_BUDGET_SCRIPT = `
+local t = redis.call('TIME')
+local now = tonumber(t[1]) * 1000 + tonumber(t[2]) / 1000
+local key = KEYS[1]
+local state = redis.call('HMGET', key, 'tokens', 'last', 'pause', 'full')
+local full = state[4] == '1'
+local capacity = tonumber(ARGV[2])
+local rate = tonumber(ARGV[3])
+if not full then capacity = math.ceil(capacity / 2); rate = math.ceil(rate / 2) end
+local tokens = tonumber(state[1]) or capacity
+local last = tonumber(state[2]) or now
+local pause = tonumber(state[3]) or 0
+-- Paused time earns no tokens, including when nobody polls during the pause.
+tokens = math.min(capacity, tokens + math.max(0, now - math.max(last, pause)) * rate / 1000)
+local result = 0
+if ARGV[1] == 'pause' then
+  pause = math.max(pause, now + tonumber(ARGV[4]))
+  tokens = 0
+elseif ARGV[1] == 'warm' then
+  redis.call('HSET', key, 'full', '1')
+else
+  if now < pause then result = math.ceil(pause - now)
+  elseif tokens >= 1 then tokens = tokens - 1
+  else result = math.ceil((1 - tokens) * 1000 / rate) end
+end
+redis.call('HSET', key, 'tokens', tokens, 'last', now, 'pause', pause)
+return result
+`;
+
+export class RedisTokenBucket {
+  private pending: Promise<unknown> = Promise.resolve();
+  private controller = new AbortController();
+  private queued = 0;
+  private warmup = true;
+  private stats = {
+    totalRequests: 0,
+    immediateGrants: 0,
+    queuedRequests: 0,
+    rejectedRequests: 0,
+    totalWaitMs: 0,
+    globalPauses: 0,
+  };
+
+  constructor(
+    private redis: AdmissionRedis,
+    private options: { maxTokens: number; refillRate: number; maxQueueSize?: number }
+  ) {
+    if (!(options.maxTokens >= 1) || !(options.refillRate > 0)) {
+      throw new Error('Shared TMDB budget requires positive capacity and refill rate');
+    }
+  }
+
+  private command(action: string, pause = 0, timeoutMs = 1000): Promise<number> {
+    return this.redis.eval(
+      TMDB_BUDGET_SCRIPT,
+      [`${ADMISSION_PREFIX}tmdb`],
+      [action, String(this.options.maxTokens), String(this.options.refillRate), String(pause)],
+      timeoutMs
+    );
+  }
+
+  notifyRateLimited(retryAfterMs: number): Promise<unknown> {
+    const pause = Math.min(
+      Math.max(Number.isFinite(retryAfterMs) ? retryAfterMs : 1000, 1000),
+      10000
+    );
+    this.stats.globalPauses++;
+    this.pending = this.pending.then(() => this.command('pause', pause));
+    observeAdmissionMutation(this.pending);
+    return this.pending;
+  }
+
+  endWarmup(): Promise<unknown> {
+    this.warmup = false;
+    this.pending = this.pending.then(() => this.command('warm'));
+    observeAdmissionMutation(this.pending);
+    return this.pending;
+  }
+
+  async acquire(timeoutMs = 10000, requestSignal = getRequestSignal()): Promise<void> {
+    const signal = AbortSignal.any([
+      this.controller.signal,
+      this.redis.shutdown.signal,
+      ...(requestSignal ? [requestSignal] : []),
+    ]);
+    signal.throwIfAborted();
+    this.stats.totalRequests++;
+    if (this.queued >= (this.options.maxQueueSize ?? 500)) {
+      this.stats.rejectedRequests++;
+      throw new Error('TMDB rate limiter queue full — too many concurrent requests');
+    }
+    this.queued++;
+    const started = Date.now();
+    const deadline = started + timeoutMs;
+    let waited = false;
+    try {
+      await admissionAwait(
+        this.pending,
+        timeoutMs,
+        signal,
+        Object.assign(new Error('Rate limiter timeout — waited too long for token'), {
+          code: RATE_LIMITER_TIMEOUT_CODE,
+        })
+      );
+      for (;;) {
+        signal.throwIfAborted();
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          throw Object.assign(new Error('Rate limiter timeout — waited too long for token'), {
+            code: RATE_LIMITER_TIMEOUT_CODE,
+          });
+        }
+        const wait = await this.command('acquire', 0, Math.min(1000, remaining));
+        signal.throwIfAborted();
+        if (wait === 0) {
+          if (!waited) this.stats.immediateGrants++;
+          else this.stats.totalWaitMs += Date.now() - started;
+          return;
+        }
+        if (!waited) {
+          waited = true;
+          this.stats.queuedRequests++;
+        }
+        await admissionDelay(Math.min(wait, 100, Math.max(1, deadline - Date.now())), signal);
+      }
+    } catch (error) {
+      this.stats.rejectedRequests++;
+      throw error;
+    } finally {
+      this.queued--;
+    }
+  }
+
+  getStats(): Record<string, unknown> {
+    return {
+      ...this.stats,
+      driver: 'redis',
+      scope: 'shared',
+      queueDepth: this.queued,
+      warmupActive: this.warmup,
+      avgWaitMs: this.stats.queuedRequests
+        ? Math.round(this.stats.totalWaitMs / this.stats.queuedRequests)
+        : 0,
+    };
+  }
+
+  destroy(): void {
+    this.controller.abort(new Error('Rate limiter shutting down'));
+  }
+}
+
+let instance: TokenBucket | RedisTokenBucket | null = null;
 
 export { TokenBucket };
 
-export function getTmdbThrottle(): TokenBucket {
+export function getTmdbThrottle(): TokenBucket | RedisTokenBucket {
   if (!instance) {
     const maxTokens = config.tmdb.rateLimit;
-    instance = new TokenBucket({ maxTokens, refillRate: maxTokens });
+    const redis = getAdmissionRedis();
+    instance = redis
+      ? new RedisTokenBucket(redis, { maxTokens, refillRate: maxTokens })
+      : new TokenBucket({ maxTokens, refillRate: maxTokens });
     log.info('TMDB outbound throttle initialized', { maxTokens });
   }
   return instance;
@@ -187,4 +349,5 @@ export function destroyTmdbThrottle(): void {
     instance.destroy();
     instance = null;
   }
+  closeAdmissionRedis();
 }

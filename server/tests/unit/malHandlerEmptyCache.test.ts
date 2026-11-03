@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../../src/config.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/config.ts')>();
+  return {
+    ...actual,
+    config: { ...actual.config, cache: { ...actual.config.cache, driver: 'memory' } },
+  };
+});
+
 const { cacheSet, cacheGet, mockDiscover, mockGetUserConfig } = vi.hoisted(() => ({
   cacheSet: vi.fn(),
   cacheGet: vi.fn(),

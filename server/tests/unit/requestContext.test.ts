@@ -8,7 +8,32 @@ import {
   getRequestContextSnapshot,
   getRequestCacheStats,
   trackCacheOperation,
+  withRequestAbortContext,
 } from '../../src/utils/requestContext.ts';
+
+describe('withRequestAbortContext', () => {
+  it('creates an isolated cancellable context for background work', async () => {
+    const reason = new Error('lease lost');
+    await withRequestAbortContext(async () => {
+      expect(getRequestSignal()).toBeDefined();
+      expect(getRequestContextSnapshot()?.method).toBe('BACKGROUND');
+      abortRequestContext(reason);
+      expect(getRequestSignal()?.reason).toBe(reason);
+    });
+    expect(getRequestSignal()).toBeUndefined();
+  });
+
+  it('preserves the existing signal and accounting across nested work', async () => {
+    await withRequestAbortContext(async () => {
+      const signal = getRequestSignal();
+      trackCacheOperation('hits');
+      await withRequestAbortContext(async () => {
+        expect(getRequestSignal()).toBe(signal);
+        expect(getRequestCacheStats()?.hits).toBe(1);
+      });
+    });
+  });
+});
 
 describe('requestIdMiddleware', () => {
   const middleware = requestIdMiddleware();

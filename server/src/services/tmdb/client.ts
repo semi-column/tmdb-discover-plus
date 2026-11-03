@@ -302,10 +302,12 @@ async function _tmdbFetchInner(
             const retryAfter = response.headers.get('Retry-After');
             const waitMs = retryAfter ? Math.min(parseInt(retryAfter) * 1000, 10000) || 1000 : 1000;
             log.warn('TMDB 429 — respecting Retry-After', { retryAfter, waitMs });
-            throttle.notifyRateLimited(waitMs);
+            await throttle.notifyRateLimited(waitMs);
             await delay(waitMs, undefined, { signal: getRequestSignal() });
           }
-          throw new Error(`TMDB API retryable error: ${response.status}`);
+          throw Object.assign(new Error(`TMDB API retryable error: ${response.status}`), {
+            statusCode: response.status,
+          });
         }
 
         const errorBody = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -378,13 +380,33 @@ async function _tmdbFetchInner(
   }
 
   const isRateLimiterTimeout = lastError!.code === RATE_LIMITER_TIMEOUT_CODE;
-  if (isRateLimiterTimeout) {
+  const isAdmissionUnavailable = lastError!.code === 'SHARED_ADMISSION_UNAVAILABLE';
+  if (isAdmissionUnavailable) {
+    log.warn('TMDB request blocked by unavailable shared admission', {
+      endpoint: url.pathname.slice(0, 80),
+      statusCode: 503,
+      requestId: getRequestId(),
+    });
+  } else if (isRateLimiterTimeout) {
     log.warn('TMDB request skipped after local rate limiter timeout', {
       endpoint: url.pathname.slice(0, 80),
       requestId: getRequestId(),
     });
+  } else if (lastError!.statusCode === 404) {
+    log.info('TMDB resource not found', {
+      endpoint: url.pathname.slice(0, 80),
+      statusCode: 404,
+      requestId: getRequestId(),
+    });
+  } else if (lastError!.invalidApiKey) {
+    log.warn('Invalid TMDB API key', {
+      classification: 'user_config',
+      endpoint: url.pathname.slice(0, 80),
+      statusCode: 401,
+      requestId: getRequestId(),
+    });
   } else {
-    log.error('TMDB fetch error after retries', {
+    log.error('TMDB fetch failed', {
       error: lastError,
       endpoint: url.pathname.slice(0, 80),
       statusCode: lastError!.statusCode,
@@ -394,6 +416,7 @@ async function _tmdbFetchInner(
 
   const shouldTrip =
     !isRateLimiterTimeout &&
+    !isAdmissionUnavailable &&
     (!lastError!.statusCode ||
       lastError!.statusCode >= 500 ||
       lastError!.statusCode === 429 ||
@@ -422,7 +445,12 @@ async function _tmdbFetchInner(
       lastError!.name === 'TimeoutError' ||
       lastError!.name === 'TypeError' ||
       lastError!.message.includes('fetch failed'));
-  if (!isAuthError && !isTransientNetworkError && !isRateLimiterTimeout) {
+  if (
+    !isAuthError &&
+    !isTransientNetworkError &&
+    !isRateLimiterTimeout &&
+    !isAdmissionUnavailable
+  ) {
     try {
       await cache.setError(cacheKey, errorType, lastError!.message);
     } catch (e) {

@@ -29,7 +29,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { etagMiddleware } from '../utils/etag.ts';
-import { CachedError } from '../services/cache/CacheWrapper.ts';
+import { CachedError, classifyError } from '../services/cache/CacheWrapper.ts';
 import { getCache } from '../services/cache/index.ts';
 import { buildMetaCacheKey } from '../services/cache/keys.ts';
 import {
@@ -236,6 +236,12 @@ router.get('/:userId/manifest.json', async (req, res) => {
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Failed to load manifest');
   }
 });
+
+function sendMissingMetadata(res: Response, userId: string, id: string): void {
+  res.set('X-Metadata-Status', 'not-found');
+  res.set('Cache-Control', 'max-age=60, must-revalidate');
+  res.etagJson({ meta: {}, cacheMaxAge: 60 }, { extra: `${userId}:${id}` });
+}
 
 function parseExtra(extraString: string | undefined): Record<string, string> {
   if (!extraString) return {};
@@ -840,40 +846,24 @@ async function handleMetaRequest(
     };
 
     const fetchMeta = () => withAddonWork(userId, computeMeta);
-    let meta = null as Partial<StremioMeta> | null;
-
-    try {
-      meta = (await cache.wrap(metaCacheKey, fetchMeta, CACHE_TTLS.META_HEADER, {
-        allowStale: true,
-        onCacheRead: (entry) => {
-          cacheState = entry?.__errorType
-            ? 'error'
-            : entry?.__isStale
-              ? 'stale'
-              : entry
-                ? 'hit'
-                : 'miss';
-        },
-      })) as Partial<StremioMeta> | null;
-    } catch (error) {
-      throwIfRequestAborted();
-      if (error instanceof CachedError) {
-        log.warn('Bypassing cached meta error and recomputing', {
-          id: requestedId,
-          type,
-          cacheError: error.errorType,
-        });
-        await cache.del(metaCacheKey);
-        meta = await fetchMeta();
-        if (meta) {
-          await cache.set(metaCacheKey, meta, CACHE_TTLS.META_HEADER);
-        }
-      } else {
-        throw error;
-      }
+    const meta = (await cache.wrap(metaCacheKey, fetchMeta, CACHE_TTLS.META_HEADER, {
+      allowStale: true,
+      onCacheRead: (entry) => {
+        cacheState = entry?.__errorType
+          ? 'error'
+          : entry?.__isStale
+            ? 'stale'
+            : entry
+              ? 'hit'
+              : 'miss';
+      },
+    })) as Partial<StremioMeta> | null;
+    if (!meta) {
+      log.info('Metadata not found', { id: requestedId, type, cacheState });
+      return sendMissingMetadata(res, userId, id);
     }
 
-    const responseMeta: Partial<StremioMeta> | Record<string, never> = meta || {};
+    const responseMeta = meta;
     const { posterPlaceholder, backdropPlaceholder } = getPlaceholderUrls(resolvedBaseUrl);
     if (!responseMeta.poster) responseMeta.poster = posterPlaceholder;
     if (responseMeta.videos) {
@@ -916,6 +906,14 @@ async function handleMetaRequest(
       return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
     }
 
+    if (classifyError(error as Error) === 'NOT_FOUND') {
+      log.info('Metadata not found', {
+        id,
+        type,
+        cacheState: error instanceof CachedError ? 'negative-hit' : 'miss',
+      });
+      return sendMissingMetadata(res, userId, id);
+    }
     const durationMs = Date.now() - startTime;
     const errMsg = (error as Error).message;
     if (shouldLogError(userId, errMsg)) {
@@ -929,7 +927,8 @@ async function handleMetaRequest(
         code: (error as Error & { code?: string }).code || 'META_FETCH_ERROR',
       });
     }
-    res.json({ meta: {} });
+    res.set('Cache-Control', 'no-store');
+    return sendError(res, 503, ErrorCodes.TMDB_UNAVAILABLE, 'Metadata is temporarily unavailable');
   }
 }
 

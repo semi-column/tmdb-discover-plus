@@ -1,7 +1,12 @@
 import crypto from 'crypto';
 import { getStorage } from './storage/index.ts';
 import { createLogger } from '../utils/logger.ts';
-import { sanitizeString, isValidUserId, isValidApiKeyFormat } from '../utils/validation.ts';
+import {
+  sanitizeString,
+  isValidUserId,
+  isValidApiKeyFormat,
+  validateTmdbCatalogSelection,
+} from '../utils/validation.ts';
 import {
   artworkProviderRequiresApiKey,
   validateArtworkProviderApiKey,
@@ -121,6 +126,10 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
       ...(config.preferences || {}),
     },
   };
+
+  for (const catalog of mergedConfig.catalogs || []) {
+    validateTmdbCatalogSelection(catalog);
+  }
 
   let encryptedApiKey = mergedConfig.tmdbApiKeyEncrypted || null;
   let rawApiKey = null;

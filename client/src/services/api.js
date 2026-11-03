@@ -1,4 +1,5 @@
 import { jwtDecode } from 'jwt-decode';
+import { validateCatalogSelections } from '../utils/catalogValidation';
 
 const API_BASE = '/api';
 
@@ -530,6 +531,7 @@ class ApiService {
   }
 
   async saveConfig(config) {
+    validateCatalogSelections(config.catalogs);
     return this.request('/config', {
       method: 'POST',
       body: JSON.stringify(config),
@@ -541,6 +543,7 @@ class ApiService {
   }
 
   async updateConfig(userId, config) {
+    validateCatalogSelections(config.catalogs);
     return this.request(`/config/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(config),

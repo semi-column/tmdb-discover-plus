@@ -34,15 +34,29 @@ guard.
 
 Uncached catalog/meta builds, searches, randomized catalogs, manifest enrichment,
 and IMDb prefetch share a work admission limit: 6 active builds per configuration,
-60 per process, at most 100 queued per configuration and 500 per process.
+60 total across Redis replicas, at most 100 queued per configuration and 500
+per process (queues remain local).
 Queued work waits at most 5 seconds. Fresh cache hits bypass this work limit;
 stale responses remain available while their refresh uses the same budget.
 Capacity rejections return HTTP 429 with `Retry-After: 5` and `Cache-Control:
 no-store`; they are not stored as cached errors or successful empty results.
 
 Rate counters use Redis when configured (logged in-memory fallback if initial
-connection fails); work admission and upstream TMDB throttling are per process.
-Account for worker count before scaling replicas. These are application
+connection fails). Work admission and outbound TMDB tokens/429 pauses use
+atomic shared Redis state when `REDIS_URL` is set and `CACHE_DRIVER` is not
+`memory`: two replicas still share 6/configuration, 60 global active builds,
+and the default 35 TMDB requests/second token refill. Memory mode retains
+process-local limits, so account for worker count there.
+
+Shared admission fails closed on Redis errors (503, no memory fallback);
+restart affected processes after restoring Redis. Active work uses 30-second
+leases renewed every 10 seconds. Shutdown/lost renewal cancels request contexts;
+background refresh/prefetch work also receives an abortable context through
+`withAddonWork()`. Crashed replicas' slots expire. Cancellation must be honored: leases cannot fence
+computation that continues after a process pause or partition. Use identical
+rate settings and the same Redis database across replicas, separate databases
+for independent deployments, and protect admission keys from eviction/reset.
+These are application
 fairness/backpressure controls, not volumetric DDoS protection. Configure
 connection/request limits at your hosting provider or edge proxy, restrict
 direct origin access, and set `TRUST_PROXY` to only trusted proxy hops/networks.
@@ -51,7 +65,9 @@ The repository Caddy configuration is not the public service's edge policy.
 In the admin dashboard, monitor 429 counts, upstream latency and cache hit rate.
 Rate-limit responses and logs include a `policy` identifying `api`, `addonIp`,
 `addonUser`, `addonInvalid`, or `addonWork`; work-limit logs include the user ID
-prefix and active/queued counts. Repeated work-limit rejections with low cache
+prefix and active/queued counts in memory mode. Redis failures are logged without
+credentials; active ceilings are shared, while local queue/throttle statistics
+are not a Redis-wide snapshot. Repeated work-limit rejections with low cache
 hits indicate cold-cache pressure rather than just high cached traffic.
 
 ## Docker Compose: PostgreSQL + Redis

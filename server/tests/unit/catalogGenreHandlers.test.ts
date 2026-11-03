@@ -167,7 +167,7 @@ import { handleMalCatalogRequest } from '../../src/routes/handlers/malHandler.ts
 import { handleSimklCatalogRequest } from '../../src/routes/handlers/simklHandler.ts';
 import { addonRouter } from '../../src/routes/addon.ts';
 import { etagMiddleware } from '../../src/utils/etag.ts';
-import { CacheWrapper } from '../../src/services/cache/CacheWrapper.ts';
+import { CacheWrapper, CachedError } from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter } from './helpers/mocks.ts';
 import { AppError, ErrorCodes } from '../../src/utils/AppError.ts';
 import { setLogSink } from '../../src/utils/logger.ts';
@@ -195,6 +195,8 @@ const sourceHandlers = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockTmdbGetDetails.mockReset();
+  mockTmdbFullMeta.mockReset();
   mockBuildArtworkOptions.mockReturnValue(null);
   mockCacheGet.mockResolvedValue(null);
   mockCacheSet.mockResolvedValue(undefined);
@@ -508,6 +510,75 @@ describe('TMDB catalog route', () => {
 });
 
 describe('metadata route cache dependencies', () => {
+  it.each(['NOT_FOUND', 'TEMPORARY_ERROR', 'RATE_LIMITED'] as const)(
+    'respects cached %s without deleting or recomputing metadata',
+    async (errorType) => {
+      mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+      const cache = new CacheWrapper(new MockCacheAdapter());
+      mockCacheWrap.mockImplementation(cache.wrap.bind(cache));
+      const failure = new CachedError(errorType, 'upstream unavailable');
+      mockTmdbGetDetails.mockRejectedValueOnce(failure);
+      const app = express();
+      app.use(addonRouter);
+      // A lower-level negative hit must not trigger a bypass and a second compute.
+      const response = await request(app).get('/testuser/meta/series/tmdb:294275.json');
+      expect(mockTmdbGetDetails).toHaveBeenCalledOnce();
+      if (errorType === 'NOT_FOUND') {
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ meta: {}, cacheMaxAge: 60 });
+        expect(response.headers['x-metadata-status']).toBe('not-found');
+      } else {
+        expect(response.status).toBe(503);
+        expect(response.headers['cache-control']).toBe('no-store');
+        expect(response.body.code).toBe('TMDB_UNAVAILABLE');
+      }
+    }
+  );
+
+  it('keeps an outer negative entry and retries a previously missing title after expiry', async () => {
+    const adapter = new MockCacheAdapter();
+    const cache = new CacheWrapper(adapter);
+    const remove = vi.spyOn(cache, 'del');
+    const wrap = vi.spyOn(cache, 'wrap');
+    mockCacheWrap.mockImplementation(cache.wrap.bind(cache));
+    mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+    mockTmdbGetDetails.mockRejectedValue(
+      Object.assign(new Error('Missing title'), { statusCode: 404 })
+    );
+    const app = express();
+    app.use(addonRouter);
+    for (let i = 0; i < 3; i++) {
+      const response = await request(app).get('/testuser/meta/movie/tmdb:550.json');
+      expect(response.status).toBe(200);
+      expect(response.body.meta).toEqual({});
+      expect(response.body.cacheMaxAge).toBe(60);
+    }
+    expect(remove).not.toHaveBeenCalled();
+    expect(mockTmdbGetDetails).toHaveBeenCalledOnce();
+    const key = wrap.mock.calls[0][0];
+    const entry = await cache.getEntry(key);
+    expect(entry?.__errorType).toBe('NOT_FOUND');
+    if (!entry) throw new Error('Expected negative entry');
+    adapter.store.set(key, { ...entry, __storedAt: Date.now() - 3_600_001 });
+    mockTmdbGetDetails.mockResolvedValue({ id: 550, images: { logos: [{}] } });
+    mockTmdbFullMeta.mockResolvedValue({ id: 'tmdb:550', poster: 'poster' });
+    const recovered = await request(app).get('/testuser/meta/movie/tmdb:550.json');
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.meta.id).toBe('tmdb:550');
+    expect(mockTmdbGetDetails).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not manufacture placeholder-only metadata for an unavailable title', async () => {
+    mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+    mockTmdbGetDetails.mockResolvedValue(null);
+    const app = express();
+    app.use(addonRouter);
+    const response = await request(app).get('/testuser/meta/series/tmdb:294275.json');
+    expect(response.body).toEqual({ meta: {}, cacheMaxAge: 60 });
+    expect(response.headers['x-metadata-status']).toBe('not-found');
+    expect(mockTmdbFullMeta).not.toHaveBeenCalled();
+  });
+
   it('survives unrelated config edits but invalidates relevant settings and isolates users', async () => {
     const adapter = new MockCacheAdapter();
     const cache = new CacheWrapper(adapter);

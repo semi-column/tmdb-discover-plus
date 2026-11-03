@@ -12,7 +12,7 @@ import { normalizeGenreName, parseIdArray } from '../utils/helpers.ts';
 import { stableStringify } from '../utils/stableStringify.ts';
 import { resolveDynamicDatePreset } from '../utils/dateHelpers.ts';
 import { createLogger } from '../utils/logger.ts';
-import { getApiKeyFromConfig, updateCatalogGenres } from './configService.ts';
+import { getApiKeyFromConfig } from './configService.ts';
 import { config } from '../config.ts';
 import { SORT_OPTIONS } from './tmdb/referenceData.ts';
 import type { UserConfig, StremioManifest, ManifestCatalog, TmdbGenre } from '../types/index.ts';
@@ -461,7 +461,6 @@ export async function enrichManifestWithGenres(
 
         let isDiscoverOnly = false;
         let options: string[] | null = null;
-        let healedFixes: Record<string, { genres: number[]; genreNames: string[] }> | null = null;
 
         try {
           const savedCatalog = (config.catalogs || []).find((c) => {
@@ -492,65 +491,26 @@ export async function enrichManifestWithGenres(
           if (savedCatalog && savedCatalog.filters) {
             const selected = parseIdArray(savedCatalog.filters.genres);
             const excluded = parseIdArray(savedCatalog.filters.excludeGenres);
+            const resolveGenre = (value: string): string | undefined => {
+              const trimmed = value.trim();
+              return (
+                idToName[trimmed] ||
+                fullNames?.find((name) => normalizeGenreName(name) === normalizeGenreName(trimmed))
+              );
+            };
 
             if (selected.length > 0) {
-              options = selected.map((gid) => idToName[String(gid)]).filter(Boolean);
-
-              if (options.length === 0) {
-                log.info('Genre mapping failed, attempting self-healing', {
-                  catalogId: catalog.id,
-                });
-
-                const apiKey = getApiKeyFromConfig(config);
-                if (apiKey) {
-                  try {
-                    const freshGenres = await tmdb.getGenres(apiKey, helperType);
-                    if (Array.isArray(freshGenres) && freshGenres.length > 0) {
-                      const freshMap: Record<string, string> = {};
-                      freshGenres.forEach((g) => (freshMap[String(g.id)] = g.name));
-
-                      const healedOptions = selected
-                        .map((gid) => freshMap[String(gid)])
-                        .filter(Boolean);
-
-                      if (healedOptions.length > 0) {
-                        options = healedOptions;
-                        healedFixes = healedFixes || {};
-                        healedFixes[savedCatalog.id!] = {
-                          genres: selected.map(Number),
-                          genreNames: healedOptions,
-                        };
-                        log.info('Self-healing successful', {
-                          catalogId: catalog.id,
-                          genres: healedOptions,
-                        });
-                      }
-                    }
-                  } catch (healErr) {
-                    log.error('Self-healing failed', { error: (healErr as Error).message });
-                  }
-                }
-              }
-
-              if ((!options || options.length === 0) && fullNames && fullNames.length > 0) {
-                const wantedNorm = selected.map((s) => normalizeGenreName(s));
-                const matched = fullNames.filter((name) =>
-                  wantedNorm.includes(normalizeGenreName(name))
-                );
-                if (matched.length > 0) {
-                  options = matched;
-                }
-              }
-
-              if (!options || options.length === 0) {
-                log.warn('Could not map saved genres after all attempts', {
+              options = selected.map(resolveGenre).filter((name): name is string => !!name);
+              if (options.length < selected.length) {
+                log.warn('Could not map some saved genres', {
                   catalogId: catalog.id,
                   selectedCount: selected.length,
+                  unmappedCount: selected.length - options.length,
                 });
               }
             } else if (fullNames && fullNames.length > 0) {
               if (excluded.length > 0) {
-                const excludeNames = excluded.map((gid) => idToName[String(gid)]).filter(Boolean);
+                const excludeNames = excluded.map(resolveGenre).filter(Boolean);
                 const excludeSet = new Set(excludeNames);
                 options = fullNames.filter((name) => !excludeSet.has(name));
               } else {
@@ -562,12 +522,6 @@ export async function enrichManifestWithGenres(
           }
         } catch (err) {
           options = null;
-        }
-
-        if (healedFixes) {
-          updateCatalogGenres(config.userId, healedFixes).catch((e) =>
-            log.error('Failed to persist healed genres', { error: (e as Error).message })
-          );
         }
 
         if (options && options.length > 0) {

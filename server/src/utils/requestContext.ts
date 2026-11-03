@@ -62,6 +62,23 @@ export function getRequestSignal(): AbortSignal | undefined {
   return asyncLocalStorage.getStore()?.abortController.signal;
 }
 
+export function withRequestAbortContext<T>(work: () => Promise<T>): Promise<T> {
+  if (asyncLocalStorage.getStore()) return work();
+  return asyncLocalStorage.run(
+    {
+      requestId: randomBytes(9).toString('base64url'),
+      method: 'BACKGROUND',
+      path: '',
+      startedAt: Date.now(),
+      abortController: new AbortController(),
+      cache: buildEmptyCacheStats(),
+      cacheReads: {},
+      obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
+    },
+    work
+  );
+}
+
 export function throwIfRequestAborted(): void {
   getRequestSignal()?.throwIfAborted();
 }

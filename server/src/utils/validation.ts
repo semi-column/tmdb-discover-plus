@@ -1,5 +1,48 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { CatalogFilters } from '../types/config.ts';
+import type { CatalogConfig, CatalogFilters } from '../types/config.ts';
+import { AppError, ErrorCodes } from './AppError.ts';
+
+export function isValidTmdbId(value: unknown): boolean {
+  return (
+    (typeof value === 'string' || typeof value === 'number') &&
+    /^[1-9]\d*$/.test(String(value)) &&
+    Number.isSafeInteger(Number(value))
+  );
+}
+
+export function validateTmdbCatalogSelection(catalog: CatalogConfig): void {
+  if (
+    catalog.enabled === false ||
+    (catalog.source && !['tmdb', 'trakt'].includes(catalog.source))
+  ) {
+    return;
+  }
+  const filters = catalog.filters || {};
+  const listType = filters.listType;
+  if (catalog.type === 'collection' && listType !== 'collection' && listType !== 'studio') {
+    throw new AppError(400, ErrorCodes.VALIDATION_ERROR, 'Select a collection or studio list type');
+  }
+  if (listType !== 'collection' && listType !== 'studio') return;
+
+  const validType =
+    listType === 'studio'
+      ? catalog.type === 'collection'
+      : catalog.type === 'movie' || catalog.type === 'collection';
+  if (!validType) {
+    throw new AppError(
+      400,
+      ErrorCodes.VALIDATION_ERROR,
+      `Unsupported catalog type for ${listType}`
+    );
+  }
+  if (!isValidTmdbId(listType === 'studio' ? filters.studioId : filters.collectionId)) {
+    throw new AppError(
+      400,
+      ErrorCodes.VALIDATION_ERROR,
+      `A valid ${listType} ID is required for ${listType} list type`
+    );
+  }
+}
 
 export function isValidApiKeyFormat(apiKey: unknown): boolean {
   if (!apiKey || typeof apiKey !== 'string') return false;

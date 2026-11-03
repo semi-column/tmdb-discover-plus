@@ -2,6 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
+const { saveConfig } = vi.hoisted(() => ({ saveConfig: vi.fn() }));
+vi.mock('../../src/services/storage/index.ts', () => ({
+  getStorage: () => ({
+    getUserConfig: vi.fn().mockResolvedValue(null),
+    saveUserConfig: saveConfig,
+  }),
+}));
+
 vi.mock('../../src/utils/authMiddleware.ts', () => ({
   requireAuth: (req: any, _res: unknown, next: () => void) => {
     req.apiKey = 'test-api-key';
@@ -27,6 +35,7 @@ describe('POST /api/preview collection validation', () => {
     setLogSink((_level, _context, message, data) => {
       if (message === 'Invalid preview configuration') warnings.push(data);
     });
+
     const app = express();
     app.use(express.json());
     app.use('/api', apiRouter);
@@ -49,4 +58,26 @@ describe('POST /api/preview collection validation', () => {
     ]);
     expect(fetch).not.toHaveBeenCalled();
   });
+});
+
+describe('config save selection validation', () => {
+  it.each(['post', 'put'] as const)(
+    '%s returns 400 before persisting an incomplete collection',
+    async (method) => {
+      const app = express();
+      app.use(express.json());
+      app.use('/api', apiRouter);
+      const response = await request(app)
+        [method](method === 'post' ? '/api/config' : '/api/config/testuser01')
+        .send({
+          catalogs: [
+            { name: 'Missing ID', type: 'collection', filters: { listType: 'collection' } },
+          ],
+        });
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe('VALIDATION_ERROR');
+      expect(response.body.error).toContain('collection ID');
+      expect(saveConfig).not.toHaveBeenCalled();
+    }
+  );
 });

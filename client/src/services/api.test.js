@@ -21,6 +21,19 @@ describe('ApiService', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each(['saveConfig', 'updateConfig'])(
+    '%s rejects invalid selections before sending a request',
+    async (method) => {
+      const config = {
+        catalogs: [{ type: 'collection', filters: { listType: 'collection' } }],
+      };
+      const call =
+        method === 'saveConfig' ? api.saveConfig(config) : api.updateConfig('user-id', config);
+      await expect(call).rejects.toThrow('Select a valid collection or studio');
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    }
+  );
+
   it('includes auth header when session token is set', async () => {
     api.setSessionToken('tok123');
 

@@ -104,6 +104,27 @@ List all configs belonging to the authenticated API key.
 
 Create a new config. A `userId` is auto-generated.
 
+Create/update saves and imports validate enabled TMDB collection/studio selections before writing.
+`filters.listType: "collection"` requires a positive numeric `collectionId` and a movie or
+collection catalog; `"studio"` requires a positive numeric `studioId` and a collection catalog.
+Collection-type catalogs must select one of those modes. Invalid selections return
+`400 VALIDATION_ERROR`; disabled incomplete drafts and empty configurations remain supported.
+The shared save service also enforces this for marketplace imports.
+
+Studio mode uses [TMDB Discover Movie](https://developer.themoviedb.org/reference/discover-movie)
+with `with_companies`, not the bot-protected TMDB website. It lists production-company credits,
+**not streaming-provider availability**, includes video and unrated titles, excludes adult titles,
+and defaults to popularity descending. Discover filters and regional release constraints are
+intentionally not applied in this mode. Supported explicit API sorts (including release-date
+aliases) and randomization are honored; unsupported sorts are rejected, not silently replaced.
+Results use API pagination (20 titles/page, TMDB's 500-page access limit); website counts/order
+are not guaranteed to match. API errors propagate without a website/unfiltered fallback.
+
+Manifest genre dropdowns resolve each saved ID or normalized name independently, including mixed
+selections and name-based exclusions. Unknown genres do not expand to all genres or trigger
+automatic configuration writes. This is dropdown mapping only; imported unknown IDs or names
+are not migrated to valid Discover filter IDs.
+
 **Request:**
 
 ```json
@@ -338,6 +359,17 @@ before storage access once exhausted. Catalog/meta cache misses, search, random
 catalogs, manifest enrichment and prefetch also use bounded work admission;
 cache hits bypass that work limit. See [request protection](self-hosting.md#request-protection-and-monitoring).
 Successful responses support ETag caching where implemented.
+
+Missing metadata remains a protocol-compatible `200` with `{ "meta": {},
+"cacheMaxAge": 60 }` (or `304` for an unchanged negative response), marked with
+`X-Metadata-Status: not-found`. It is not decorated with placeholder artwork or
+cached as a successful full-day metadata result. TMDB missing-title lookups are
+negative-cached for one hour, then retried; cached errors are not bypassed.
+Transient metadata failures instead return `503 TMDB_UNAVAILABLE` with
+`Cache-Control: no-store`, rather than a misleading successful empty response.
+Invalid credentials still return `401 INVALID_API_KEY`.
+Failed background refreshes retain the previous successful stale response
+instead of overwriting it with a cached failure.
 
 | Method | Path                                            | Description                                                 |
 | ------ | ----------------------------------------------- | ----------------------------------------------------------- |

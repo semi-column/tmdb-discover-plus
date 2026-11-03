@@ -64,7 +64,10 @@ API/general routes are limited to 300 requests per minute per IP, with stricter
 60/min limits on sensitive endpoints. Configured addon resources instead use
 1,000/min per existing configuration and a 3,000/min IP ceiling; invalid IDs
 have a separate 30/min IP budget. Uncached addon work uses bounded per-user and
-per-process admission while cached responses remain available.
+global admission while cached responses remain available. With Redis configured,
+active work leases and TMDB outbound rate/pause budgets are shared across replicas;
+without Redis, these budgets are process-local. Shared admission failures stop new
+expensive work rather than falling back to independent replica budgets.
 
 `DISABLE_RATE_LIMIT=true` is honored only in development/test, not production;
 work admission remains enabled. These application controls do not replace

@@ -114,8 +114,8 @@ filters remain supported, including existing bookmarked filters.
 5. **TMDB fetch** via `tmdbFetch()`:
    - Circuit breaker check — if open (≥10 failures in 60s), immediately returns 503
    - Cache check — `CacheWrapper.getEntry()` returns cached response if fresh, or serves stale data while triggering background refresh
-   - Uncached addon builds use bounded admission (6/user and 60/process); hits bypass admission, stale refresh and prefetch consume capacity. Queues are capped at 100/user and 500/process with a 5-second wait; saturation returns an uncacheable 429.
-   - Token bucket throttle — `TokenBucket.acquire()` enforces rate limit (~35 req/s)
+   - Uncached addon builds use bounded admission (6/user and 60 total, shared across Redis replicas); hits bypass admission, stale refresh and prefetch consume capacity. Queues remain local, capped at 100/user and 500/process with a 5-second wait; saturation returns an uncacheable 429.
+   - Token bucket throttle — shared Redis budget (~35 req/s total), or process-local `TokenBucket` in memory mode
    - HTTP fetch with up to 3 retries (exponential backoff: 300ms × 2^attempt)
    - 429 handling — respects `Retry-After` header
 6. **Response enrichment** — IMDb ID mapping, localized genres, IMDb ratings overlay, RPDB poster overlays
@@ -224,9 +224,19 @@ Module-level singleton with three implicit states:
 ### Token Bucket Throttle
 
 - Capacity: `TMDB_RATE_LIMIT` (default 35 tokens/sec)
-- Refill: same rate, replenished every 100ms
-- Queue: up to 500 pending requests, 10s per-request timeout
-- Graceful shutdown: rejects all queued requests
+- Refill: same rate; warmup uses half capacity/rate (rounded up). Redis uses server time and atomic Lua, memory replenishes every 100ms.
+- Redis mode (`REDIS_URL` set and `CACHE_DRIVER` not `memory`) shares tokens, warmup completion and 429 pauses across replicas. Pauses are clamped to 1–10 seconds, never shortened by another replica, and do not earn tokens.
+- Queue: up to 500 pending requests **per process**, 10s per-request timeout. Redis polling is bounded and abortable; commands time out after at most 1 second.
+- A dedicated Redis connection is fail-closed: connection, command, release or renewal failures stop admission (`SharedAdmissionError`, status 503), not unlimited memory fallback. Recovery requires restarting the affected process. Graceful shutdown cancels waiters and closes this connection through the TMDB shutdown hook.
+- Work admission uses two atomic sorted sets (global/user), opaque lease IDs and hashed user keys under `tmdb-discover-plus:{admission}:v1:`. Leases expire after 30 seconds and renew every 10 seconds; release is idempotent. Lost renewal aborts associated request contexts. Killed replicas reclaim capacity through lease/key expiry.
+- `withAddonWork()` preserves existing request contexts and creates an abortable background context when absent. Background refresh/prefetch upstream calls therefore receive `getRequestSignal()` and cancel on renewal loss as request-bound calls do.
+- Lease expiry is crash recovery, not fencing: work must honor request cancellation. A paused/partitioned process that ignores abort can continue computing after its lease expires. Queues/fairness and throttle statistics are process-local; Redis active ceilings are shared. All replicas must use the same rate configuration and Redis database; independent deployments need separate Redis databases. Protect admission keys from eviction/reset, which would erase live budgets/leases.
+
+Shared admission tests spawn their own localhost Redis, never use `REDIS_URL`,
+and destroy only that isolated server's state. Run
+`npm --prefix server test -- tests/unit/sharedAdmission.test.ts` with
+`redis-server` installed, or set `ADMISSION_REDIS_SERVER` to its executable path.
+Live Redis cases are skipped when the executable is unavailable.
 
 ### Retry Logic
 

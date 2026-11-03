@@ -2,6 +2,7 @@ import { createLogger } from '../../utils/logger.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { getCache } from '../cache/index.ts';
 import { tmdbFetch } from './client.ts';
+import { CachedError } from '../cache/CacheWrapper.ts';
 import { TMDB_IMAGE_BASE } from './constants.ts';
 import { formatRuntime } from './stremioMeta.ts';
 import { generateEpisodeThumbnailUrl, isValidPosterConfig } from '../artworkService.ts';
@@ -57,7 +58,19 @@ export async function getDetails(
     params.include_image_language = 'en,null';
   }
 
-  return tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, params);
+  try {
+    return await tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, params);
+  } catch (error) {
+    throwIfRequestAborted();
+    if (
+      (error instanceof CachedError && error.errorType === 'NOT_FOUND') ||
+      (error instanceof Error && 'statusCode' in error && error.statusCode === 404)
+    ) {
+      log.debug('TMDB details not found', { tmdbId, type });
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function getLogos(
