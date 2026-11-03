@@ -1,8 +1,16 @@
 # Architecture Overview
 
-TMDB Discover+ is a Stremio addon that lets users create custom content catalogs powered by TMDB's Discover API. It consists of an Express server implementing the Stremio addon protocol and a React SPA ("Catalog Builder") for configuration.
+TMDB Discover+ is a Stremio catalog/metadata addon with TMDB, IMDb, AniList,
+MyAnimeList, Kitsu, and Simkl sources. It consists of an Express server
+implementing the Stremio addon protocol, a React SPA ("Catalog Builder"), and an
+optional admin dashboard. Source availability depends on instance/user
+credentials. See [self-hosting](self-hosting.md) for deployment topology and
+[environment settings](environment.md) for configuration.
 
-## System Diagram
+## Core Request Path
+
+The diagram below focuses on shared infrastructure and the TMDB request path;
+other sources have their own clients and source-specific throttling/caching.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

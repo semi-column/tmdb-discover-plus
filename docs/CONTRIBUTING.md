@@ -32,44 +32,81 @@ This project adheres to a code of conduct. By participating, you are expected to
    ```
 3. **Add the upstream remote**:
    ```bash
-   git remote add upstream https://github.com/semicolumn/tmdb-discover-plus.git
+   git remote add upstream https://github.com/semi-column/tmdb-discover-plus.git
    ```
 
 ## Development Setup
 
 ### Prerequisites
 
-- Node.js 22+
+- Node.js 22.16+ (Node.js 24 recommended, as used in CI)
 - npm
 - A TMDB API key (free from [TMDB](https://www.themoviedb.org/settings/api))
 
 ### Installation
 
 ```bash
-# Install all dependencies
-npm run install:all
+# Install locked dependencies
+npm ci
+npm --prefix server ci
+npm --prefix client ci
 
 # Copy environment file
 cp .env.example .env
 
-# Start development servers
-npm run dev
 ```
 
-This starts:
+Edit `.env`: set `NODE_ENV=development`, generate separate valid
+`JWT_SECRET` and `ENCRYPTION_KEY`, and
+configure your database/cache. For a disposable local test use
+`DATABASE_DRIVER=memory`, `CACHE_DRIVER=memory`, `REDIS_URL=`, `OBS_REDIS_URL=`,
+`TRUST_PROXY=0`, and `BASE_URL=http://localhost:5173`.
+
+From the repository root, start the backend:
+
+```bash
+node --env-file=.env --experimental-strip-types --watch server/src/index.ts
+```
+
+In another terminal:
+
+```bash
+npm run dev:client
+```
+
+This provides:
 
 - Frontend at http://localhost:5173 (with hot reload)
 - Backend at http://localhost:7000 (with watch mode)
+- Admin UI at http://localhost:5173/admin.html when admin credentials are configured
+
+`npm run dev` also exists, but changes the backend's working directory to
+`server/`, so the root `.env` is not read by default. On POSIX, use
+`DOTENV_CONFIG_PATH=../.env npm run dev`, or export settings before launch.
+See [self-hosting](self-hosting.md) and [environment settings](environment.md).
 
 ### Running Tests
 
 ```bash
-# Check for syntax errors
-node --check server/src/index.js
-
-# Lint frontend code
-cd client && npm run lint
+# Run from repository root
+npm --prefix server test
+npm --prefix server run typecheck
+npm --prefix client test
+npm --prefix client run lint
+npm --prefix client run build
 ```
+
+History backend contract tests always cover memory. Set
+`OBS_HISTORY_TEST_POSTGRES` and/or `OBS_HISTORY_TEST_MONGO` to dedicated test
+services for the real adapters; the test suite creates/deletes its own schema or
+database. Never point it at production.
+
+`npm run test:integration` starts a backend and runs live checks (default
+`http://localhost:7000`, with test URL overrides via `TEST_BASE_URL`). It loads
+`server/.env` and needs the credentials required by the tests. Use
+`SKIP_SERVER=1` only to target an existing **test** server. Do not point these
+checks at production or your normal development data. They are not a replacement
+for the Vitest suites.
 
 ## How to Contribute
 
@@ -130,7 +167,7 @@ Please **do not** manually update version numbers or create tags.
 
 1. **Fill out the PR template** completely
 2. **Link any related issues** using keywords (e.g., "Fixes #123")
-3. **Ensure all checks pass** (linting, syntax checks)
+3. **Ensure all relevant checks pass** (server/client tests, typecheck, lint, and client build)
 4. **Request a review** from maintainers
 5. **Address feedback** promptly and respectfully
 6. **Squash commits** if requested before merging
@@ -150,9 +187,10 @@ Use conventional commit format:
 
 ## Coding Standards
 
-### JavaScript/Node.js
+### JavaScript/TypeScript
 
 - Use ES modules (`import`/`export`)
+- The backend runs TypeScript directly with Node's type stripping; preserve explicit `.ts` imports and erasable syntax
 - Use `const` by default, `let` when reassignment is needed
 - Avoid `var`
 - Use async/await over raw promises

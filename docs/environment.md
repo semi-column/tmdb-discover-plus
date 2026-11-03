@@ -1,230 +1,294 @@
 # Environment Variables
 
-All variables are defined in `server/src/config.ts`. Only `JWT_SECRET` and `ENCRYPTION_KEY` are required.
+Most settings are defined in [`server/src/config.ts`](../server/src/config.ts).
+The MAL client also reads `JIKAN_API_BASE`, and observability uses `HOSTNAME`.
+Only `JWT_SECRET` and `ENCRYPTION_KEY` are mandatory for startup; durable hosting
+also requires a working database.
+
+Defaults below describe the app, not Compose overrides. See the
+[self-hosting guide](self-hosting.md) and [`.env.example`](../.env.example).
+Run `npm start` from the repository root to load its `.env`. A process started
+from `server/` instead loads `server/.env` unless its environment or dotenv path
+is supplied explicitly. Compose interpolation does not automatically forward
+variables into containers.
 
 ## Core
 
-| Variable      | Description                                                                                                                                                                    | Default         |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- |
-| `PORT`        | HTTP server listen port                                                                                                                                                        | `7000`          |
-| `NODE_ENV`    | Runtime environment (`production`, `development`, `test`, `nightly`)                                                                                                           | `production`    |
-| `BASE_URL`    | Public base URL for manifest/install links. Auto-detected from `Host` header if unset. Set this explicitly when running behind proxies that do not preserve the original host. | _(auto-detect)_ |
-| `TRUST_PROXY` | Express `trust proxy` setting — number of hops or `true`                                                                                                                       | `1`             |
+| Variable                 | Description                                                                                                                | Default         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `PORT`                   | HTTP listen port; set explicitly in standalone containers                                                                  | `7000`          |
+| `NODE_ENV`               | `production`, `development`, or `test`; nightly behavior is selected by `ADDON_VARIANT`                                    | `production`    |
+| `BASE_URL`               | Public origin for generated links, no trailing slash; set explicitly for hosting                                           | Request-derived |
+| `TRUST_PROXY`            | Proxy hop count or trusted IP/CIDR/preset configuration; use `0` directly, `1` only behind one trusted proxy               | `1`             |
+| `JSON_BODY_LIMIT`        | Express JSON body size limit for API/configuration payloads                                                                | `512kb`         |
+| `CORS_ORIGIN`            | Comma-separated allowed origins, or `*`; restricting it can prevent browser-based Stremio clients from accessing the addon | `*`             |
+| `CORS_ALLOW_CREDENTIALS` | Allow credentialed CORS requests                                                                                           | `false`         |
+
+Without `BASE_URL`, generated links can derive from request origin/referrer or
+forwarded host/protocol headers. Restrict access to your origin and ensure
+trusted proxies replace untrusted forwarded headers. Do not set broad proxy
+trust merely to remove an IP/rate-limit warning.
 
 ## Auth & Security
 
-| Variable         | Description                                                                                                                                                                                                                     | Default |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `JWT_SECRET`     | **Required.** Secret for signing JWT tokens. Must be at least 32 characters.                                                                                                                                                    | —       |
-| `ENCRYPTION_KEY` | **Required.** AES-256 key for encrypting TMDB API keys at rest. Must be a 64-character hex string (32 bytes). Validated at startup — the server will refuse to start with an invalid key. Generate with `openssl rand -hex 32`. | —       |
+| Variable         | Description                                                                          | Default |
+| ---------------- | ------------------------------------------------------------------------------------ | ------- |
+| `JWT_SECRET`     | Required signing and API-key-derived account-identity secret, at least 32 characters | None    |
+| `ENCRYPTION_KEY` | Required 64-character hexadecimal AES-256 key; invalid format prevents startup       | None    |
 
-Generate both with:
+Generate **two separate values**:
+
+```bash
+openssl rand -hex 32
+openssl rand -hex 32
+```
+
+Or run the following separately for each secret:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
+Preserve both across restarts, upgrades, and replicas. Changing `JWT_SECRET`
+signs out users and changes API-key-derived account identifiers. Changing or
+losing `ENCRYPTION_KEY` prevents decrypting saved credentials. Back up secrets
+securely alongside the database; never commit them.
+
 ## TMDB
 
-| Variable          | Description                                                                                                                           | Default   |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `TMDB_API_KEY`    | Server-side default TMDB API key. Per-user keys are stored encrypted in the database; this is a fallback when no per-user key exists. | _(empty)_ |
-| `TMDB_RATE_LIMIT` | Max TMDB API requests per second (token bucket capacity)                                                                              | `35`      |
-| `DEBUG_TMDB`      | Enable verbose logging of outbound TMDB API calls                                                                                     | `false`   |
+| Variable          | Description                                                                                            | Default             |
+| ----------------- | ------------------------------------------------------------------------------------------------------ | ------------------- |
+| `TMDB_API_KEY`    | Optional instance default for shared/background TMDB work; users still authenticate with their own key | Empty               |
+| `TMDB_RATE_LIMIT` | Per-process TMDB token-bucket rate/capacity                                                            | `35` (`12` nightly) |
+| `DEBUG_TMDB`      | Verbose outbound TMDB logging                                                                          | `false`             |
+
+Key validity is checked for user authentication and configured addon/API access.
+Confirmed invalid keys return 401 and permit export-only configuration recovery.
+The short shared validity cache currently lasts 60 seconds; temporary upstream
+failures are not proof a key is invalid.
 
 ## Database
 
-Storage backend selection priority: explicit `DATABASE_DRIVER` → auto-detect from URI → memory fallback.
+| Variable          | Description                                                                                                | Default       |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- | ------------- |
+| `DATABASE_DRIVER` | `postgres`, `mongo`, or `memory`                                                                           | URI detection |
+| `POSTGRES_URI`    | PostgreSQL connection URI; set with `DATABASE_DRIVER=postgres`                                             | Empty         |
+| `MONGODB_URI`     | MongoDB connection URI; set with `DATABASE_DRIVER=mongo`                                                   | Empty         |
+| `DATABASE_URL`    | Read into config but **not used by the storage selector**; map a provider-supplied value to `POSTGRES_URI` | Empty         |
 
-| Variable          | Description                                                               | Default         |
-| ----------------- | ------------------------------------------------------------------------- | --------------- |
-| `DATABASE_DRIVER` | Storage backend: `postgres`, `mongo`, or `memory`                         | _(auto-detect)_ |
-| `POSTGRES_URI`    | PostgreSQL connection string. Required when `DATABASE_DRIVER=postgres`.   | _(empty)_       |
-| `MONGODB_URI`     | MongoDB connection string. Required when `DATABASE_DRIVER=mongo`.         | _(empty)_       |
-| `DATABASE_URL`    | Generic database URL (alternative to the driver-specific variables above) | _(empty)_       |
+An explicit `memory` driver selects volatile storage. Otherwise a matching
+explicit driver/URI is used; URI detection prefers PostgreSQL over MongoDB,
+falling back to memory with neither. Invalid/incomplete driver settings may
+also fall through to detection: verify the actual driver in startup logs.
+Failure to connect to the selected database prevents app startup; it does not
+migrate app data into memory.
+
+The app creates/migrates tables or collections and indexes at startup.
+PostgreSQL requires DDL permissions and the `pg_trgm` extension, which a DBA may
+need to install first on managed services. Admin history needs its own
+`obs_*` DDL/index permissions too.
 
 ## Cache & Redis
 
-| Variable                 | Description                                                                                                      | Default          |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `CACHE_DRIVER`           | Cache backend: `redis` or `memory`                                                                               | _(auto-detect)_  |
-| `REDIS_URL`              | Redis connection string. Required when `CACHE_DRIVER=redis`. Falls back to memory adapter on connection failure. | _(empty)_        |
-| `CACHE_MAX_KEYS`         | Maximum keys in the in-memory cache (LRU eviction)                                                               | `50000`          |
-| `CACHE_VERSION_OVERRIDE` | Force a cache version string — changing this busts all cached entries                                            | _(empty)_        |
-| `CACHE_WARM_REGIONS`     | Comma-separated ISO country codes for cache warming on startup                                                   | `US,GB,DE,FR,ES` |
+| Variable                 | Description                                                                         | Default                         |
+| ------------------------ | ----------------------------------------------------------------------------------- | ------------------------------- |
+| `CACHE_DRIVER`           | `redis` or `memory`                                                                 | URI detection                   |
+| `REDIS_URL`              | Redis URI for cache, rate limits and user-token revocation                          | Empty                           |
+| `CACHE_MAX_KEYS`         | In-memory cache maximum keys with eviction                                          | `20000` (`6000` nightly)        |
+| `CACHE_VERSION_OVERRIDE` | Override the cache namespace/version; changing it invalidates effective cache reuse | Empty                           |
+| `CACHE_WARM_REGIONS`     | Comma-separated ISO country codes for startup warming                               | `US,GB,DE,FR,ES` (`US` nightly) |
 
-## IMDB Ratings
+With a Redis URL, non-memory cache modes attempt Redis and may fall back to
+memory after connection failures. Without a Redis URL, the cache uses memory
+even if the driver says `redis`. Inspect actual logs/health.
 
-| Variable                    | Description                                                      | Default |
-| --------------------------- | ---------------------------------------------------------------- | ------- |
-| `IMDB_RATINGS_DISABLED`     | Disable the IMDB ratings enrichment system entirely              | `false` |
-| `IMDB_RATINGS_UPDATE_HOURS` | How often (in hours) to refresh the IMDB ratings dataset         | `24`    |
-| `IMDB_MIN_VOTES`            | Minimum IMDB vote count for a title to receive rating enrichment | `100`   |
+`CACHE_DRIVER=memory` skips cache Redis, but other services can still use
+`REDIS_URL`. For an entirely Redis-free local test, clear both `REDIS_URL` and
+`OBS_REDIS_URL`. Memory cache/rate limits/revocation are process-local, not a
+multi-replica replacement. Configuration persistence is a separate database
+choice.
 
-## External APIs
+## IMDb Ratings
 
-| Variable              | Description                                                                | Default        |
-| --------------------- | -------------------------------------------------------------------------- | -------------- |
-| `RPDB_API_KEY`        | RatingPosterDB API key for poster overlays. Free tier key: `t0-free-rpdb`. | `t0-free-rpdb` |
-| `TOP_POSTERS_API_KEY` | TOP Posters API key. Required when using Top Posters artwork provider.     | _(empty)_      |
-| `FANART_API_KEY`      | Fanart.tv API key. Required when using Fanart artwork provider.            | _(empty)_      |
+This dataset enrichment is separate from the IMDb catalog API.
+
+| Variable                    | Description                       | Default |
+| --------------------------- | --------------------------------- | ------- |
+| `IMDB_RATINGS_DISABLED`     | Disable IMDb ratings enrichment   | `false` |
+| `IMDB_RATINGS_UPDATE_HOURS` | Dataset refresh interval in hours | `24`    |
+| `IMDB_MIN_VOTES`            | Minimum votes for enrichment      | `100`   |
+
+## External Artwork APIs
+
+| Variable              | Description                 | Default        |
+| --------------------- | --------------------------- | -------------- |
+| `RPDB_API_KEY`        | Instance RatingPosterDB key | `t0-free-rpdb` |
+| `TOP_POSTERS_API_KEY` | Instance TOP Posters key    | Empty          |
+| `FANART_API_KEY`      | Instance Fanart.tv key      | Empty          |
+
+Users may also configure provider credentials/preferences in the builder.
+These settings do not provision external services.
 
 ## IMDb Source
 
-The IMDb catalog source is enabled when a compatible IMDb API service is configured. It remains
-available on nightly deployments when these values are set.
+This source requires a compatible IMDb API service. It remains available on
+nightly when configured.
 
-| Variable               | Description                                                                         | Default              |
-| ---------------------- | ----------------------------------------------------------------------------------- | -------------------- |
-| `IMDB_DATA_ENABLED`    | Explicitly enables or disables the source. When unset, a configured key enables it. | _(derived from key)_ |
-| `IMDB_DATA_KEY`        | Credential sent to the IMDb API service.                                            | _(empty)_            |
-| `IMDB_DATA_HOST`       | IMDb API service host, without a protocol.                                          | _(empty)_            |
-| `IMDB_DATA_ATTR_K`     | Request header name for `IMDB_DATA_KEY`.                                            | _(empty)_            |
-| `IMDB_DATA_ATTR_H`     | Request header name for the API host.                                               | _(empty)_            |
-| `IMDB_DATA_RATE_LIMIT` | Maximum IMDb API requests per second.                                               | `5`                  |
+| Variable               | Description                                                                  | Default                   |
+| ---------------------- | ---------------------------------------------------------------------------- | ------------------------- |
+| `IMDB_DATA_ENABLED`    | Explicitly enable/disable; `true`/`1` enables, other nonempty values disable | Enabled when a key is set |
+| `IMDB_DATA_KEY`        | Credential sent to the service                                               | Empty                     |
+| `IMDB_DATA_HOST`       | Host without protocol                                                        | Empty                     |
+| `IMDB_DATA_ATTR_K`     | Header name for the service credential                                       | Empty                     |
+| `IMDB_DATA_ATTR_H`     | Header name for the service host                                             | Empty                     |
+| `IMDB_DATA_RATE_LIMIT` | Per-process IMDb requests per second                                         | `5`                       |
 
-## CORS
+Enabling the source does not install its backend. The client uses HTTPS for
+normal hosts; hosts recognized as local (`localhost`, `127.0.0.1`, or
+`imdb-api`, including `imdb-api:8787`) use HTTP. Do not assume an arbitrary IMDb/RapidAPI product has compatible
+routes or authentication.
 
-| Variable                 | Description                                     | Default |
-| ------------------------ | ----------------------------------------------- | ------- |
-| `CORS_ORIGIN`            | Allowed CORS origin(s). `*` allows all origins. | `*`     |
-| `CORS_ALLOW_CREDENTIALS` | Set `Access-Control-Allow-Credentials: true`    | `false` |
+IMDb cache overrides are in **seconds**:
 
-## Logging
+| Variable                   | Default   |
+| -------------------------- | --------- |
+| `IMDB_CACHE_TTL_SEARCH`    | `86400`   |
+| `IMDB_CACHE_TTL_DETAIL`    | `604800`  |
+| `IMDB_CACHE_TTL_RANKING`   | `86400`   |
+| `IMDB_CACHE_TTL_POPULAR`   | `21600`   |
+| `IMDB_CACHE_TTL_LIST`      | `21600`   |
+| `IMDB_CACHE_TTL_REFERENCE` | `2592000` |
 
-| Variable     | Description                                                   | Default |
-| ------------ | ------------------------------------------------------------- | ------- |
-| `LOG_LEVEL`  | Log verbosity: `debug`, `info`, `warn`, `error`               | `info`  |
-| `LOG_FORMAT` | Output format: `text` (human-readable) or `json` (structured) | `text`  |
+Most other TTLs are constants in
+[`cacheTtls.ts`](../server/src/cacheTtls.ts), not environment settings.
+The admin Caching tab lists effective runtime values and distinguishes HTTP
+freshness, stale serving, and physical retention.
 
-## Feature Flags
+## MAL and Simkl
 
-| Variable             | Description                                                                                               | Default |
-| -------------------- | --------------------------------------------------------------------------------------------------------- | ------- |
-| `DISABLE_RATE_LIMIT` | Disable API rate limiting. Only effective in `development` or `test` environments; ignored in production. | `false` |
+| Variable           | Description                                                          | Default                    |
+| ------------------ | -------------------------------------------------------------------- | -------------------------- |
+| `MAL_CLIENT_ID`    | Instance MAL client ID; users can also supply one                    | Empty                      |
+| `MAL_RATE_LIMIT`   | Per-process MAL API requests per second                              | `3`                        |
+| `JIKAN_API_BASE`   | Jikan base URL including `/v4`, used for Jikan-backed MAL operations | `https://api.jikan.moe/v4` |
+| `SIMKL_CLIENT_ID`  | Instance Simkl client/API key; users can also supply one             | Empty                      |
+| `SIMKL_RATE_LIMIT` | Per-process Simkl API requests per second                            | `5`                        |
+
+AniList and Kitsu do not require instance API credentials. Individual operations
+and source availability depend on instance/user configuration.
+
+## Logging and Feature Flags
+
+| Variable             | Description                                                                   | Default |
+| -------------------- | ----------------------------------------------------------------------------- | ------- |
+| `LOG_LEVEL`          | `debug`, `info`, `warn`, `error`                                              | `info`  |
+| `LOG_FORMAT`         | `text` or `json`                                                              | `text`  |
+| `DISABLE_RATE_LIMIT` | Disable app rate limits only in `development`/`test`; ignored in production   | `false` |
+| `ADDON_VARIANT`      | `nightly` changes addon identity/name and resource defaults; unset for stable | Stable  |
 
 ## Admin Dashboard & Observability
 
-The admin dashboard lives at `/admin`. It returns 404 unless `ADMIN_USERNAME` and either `ADMIN_PASSWORD` or `ADMIN_PASSWORD_HASH` are set. Nothing is collected or written until then.
+Production admin UI: `/admin`. It returns 404 unless a valid admin setup is
+configured and the frontend is built. The Vite development entry is
+`/admin.html`. Normal app logging and health endpoints do not require admin
+collection.
 
-It uses whatever the app already runs on, with no extra services:
+| Variable                   | Description                                                                                                                                                                            | Default          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `ADMIN_USERNAME`           | Admin login name                                                                                                                                                                       | Disabled         |
+| `ADMIN_PASSWORD`           | Plain password, at least 16 characters; rotate to invalidate admin sessions                                                                                                            | Disabled         |
+| `ADMIN_PASSWORD_HASH`      | Alternative scrypt hash; takes precedence over plain password                                                                                                                          | Unset            |
+| `ADMIN_TOTP_SECRET`        | Optional base32 authenticator secret; generate under Security and persist in environment                                                                                               | Off              |
+| `ADMIN_ALLOWED_IPS`        | Comma-separated permitted IPs/CIDRs                                                                                                                                                    | Any              |
+| `TRUST_CLOUDFLARE_HEADERS` | Honor `CF-*` headers only when trusted ingress enforces Cloudflare provenance/strips forged headers                                                                                    | `false`          |
+| `OBS_SAMPLE_RATE`          | Fraction (0–1) of ordinary requests retained, including ordinary 4xx; 5xx, slow (at least 1.5s) and error-logging requests are retained independently; live counters count all traffic | `1`              |
+| `OBS_RETENTION_DAYS`       | History retention, clamped to 1–90 days                                                                                                                                                | `7`              |
+| `OBS_MAX_STORAGE_MB`       | Postgres/Mongo history cap; oldest days expire early, current-day overflow pauses new request history; `0` disables                                                                    | `1024`           |
+| `OBS_REDIS_URL`            | Optional dedicated Redis for live metrics, admin lockout/revocation                                                                                                                    | Uses cache Redis |
+| `OBS_ALERT_WEBHOOK_URL`    | Optional HTTPS generic-JSON health notification endpoint; no redirects or embedded URL credentials                                                                                     | Off              |
+| `HOSTNAME`                 | Instance identifier, normally supplied by container runtime                                                                                                                            | OS hostname      |
 
-| Your setup     | Request / error history                                             | Live counters and live tail                            |
-| -------------- | ------------------------------------------------------------------- | ------------------------------------------------------ |
-| Postgres       | `obs_*` tables, one partition per day                               |                                                        |
-| MongoDB (4.4+) | `obs_*` collections with TTL indexes                                |                                                        |
-| No database    | In memory: last 10,000 requests (3,000 on nightly), lost on restart |                                                        |
-| Redis          |                                                                     | `obs:*` keys, shared by all instances                  |
-| No Redis       |                                                                     | In memory, this instance only (fine for one container) |
+Generate `ADMIN_PASSWORD_HASH` with `npm --prefix server run admin:hash` from
+the repository root. See [admin setup](self-hosting.md#admin-dashboard-and-cache-analytics)
+for container commands and TOTP. Invalid hashes/TOTP settings disable admin
+access and are reported in startup logs. Admin sessions last eight hours.
 
-| Variable                   | Description                                                                                                                                                                                                                                                                                    | Default              |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `ADMIN_USERNAME`           | Admin login name                                                                                                                                                                                                                                                                               | _(disabled)_         |
-| `ADMIN_PASSWORD`           | Admin password, at least 16 characters. Set it like any other secret env var. Changing it signs out every admin session                                                                                                                                                                        | _(disabled)_         |
-| `ADMIN_PASSWORD_HASH`      | Optional alternative to `ADMIN_PASSWORD` if you prefer not to keep the plain password in env (from `npm run admin:hash`). Takes precedence                                                                                                                                                     | _(unset)_            |
-| `ADMIN_TOTP_SECRET`        | Optional base32 secret to require an authenticator code. Generate it in the dashboard under **Security** after signing in                                                                                                                                                                      | _(off)_              |
-| `ADMIN_ALLOWED_IPS`        | Optional comma-separated IPs/CIDRs allowed to reach the admin                                                                                                                                                                                                                                  | _(any)_              |
-| `TRUST_CLOUDFLARE_HEADERS` | Set to `true` only when Cloudflare proxies the app. Enables real visitor IP (`CF-Connecting-IP`), country and edge-location data. When off, those headers are ignored because clients could forge them                                                                                         | `false`              |
-| `OBS_SAMPLE_RATE`          | Fraction (0–1) of successful requests stored as history. 5xx, slow (≥1.5s) and error-logging requests are always stored; live counters always count 100%                                                                                                                                       | `1`                  |
-| `OBS_RETENTION_DAYS`       | Days of request/upstream/error history kept (1–90)                                                                                                                                                                                                                                             | `7`                  |
-| `OBS_MAX_STORAGE_MB`       | Upper bound for dashboard data in Postgres/MongoDB. Oldest days are deleted early; if today alone exceeds it, new request history pauses until it fits. `0` disables the cap. Never touches app data                                                                                           | `1024`               |
-| `OBS_REDIS_URL`            | Optional dedicated Redis for observability, live tail and admin session revocation. Use a separate Redis instance with `noeviction` to prevent application-cache LRU eviction from deleting counters or revocations. A different logical database on the same Redis does not isolate eviction. | _(uses cache Redis)_ |
-| `OBS_ALERT_WEBHOOK_URL`    | Optional HTTPS endpoint receiving JSON health notifications. Redirects and embedded URL credentials are rejected. The receiver must accept generic JSON (use an adapter for Slack/Discord).                                                                                                    | _(off)_              |
+Collection is opt-in with admin credentials. Request/error/upstream history
+uses the application database, not an additional database service:
 
-Collection runs only when the admin is configured. Admin sessions last 8 hours.
+| Setup          | History                                               | Live counters/tail                          |
+| -------------- | ----------------------------------------------------- | ------------------------------------------- |
+| PostgreSQL     | `obs_*` tables/partitions                             | Redis if configured, otherwise this process |
+| MongoDB (4.4+) | `obs_*` collections with TTL indexes                  | Redis if configured, otherwise this process |
+| Memory         | Last 10,000 requests (3,000 nightly), lost on restart | Redis if configured, otherwise this process |
 
-Health checks run every minute without an open dashboard, covering the previous five completed
-minutes. Each minute with at least 20 requests is flagged at **5xx >1%**, **4xx >5%**, or
-**slow >15%**; upstream 429s are also included. Notifications are coalesced for five minutes
-across instances when using shared Redis (per instance otherwise). Failures are logged and retried
-on the next evaluation. Payloads contain counts, time bounds and provider names, not request paths,
-configuration IDs or search terms. Without a webhook, notifications are local logs only.
-These thresholds are investigation signals: a 4xx is not automatically a server defect.
-When moving `OBS_REDIS_URL` to a new store, rotate the admin password/hash in the same rollout:
-revocation and login-lockout records in the old store are not transferred automatically.
+History initialization can fall back to bounded memory if database history
+tables/indexes cannot be opened; check the dashboard persistence indicator.
+History caps do not delete ordinary application data.
 
-The Overview shows historical threshold breaches and process-start markers. Older markers are
-estimated from uptime and explicitly labelled; restarts are not proof of deployments.
-Collector counters are per process since startup, not lifetime fleet totals. Gone instances
-disappear from the live roster after 24 hours; their retained system history is unchanged.
+For `OBS_REDIS_URL`, use a **separate Redis instance with `noeviction`** to
+avoid app-cache eviction deleting counters or revocations. Different logical
+databases on the same Redis do not isolate eviction. An explicitly configured
+observability Redis fails closed for the admin session store when unavailable,
+instead of silently choosing a different store. When moving it, rotate the
+admin password/hash in the same rollout: old lockouts/revocations are not copied.
 
-Search terms in newly captured catalog paths are redacted. Existing history is not rewritten and
-expires under normal retention. New error samples preserve occurrence counts even when detail is
-sampled; old sample-capped counts remain lower bounds and missing historical stacks cannot be
-recovered. Occurrence weights retain the minute of the event; sub-minute boundaries remain
-sample-based. Error-group first-seen versions describe fingerprints, not necessarily new bugs;
-2.12.1 changed fingerprint identity. Do not bulk-resolve old groups merely because hashes changed.
+Health checks run every minute without an open dashboard over the previous
+five completed minutes. A minute with at least 20 requests is flagged at
+**5xx >1%**, **4xx >5%**, or **slow >15%**; upstream 429s are included too.
+Notifications are coalesced for five minutes across shared Redis (per process
+otherwise). Failures are logged/retried; without a webhook, notifications are
+logs only. Payloads contain counts/time bounds/provider names, not config IDs,
+paths, or search terms. Use an adapter for Slack/Discord if needed.
+These are investigation signals: a 4xx is not automatically a server defect.
+
+Overview process-start markers are not proof of deployments. Counters are
+per-process since startup; inactive live instances disappear after 24 hours,
+without deleting retained system history. Newly captured search paths are
+redacted; existing history is not rewritten and expires normally. Error-group
+first-seen versions identify fingerprints, not necessarily new bugs (2.12.1
+changed fingerprint identity).
 
 Request exploration supports `sort=newest|duration|upstream`, `minMs`, `maxMs`,
-`minUpstreamCalls`, and `userHash`. Counts refer to stored matching rows, not weighted traffic
-estimates. Invalid custom time ranges return 400 rather than quietly selecting another interval.
-
-## Addon Identity
-
-| Variable        | Description                                                                                                                                   | Default    |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `ADDON_VARIANT` | Changes addon ID and display name. Set to `nightly` to produce ID `community.tmdb.discover.plus.nightly` and name "TMDB Discover+ (Nightly)". | _(stable)_ |
+`minUpstreamCalls`, and `userHash`. Event counts are stored rows, not weighted
+traffic estimates; sampled cache analytics are weighted estimates. Invalid
+custom time ranges return 400. See [cache metric definitions](architecture.md#cache-observability).
 
 ## Nightly Resource Profile
 
-When `ADDON_VARIANT=nightly`, runtime applies a constrained profile for memory-only deployments:
+Set `ADDON_VARIANT=nightly` (not `NODE_ENV=nightly`):
 
-| Setting / Behavior           | Stable Default   | Nightly Effective      |
-| ---------------------------- | ---------------- | ---------------------- |
-| `TMDB_RATE_LIMIT` default    | `35`             | `12`                   |
-| `CACHE_MAX_KEYS` default     | `20000`          | `6000`                 |
-| `CACHE_WARM_REGIONS` default | `US,GB,DE,FR,ES` | `US`                   |
-| IMDb API (`imdbApi.enabled`) | env-driven       | env-driven             |
-| IMDb Ratings updater         | env-driven       | unchanged (env-driven) |
-| Startup cache warming        | enabled          | skipped                |
+| Setting               | Stable default     | Nightly default    |
+| --------------------- | ------------------ | ------------------ |
+| `TMDB_RATE_LIMIT`     | `35`               | `12`               |
+| `CACHE_MAX_KEYS`      | `20000`            | `6000`             |
+| `CACHE_WARM_REGIONS`  | `US,GB,DE,FR,ES`   | `US`               |
+| Startup cache warming | Enabled            | Skipped            |
+| IMDb source/ratings   | Environment-driven | Environment-driven |
 
-Explicit env values still override the default numeric/cache settings.
+The addon ID becomes `community.tmdb.discover.plus.nightly` and its display name
+becomes `TMDB Discover+ (Nightly)`. Explicit settings override numeric/cache
+defaults; choosing this variant does not itself select memory storage.
 
-## Deployment Examples
+## Local Development Example
 
-### Docker Compose (recommended)
+Replace placeholders with independently generated secrets:
 
-```env
-PORT=7000
-DATABASE_DRIVER=postgres
-POSTGRES_URI=postgres://user:pass@db:5432/tmdb_discover
-CACHE_DRIVER=redis
-REDIS_URL=redis://redis:6379
-JWT_SECRET=<random-64-hex>
-ENCRYPTION_KEY=<random-64-hex>
-LOG_LEVEL=info
-```
-
-### Nightly (example)
-
-```env
-ADDON_VARIANT=nightly
-BASE_URL=https://nightly.example.com
-MONGODB_URI=mongodb+srv://...
-JWT_SECRET=<random-64-hex>
-ENCRYPTION_KEY=<random-64-hex>
-```
-
-### ElfHosted (Stable)
-
-```env
-DATABASE_DRIVER=postgres
-POSTGRES_URI=postgres://...
-CACHE_DRIVER=redis
-REDIS_URL=redis://...
-JWT_SECRET=<random-64-hex>
-ENCRYPTION_KEY=<random-64-hex>
-ADMIN_USERNAME=<admin-name>
-ADMIN_PASSWORD=<at-least-16-characters>
-TRUST_CLOUDFLARE_HEADERS=true
-```
-
-### Local Development
-
-```env
+```dotenv
 NODE_ENV=development
+DATABASE_DRIVER=memory
+CACHE_DRIVER=memory
+REDIS_URL=
+OBS_REDIS_URL=
+BASE_URL=http://localhost:5173
+TRUST_PROXY=0
 DISABLE_RATE_LIMIT=true
 LOG_LEVEL=debug
-JWT_SECRET=dev-secret-not-for-production-use
-ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+JWT_SECRET=<generated-secret-at-least-32-characters>
+ENCRYPTION_KEY=<generated-64-hex-characters>
 ```
+
+For persistent hosting use the [complete Compose/manual guide](self-hosting.md).
+Compose-only settings such as `POSTGRES_PASSWORD` are not app settings. Older
+Compose files forward `IMDB_BUDGET_*`, but the current app does not read or
+enforce those variables.

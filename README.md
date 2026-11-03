@@ -5,754 +5,369 @@
 <h1 align="center">TMDB Discover+</h1>
 
 <p align="center">
-  <strong>🎬 Create Custom Movie & TV Show Catalogs for Stremio</strong><br/>
-  <em>Unlock the full power of TMDB's discover API with advanced filtering and personalized catalogs</em>
+  <strong>Create personalized movie, TV, and anime catalogs for Stremio.</strong><br/>
+  Discover with TMDB, IMDb, AniList, MyAnimeList, Kitsu, and Simkl.
 </p>
 
 <p align="center">
   <a href="https://github.com/semi-column/tmdb-discover-plus/releases/latest">
-    <img src="https://img.shields.io/github/v/release/semi-column/tmdb-discover-plus?style=flat-square&logo=github&label=stable" alt="GitHub Release" />
+    <img src="https://img.shields.io/github/v/release/semi-column/tmdb-discover-plus?style=flat-square&logo=github&label=stable" alt="Stable release" />
   </a>
   <a href="https://discord.gg/X2N3btmEG2">
     <img src="https://img.shields.io/discord/1466384279717285961?style=flat-square&logo=discord&logoColor=white&label=Discord&color=5865F2" alt="Discord" />
   </a>
-</p>
-
-<p align="center">
   <a href="https://nodejs.org/">
-    <img src="https://img.shields.io/badge/node-%3E%3D22-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js" />
+    <img src="https://img.shields.io/badge/node-%3E%3D22.16-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22.16+" />
   </a>
-  <a href="https://hub.docker.com/">
-    <img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker" />
-  </a>
-  <a href="https://stremio.com/">
-    <img src="https://img.shields.io/badge/Stremio-Addon-8A2BE2?style=flat-square" alt="Stremio Addon" />
-  </a>
-  <a href="https://www.themoviedb.org/">
-    <img src="https://img.shields.io/badge/TMDB-API-01D277?style=flat-square&logo=themoviedatabase&logoColor=white" alt="TMDB API" />
-  </a>
-</p>
-
-<p align="center">
   <a href="https://ko-fi.com/semicolumn">
-    <img src="https://img.shields.io/badge/Ko--fi-Support%20Development-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-Fi" />
+    <img src="https://img.shields.io/badge/Ko--fi-Support%20Development-FF5E5B?style=flat-square&logo=ko-fi" alt="Support development" />
   </a>
 </p>
 
----
-
-## 🤔 Why TMDB Discover+?
-
-### vs. Default Stremio Catalogs
-
-- 🎯 **Precise Filtering** - Go beyond basic genre filters
-- 🔄 **Dynamic Updates** - Date presets stay current automatically
-- 📊 **Quality Control** - Filter by vote count and ratings
-- 🎬 **Production Insight** - Filter by studios and companies
-
-### vs. Other TMDB Addons
-
-- 🔧 **Unlimited Catalogs** - Not just predefined lists
-- 💾 **Persistent Configs** - Save and manage multiple setups
-- 👁️ **Live Preview** - See results before installing
-- 🚀 **Modern Tech Stack** - Fast, reliable, and actively maintained
-
-### For Power Users
-
-- 🐳 **Docker Ready** - Self-host with full control
-- 🔌 **Multiple Databases** - Postgres, MongoDB, or memory
-- ⚡ **Redis Caching** - Optimized performance
-- 📊 **Status API** - Monitor your instance
-
----
-
-## ✨ What is TMDB Discover+?
-
-TMDB Discover+ is a **powerful Stremio addon** that unlocks the full potential of The Movie Database's discover API. Create unlimited personalized catalogs with advanced filters like genre, year, rating, runtime, streaming providers, and much more.
-
-Whether you're hunting for:
-
-- 🎞️ Hidden gems from the 90s
-- 🆕 Upcoming releases on your favorite streaming services
-- 🌍 Critically acclaimed foreign films
-- 🏆 Award-winning documentaries
-- 🎭 Indie films from specific production companies
-
-**TMDB Discover+ has you covered!**
+TMDB Discover+ is a **catalog and metadata addon**, not a streaming provider.
+Build and preview catalogs, save multiple configurations, and install the
+configured addon in Stremio. You need separate stream addons to watch content.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="TMDB Discover+ Configuration Interface" width="800" />
+  <img src="docs/screenshot.png" alt="TMDB Discover+ configuration interface" width="800" />
 </p>
 
----
+## Contents
 
-## 🌐 Public Instances
+- [Quick start](#quick-start)
+- [Features](#features)
+- [Usage and configuration recovery](#usage-and-configuration-recovery)
+- [Self-hosting](#self-hosting)
+- [Configuration](#configuration)
+- [Admin dashboard](#admin-dashboard)
+- [API overview](#api-overview)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [Contributing and support](#contributing-and-support)
+- [License and credits](#license-and-credits)
 
-Choose the instance that best fits your needs:
+## Quick start
 
-| Instance                                                   | Channel   | Status     | Description                                                                     |
-| ---------------------------------------------------------- | --------- | ---------- | ------------------------------------------------------------------------------- |
-| **[ElfHosted](https://tmdb-discover-plus.elfhosted.com/)** | 🟢 Stable | Production | ✅ **Recommended for daily use**<br/>PostgreSQL + Redis for optimal performance |
+The recommended public stable instance is
+**[tmdb-discover-plus.elfhosted.com](https://tmdb-discover-plus.elfhosted.com/)**.
+No server installation is needed.
 
-> **💡 Tip:** The stable instance is free to use and recommended for most users.
+1. Get a TMDB API key from [TMDB account settings](https://www.themoviedb.org/settings/api).
+2. Open the instance and sign in with that key.
+3. Create a configuration or select an existing one, then add catalogs.
+4. Choose a source, set its filters, and preview the results.
+5. Use **Save & Install** to save and install the configured addon in Stremio.
 
----
+Use your configuration's install link, not the bare `/manifest.json`.
+The root manifest is a setup entry point and advertises no catalog or metadata
+resources.
 
-## 🚀 Key Features
+## Features
 
-### 🎬 Unlimited Custom Catalogs
+### Multiple catalog sources
 
-Create as many personalized movie and TV show catalogs as you want with different filter combinations.
+| Source            | Examples                                                                                                    |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| TMDB              | Discover filters, trending/popular and release lists, collections, studios                                  |
+| IMDb              | Search, rankings, lists, and source-specific filters when the instance has a compatible IMDb API configured |
+| AniList           | Anime discovery and source-specific filtering                                                               |
+| MyAnimeList (MAL) | Anime catalogs; API-backed functionality can use an instance or user client ID                              |
+| Kitsu             | Anime discovery and filtering                                                                               |
+| Simkl             | Source-specific catalogs using an instance or user API key                                                  |
 
-### 🔍 Advanced Filtering Engine
+Available functionality depends on the source and credentials configured on the
+instance/account. See the [environment reference](docs/environment.md) for
+optional source services and credentials.
 
-- **🎭 Genres** - Filter by one or more genres (with exclude support)
-- **📅 Year Range** - Release year from/to
-- **⭐ Rating Range** - TMDB vote average (0-10)
-- **⏱️ Runtime** - Filter by duration with presets (Short, Standard, Long, Epic)
-- **🌐 Language & Country** - Filter by original language and origin country
-- **📺 Streaming Services** - Filter by watch provider (Netflix, Disney+, Prime Video, etc.)
-- **👥 People** - Filter by actors, directors, crew
-- **🏷️ Keywords** - Include or exclude specific keywords
-- **🏢 Companies** - Filter or exclude production companies
-- **🗳️ Vote Count** - Minimum votes for quality filtering
+### Build catalogs your way
 
-### 📅 Dynamic Date Presets
+- Include/exclude genres, keywords, people, and production companies.
+- Filter by year/date, rating, vote count, runtime, language, country, region,
+  and watch provider where the selected source supports them.
+- Use dynamic date presets and randomization for changing discovery results.
+- Preview results before installation; reorder and manage catalogs in the builder.
+- Save and switch between multiple addon configurations.
+- Export selected catalogs and preferences to JSON, then import into another
+  configuration or account.
+- Discover and share public catalogs through the marketplace.
+- Customize artwork with the supported providers, including RPDB, TOP Posters,
+  and Fanart.tv; availability depends on provider credentials.
 
-"Last 30 days" always means 30 days from **today**, not when you created the catalog—smart and up-to-date!
+Filters are source-specific: not every TMDB option exists for every source.
+IMDb ID support and metadata integration help catalogs work with other Stremio
+addons.
 
-### 🎲 Smart Randomization
+### Operate your own instance
 
-Dedicated randomization toggle that works seamlessly with any sort order for discovering unexpected favorites.
+- PostgreSQL or MongoDB persistence; explicit in-memory mode for evaluation.
+- Redis or in-process caching.
+- Container images and source-based deployment.
+- Optional protected admin dashboard with request/error/upstream investigation,
+  live tail, usage, cache analytics/TTLs, and system diagnostics.
 
-### ⚙️ Configuration Manager
+## Usage and configuration recovery
 
-Save, switch between, and manage multiple addon configurations effortlessly.
+Sign in with your TMDB API key to manage its configurations. Select a saved
+configuration to edit it or create another. Saving updates a configuration;
+manifest/catalog changes may also require refreshing or reinstalling the addon
+in Stremio because clients cache manifests and results.
 
-### 👀 Live Preview
+### Export and import
 
-See your catalog results before installing with clickable links to TMDB—no surprises!
+Use the builder's export/import controls to choose catalogs and optionally
+preferences and the configuration name. Exported JSON does **not** contain API
+keys. After importing, supply any credentials needed by the destination
+account/providers, review the catalogs, then save/install.
 
-### 🆔 IMDB Integration
+Exports can still contain private catalog names, filters, and preferences:
+review them before sharing. They are configuration transfers, not complete
+server/database backups.
 
-Full IMDB ID support ensures maximum compatibility with Stremio and other addons.
+### Invalid TMDB API key
 
-### 🐳 Self-Hostable
+If TMDB confirms that a key is invalid, configured manifests, catalogs,
+metadata, and authenticated configuration operations return **401** rather than
+cached successful content. Signing in/verifying with the invalid key opens an
+export-only recovery view for associated saved configurations when available.
 
-Complete Docker support with PostgreSQL/MongoDB and Redis/Memory cache options for full control.
+Export there, sign in with a valid key, then import into a new account/configuration.
+Recovery does not authorize editing, installing, or fetching addon content with
+the rejected key. A temporary TMDB failure is not treated as confirmed key
+invalidation. Key-validity checks use a short shared-cache window (currently
+60 seconds); revocation detection is not instantaneous, and already cached
+client/CDN responses cannot be recalled.
 
----
+## Self-hosting
 
-## 📋 Table of Contents
+See the **[complete self-hosting guide](docs/self-hosting.md)** for a persistent
+PostgreSQL + Redis Compose example, manual installation, external databases,
+HTTPS/reverse proxies, admin setup, backups, upgrades, and troubleshooting.
 
-- [Quick Start](#-quick-start)
-- [Self-Hosting](#-self-hosting)
-  - [Docker (Recommended)](#docker-recommended)
-  - [Manual Installation](#manual-installation)
-  - [Cloud Deployment](#cloud-deployment)
-- [Configuration](#%EF%B8%8F-configuration)
-- [Usage](#-usage)
-- [API Reference](#-api-reference)
-- [Development](#%EF%B8%8F-development)
-- [Contributing](#-contributing)
-- [License](#-license)
-
----
-
-## 🚀 Quick Start
-
-### 🌟 Use a Public Instance
-
-The easiest way to get started—no installation required!
-
-**Visit [tmdb-discover-plus.elfhosted.com](https://tmdb-discover-plus.elfhosted.com/)** and:
-
-1. 🔑 Enter your free TMDB API key ([Get one here](https://www.themoviedb.org/settings/api))
-2. 🎨 Create catalogs with your preferred filters
-3. 📥 Click "Install to Stremio"
-4. ✨ Start discovering!
-
-### Prerequisites
-
-- **TMDB API Key** - [Get a free key here](https://www.themoviedb.org/settings/api) (takes 2 minutes)
-- **Stremio** - [Download here](https://www.stremio.com/) if you don't have it
-
----
-
-## 🏠 Self-Hosting
-
-### Docker (Recommended)
-
-The easiest way to self-host TMDB Discover+ with full persistence and caching:
-
-```bash
-# Clone the repository
-git clone https://github.com/semi-column/tmdb-discover-plus.git
-cd tmdb-discover-plus
-
-# Copy environment file
-cp .env.example .env
-
-# Edit .env to choose your database (Postgres/Mongo) and cache (Redis/Memory)
-nano .env
-
-# Build and run with Docker Compose
-docker-compose up -d
-```
-
-The addon will be available at `http://localhost:7000`
-
-#### Pre-built Image
-
-Stable releases are published to the GitHub Container Registry, so you can pull an image without cloning or building the repository:
+### Container image
 
 ```bash
 docker pull ghcr.io/semi-column/tmdb-discover-plus:latest
 ```
 
-Use a specific release tag instead of `latest` when you need a pinned deployment. The same tags are mirrored to Docker Hub when the maintainers configure its publishing credentials.
+Stable images are published for AMD64 and ARM64. Pin a published version tag
+(without its release's leading `v`) or digest for controlled upgrades.
+An image alone still needs application secrets and a storage/cache choice;
+follow the guide rather than running it with placeholder credentials.
 
-#### Docker Environment Variables
-
-| Variable          | Description                                     | Default               |
-| ----------------- | ----------------------------------------------- | --------------------- |
-| `PORT`            | Server port                                     | `7000`                |
-| `DATABASE_DRIVER` | Storage backend (`postgres`, `mongo`, `memory`) | `postgres`            |
-| `POSTGRES_URI`    | Postgres connection URL                         | (internal docker url) |
-| `MONGODB_URI`     | MongoDB connection URL                          | (internal docker url) |
-| `CACHE_DRIVER`    | Cache backend (`redis`, `memory`)               | `redis`               |
-| `REDIS_URL`       | Redis connection URL                            | `redis://redis:6379`  |
-| `LOG_LEVEL`       | Logging level (debug/info/warn/error)           | `info`                |
-
-### Manual Installation
-
-#### Requirements
-
-- Node.js 22+
-- npm or yarn
-- Postgres or MongoDB (Recommended for persistence)
-- Redis (Optional for caching)
-
-#### Steps
+### Source installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/semi-column/tmdb-discover-plus.git
 cd tmdb-discover-plus
-
-# Install all dependencies
-npm run install:all
-
-# Copy and configure environment
+npm ci
+npm --prefix server ci
+npm --prefix client ci
 cp .env.example .env
-# Edit .env to configure your DB and Cache connections
+```
 
-# Build the frontend
-npm run build
+**Before starting:** edit `.env`, generate separate `JWT_SECRET` and
+`ENCRYPTION_KEY` values, and configure reachable database/cache services. For a
+disposable local test only, explicitly use memory drivers and clear Redis URLs.
 
-# Start the server
+```bash
+npm --prefix client run build
 npm start
 ```
 
-### Cloud Deployment
+The built frontend and API are served at `http://localhost:7000` unless `PORT`
+is changed. Use HTTPS and a supervised production process for remote access.
+The [development workflow](#development) below is separate.
 
-#### Render / Railway / Fly.io
+> The existing `docker-compose.yml` starts both databases and publishes their
+> ports. `docker-compose.production.yml` and `Caddyfile` are a bespoke DuckDNS
+> setup, **not ElfHosted's deployment configuration**. Use the
+> [documented self-hosting example](docs/self-hosting.md#docker-compose-postgresql--redis)
+> rather than assuming either is a production-ready default.
 
-1. Fork this repository
-2. Connect to your cloud provider
-3. Set environment variables:
-   - `MONGODB_URI` (optional)
-   - `PORT` (usually auto-set)
-4. Deploy!
+## Configuration
 
-#### Reverse Proxy (nginx)
+[`.env.example`](.env.example) is a starting template;
+[docs/environment.md](docs/environment.md) explains runtime defaults, driver
+selection, source options, and admin/observability settings. Placeholder secrets
+are not usable credentials.
 
-If running behind a reverse proxy:
+| Setting                                             | Purpose                                                                                         |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `JWT_SECRET`                                        | Required signing/account-identity secret; generate a strong value of at least 32 characters     |
+| `ENCRYPTION_KEY`                                    | Required 64-character hexadecimal encryption key; preserve it with database backups             |
+| `DATABASE_DRIVER` + `POSTGRES_URI` or `MONGODB_URI` | Choose durable configuration storage                                                            |
+| `CACHE_DRIVER` + `REDIS_URL`                        | Choose Redis or memory caching                                                                  |
+| `PORT`                                              | App listen port; set explicitly in standalone containers                                        |
+| `BASE_URL`                                          | Public origin used in generated links                                                           |
+| `TRUST_PROXY`                                       | Trust only your actual proxy topology; `0` for direct access                                    |
+| `TMDB_API_KEY`                                      | Optional server default for background/shared TMDB work; users still sign in with their own key |
+| `ADMIN_USERNAME` + admin password/hash              | Enable protected admin access and observability                                                 |
 
-```nginx
-location / {
-    proxy_pass http://localhost:7000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
+Memory storage loses configurations on restart. A provider-supplied
+`DATABASE_URL` must be mapped to `POSTGRES_URI`; it is not a substitute for the
+application's database URI setting. Variables in a Compose `.env` are not
+automatically container environment variables unless forwarded.
 
----
+## Admin dashboard
 
-## ⚙️ Configuration
-
-### Environment Variables
-
-See [docs/environment.md](docs/environment.md) for a complete reference of all 28 environment variables.
-
-Create a `.env` file from `.env.example`:
+Set `ADMIN_USERNAME` and either `ADMIN_PASSWORD` (minimum 16 characters) or
+`ADMIN_PASSWORD_HASH`, restart/recreate the app, then open `/admin`.
+Admin is disabled by default. Generate an optional hash with:
 
 ```bash
-# Database Configuration
-DATABASE_DRIVER=postgres
-POSTGRES_URI=postgres://user:pass@localhost:5432/tmdb_discover
-# MONGODB_URI=mongodb+srv://...
-
-# Cache Configuration
-CACHE_DRIVER=redis
-REDIS_URL=redis://localhost:6379
-
-# Server Settings
-PORT=7000
-LOG_LEVEL=info
-CORS_ORIGIN=*
+npm --prefix server run admin:hash
 ```
 
-### Filter Options
-
-| Filter                | Description                                                               |
-| --------------------- | ------------------------------------------------------------------------- |
-| **Genres**            | Filter by one or more genres                                              |
-| **Exclude Genres**    | Exclude specific genres from results                                      |
-| **Year Range**        | Release year from/to                                                      |
-| **Rating Range**      | TMDB vote average (0-10)                                                  |
-| **Runtime**           | Filter by duration in minutes (with presets: Short, Standard, Long, Epic) |
-| **Sort By**           | Popularity, Rating, Release Date, Revenue                                 |
-| **Randomize**         | Fetch a random page from results and shuffle them locally                 |
-| **Language**          | Original language filter                                                  |
-| **Country**           | Origin country filter                                                     |
-| **Region**            | Regional release filter (for theatrical releases)                         |
-| **First Air Date**    | TV show premiere date filter                                              |
-| **Date Presets**      | Quick filters: Last 30/90 days, Last 6 months, This/Last Year             |
-| **Min Votes**         | Minimum vote count for quality filtering                                  |
-| **Streaming Service** | Filter by watch provider                                                  |
-| **People**            | Filter by actors, directors                                               |
-| **Companies**         | Filter by production company                                              |
-| **Exclude Companies** | Exclude specific production companies                                     |
-| **Keywords**          | Filter by content keywords                                                |
-| **Exclude Keywords**  | Exclude content with specific keywords                                    |
-| **IMDB Only**         | Only show items with IMDB IDs                                             |
-
----
-
-## 📖 Usage
-
-### Getting Started Guide
-
-1. **🌐 Open the Configuration Page**
-   - Visit your instance URL (e.g., `http://localhost:7000` or public instance)
-
-2. **🔑 Enter Your TMDB API Key**
-   - Get a free key from [TMDB](https://www.themoviedb.org/settings/api)
-   - Only takes 2 minutes to sign up!
-
-3. **🎨 Create Your First Catalog**
-   - Click "Add Catalog"
-   - Choose from preset templates or create custom filters
-   - Use "Preview" to see results in real-time
-
-4. **💾 Save & Install**
-   - Click "Save Configuration"
-   - Click "Install to Stremio" to add the addon
-   - Your catalogs will appear in Stremio!
-
-5. **✏️ Edit Anytime**
-   - Return to your configuration URL to modify catalogs
-   - Changes sync automatically
-
-### 💡 Pro Tips
-
-- **🎲 Randomize** - Enable randomization to discover hidden gems
-- **📅 Use Date Presets** - "Last 30 days" automatically updates daily
-- **⭐ Filter by Votes** - Set minimum vote count to avoid obscure titles
-- **🏢 Exclude Studios** - Filter out specific production companies
-- **🔍 Preview First** - Always preview before installing to verify results
-
----
-
-## ❓ FAQ & Troubleshooting
-
-<details>
-<summary><b>How do I get a TMDB API key?</b></summary>
-
-1. Go to [themoviedb.org](https://www.themoviedb.org/)
-2. Create a free account
-3. Go to Settings → API
-4. Request an API key (choose "Developer" option)
-5. Fill in basic details—it's approved instantly!
-
-</details>
-
-<details>
-<summary><b>My catalogs aren't showing up in Stremio</b></summary>
-
-Try these steps:
-
-1. Make sure you clicked "Install to Stremio"
-2. Restart the Stremio app
-3. Check if the addon appears in Settings → Addons
-4. Verify your configuration URL is correct
-5. Check browser console for errors (F12)
-
-</details>
-
-<details>
-<summary><b>Can I use this without self-hosting?</b></summary>
-
-Yes! Use one of our public instances:
-
-- **Stable:** [tmdb-discover-plus.elfhosted.com](https://tmdb-discover-plus.elfhosted.com/)
-
-No installation required!
-
-</details>
-
-<details>
-<summary><b>How many catalogs can I create?</b></summary>
-
-There's no hard limit! However, for performance:
-
-- Keep it under 20 catalogs for best experience
-- Each catalog is loaded separately by Stremio
-- Consider using meaningful filters to avoid overlaps
-
-</details>
-
-<details>
-<summary><b>Does this addon provide streams?</b></summary>
-
-**No.** TMDB Discover+ is a **catalog addon** that helps you discover movies and TV shows. You need other Stremio addons (like Torrentio, The Movie Database +, etc.) to actually stream content.
-
-</details>
-
-<details>
-<summary><b>Is my TMDB API key secure?</b></summary>
-
-Yes! Your API key is:
-
-- Encrypted at rest using AES-256
-- Never logged or exposed in responses
-- Only used for TMDB API calls
-- Stored securely in the database
-
-For self-hosted instances, you have full control!
-
-</details>
-
-<details>
-<summary><b>Why do some filters not work together?</b></summary>
-
-TMDB's API has some limitations:
-
-- Some filter combinations may return no results
-- "With people" filter works best with fewer other filters
-- Try using preview to verify filter combinations work
-
-</details>
-
-<details>
-<summary><b>Can I export/import my configuration?</b></summary>
-
-Currently, configurations are tied to your user ID. We're considering adding export/import in future versions!
-
-Follow the project for updates or contribute this feature!
-
-</details>
-
----
-
-## 📖 Usage
-
-> **Note:** This section has been moved above. See the [Getting Started Guide](#-usage) for detailed usage instructions.
-
----
-
-## 📡 API Reference
-
-See [docs/api.md](docs/api.md) for comprehensive API documentation with request/response shapes, auth requirements, and rate limits. See [docs/architecture.md](docs/architecture.md) for system architecture.
-
-### Health & Status
-
-| Endpoint          | Description                                      |
-| ----------------- | ------------------------------------------------ |
-| `GET /health`     | Basic health check                               |
-| `GET /api/status` | Version, build info, uptime, database/cache type |
-
-The `/api/status` endpoint returns:
-
-```json
-{
-  "version": "2.6.7",
-  "tag": "v2.6.7",
-  "channel": "stable",
-  "commitHash": "abc1234",
-  "buildTime": "2026-02-02T12:00:00.000Z",
-  "uptime": 3600,
-  "environment": "production",
-  "database": "postgres",
-  "cache": "redis",
-  "stats": { "users": 100, "catalogs": 250 }
-}
-```
-
-### Stremio Addon Endpoints
-
-| Endpoint                                     | Description            |
-| -------------------------------------------- | ---------------------- |
-| `GET /:userId/manifest.json`                 | Stremio addon manifest |
-| `GET /:userId/catalog/:type/:id.json`        | Catalog results        |
-| `GET /:userId/catalog/:type/:id/:extra.json` | Paginated catalog      |
-
-### Configuration API
-
-| Endpoint              | Method | Description              |
-| --------------------- | ------ | ------------------------ |
-| `/api/config`         | POST   | Create new configuration |
-| `/api/config/:userId` | GET    | Get user configuration   |
-| `/api/config/:userId` | PUT    | Update configuration     |
-| `/api/validate-key`   | POST   | Validate TMDB API key    |
-| `/api/preview`        | POST   | Preview catalog results  |
-
-### TMDB Data Endpoints
-
-| Endpoint                     | Description                     |
-| ---------------------------- | ------------------------------- |
-| `/api/genres/:type`          | Get genres for movie/series     |
-| `/api/languages`             | Get available languages         |
-| `/api/countries`             | Get available countries         |
-| `/api/watch-providers/:type` | Get streaming providers         |
-| `/api/search/person`         | Search for actors/directors     |
-| `/api/search/company`        | Search for production companies |
-| `/api/search/keyword`        | Search for keywords             |
-
----
-
-## 🛠️ Development
-
-### Prerequisites
-
-- Node.js 22+
-- npm
-
-### Setup
+The dashboard offers:
+
+- **Overview / Requests:** rates, latency, request filters, traces, and history.
+- **Errors / Dependencies / Live tail:** grouped failures and captured upstream work.
+- **Usage:** traffic and configuration/catalog insights.
+- **Caching:** lookup hit/miss percentages, request outcomes, miss-heavy
+  routes/paths, and a read-only inventory of current TTL policy.
+- **System / Proxy diagnostics / Security:** process health, ingress diagnostics,
+  and optional TOTP setup.
+
+Cache lookup rates are not request-level cache rates. One request can have hits,
+misses, and API calls together; the dashboard shows both views and explains
+their limits. Admin collection/history uses existing database/Redis services,
+or bounded process memory. See [setup and retention guidance](docs/self-hosting.md#admin-dashboard-and-cache-analytics).
+
+## API overview
+
+See [docs/api.md](docs/api.md) for authentication, errors, route tables, and
+examples; [docs/architecture.md](docs/architecture.md) describes the implementation.
+
+| Endpoint                                            | Purpose                                                           |
+| --------------------------------------------------- | ----------------------------------------------------------------- |
+| `GET /health`                                       | Runtime/cache/degradation diagnostics                             |
+| `GET /ready`                                        | Readiness status                                                  |
+| `GET /api/status`                                   | Version/build/runtime and storage/cache information               |
+| `POST /api/auth/login`                              | Authenticate a TMDB key; invalid-key recovery uses a 401 response |
+| `/api/config` and `/api/config/:userId`             | Authenticated configuration management                            |
+| `GET /manifest.json`                                | Configuration-required entry point, no advertised resources       |
+| `GET /:userId/manifest.json`                        | Configured Stremio manifest                                       |
+| `GET /:userId/catalog/:type/:catalogId.json`        | Catalog results                                                   |
+| `GET /:userId/catalog/:type/:catalogId/:extra.json` | Catalog with extras/pagination                                    |
+| `GET /:userId/meta/:type/:id.json`                  | Metadata                                                          |
+| `GET /:userId/meta/:type/:id/:extra.json`           | Metadata with extras                                              |
+
+Configured addon URLs identify a saved configuration; they are not bearer-token
+configuration-editing endpoints. Do not share links or configuration data you
+intend to keep private. Root-level `/meta/*` and `/catalog/*` calls are
+unsupported and return 404.
+
+## Development
+
+Install Node.js 22.16+ (Node.js 24 recommended) and the root/server/client
+dependencies, then create and configure the root `.env` as above.
+Set `NODE_ENV=development` and `TRUST_PROXY=0` for direct local testing.
+
+Run the backend **from the repository root**:
 
 ```bash
-# Clone and install
-git clone https://github.com/semi-column/tmdb-discover-plus.git
-cd tmdb-discover-plus
-npm run install:all
-
-# Start development servers (frontend + backend)
-npm run dev
+node --env-file=.env --experimental-strip-types --watch server/src/index.ts
 ```
 
-- Frontend: http://localhost:5173 (with hot reload)
-- Backend: http://localhost:7000 (with watch mode)
+In another terminal:
 
-### Project Structure
-
-```
-tmdb-discover-plus/
-├── client/                 # React frontend
-│   ├── src/
-│   │   ├── components/     # React components
-│   │   ├── hooks/          # Custom hooks
-│   │   ├── services/       # API client
-│   │   └── styles/         # CSS styles
-│   └── public/             # Static assets
-├── server/                 # Express backend
-│   └── src/
-│       ├── routes/         # API routes
-│       ├── services/       # Business logic
-│       ├── models/         # Database models
-│       └── utils/          # Helpers, logger, validation
-├── Dockerfile              # Production Docker image
-├── docker-compose.yml      # Docker Compose config
-└── .env.example            # Environment template
+```bash
+npm run dev:client
 ```
 
-### Tech Stack
+- Builder: `http://localhost:5173`
+- Admin UI in Vite: `http://localhost:5173/admin.html`
+- API/backend: `http://localhost:7000`
 
-**Backend:**
+Vite proxies API and configured addon calls to port 7000. If you change the
+backend port, update your local proxy target too. Use `BASE_URL=http://localhost:5173`
+when testing generated links through Vite. Built production admin access is
+`/admin`, not `/admin.html`.
 
-- **Runtime:** Node.js 22+ with ES Modules
-- **Framework:** Express.js
-- **Databases:** PostgreSQL / MongoDB (with in-memory fallback)
-- **Caching:** Redis / Memory
-- **HTTP Client:** Node.js built-in fetch
+The combined `npm run dev` changes directory into `server` before loading dotenv.
+It therefore needs environment variables already exported or a `server/.env`.
+On a POSIX shell you can use the root file without duplicating secrets:
 
-**Frontend:**
+```bash
+DOTENV_CONFIG_PATH=../.env npm run dev
+```
 
-- **Framework:** React 19 with Hooks
-- **Build Tool:** Vite (lightning fast ⚡)
-- **Styling:** CSS with custom properties (CSS Variables)
-- **Icons:** Lucide React
-- **State Management:** React Hooks (useState, useEffect, custom hooks)
+For a dependency-free local test, set `DATABASE_DRIVER=memory`,
+`CACHE_DRIVER=memory`, `REDIS_URL=` and `OBS_REDIS_URL=`; this intentionally loses
+data on restart. Keep real secrets even in local environments, and never commit
+your `.env`.
 
-**DevOps:**
+### Checks
 
-- **Containerization:** Docker & Docker Compose
-- **CI/CD:** GitHub Actions
-- **Release Management:** Release Please (automated versioning)
-- **Code Quality:** Prettier, ESLint, Husky (pre-commit hooks)
+Run from the repository root:
 
----
+```bash
+npm --prefix server test
+npm --prefix server run typecheck
+npm --prefix client test
+npm --prefix client run lint
+npm --prefix client run build
+```
 
-## 🗺️ Roadmap
+History backend contract tests run memory coverage by default; real database
+coverage requires `OBS_HISTORY_TEST_POSTGRES` and/or `OBS_HISTORY_TEST_MONGO`.
+Those tests create and delete their own schema/database; use test services,
+never a production database. The live integration runner starts a backend by default; use `SKIP_SERVER=1`
+only when deliberately targeting an existing test server, with test credentials.
+See [contributing](docs/CONTRIBUTING.md).
 
-We're constantly improving TMDB Discover+! Here's what's on the horizon:
+### Layout and stack
 
-### 🚧 Planned Features
+```text
+client/src/                  React UI and admin dashboard
+server/src/routes/           Express API/addon/admin routes
+server/src/services/         Sources, storage/cache, observability
+server/src/infrastructure/   Throttling and process-local caches
+server/src/cacheTtls.ts      Shared cache policy constants
+server/tests/                Vitest and live integration checks
+docs/                        API, environment, architecture, hosting guides
+Dockerfile.docker            Multi-stage production image
+```
 
-- [ ] **Import/Export Configurations** - Share catalog setups with friends
-- [ ] **Template Library** - Pre-made catalog templates for common use cases
-- [ ] **Enhanced Analytics** - View your catalog usage statistics
-- [ ] **Multi-language UI** - Support for multiple interface languages
-- [ ] **Advanced Sorting** - More sorting options and combinations
-- [ ] **Watched History Integration** - Filter out already-watched content
-- [ ] **Collections Support** - Create catalogs from TMDB collections
+Backend: Node.js native TypeScript stripping, Express, PostgreSQL/MongoDB,
+Redis/memory, and built-in fetch. Frontend: React, Vite, CSS, Lucide, and uPlot.
+GitHub Actions runs checks and container builds; release-please manages stable
+release versions and image publishing.
 
-### 💭 Under Consideration
+## Troubleshooting
 
-- GraphQL API for advanced integrations
-- Mobile app for configuration management
-- Collaborative catalogs (share with family/friends)
-- Integration with Trakt.tv
-- Custom poster/artwork selection
+| Problem                                     | Next step                                                                                                             |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Missing secrets or Redis connection retries | Follow [self-hosting troubleshooting](docs/self-hosting.md#troubleshooting); check env loading and reachable services |
+| Configurations missing after restart        | Confirm a durable database is actually selected, and retain the original secrets                                      |
+| Invalid API key                             | Export from recovery, then sign in/import with a valid key                                                            |
+| Catalogs missing in Stremio                 | Save the configuration, install its configured manifest, refresh/reinstall the addon, and preview the catalog         |
+| No results                                  | Check source credentials and filter combinations; filters vary by source                                              |
+| Wrong generated URL                         | Set `BASE_URL` and verify proxy host/protocol forwarding                                                              |
+| Admin 404                                   | Configure admin credentials and build the frontend                                                                    |
+| Bare `/meta` or `/catalog` traffic          | These old config-less installs are unsupported; ingress blocking is optional and must preserve configured paths       |
 
-**Want to contribute?** Check out our [Contributing Guide](docs/CONTRIBUTING.md) or [open a discussion](https://github.com/semi-column/tmdb-discover-plus/discussions)!
+## Contributing and support
 
----
+- [Contributing guide](docs/CONTRIBUTING.md)
+- [Report a bug](https://github.com/semi-column/tmdb-discover-plus/issues/new?template=bug_report.yml)
+- [Request a feature](https://github.com/semi-column/tmdb-discover-plus/issues/new?template=feature_request.yml)
+- [GitHub Discussions](https://github.com/semi-column/tmdb-discover-plus/discussions)
+- [Discord](https://discord.gg/X2N3btmEG2)
+- [Security policy](docs/SECURITY.md) and [code of conduct](docs/CODE_OF_CONDUCT.md)
 
-## 🤝 Contributing
+Use Conventional Commits (`feat:`, `fix:`, `docs:`) and do not manually bump
+release-managed versions. Current issues/discussions track planned work;
+export/import, templates, collections, marketplace, and admin analytics are
+already implemented, not a future roadmap.
 
-We welcome contributions from everyone! Whether you're fixing bugs, adding features, improving docs, or suggesting ideas—your help is appreciated! 🎉
+## License and credits
 
-**Quick Links:**
+Licensed under [MIT](LICENSE). Thanks to our
+[contributors](https://github.com/semi-column/tmdb-discover-plus/graphs/contributors),
+the Stremio community, TMDB, the catalog/data/artwork providers, and
+[ElfHosted](https://elfhosted.com/) for hosting the public stable instance.
 
-- 📖 [Contributing Guidelines](docs/CONTRIBUTING.md)
-- 🐛 [Report a Bug](https://github.com/semi-column/tmdb-discover-plus/issues/new?template=bug_report.yml)
-- ✨ [Request a Feature](https://github.com/semi-column/tmdb-discover-plus/issues/new?template=feature_request.yml)
-- 💬 [Join Discussions](https://github.com/semi-column/tmdb-discover-plus/discussions)
-- 🔒 [Security Policy](docs/SECURITY.md)
-
-### How to Contribute
-
-1. 🍴 Fork the repository
-2. 🔧 Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. 💻 Make your changes and test them
-4. 📝 Commit using [Conventional Commits](https://conventionalcommits.org/) (`git commit -m 'feat: add amazing feature'`)
-5. 🚀 Push to your branch (`git push origin feature/amazing-feature`)
-6. 🎉 Open a Pull Request
-
-**First-time contributor?** Look for issues labeled [`good first issue`](https://github.com/semi-column/tmdb-discover-plus/labels/good%20first%20issue)!
-
----
-
-## 💬 Community & Support
-
-### Get Help
-
-- 💬 **[Discord Server](https://discord.gg/X2N3btmEG2)** - Real-time chat and support
-- 🗣️ **[GitHub Discussions](https://github.com/semi-column/tmdb-discover-plus/discussions)** - Q&A and ideas
-- 🐛 **[Issue Tracker](https://github.com/semi-column/tmdb-discover-plus/issues)** - Bug reports
-- 📖 **[Documentation](https://github.com/semi-column/tmdb-discover-plus#readme)** - This README
-
-### Stay Updated
-
-- ⭐ **Star the repo** to get notifications for new releases
-- 👀 **Watch releases** on GitHub
-- 🐦 Follow development progress in [GitHub Projects](https://github.com/semi-column/tmdb-discover-plus/projects)
-
-### Community Guidelines
-
-We're committed to providing a welcoming and inspiring community for all. Please review our:
-
-- 📜 [Code of Conduct](docs/CODE_OF_CONDUCT.md)
-- 🛡️ [Security Policy](docs/SECURITY.md)
-- 🤝 [Contributing Guidelines](docs/CONTRIBUTING.md)
-
----
-
-## ⭐ Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=semi-column/tmdb-discover-plus&type=Date)](https://star-history.com/#semi-column/tmdb-discover-plus&Date)
-
-<p align="center">
-  <em>Help us grow by starring the repository! ⭐</em>
-</p>
-
----
-
-## 🔗 Related Projects & Ecosystem
-
-### Recommended Stremio Addons
-
-These addons work great with TMDB Discover+:
-
-- **[Torrentio](https://torrentio.strem.fun/)** - Torrent streams
-- **[Comet](https://github.com/g0ldyy/comet)** - Debrid streams
-- **[MediaFusion](https://mediafusion.elfhosted.com/)** - Multiple streaming sources
-
-### Useful Tools
-
-- **[TMDB](https://www.themoviedb.org/)** - Browse and discover content
-- **[RPDB](https://ratingposterdb.com/)** - High-quality posters
-- **[Stremio Community](https://www.reddit.com/r/StremioAddons/)** - Reddit community
-
-> **Note:** TMDB Discover+ is a catalog addon. You need stream addons (like Torrentio) to actually watch content!
-
----
-
-## 📊 Project Stats
-
-<p align="center">
-  <img src="https://img.shields.io/github/repo-size/semi-column/tmdb-discover-plus?style=flat-square&label=Repo%20Size" alt="Repo Size" />
-  <img src="https://img.shields.io/github/languages/top/semi-column/tmdb-discover-plus?style=flat-square" alt="Top Language" />
-  <img src="https://img.shields.io/github/commit-activity/m/semi-column/tmdb-discover-plus?style=flat-square&label=Commit%20Activity" alt="Commit Activity" />
-  <img src="https://img.shields.io/github/last-commit/semi-column/tmdb-discover-plus?style=flat-square&label=Last%20Commit" alt="Last Commit" />
-</p>
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
----
-
-## ⚠️ Disclaimer
-
-This project is **not affiliated with, endorsed by, or sponsored by** The Movie Database (TMDB) or Stremio.
-
-- All product names, logos, and brands are property of their respective owners
-- This addon uses the TMDB API for metadata but is an independent, community-driven project
-- Users are responsible for complying with TMDB's Terms of Service and API usage guidelines
-- The developers assume no responsibility for any misuse of this software or violation of third-party terms of service
-- This addon provides catalog discovery only—streaming content depends on your other Stremio addons
-
-**Use responsibly and respect content creators!**
-
----
-
-## 🙏 Credits & Acknowledgments
-
-Built with amazing open-source technologies and services:
-
-- **[TMDB](https://www.themoviedb.org/)** - The Movie Database API for comprehensive metadata
-- **[Stremio](https://www.stremio.com/)** - The media center platform that makes it all possible
-- **[Lucide](https://lucide.dev/)** - Beautiful, consistent icons
-- **[ElfHosted](https://elfhosted.com/)** - Reliable hosting for the stable instance
-- **[RPDB](https://ratingposterdb.com/)** - High-quality posters and ratings
-
-Special thanks to:
-
-- All our [contributors](https://github.com/semi-column/tmdb-discover-plus/graphs/contributors) who help improve this project
-- The Stremio community for their support and feedback
-- Everyone who has starred, shared, or sponsored this project
-
-Made possible by the open-source community! ❤️
-
----
-
-<p align="center">
-  Made with ❤️ by the TMDB Discover+ community
-</p>
+TMDB Discover+ is independent and is not affiliated with or endorsed by TMDB or
+Stremio. Respect provider terms, API limits, and content creators. This addon
+provides discovery/metadata; playback depends on other addons.

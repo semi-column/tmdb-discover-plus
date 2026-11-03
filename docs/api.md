@@ -12,7 +12,16 @@ All endpoints are served from the Express server. Rate limits are per IP address
 
 ### POST `/api/auth/login`
 
-Validates a TMDB API key and returns a JWT session token.
+Validates a TMDB API key and returns a JWT session token, the selected
+configuration, and safe configuration summaries. Decrypted API keys are not
+returned.
+
+Confirmed invalid keys return `401` with `code: INVALID_API_KEY`.
+When associated saved configurations exist, login/verification also return
+`recoveryConfigs` for export-only recovery. These contain catalog/preferences
+data, not API keys; they do not grant editing or addon access. Temporary TMDB
+verification failures return `503`, not an invalid-key verdict. A valid JWT
+does not bypass validation of a subsequently rejected TMDB key.
 
 **Request:**
 
@@ -148,6 +157,16 @@ Delete a config.
 
 ## Reference Data
 
+`/api/reference-data` requires both bearer authentication and TMDB API-key
+resolution (`requireAuth + resolveApiKey`).
+
+Collection lookups also require `requireAuth + resolveApiKey`:
+
+| Method | Path                     | Purpose                 |
+| ------ | ------------------------ | ----------------------- |
+| GET    | `/api/search/collection` | Search TMDB collections |
+| GET    | `/api/collection/:id`    | Collection details      |
+
 Batch endpoint for all reference data (cached 7 days server-side):
 
 | Method | Path                  | Rate Limit | Auth        |
@@ -245,7 +264,70 @@ Live preview of discover results during catalog configuration.
 
 ---
 
+## Source-specific APIs
+
+All routes below require bearer authentication (`requireAuth`). Source
+implementations determine additional credentials; not every route uses TMDB
+`resolveApiKey`. Preview request/response shapes are source-specific.
+
+| Method | Path                           |
+| ------ | ------------------------------ |
+| POST   | `/api/imdb/preview`            |
+| GET    | `/api/imdb/search`             |
+| GET    | `/api/imdb/list/:id/validate`  |
+| GET    | `/api/imdb/search/people`      |
+| GET    | `/api/imdb/search/companies`   |
+| GET    | `/api/imdb/search/suggestions` |
+| POST   | `/api/anilist/preview`         |
+| GET    | `/api/anilist/studios`         |
+| POST   | `/api/mal/preview`             |
+| POST   | `/api/kitsu/preview`           |
+| POST   | `/api/simkl/preview`           |
+
+## Source credentials
+
+| Method | Path                      | Auth                          |
+| ------ | ------------------------- | ----------------------------- |
+| POST   | `/api/source-key`         | `requireAuth + resolveApiKey` |
+| GET    | `/api/source-keys`        | `requireAuth + resolveApiKey` |
+| POST   | `/api/validate-mal-key`   | `requireAuth`                 |
+| POST   | `/api/validate-simkl-key` | `requireAuth`                 |
+| POST   | `/api/validate-tvdb-key`  | `requireAuth`                 |
+
+Source-key storage accepts MAL and Simkl credentials. An instance can also
+supply `MAL_CLIENT_ID` or `SIMKL_CLIENT_ID`. TVDB artwork credentials use the
+authenticated configuration flow, not a TVDB environment variable.
+See [environment settings](environment.md) for instance-level source options.
+
+## Marketplace
+
+| Method | Path                                | Auth            |
+| ------ | ----------------------------------- | --------------- |
+| GET    | `/api/marketplace/search`           | Optional bearer |
+| GET    | `/api/marketplace/:id`              | Optional bearer |
+| POST   | `/api/marketplace/reconcile`        | `requireAuth`   |
+| GET    | `/api/marketplace/reconcile/status` | `requireAuth`   |
+| POST   | `/api/marketplace/publish`          | `requireAuth`   |
+| POST   | `/api/marketplace/:id/unpublish`    | `requireAuth`   |
+| POST   | `/api/marketplace/:id/install`      | `requireAuth`   |
+| POST   | `/api/marketplace/:id/like`         | `requireAuth`   |
+| DELETE | `/api/marketplace/:id/like`         | `requireAuth`   |
+
+Authenticated operations also enforce their applicable ownership/configuration
+checks; a valid token alone is not permission to change another user's catalog.
+
 ## Stremio Addon Protocol
+
+The configured manifest is generated from saved catalogs, sources, types and
+protocol extras, not a fixed TMDB-only catalog list. The root
+`GET /manifest.json` is a configuration entry point with no advertised resources
+or content types. Install a configured `/:userId/manifest.json`.
+
+Configured addon requests need no bearer header, but the saved configuration's
+TMDB key must remain valid. Confirmed invalid keys produce `401 INVALID_API_KEY`
+before serving cached successful content. Bare `/catalog/...` and `/meta/...`
+paths return `404 CONFIG_REQUIRED` for the named unsupported routes.
+Other unsupported paths can return an ordinary 404 or be rejected by ingress.
 
 These endpoints implement the [Stremio addon protocol](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/protocol.md). No authentication required — config is resolved from the `userId` path segment.
 
@@ -306,10 +388,10 @@ Rate limit: 1000/min. All responses include ETag headers for caching.
 
 ## Operational
 
-| Method | Path      | Description                                                      |
+| Method | Path | Description |
 | ------ | --------- | ---------------------------------------------------------------- | ------------- |
-| GET    | `/health` | Comprehensive health check (returns 503 during shutdown)         |
-| GET    | `/ready`  | Readiness probe — `{ ready: boolean, cacheWarming: "in_progress" | "complete" }` |
+| GET | `/health` | Runtime diagnostics; 503 while starting or shutting down, 200 for healthy or degraded operation |
+| GET | `/ready` | Readiness probe — `{ ready: boolean, cacheWarming: "in_progress" | "complete" }` |
 
 ---
 
