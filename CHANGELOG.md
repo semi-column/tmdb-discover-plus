@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.13.1...v2.14.0) (2026-11-03)
+
+
+### Features
+
+* add cache analytics and TTL dashboard ([d89f292](https://github.com/semi-column/tmdb-discover-plus/commit/d89f292ed0b217432c79dc284f337da16f873704))
+
+
+### Bug Fixes
+
+* add cache-layer outcomes, history coverage, and backend visibility to caching dashboard ([dd47dcb](https://github.com/semi-column/tmdb-discover-plus/commit/dd47dcbd09184095b797381663e99993707cdaa7))
+* classify homepage and configure requests correctly in dashboard ([cccb060](https://github.com/semi-column/tmdb-discover-plus/commit/cccb06017615f6cdc02b6b7a35e61c2a9c223dcd))
+* reject invalid TMDB keys and support config recovery ([27b43f1](https://github.com/semi-column/tmdb-discover-plus/commit/27b43f1e92ef85c9e163ccfeaaba4479f5daf83d))
+
 ## [2.13.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.13.0...v2.13.1) (2026-11-02)
 
 
