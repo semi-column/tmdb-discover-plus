@@ -1,7 +1,8 @@
 import type { TimeRange } from '../liveQueries.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
 import type { UserConfig } from '../../../types/index.ts';
-import { cacheMetrics } from './cache.ts';
+import { cacheCoverage, cacheDetails, cacheMetrics, cacheReadMetrics } from './cache.ts';
+import { CACHE_READ_LAYERS, type CacheReads, type CacheReadMetrics } from '../../../types/cache.ts';
 import { LATENCY_BUCKETS, latencyBucket } from '../collector.ts';
 import {
   buildHistoryUpstreamOverview,
@@ -58,6 +59,7 @@ function toRequestRow(e: RequestEvent): Row {
     ip_hash: e.ipHash,
     cache_hits: e.cacheHits,
     cache_misses: e.cacheMisses,
+    cache_reads: e.cacheReads ?? null,
     upstream_calls: e.upstreamCalls,
     upstream_ms: e.upstreamMs,
     error_fp: e.errorFp,
@@ -336,11 +338,29 @@ export class MemoryHistory implements HistoryStore {
   async cacheStats(range: TimeRange, filter: RequestFilter, by: 'route' | 'path') {
     const totals = cacheMetrics();
     const groups = new Map<string, ReturnType<typeof cacheMetrics>>();
+    const coverage = cacheCoverage();
+    const reads: CacheReads = {};
     let sampled = false;
     for (const e of this.requests) {
-      if (!this.matches(e, range, filter) || e.cacheHits + e.cacheMisses === 0) continue;
-      const key = e[by];
+      if (!this.matches(e, range, filter)) continue;
+      coverage.retainedRequests++;
+      const ts = new Date(e.ts).toISOString();
+      if (!coverage.oldest || ts < coverage.oldest) coverage.oldest = ts;
+      if (!coverage.newest || ts > coverage.newest) coverage.newest = ts;
       sampled ||= e.weight !== 1;
+      if (e.cacheReads !== undefined) {
+        coverage.detailedRequests++;
+        if (!coverage.detailedOldest || ts < coverage.detailedOldest) coverage.detailedOldest = ts;
+        for (const layer of CACHE_READ_LAYERS) {
+          if (!e.cacheReads[layer]) continue;
+          const row = (reads[layer] ??= cacheReadMetrics());
+          for (const field of Object.keys(row) as Array<keyof CacheReadMetrics>) {
+            row[field] += e.cacheReads[layer][field] * e.weight;
+          }
+        }
+      }
+      if (e.cacheHits + e.cacheMisses === 0) continue;
+      const key = e[by];
       const group = groups.get(key) ?? cacheMetrics();
       groups.set(key, group);
       for (const row of [totals, group]) {
@@ -358,6 +378,8 @@ export class MemoryHistory implements HistoryStore {
     return {
       totals,
       sampled,
+      coverage,
+      details: cacheDetails(reads),
       groups: [...groups]
         .map(([key, row]) => ({ key, ...row }))
         .sort(

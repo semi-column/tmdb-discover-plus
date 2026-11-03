@@ -86,6 +86,23 @@ function newHistory(maxEvents = 100) {
 }
 
 describe('MemoryHistory', () => {
+  it('uses retained timestamp bounds, not insertion order or the requested window', async () => {
+    const history = newHistory(2);
+    await history.insertRequests([
+      request(1, { ts: now - 3000, cacheReads: {} }),
+      request(2, { ts: now - 1000, cacheReads: {} }),
+      request(3, { ts: now - 2000 }),
+    ]);
+    const stats = await history.cacheStats(range, parseRequestFilter({}), 'route');
+    expect(stats.coverage).toEqual({
+      retainedRequests: 2,
+      detailedRequests: 1,
+      oldest: new Date(now - 2000).toISOString(),
+      newest: new Date(now - 1000).toISOString(),
+      detailedOldest: new Date(now - 1000).toISOString(),
+    });
+  });
+
   it('normalizes PostgreSQL route metrics for the dashboard', () => {
     const overview = buildHistoryOverview(
       range,

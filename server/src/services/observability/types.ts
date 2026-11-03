@@ -1,3 +1,5 @@
+import type { CacheReads } from '../../types/cache.ts';
+
 export interface RequestEvent {
   ts: number;
   requestId: string;
@@ -19,6 +21,8 @@ export interface RequestEvent {
   ipHash: string;
   cacheHits: number;
   cacheMisses: number;
+  /** Absent on legacy history; an empty object means new instrumentation saw no reads. */
+  cacheReads?: CacheReads;
   upstreamCalls: number;
   upstreamMs: number;
   errorFp: string;

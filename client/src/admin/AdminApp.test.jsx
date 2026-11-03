@@ -591,6 +591,138 @@ it('shows no-lookup rates as unavailable and preserves custom cache time bounds'
   );
 });
 
+it('distinguishes Redis cache/live counters from retained memory history and legacy detail', async () => {
+  const base = await adminApi.caching();
+  const read = { freshHits: 4, staleHits: 2, misses: 4, cachedErrors: 7, readErrors: 3 };
+  window.location.hash = '/caching?range=7d';
+  adminApi.caching.mockResolvedValue({
+    ...base,
+    analytics: {
+      ...base.analytics,
+      coverage: {
+        retainedRequests: 5,
+        detailedRequests: 3,
+        oldest: requestRow.ts,
+        newest: requestRow.ts,
+        detailedOldest: requestRow.ts,
+      },
+      details: { totals: read, layers: [{ key: 'tmdb_api', ...read }] },
+    },
+    history: {
+      backend: 'memory',
+      cacheBackend: 'redis',
+      liveBackend: 'redis',
+      retentionDays: 7,
+      storage: { memory: { requests: 500, capacity: 3000 } },
+    },
+  });
+  render(<AdminApp />);
+  expect(await screen.findByText('History coverage')).toBeInTheDocument();
+  expect(screen.getByText('memory')).toBeInTheDocument();
+  expect(screen.getAllByText('redis')).toHaveLength(2);
+  expect(screen.getByText(/500 \/ 3,000 request rows/)).toBeInTheDocument();
+  expect(screen.getByText(/5 retained request rows/)).toHaveTextContent(
+    '3 have detailed cache instrumentation'
+  );
+  expect(
+    screen.getByText(/Selecting a time range does not guarantee complete history/)
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(/2 retained request rows lack layer\/freshness\/error detail/)
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText('Fresh hits', { selector: '.adm-stat-label' }).parentElement
+  ).toHaveTextContent('20.00% of 20 detailed read attempts');
+  expect(
+    screen.getByText('Stale hits', { selector: '.adm-stat-label' }).parentElement
+  ).toHaveTextContent('10.00%');
+  expect(
+    screen.getByText('Read failures', { selector: '.adm-stat-label' }).parentElement
+  ).toHaveTextContent('15.00%');
+  expect(screen.getByText('Lookup hit rate').parentElement).toHaveTextContent('75.00%');
+  const layer = screen.getByText('TMDB API responses').closest('tr');
+  expect(layer).toHaveTextContent('60.00%');
+});
+
+it.each([
+  ['legacy', 0, 'Detailed cache outcomes are unavailable for these records.'],
+  ['no reads', 1, 'No instrumented shared-cache reads in detailed records.'],
+  ['errors only', 1, null],
+])(
+  'renders %s cache history without inventing successful lookups',
+  async (kind, detailedRequests, emptyText) => {
+    const base = await adminApi.caching();
+    const read = {
+      freshHits: 0,
+      staleHits: 0,
+      misses: 0,
+      cachedErrors: kind === 'errors only' ? 1 : 0,
+      readErrors: kind === 'errors only' ? 2 : 0,
+    };
+    window.location.hash = '/caching?range=1h';
+    adminApi.caching.mockResolvedValue({
+      ...base,
+      analytics: {
+        totals: {
+          requests: 0,
+          hits: 0,
+          misses: 0,
+          allHits: 0,
+          mixed: 0,
+          missesOnly: 0,
+          missesWithUpstream: 0,
+        },
+        groups: [],
+        coverage: {
+          retainedRequests: 1,
+          detailedRequests,
+          oldest: requestRow.ts,
+          newest: requestRow.ts,
+          detailedOldest: detailedRequests ? requestRow.ts : null,
+        },
+        details: { totals: read, layers: kind === 'errors only' ? [{ key: 'imdb', ...read }] : [] },
+      },
+      history: {
+        backend: 'postgres',
+        cacheBackend: 'redis',
+        liveBackend: 'redis',
+        retentionDays: 7,
+        storage: { totalBytes: 1024, capBytes: 2048, paused: true },
+        collector: {
+          storagePaused: true,
+          dropped: { requests: 2, storageCap: 3 },
+          failedWrites: { historyRecords: 4 },
+          lastFlushError: 'database unavailable',
+        },
+      },
+    });
+    render(<AdminApp />);
+    expect(await screen.findByText('Cache read outcomes by layer')).toBeInTheDocument();
+    expect(screen.getByText(/history collection is paused by the storage cap/)).toBeInTheDocument();
+    expect(screen.getByText(/not scoped to the selected interval/)).toHaveTextContent(
+      '4 failed history-record writes'
+    );
+    expect(screen.getByText(/Latest collector flush error/)).toHaveTextContent(
+      'database unavailable'
+    );
+    expect(screen.getByText('Lookup hit rate').parentElement).not.toHaveTextContent('0.00%');
+    if (emptyText) expect(screen.getByText(emptyText)).toBeInTheDocument();
+    if (kind === 'legacy') {
+      expect(
+        screen.queryByText('Fresh hits', { selector: '.adm-stat-label' })
+      ).not.toBeInTheDocument();
+    } else if (kind === 'errors only') {
+      expect(
+        screen.getByText('Read failures', { selector: '.adm-stat-label' }).parentElement
+      ).toHaveTextContent('66.67% of 3 detailed read attempts');
+      expect(
+        screen.getByText('Cached errors', { selector: '.adm-stat-label' }).parentElement
+      ).toHaveTextContent('33.33%');
+      expect(screen.getByText('IMDb data / cursors').closest('tr')).not.toHaveTextContent('0.00%');
+    }
+  }
+);
+
 it('starts each page at the top instead of keeping the previous page scroll offset', async () => {
   const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   render(<AdminApp />);

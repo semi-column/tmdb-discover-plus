@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
+import type { CacheReadLayer, CacheReadMetrics, CacheReads } from '../types/cache.ts';
 
 export interface RequestCacheStats {
   hits: number;
@@ -32,6 +33,7 @@ interface RequestStore {
   abortController: AbortController;
   cache: RequestCacheStats;
   obs: RequestObsState;
+  cacheReads: CacheReads;
 }
 
 const asyncLocalStorage = new AsyncLocalStorage<RequestStore>();
@@ -106,8 +108,35 @@ export function getRequestCacheStats(): RequestCacheStats | undefined {
 
 /** Live (mutable) references, safe to hold past the async context, e.g. in res 'finish'. */
 export function getRequestLiveState():
-  { requestId: string; path: string; cache: RequestCacheStats; obs: RequestObsState } | undefined {
+  | {
+      requestId: string;
+      path: string;
+      cache: RequestCacheStats;
+      cacheReads: CacheReads;
+      obs: RequestObsState;
+    }
+  | undefined {
   return asyncLocalStorage.getStore();
+}
+
+export function trackCacheRead(layer: CacheReadLayer, outcome: keyof CacheReadMetrics): void {
+  const store = asyncLocalStorage.getStore();
+  if (!store) return;
+  const row = (store.cacheReads[layer] ??= {
+    freshHits: 0,
+    staleHits: 0,
+    misses: 0,
+    cachedErrors: 0,
+    readErrors: 0,
+  });
+  row[outcome]++;
+  store.cache[
+    outcome === 'freshHits' || outcome === 'staleHits'
+      ? 'hits'
+      : outcome === 'misses'
+        ? 'misses'
+        : 'errors'
+  ]++;
 }
 
 export function trackCacheOperation(op: keyof RequestCacheStats): void {
@@ -134,6 +163,7 @@ export function requestIdMiddleware() {
       startedAt: Date.now(),
       abortController: new AbortController(),
       cache: buildEmptyCacheStats(),
+      cacheReads: {},
       obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
     };
     asyncLocalStorage.run(store, () => {

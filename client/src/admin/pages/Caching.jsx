@@ -1,11 +1,33 @@
 import { adminApi } from '../api.js';
 import { navigate, useAsync } from '../hooks.js';
 import { pickFilters } from '../filters.js';
-import { fmtInt, fmtPct } from '../format.js';
+import { fmtBytes, fmtInt, fmtPct, fmtTime } from '../format.js';
 import { FilterBar } from '../components/FilterBar.jsx';
 import { ErrorNote, Loading, Panel, StatCard } from '../components/ui.jsx';
 
 const fraction = (n, total) => (total ? n / total : null);
+const READ_OUTCOMES = [
+  ['freshHits', 'Fresh hits'],
+  ['staleHits', 'Stale hits'],
+  ['misses', 'Misses'],
+  ['cachedErrors', 'Cached errors'],
+  ['readErrors', 'Read failures'],
+];
+const LAYERS = {
+  addon_response: 'Addon responses',
+  key_validation: 'TMDB key validation',
+  tmdb_api: 'TMDB API responses',
+  tmdb_reference: 'TMDB reference data',
+  seasons: 'Series seasons',
+  artwork: 'Artwork / logos / RPDB',
+  id_lookup: 'ID lookups',
+  imdb: 'IMDb data / cursors',
+  imdb_freshness: 'IMDb freshness markers',
+  anime: 'Anime data / ID mapping',
+  discovery: 'Discovery pagination',
+  other: 'Other shared-cache reads',
+};
+const attempts = (row) => READ_OUTCOMES.reduce((n, [key]) => n + row[key], 0);
 const duration = (seconds) => {
   for (const [unit, size] of [
     ['d', 86400],
@@ -33,6 +55,12 @@ export function Caching({ range, rangeParams = { range }, params = {} }) {
   if (loading && !data) return <Loading />;
   if (!data) return <ErrorNote error={error} />;
   const totals = data.analytics?.totals;
+  const coverage = data.analytics?.coverage;
+  const details = data.analytics?.details;
+  const history = data.history;
+  const storage = history?.storage;
+  const readAttempts = details ? attempts(details.totals) : 0;
+  const collector = history?.collector;
   const lookups = totals ? totals.hits + totals.misses : 0;
   const showRequests = (key) =>
     navigate('requests', {
@@ -51,11 +79,63 @@ export function Caching({ range, rangeParams = { range }, params = {} }) {
         onChange={(next) => navigate('caching', { ...rangeParams, ...next, by })}
       />
       <ErrorNote error={error} />
+      {history && (
+        <Panel title="History coverage">
+          <p>
+            History: <strong>{history.backend || 'unavailable'}</strong> · Application cache:{' '}
+            <strong>{history.cacheBackend}</strong> · Live counters:{' '}
+            <strong>{history.liveBackend}</strong>
+          </p>
+          <p className="adm-muted">
+            Retention: {history.retentionDays} days.
+            {storage?.memory
+              ? ` This process holds ${fmtInt(storage.memory.requests)} / ${fmtInt(storage.memory.capacity)} request rows; history is lost on restart and older rows are evicted at capacity. Redis cache/live counters do not persist these request rows.`
+              : storage
+                ? ` History storage: ${fmtBytes(storage.totalBytes)} / ${storage.capBytes === null ? 'no configured size cap' : fmtBytes(storage.capBytes)}. A size cap can remove older days before retention expires.`
+                : ''}
+          </p>
+          {coverage && (
+            <p className="adm-muted">
+              Selected range and filters contain {fmtInt(coverage.retainedRequests)} retained
+              request rows ({fmtTime(coverage.oldest)} – {fmtTime(coverage.newest)}).{' '}
+              {fmtInt(coverage.detailedRequests)} have detailed cache instrumentation
+              {coverage.detailedOldest ? `, first seen ${fmtTime(coverage.detailedOldest)}` : ''}.
+              These are unweighted stored-row counts, including requests without cache reads.
+            </p>
+          )}
+          <div className="adm-alert">
+            Selecting a time range does not guarantee complete history for that interval. Retention,
+            restarts, sampling, collection gaps, and storage limits can reduce coverage; timestamps
+            describe matching retained records, not continuous collection.
+          </div>
+          {(storage?.paused || collector?.storagePaused) && (
+            <div className="adm-alert adm-tone-warn">
+              Request history collection is paused by the storage cap.
+            </div>
+          )}
+          {collector &&
+            (collector.dropped.requests > 0 ||
+              collector.dropped.storageCap > 0 ||
+              collector.failedWrites.historyRecords > 0) && (
+              <div className="adm-alert adm-tone-warn">
+                This process has dropped {fmtInt(collector.dropped.requests)} buffered request rows,{' '}
+                skipped {fmtInt(collector.dropped.storageCap)} records at the storage cap, and
+                recorded {fmtInt(collector.failedWrites.historyRecords)} failed history-record
+                writes since startup. These counters are not scoped to the selected interval.
+              </div>
+            )}
+          {collector?.lastFlushError && (
+            <div className="adm-alert adm-tone-warn">
+              Latest collector flush error: {collector.lastFlushError}
+            </div>
+          )}
+        </Panel>
+      )}
       <div className="adm-alert">
         Lookup rates count instrumented shared-cache reads, not HTTP requests. One request may have
-        several hits and misses. Stale entries count as hits even if refreshed; cached errors and
-        cache failures are not included. Process-local caches and client/CDN caches are not
-        measured.
+        several hits and misses. The headline hit/miss rates include stale hits but exclude cached
+        errors and read failures; the detailed breakdown below counts those separately.
+        Process-local caches and client/CDN caches are not measured.
       </div>
       {data.sampled && (
         <div className="adm-alert adm-tone-warn">
@@ -111,6 +191,90 @@ export function Caching({ range, rangeParams = { range }, params = {} }) {
             rate. Calls can be unrelated to the miss or include retries; a miss may be served by
             deduplicated work without a new call. All hits does not mean no API calls.
           </p>
+          <Panel title="Cache read outcomes by layer">
+            <p className="adm-muted">
+              Detailed records only; legacy records cannot be backfilled. Each attempt has one
+              outcome. Percentages below use all detailed read attempts, including cached errors and
+              read failures—not the headline hit-plus-miss denominator. Read failures include
+              corrupt entries, not cache write failures.
+            </p>
+            {coverage && coverage.detailedRequests < coverage.retainedRequests && (
+              <div className="adm-alert adm-tone-warn">
+                {fmtInt(coverage.retainedRequests - coverage.detailedRequests)} retained request
+                rows lack layer/freshness/error detail. Their hit/miss counts remain in the headline
+                rates.
+              </div>
+            )}
+            {!coverage || coverage.detailedRequests === 0 ? (
+              <div className="adm-empty">
+                Detailed cache outcomes are unavailable for these records.
+              </div>
+            ) : (
+              <>
+                <div className="adm-stats">
+                  {READ_OUTCOMES.map(([key, label]) => (
+                    <StatCard
+                      key={key}
+                      label={label}
+                      value={fmtInt(details.totals[key])}
+                      sub={`${fmtPct(fraction(details.totals[key], readAttempts))} of ${fmtInt(readAttempts)} detailed read attempts`}
+                    />
+                  ))}
+                </div>
+                <div className="adm-table-wrap">
+                  <table className="adm-table adm-table-stack">
+                    <thead>
+                      <tr>
+                        <th>Cache layer</th>
+                        <th className="num">Read attempts</th>
+                        {READ_OUTCOMES.map(([key, label]) => (
+                          <th key={key} className="num">
+                            {label}
+                          </th>
+                        ))}
+                        <th className="num">Hit % (hits + misses)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {details.layers.map((row) => (
+                        <tr key={row.key}>
+                          <td>{LAYERS[row.key] || row.key}</td>
+                          <td className="num" data-label="Read attempts">
+                            {fmtInt(attempts(row))}
+                          </td>
+                          {READ_OUTCOMES.map(([key, label]) => (
+                            <td key={key} className="num" data-label={label}>
+                              {fmtInt(row[key])}
+                            </td>
+                          ))}
+                          <td className="num" data-label="Hit % (hits + misses)">
+                            {fmtPct(
+                              fraction(
+                                row.freshHits + row.staleHits,
+                                row.freshHits + row.staleHits + row.misses
+                              )
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {readAttempts === 0 && (
+                  <div className="adm-empty">
+                    No instrumented shared-cache reads in detailed records.
+                  </div>
+                )}
+              </>
+            )}
+            <p className="adm-muted">
+              Layers are fixed cache-key families, not API-call categories; no raw keys are
+              retained. Fresh/stale describe the shared cache wrapper's TTL, not whether an HTTP
+              response or every source considers the result fresh. IMDb also uses separate freshness
+              markers. Outcomes are snapshotted when the HTTP response finishes; later background
+              refresh work is not included.
+            </p>
+          </Panel>
           <Panel
             title="Most cache misses"
             actions={

@@ -139,6 +139,7 @@ export function observabilityMiddleware() {
           ipHash: hashIdentifier(getClientIp(req)),
           cacheHits: state?.cache.hits ?? 0,
           cacheMisses: state?.cache.misses ?? 0,
+          cacheReads: state ? structuredClone(state.cacheReads) : undefined,
           upstreamCalls: state?.obs.upstreamCalls ?? 0,
           upstreamMs: state?.obs.upstreamMs ?? 0,
           errorFp: state?.obs.errorFingerprint ?? '',

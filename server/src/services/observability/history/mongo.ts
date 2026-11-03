@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
-import { cacheMetrics } from './cache.ts';
+import { cacheCoverage, cacheDetails, cacheMetrics, cacheReadMetrics } from './cache.ts';
+import { CACHE_READ_LAYERS, type CacheReads } from '../../../types/cache.ts';
 import { createLogger } from '../../../utils/logger.ts';
 import { UserConfig } from '../../../models/UserConfig.ts';
 import { MarketplaceEntryModel } from '../../../models/MarketplaceEntry.ts';
@@ -183,6 +184,7 @@ export class MongoHistory implements HistoryStore {
         ip_hash: e.ipHash,
         cache_hits: e.cacheHits,
         cache_misses: e.cacheMisses,
+        ...(e.cacheReads === undefined ? {} : { cache_reads: e.cacheReads }),
         upstream_calls: e.upstreamCalls,
         upstream_ms: e.upstreamMs,
         error_fp: e.errorFp,
@@ -756,6 +758,7 @@ export class MongoHistory implements HistoryStore {
   async cacheStats(range: TimeRange, filter: RequestFilter, by: 'route' | 'path') {
     const column = by === 'path' ? 'path' : 'route';
     const conditional = (condition: Doc) => ({ $sum: { $cond: [condition, '$weight', 0] } });
+    const hasDetails = { cache_reads: { $exists: true, $ne: null } };
     const sums = {
       requests: { $sum: '$weight' },
       hits: { $sum: { $multiply: ['$cache_hits', '$weight'] } },
@@ -769,20 +772,52 @@ export class MongoHistory implements HistoryStore {
         $and: [{ $gt: ['$cache_misses', 0] }, { $gt: ['$upstream_calls', 0] }],
       }),
     };
+    const detailedRows = this.requestMatch(range, filter);
+    const metricSum = (field: string) => ({
+      $sum: {
+        $multiply: [
+          {
+            $convert: {
+              input: { $ifNull: [`$entries.v.${field}`, 0] },
+              to: 'double',
+              onError: 0,
+              onNull: 0,
+            },
+          },
+          '$weight',
+        ],
+      },
+    });
     const [result] = await this.coll(C.requests)
       .aggregate(
         [
-          {
-            $match: {
-              $and: [
-                this.requestMatch(range, filter),
-                { $expr: { $gt: [{ $add: ['$cache_hits', '$cache_misses'] }, 0] } },
-              ],
-            },
-          },
+          { $match: detailedRows },
           {
             $facet: {
+              coverage: [
+                {
+                  $group: {
+                    _id: null,
+                    retainedRequests: { $sum: 1 },
+                    detailedRequests: {
+                      $sum: { $cond: [{ $ne: [{ $ifNull: ['$cache_reads', null] }, null] }, 1, 0] },
+                    },
+                    oldest: { $min: '$ts' },
+                    newest: { $max: '$ts' },
+                    detailedOldest: {
+                      $min: {
+                        $cond: [{ $ne: [{ $ifNull: ['$cache_reads', null] }, null] }, '$ts', null],
+                      },
+                    },
+                  },
+                },
+              ],
               totals: [
+                {
+                  $match: {
+                    $expr: { $gt: [{ $add: ['$cache_hits', '$cache_misses'] }, 0] },
+                  },
+                },
                 {
                   $group: {
                     _id: null,
@@ -792,9 +827,47 @@ export class MongoHistory implements HistoryStore {
                 },
               ],
               groups: [
+                {
+                  $match: {
+                    $expr: { $gt: [{ $add: ['$cache_hits', '$cache_misses'] }, 0] },
+                  },
+                },
                 { $group: { _id: `$${column}`, ...sums } },
                 { $sort: { misses: -1, requests: -1, _id: 1 } },
                 { $limit: REQUEST_GROUP_LIMIT },
+              ],
+              details: [
+                { $match: hasDetails },
+                {
+                  $project: {
+                    weight: 1,
+                    entries: {
+                      $filter: {
+                        input: {
+                          $cond: [
+                            { $eq: [{ $type: '$cache_reads' }, 'object'] },
+                            { $objectToArray: '$cache_reads' },
+                            [],
+                          ],
+                        },
+                        as: 'entry',
+                        cond: { $in: ['$$entry.k', [...CACHE_READ_LAYERS]] },
+                      },
+                    },
+                  },
+                },
+                { $unwind: '$entries' },
+                {
+                  $group: {
+                    _id: '$entries.k',
+                    freshHits: metricSum('freshHits'),
+                    staleHits: metricSum('staleHits'),
+                    misses: metricSum('misses'),
+                    cachedErrors: metricSum('cachedErrors'),
+                    readErrors: metricSum('readErrors'),
+                  },
+                },
+                { $sort: { misses: -1, _id: 1 } },
               ],
             },
           },
@@ -802,9 +875,16 @@ export class MongoHistory implements HistoryStore {
         AGG_OPTS
       )
       .toArray();
+    const reads: CacheReads = {};
+    for (const row of result?.details ?? []) {
+      if (CACHE_READ_LAYERS.includes(row._id as (typeof CACHE_READ_LAYERS)[number]))
+        reads[row._id as (typeof CACHE_READ_LAYERS)[number]] = cacheReadMetrics(row);
+    }
     return {
       totals: cacheMetrics(result?.totals[0]),
       sampled: Boolean(result?.totals[0]?.sampled),
+      coverage: cacheCoverage(result?.coverage[0]),
+      details: cacheDetails(reads),
       groups: (result?.groups ?? []).map((row: Doc) => ({
         key: String(row._id),
         ...cacheMetrics(row),

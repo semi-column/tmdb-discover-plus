@@ -1,5 +1,6 @@
 import pg from 'pg';
-import { cacheMetrics } from './cache.ts';
+import { cacheCoverage, cacheDetails, cacheMetrics, cacheReadMetrics } from './cache.ts';
+import { CACHE_READ_LAYERS, type CacheReads } from '../../../types/cache.ts';
 import { createLogger } from '../../../utils/logger.ts';
 import { LATENCY_BUCKETS } from '../collector.ts';
 import type { TimeRange } from '../liveQueries.ts';
@@ -133,6 +134,7 @@ ALTER TABLE obs_error_events ADD COLUMN IF NOT EXISTS occurrences bigint NOT NUL
 ALTER TABLE obs_error_events ADD COLUMN IF NOT EXISTS classification text NOT NULL DEFAULT '';
 ALTER TABLE obs_error_groups ADD COLUMN IF NOT EXISTS classification text NOT NULL DEFAULT '';
 ALTER TABLE obs_upstream ADD COLUMN IF NOT EXISTS cancelled boolean NOT NULL DEFAULT false;
+ALTER TABLE obs_requests ADD COLUMN IF NOT EXISTS cache_reads jsonb;
 
 CREATE TABLE IF NOT EXISTS obs_system_samples (
   ts       timestamptz NOT NULL,
@@ -144,7 +146,7 @@ CREATE INDEX IF NOT EXISTS obs_system_samples_ts_idx ON obs_system_samples (ts D
 
 const REQUEST_COLUMNS = `ts, request_id, instance, method, route, path, status, duration_ms, resource,
   source, content_type, catalog_id, user_hash, client, ua, country, colo, ip_hash, cache_hits,
-  cache_misses, upstream_calls, upstream_ms, error_fp, weight`;
+  cache_misses, upstream_calls, upstream_ms, error_fp, weight, cache_reads`;
 
 const CATALOGS_SQL = `CASE WHEN jsonb_typeof(data->'catalogs') = 'array' THEN data->'catalogs' ELSE '[]'::jsonb END`;
 
@@ -303,11 +305,11 @@ export class PostgresHistory implements HistoryStore {
       await this.pool.query(
         `INSERT INTO obs_requests (ts, request_id, instance, method, route, path, status, duration_ms,
            resource, source, content_type, catalog_id, user_hash, client, ua, country, colo, ip_hash,
-           cache_hits, cache_misses, upstream_calls, upstream_ms, error_fp, weight)
+           cache_hits, cache_misses, upstream_calls, upstream_ms, error_fp, weight, cache_reads)
          SELECT * FROM unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[],
            $6::text[], $7::smallint[], $8::int[], $9::text[], $10::text[], $11::text[], $12::text[],
            $13::text[], $14::text[], $15::text[], $16::text[], $17::text[], $18::text[], $19::int[],
-           $20::int[], $21::int[], $22::int[], $23::text[], $24::real[])`,
+           $20::int[], $21::int[], $22::int[], $23::text[], $24::real[], $25::jsonb[])`,
         [
           chunk.map((e) => new Date(e.ts)),
           chunk.map((e) => e.requestId),
@@ -333,6 +335,7 @@ export class PostgresHistory implements HistoryStore {
           chunk.map((e) => e.upstreamMs),
           chunk.map((e) => e.errorFp),
           chunk.map((e) => e.weight),
+          chunk.map((e) => (e.cacheReads === undefined ? null : JSON.stringify(e.cacheReads))),
         ]
       );
     }
@@ -764,6 +767,8 @@ export class PostgresHistory implements HistoryStore {
   async cacheStats(range: TimeRange, filter: RequestFilter, by: 'route' | 'path') {
     const { params, where } = this.requestWhere(range, filter);
     const column = by === 'path' ? 'path' : 'route';
+    params.push([...CACHE_READ_LAYERS]);
+    const layersParam = `$${params.length}::text[]`;
     const sums = `
       SUM(weight)::float AS requests,
       SUM(cache_hits * weight)::float AS hits,
@@ -776,21 +781,54 @@ export class PostgresHistory implements HistoryStore {
       rows: [result],
     } = await this.pool.query(
       `WITH filtered AS MATERIALIZED (
-         SELECT ${column}, cache_hits, cache_misses, upstream_calls, weight::double precision AS weight
-         FROM obs_requests WHERE ${where.join(' AND ')} AND cache_hits + cache_misses > 0
-       ), totals AS (SELECT ${sums}, COALESCE(BOOL_OR(weight <> 1), false) AS sampled FROM filtered),
+         SELECT ts, ${column}, cache_hits, cache_misses, upstream_calls, weight::double precision AS weight,
+           cache_reads
+         FROM obs_requests WHERE ${where.join(' AND ')}
+       ), cache_filtered AS (
+         SELECT * FROM filtered WHERE cache_hits + cache_misses > 0
+       ), totals AS (
+         SELECT ${sums}, COALESCE(BOOL_OR(weight <> 1), false) AS sampled FROM cache_filtered
+       ),
        groups AS (
-         SELECT ${column} AS key, ${sums} FROM filtered GROUP BY ${column}
+         SELECT ${column} AS key, ${sums} FROM cache_filtered GROUP BY ${column}
          ORDER BY misses DESC, requests DESC, key LIMIT ${REQUEST_GROUP_LIMIT}
+       ), coverage AS (
+         SELECT COUNT(*) AS "retainedRequests",
+           COUNT(*) FILTER (WHERE cache_reads IS NOT NULL) AS "detailedRequests",
+           MIN(ts) AS oldest, MAX(ts) AS newest,
+           MIN(ts) FILTER (WHERE cache_reads IS NOT NULL) AS "detailedOldest"
+         FROM filtered
+       ), details AS (
+         SELECT entry.key,
+           SUM(COALESCE(NULLIF(entry.value->>'freshHits', '')::double precision, 0) * weight)::float AS "freshHits",
+           SUM(COALESCE(NULLIF(entry.value->>'staleHits', '')::double precision, 0) * weight)::float AS "staleHits",
+           SUM(COALESCE(NULLIF(entry.value->>'misses', '')::double precision, 0) * weight)::float AS misses,
+           SUM(COALESCE(NULLIF(entry.value->>'cachedErrors', '')::double precision, 0) * weight)::float AS "cachedErrors",
+           SUM(COALESCE(NULLIF(entry.value->>'readErrors', '')::double precision, 0) * weight)::float AS "readErrors"
+         FROM filtered
+         CROSS JOIN LATERAL jsonb_each(
+           CASE WHEN jsonb_typeof(cache_reads) = 'object' THEN cache_reads ELSE '{}'::jsonb END
+         ) AS entry
+         WHERE cache_reads IS NOT NULL AND entry.key = ANY(${layersParam})
+         GROUP BY entry.key
        )
        SELECT row_to_json(totals) AS totals,
-         COALESCE((SELECT json_agg(groups ORDER BY misses DESC, requests DESC, key) FROM groups), '[]'::json) AS groups
-       FROM totals`,
+         COALESCE((SELECT json_agg(groups ORDER BY misses DESC, requests DESC, key) FROM groups), '[]'::json) AS groups,
+         row_to_json(coverage) AS coverage,
+         COALESCE((SELECT json_agg(details ORDER BY misses DESC, key) FROM details), '[]'::json) AS details
+       FROM totals CROSS JOIN coverage`,
       params
     );
+    const reads: CacheReads = {};
+    for (const row of result.details as Array<Record<string, unknown>>) {
+      if (CACHE_READ_LAYERS.includes(row.key as (typeof CACHE_READ_LAYERS)[number]))
+        reads[row.key as (typeof CACHE_READ_LAYERS)[number]] = cacheReadMetrics(row);
+    }
     return {
       totals: cacheMetrics(result.totals),
       sampled: Boolean(result.totals.sampled),
+      coverage: cacheCoverage(result.coverage),
+      details: cacheDetails(reads),
       groups: (result.groups as Record<string, unknown>[]).map((row) => ({
         key: String(row.key),
         ...cacheMetrics(row),

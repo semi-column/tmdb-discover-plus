@@ -342,6 +342,84 @@ for (const backend of ['memory', 'postgres', 'mongo'] as const) {
       expect(result.sampled).toBe(false);
     });
 
+    it('reports retained coverage and weighted read layers without inventing legacy detail', async () => {
+      const read = (overrides = {}) => ({
+        freshHits: 0,
+        staleHits: 0,
+        misses: 0,
+        cachedErrors: 0,
+        readErrors: 0,
+        ...overrides,
+      });
+      await history.insertRequests([
+        request(1, { ts: now - 60_000, cacheHits: 2, cacheMisses: 1, weight: 2 }),
+        request(2, {
+          ts: now - 30_000,
+          cacheHits: 3,
+          cacheMisses: 2,
+          weight: 2,
+          cacheReads: {
+            addon_response: read({ freshHits: 1, staleHits: 1, misses: 1 }),
+            tmdb_api: read({ freshHits: 1, misses: 1, cachedErrors: 2, readErrors: 1 }),
+          },
+        }),
+        request(3, {
+          cacheHits: 0,
+          cacheReads: { artwork: read({ cachedErrors: 3, readErrors: 1 }) },
+        }),
+        request(4, { cacheHits: 0, cacheReads: {} }),
+        request(5, { cacheHits: 0 }),
+        request(6, { ts: range.from - 1, cacheReads: { tmdb_api: read({ misses: 99 }) } }),
+        request(7, { route: '/other', cacheReads: { tmdb_api: read({ misses: 99 }) } }),
+      ]);
+      const result = await history.cacheStats(
+        range,
+        parseRequestFilter({ route: '/catalog' }),
+        'route'
+      );
+      expect(result.coverage).toEqual({
+        retainedRequests: 5,
+        detailedRequests: 3,
+        oldest: new Date(now - 60_000).toISOString(),
+        newest: new Date(now).toISOString(),
+        detailedOldest: new Date(now - 30_000).toISOString(),
+      });
+      expect(result.totals).toMatchObject({ hits: 10, misses: 6, requests: 4 });
+      expect(result.details.totals).toEqual(
+        read({ freshHits: 4, staleHits: 2, misses: 4, cachedErrors: 7, readErrors: 3 })
+      );
+      expect(result.details.layers).toEqual([
+        { key: 'addon_response', ...read({ freshHits: 2, staleHits: 2, misses: 2 }) },
+        { key: 'tmdb_api', ...read({ freshHits: 2, misses: 2, cachedErrors: 4, readErrors: 2 }) },
+        { key: 'artwork', ...read({ cachedErrors: 3, readErrors: 1 }) },
+      ]);
+      const stored = await history.listRequests(
+        range,
+        parseRequestFilter({ requestId: 'r004' }),
+        10
+      );
+      expect(stored.rows[0].cache_reads).toEqual({});
+      const legacy = await history.listRequests(
+        range,
+        parseRequestFilter({ requestId: 'r001' }),
+        10
+      );
+      expect(legacy.rows[0].cache_reads ?? null).toBeNull();
+      const empty = await history.cacheStats(
+        range,
+        parseRequestFilter({ route: '/missing' }),
+        'path'
+      );
+      expect(empty.coverage).toEqual({
+        retainedRequests: 0,
+        detailedRequests: 0,
+        oldest: null,
+        newest: null,
+        detailedOldest: null,
+      });
+      expect(empty.details).toEqual({ totals: read(), layers: [] });
+    });
+
     it('returns null exact percentiles for an empty range', async () => {
       const overview = await history.overview(range, 1000);
       expect(overview.percentilesApproximate).toBe(false);

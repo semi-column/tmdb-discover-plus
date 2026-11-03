@@ -74,6 +74,28 @@ cache failures, process-local caches, and browser/CDN caches are excluded from
 these hit/miss metrics. Sampling produces weighted estimates. Unavailable history
 is shown explicitly rather than as zero activity.
 
+New request-history records also snapshot fresh/stale hits, misses, cached-error
+reads and read failures at HTTP response completion. Fixed cache-key families
+separate addon responses, key validation, TMDB data/reference data, seasons,
+artwork, ID lookups, IMDb data/freshness markers, anime, and pagination; raw cache
+keys are never retained in these details. Each shared-cache read contributes one
+outcome; write failures do not count as read failures. Layer counts are weighted
+like the existing lookup totals, including error-only requests. Detail-card
+percentages use all five outcomes; layer hit rates still use hits plus misses.
+Fresh/stale means the shared wrapper's logical TTL, not end-to-end HTTP/source
+freshness: IMDb additionally checks a separate freshness marker. Refresh work
+starting after response completion is outside the request snapshot.
+
+Legacy rows retain their original hit/miss counts but have no layer/freshness/error
+detail. They are not backfilled as zero reads. Coverage reports unweighted
+matching retained rows, including requests without cache reads, their actual
+oldest/newest timestamps, and the detailed subset's count/oldest timestamp. These
+bounds do not prove continuous capture or complete coverage of the selected range.
+The Caching tab distinguishes the actual request-history backend, application-cache
+driver and live-counter driver, and displays current retention/storage limits and
+collector loss/pause indicators. Redis cache/live storage is not durable request
+history; database history may fall back to bounded process memory.
+
 The read-only TTL inventory comes from the current deployment's shared constants
 and effective IMDb environment overrides, including local/error TTLs and physical
 retention multipliers. It is not a historical snapshot or a cache-content browser.

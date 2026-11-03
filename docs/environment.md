@@ -226,6 +226,13 @@ History initialization can fall back to bounded memory if database history
 tables/indexes cannot be opened; check the dashboard persistence indicator.
 History caps do not delete ordinary application data.
 
+The admin Caching tab reports the actual history, cache and live-counter backends
+separately, retention/storage limits, and matching retained timestamp bounds.
+Selecting `7d` is a query window, not a guarantee of seven days of retained data.
+Layer/freshness/error details start with newly instrumented records; older
+records still contribute to the existing lookup rates, not to detailed counts.
+Redis can be in use for cache and live counters while request history is memory.
+
 For `OBS_REDIS_URL`, use a **separate Redis instance with `noeviction`** to
 avoid app-cache eviction deleting counters or revocations. Different logical
 databases on the same Redis do not isolate eviction. An explicitly configured

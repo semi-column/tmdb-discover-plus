@@ -1,12 +1,14 @@
 import { createLogger } from '../../utils/logger.ts';
 import {
   trackCacheOperation,
+  trackCacheRead,
   isRequestAborted,
   throwIfRequestAborted,
   getRequestSignal,
   awaitWithRequestAbort,
 } from '../../utils/requestContext.ts';
 import { CACHE_ERROR_TTLS, CACHE_STORAGE } from '../../cacheTtls.ts';
+import { cacheReadLayer } from './keys.ts';
 import type {
   ICacheAdapter,
   CacheErrorType,
@@ -103,7 +105,7 @@ export class CacheWrapper {
       const raw = await this.adapter.get(storageKey);
       if (raw === null || raw === undefined) {
         this.stats.misses++;
-        trackCacheOperation('misses');
+        trackCacheRead(cacheReadLayer(key), 'misses');
         log.debug('Cache miss', { key: storageKey.substring(0, 80) });
         return null;
       }
@@ -112,7 +114,7 @@ export class CacheWrapper {
         const entry = raw as CacheWrapperEntry;
         if (typeof entry.__storedAt !== 'number' || typeof entry.__ttl !== 'number') {
           this.stats.corruptedEntries++;
-          trackCacheOperation('errors');
+          trackCacheRead(cacheReadLayer(key), 'readErrors');
           log.warn('Malformed cache wrapper entry, cleaning up', { key: storageKey });
           await this.adapter.del(storageKey).catch((e) =>
             log.debug('Cache del failed during corruption cleanup', {
@@ -144,7 +146,7 @@ export class CacheWrapper {
 
         if (entry.__errorType) {
           this.stats.cachedErrors++;
-          trackCacheOperation('errors');
+          trackCacheRead(cacheReadLayer(key), 'cachedErrors');
           return entry;
         }
 
@@ -154,27 +156,27 @@ export class CacheWrapper {
             if (age < entry.__ttl * CACHE_STORAGE.WRAPPER_STALE_MULTIPLIER) {
               this.stats.hits++;
               this.stats.staleServed++;
-              trackCacheOperation('hits');
+              trackCacheRead(cacheReadLayer(key), 'staleHits');
               return { ...entry, __isStale: true };
             }
             this.stats.misses++;
-            trackCacheOperation('misses');
+            trackCacheRead(cacheReadLayer(key), 'misses');
             return null;
           }
         }
 
         this.stats.hits++;
-        trackCacheOperation('hits');
+        trackCacheRead(cacheReadLayer(key), 'freshHits');
         return entry;
       }
 
       this.stats.hits++;
-      trackCacheOperation('hits');
+      trackCacheRead(cacheReadLayer(key), 'freshHits');
       log.debug('Cache hit (unwrapped)', { key: storageKey.substring(0, 80) });
       return raw as CacheWrapperEntry;
     } catch (err) {
       this.stats.errors++;
-      trackCacheOperation('errors');
+      trackCacheRead(cacheReadLayer(key), 'readErrors');
       const errMsg = (err as Error).message ?? '';
       if (
         errMsg.includes('JSON') ||

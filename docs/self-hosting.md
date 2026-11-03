@@ -149,10 +149,13 @@ Compose file and run `up -d`; do not run `pull` for that local tag.
   to the app. In particular, admin/proxy/observability settings need explicit
   forwarding or an `env_file`. Treat this as a local stack, not a secured
   production quick start.
-- `docker-compose.production.yml` and `Caddyfile` describe a bespoke DuckDNS
-  deployment. They require a separate `imdb-api:latest` image, configure a fixed
+- `docker-compose.production.yml` and `Caddyfile` describe the project's bespoke
+  DuckDNS **nightly** deployment, not ElfHosted production. That VM also runs
+  Redis and a separate `imdb-api` service. The files require an `imdb-api:latest` image, configure a fixed
   hostname and upstreams, and do not provision an application database. They
   are **not** a generic self-hosting or ElfHosted recipe.
+  Redis cache/live counters do not imply database-backed request history; check
+  the Caching tab's actual history backend and retained coverage.
 - There is no `docker-compose.dev.yml`; use the [development commands](../README.md#development).
 
 Use a distinct Compose project/directory if another instance is already running.

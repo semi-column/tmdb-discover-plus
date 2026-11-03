@@ -46,6 +46,7 @@ import {
 } from '../services/observability/history/types.ts';
 import type { TailItem } from '../services/observability/types.ts';
 import { cachePolicy } from '../services/observability/cachePolicy.ts';
+import { getCacheStatus } from '../services/cache/index.ts';
 
 const log = createLogger('admin');
 const router = Router();
@@ -308,9 +309,21 @@ router.get(
     if (by !== 'route' && by !== 'path') throw new RangeError('by must be route or path');
     const filter = parseRequestFilter(req.query);
     const history = getHistory();
-    const analytics = history ? await history.cacheStats(range, filter, by) : null;
+    const [analytics, storage, live] = await Promise.all([
+      history ? history.cacheStats(range, filter, by) : null,
+      history ? history.storageInfo() : null,
+      getLiveStore(),
+    ]);
     return {
       analytics,
+      history: {
+        backend: history?.kind ?? null,
+        cacheBackend: getCacheStatus().driver,
+        liveBackend: live.driver,
+        retentionDays: config.observability.retentionDays,
+        storage,
+        collector: getCollectorStats(),
+      },
       historyAvailable: Boolean(history),
       sampled: analytics?.sampled ?? false,
       by,

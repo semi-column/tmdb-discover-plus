@@ -85,6 +85,12 @@ describe('admin routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.analytics).toBeNull();
     expect(res.body.historyAvailable).toBe(false);
+    expect(res.body.history).toMatchObject({
+      backend: null,
+      cacheBackend: 'none',
+      liveBackend: 'memory',
+      storage: null,
+    });
     expect(res.body.ttls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'TMDB_API_KEY_STATUS', seconds: 60 }),

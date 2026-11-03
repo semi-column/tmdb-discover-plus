@@ -6,6 +6,30 @@ export interface ICacheAdapter {
   getStats?(): Record<string, unknown>;
 }
 
+export const CACHE_READ_LAYERS = [
+  'addon_response',
+  'key_validation',
+  'tmdb_api',
+  'tmdb_reference',
+  'seasons',
+  'artwork',
+  'id_lookup',
+  'imdb',
+  'imdb_freshness',
+  'anime',
+  'discovery',
+  'other',
+] as const;
+export type CacheReadLayer = (typeof CACHE_READ_LAYERS)[number];
+export interface CacheReadMetrics {
+  freshHits: number;
+  staleHits: number;
+  misses: number;
+  cachedErrors: number;
+  readErrors: number;
+}
+export type CacheReads = Partial<Record<CacheReadLayer, CacheReadMetrics>>;
+
 export type CacheErrorType =
   | 'EMPTY_RESULT'
   | 'RATE_LIMITED'
