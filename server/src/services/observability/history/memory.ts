@@ -1,6 +1,7 @@
 import type { TimeRange } from '../liveQueries.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
 import type { UserConfig } from '../../../types/index.ts';
+import { cacheMetrics } from './cache.ts';
 import { LATENCY_BUCKETS, latencyBucket } from '../collector.ts';
 import {
   buildHistoryUpstreamOverview,
@@ -329,6 +330,40 @@ export class MemoryHistory implements HistoryStore {
           n: e.weight,
         }))
       ),
+    };
+  }
+
+  async cacheStats(range: TimeRange, filter: RequestFilter, by: 'route' | 'path') {
+    const totals = cacheMetrics();
+    const groups = new Map<string, ReturnType<typeof cacheMetrics>>();
+    let sampled = false;
+    for (const e of this.requests) {
+      if (!this.matches(e, range, filter) || e.cacheHits + e.cacheMisses === 0) continue;
+      const key = e[by];
+      sampled ||= e.weight !== 1;
+      const group = groups.get(key) ?? cacheMetrics();
+      groups.set(key, group);
+      for (const row of [totals, group]) {
+        row.requests += e.weight;
+        row.hits += e.cacheHits * e.weight;
+        row.misses += e.cacheMisses * e.weight;
+        if (e.cacheMisses === 0) row.allHits += e.weight;
+        else {
+          if (e.cacheHits > 0) row.mixed += e.weight;
+          else row.missesOnly += e.weight;
+          if (e.upstreamCalls > 0) row.missesWithUpstream += e.weight;
+        }
+      }
+    }
+    return {
+      totals,
+      sampled,
+      groups: [...groups]
+        .map(([key, row]) => ({ key, ...row }))
+        .sort(
+          (a, b) => b.misses - a.misses || b.requests - a.requests || a.key.localeCompare(b.key)
+        )
+        .slice(0, REQUEST_GROUP_LIMIT),
     };
   }
 

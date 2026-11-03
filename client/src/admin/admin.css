@@ -97,7 +97,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
 }
-.adm-nav-section:first-child {
+.adm-nav-links > div:first-child > .adm-nav-section {
   padding-top: 0;
 }
 .adm-nav-links a {
@@ -113,9 +113,6 @@ body {
 }
 .adm-nav-links a.active svg {
   opacity: 1;
-}
-.adm-nav-links > div:nth-child(7) {
-  margin-top: 20px;
 }
 .adm-nav a.adm-builder-link {
   display: flex;

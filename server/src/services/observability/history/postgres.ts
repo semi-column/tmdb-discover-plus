@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { cacheMetrics } from './cache.ts';
 import { createLogger } from '../../../utils/logger.ts';
 import { LATENCY_BUCKETS } from '../collector.ts';
 import type { TimeRange } from '../liveQueries.ts';
@@ -757,6 +758,43 @@ export class PostgresHistory implements HistoryStore {
           n: Number(p.n),
         }))
       ),
+    };
+  }
+
+  async cacheStats(range: TimeRange, filter: RequestFilter, by: 'route' | 'path') {
+    const { params, where } = this.requestWhere(range, filter);
+    const column = by === 'path' ? 'path' : 'route';
+    const sums = `
+      SUM(weight)::float AS requests,
+      SUM(cache_hits * weight)::float AS hits,
+      SUM(cache_misses * weight)::float AS misses,
+      COALESCE(SUM(weight) FILTER (WHERE cache_misses = 0), 0)::float AS "allHits",
+      COALESCE(SUM(weight) FILTER (WHERE cache_hits > 0 AND cache_misses > 0), 0)::float AS mixed,
+      COALESCE(SUM(weight) FILTER (WHERE cache_hits = 0 AND cache_misses > 0), 0)::float AS "missesOnly",
+      COALESCE(SUM(weight) FILTER (WHERE cache_misses > 0 AND upstream_calls > 0), 0)::float AS "missesWithUpstream"`;
+    const {
+      rows: [result],
+    } = await this.pool.query(
+      `WITH filtered AS MATERIALIZED (
+         SELECT ${column}, cache_hits, cache_misses, upstream_calls, weight::double precision AS weight
+         FROM obs_requests WHERE ${where.join(' AND ')} AND cache_hits + cache_misses > 0
+       ), totals AS (SELECT ${sums}, COALESCE(BOOL_OR(weight <> 1), false) AS sampled FROM filtered),
+       groups AS (
+         SELECT ${column} AS key, ${sums} FROM filtered GROUP BY ${column}
+         ORDER BY misses DESC, requests DESC, key LIMIT ${REQUEST_GROUP_LIMIT}
+       )
+       SELECT row_to_json(totals) AS totals,
+         COALESCE((SELECT json_agg(groups ORDER BY misses DESC, requests DESC, key) FROM groups), '[]'::json) AS groups
+       FROM totals`,
+      params
+    );
+    return {
+      totals: cacheMetrics(result.totals),
+      sampled: Boolean(result.totals.sampled),
+      groups: (result.groups as Record<string, unknown>[]).map((row) => ({
+        key: String(row.key),
+        ...cacheMetrics(row),
+      })),
     };
   }
 

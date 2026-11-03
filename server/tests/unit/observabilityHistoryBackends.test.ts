@@ -274,6 +274,74 @@ for (const backend of ['memory', 'postgres', 'mongo'] as const) {
       expect((await history.listRequests(range, parseRequestFilter({}), 10)).total).toBe(2);
     });
 
+    it('separates cache lookups, request outcomes and miss/upstream correlation', async () => {
+      await history.insertRequests([
+        request(1, { route: '/meta', cacheHits: 3, cacheMisses: 0, upstreamCalls: 1, weight: 2 }),
+        request(2, { route: '/meta', cacheHits: 1, cacheMisses: 2, upstreamCalls: 1 }),
+        request(3, {
+          route: '/catalog',
+          path: '/catalog/other.json',
+          cacheHits: 0,
+          cacheMisses: 4,
+          upstreamCalls: 0,
+        }),
+        request(4, { cacheHits: 0, cacheMisses: 0, upstreamCalls: 5 }),
+        request(5, { ts: range.from - 1, cacheMisses: 100 }),
+      ]);
+      const filter = parseRequestFilter({});
+      const result = await history.cacheStats(range, filter, 'route');
+      expect(result.totals).toEqual({
+        requests: 4,
+        hits: 7,
+        misses: 6,
+        allHits: 2,
+        mixed: 1,
+        missesOnly: 1,
+        missesWithUpstream: 1,
+      });
+      expect(result.sampled).toBe(true);
+      expect(result.groups.map((row) => row.key)).toEqual(['/catalog', '/meta']);
+      expect(result.groups[0]).toMatchObject({ requests: 1, misses: 4, missesWithUpstream: 0 });
+      const filtered = await history.cacheStats(
+        range,
+        parseRequestFilter({ route: '/meta' }),
+        'path'
+      );
+      expect(filtered.groups).toHaveLength(1);
+      expect(filtered.groups[0]).toMatchObject({ key: '/catalog/a%_b.json', hits: 7, misses: 2 });
+      expect(filtered.totals.requests).toBe(3);
+      const empty = await history.cacheStats(
+        range,
+        parseRequestFilter({ route: '/absent' }),
+        'route'
+      );
+      expect(empty.groups).toEqual([]);
+      expect(empty.sampled).toBe(false);
+      expect(empty.totals).toEqual({
+        requests: 0,
+        hits: 0,
+        misses: 0,
+        allHits: 0,
+        mixed: 0,
+        missesOnly: 0,
+        missesWithUpstream: 0,
+      });
+    });
+
+    it('keeps cache totals independent of the top-50 group limit', async () => {
+      await history.insertRequests(
+        Array.from({ length: 60 }, (_, i) =>
+          request(i, { route: `/route-${i}`, cacheHits: 0, cacheMisses: i + 1 })
+        )
+      );
+      const result = await history.cacheStats(range, parseRequestFilter({}), 'route');
+      expect(result.groups).toHaveLength(50);
+      expect(result.groups[0]).toMatchObject({ key: '/route-59', misses: 60 });
+      expect(result.totals.requests).toBe(60);
+      expect(result.totals.misses).toBe(1830);
+      expect(result.sampled).toBe(false);
+    });
+
     it('returns null exact percentiles for an empty range', async () => {
       const overview = await history.overview(range, 1000);
       expect(overview.percentilesApproximate).toBe(false);

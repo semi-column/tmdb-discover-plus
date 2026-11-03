@@ -37,6 +37,7 @@ export const adminApi = {
   logout: () => request('/logout', { method: 'POST' }),
   meta: () => request('/meta'),
   overview: (params) => request('/overview', { params }),
+  caching: (params) => request('/caching', { params }),
   requests: (params) => request('/requests', { params }),
   facets: (params) => request('/requests/facets', { params }),
   groups: (params) => request('/requests/groups', { params }),

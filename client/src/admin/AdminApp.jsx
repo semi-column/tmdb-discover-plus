@@ -12,6 +12,7 @@ import { Live } from './pages/Live.jsx';
 import { Errors } from './pages/Errors.jsx';
 import { Upstreams } from './pages/Upstreams.jsx';
 import { Usage } from './pages/Usage.jsx';
+import { Caching } from './pages/Caching.jsx';
 import { System } from './pages/System.jsx';
 import { Diagnostics } from './pages/Diagnostics.jsx';
 import { Security } from './pages/Security.jsx';
@@ -27,6 +28,7 @@ import {
   Network,
   ChartNoAxesCombined,
   Cpu,
+  Database,
   Route,
   ShieldCheck,
   LogOut,
@@ -39,13 +41,14 @@ const PAGES = [
   ['upstreams', 'Dependencies', Network],
   ['live', 'Live tail', Radio],
   ['usage', 'Usage', ChartNoAxesCombined],
+  ['caching', 'Caching', Database],
   ['system', 'System', Cpu],
   ['diagnostics', 'Proxy diagnostics', Route],
   ['security', 'Security', ShieldCheck],
 ];
-const NAV_SECTIONS = { 0: 'Monitor', 5: 'Insights', 6: 'Administration' };
+const NAV_SECTIONS = { overview: 'Monitor', usage: 'Insights', system: 'Administration' };
 /** Pages that share the request filter bar keep its filters when you switch between them. */
-const FILTERED_PAGES = new Set(['overview', 'requests']);
+const FILTERED_PAGES = new Set(['overview', 'requests', 'caching']);
 
 const HISTORY_LABELS = { postgres: 'Postgres', mongo: 'MongoDB', memory: 'in-memory' };
 
@@ -166,6 +169,7 @@ function Dashboard({ onLogout }) {
     errors: <Errors {...pageProps} />,
     upstreams: <Upstreams {...pageProps} />,
     usage: <Usage {...pageProps} />,
+    caching: <Caching {...pageProps} />,
     system: <System {...pageProps} />,
     diagnostics: <Diagnostics {...pageProps} />,
     security: <Security />,
@@ -208,9 +212,9 @@ function Dashboard({ onLogout }) {
           </button>
         </div>
         <div id="adm-nav-links" className="adm-nav-links">
-          {PAGES.map(([id, label, Icon], index) => (
+          {PAGES.map(([id, label, Icon]) => (
             <div key={id}>
-              {NAV_SECTIONS[index] && <div className="adm-nav-section">{NAV_SECTIONS[index]}</div>}
+              {NAV_SECTIONS[id] && <div className="adm-nav-section">{NAV_SECTIONS[id]}</div>}
               <a
                 href={`#/${id}${linkQuery(id)}`}
                 className={page === id ? 'active' : ''}

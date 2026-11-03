@@ -199,6 +199,8 @@ export async function liveOverview(live: LiveStore, range: TimeRange) {
       p95Ms: histPercentile(hist, 0.95),
       p99Ms: histPercentile(hist, 0.99),
       cacheHitRate: cacheOps ? (totals.ch ?? 0) / cacheOps : null,
+      cacheHits: totals.ch ?? 0,
+      cacheMisses: totals.cm ?? 0,
       logErrors: totals.err ?? 0,
       logWarnings: totals.warn ?? 0,
       uniqueUsers: await live.countUsers(userKeys(range)),

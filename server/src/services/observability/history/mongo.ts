@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { cacheMetrics } from './cache.ts';
 import { createLogger } from '../../../utils/logger.ts';
 import { UserConfig } from '../../../models/UserConfig.ts';
 import { MarketplaceEntryModel } from '../../../models/MarketplaceEntry.ts';
@@ -749,6 +750,65 @@ export class MongoHistory implements HistoryStore {
           return { bucket: Number(id.b), key: String(id.k), n: Number(p.n) };
         })
       ),
+    };
+  }
+
+  async cacheStats(range: TimeRange, filter: RequestFilter, by: 'route' | 'path') {
+    const column = by === 'path' ? 'path' : 'route';
+    const conditional = (condition: Doc) => ({ $sum: { $cond: [condition, '$weight', 0] } });
+    const sums = {
+      requests: { $sum: '$weight' },
+      hits: { $sum: { $multiply: ['$cache_hits', '$weight'] } },
+      misses: { $sum: { $multiply: ['$cache_misses', '$weight'] } },
+      allHits: conditional({ $eq: ['$cache_misses', 0] }),
+      mixed: conditional({ $and: [{ $gt: ['$cache_hits', 0] }, { $gt: ['$cache_misses', 0] }] }),
+      missesOnly: conditional({
+        $and: [{ $eq: ['$cache_hits', 0] }, { $gt: ['$cache_misses', 0] }],
+      }),
+      missesWithUpstream: conditional({
+        $and: [{ $gt: ['$cache_misses', 0] }, { $gt: ['$upstream_calls', 0] }],
+      }),
+    };
+    const [result] = await this.coll(C.requests)
+      .aggregate(
+        [
+          {
+            $match: {
+              $and: [
+                this.requestMatch(range, filter),
+                { $expr: { $gt: [{ $add: ['$cache_hits', '$cache_misses'] }, 0] } },
+              ],
+            },
+          },
+          {
+            $facet: {
+              totals: [
+                {
+                  $group: {
+                    _id: null,
+                    ...sums,
+                    sampled: { $max: { $cond: [{ $ne: ['$weight', 1] }, 1, 0] } },
+                  },
+                },
+              ],
+              groups: [
+                { $group: { _id: `$${column}`, ...sums } },
+                { $sort: { misses: -1, requests: -1, _id: 1 } },
+                { $limit: REQUEST_GROUP_LIMIT },
+              ],
+            },
+          },
+        ],
+        AGG_OPTS
+      )
+      .toArray();
+    return {
+      totals: cacheMetrics(result?.totals[0]),
+      sampled: Boolean(result?.totals[0]?.sampled),
+      groups: (result?.groups ?? []).map((row: Doc) => ({
+        key: String(row._id),
+        ...cacheMetrics(row),
+      })),
     };
   }
 

@@ -45,6 +45,7 @@ import {
   type HistoryStore,
 } from '../services/observability/history/types.ts';
 import type { TailItem } from '../services/observability/types.ts';
+import { cachePolicy } from '../services/observability/cachePolicy.ts';
 
 const log = createLogger('admin');
 const router = Router();
@@ -296,6 +297,26 @@ router.get(
       });
       return liveFallback();
     }
+  })
+);
+
+router.get(
+  '/caching',
+  handle(async (req) => {
+    const range = parseRange(req.query, retention());
+    const by = req.query.by ?? 'route';
+    if (by !== 'route' && by !== 'path') throw new RangeError('by must be route or path');
+    const filter = parseRequestFilter(req.query);
+    const history = getHistory();
+    const analytics = history ? await history.cacheStats(range, filter, by) : null;
+    return {
+      analytics,
+      historyAvailable: Boolean(history),
+      sampled: analytics?.sampled ?? false,
+      by,
+      range: { from: range.from, to: range.to },
+      ...cachePolicy(),
+    };
   })
 );
 

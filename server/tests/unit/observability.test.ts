@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import diagnosticsChannel from 'node:diagnostics_channel';
 import { describePath } from '../../src/services/observability/routeInfo.ts';
+import { cachePolicy } from '../../src/services/observability/cachePolicy.ts';
+import { CACHE_TTLS, CACHE_ERROR_TTLS, LOCAL_CACHE_TTLS } from '../../src/cacheTtls.ts';
+import { config } from '../../src/config.ts';
 import {
   computeFingerprint,
   normalizeMessage,
@@ -26,15 +29,58 @@ import {
   previousRangeIfRetained,
 } from '../../src/services/observability/liveQueries.ts';
 
-describe('describePath', () => {
-  it('templates Stremio catalog paths and masks the config id', () => {
-    const info = describePath('/AbC123xyz0/catalog/movie/anilist-abc/skip=20.json');
-    expect(info.route).toBe('/:userId/catalog/:type/:catalogId/:extra.json');
-    expect(info.path).toBe('/:user/catalog/movie/anilist-abc/skip=20.json');
-    expect(info.source).toBe('anilist');
-    expect(info.resource).toBe('catalog');
-    expect(info.userId).toBe('AbC123xyz0');
-    expect(info.path).not.toContain('AbC123xyz0');
+describe('cache TTL inventory', () => {
+  it('reflects effective IMDb overrides rather than hardcoded defaults', async () => {
+    vi.resetModules();
+    vi.stubEnv('IMDB_CACHE_TTL_SEARCH', '1234');
+    try {
+      const { cachePolicy: overriddenPolicy } =
+        await import('../../src/services/observability/cachePolicy.ts');
+      expect(overriddenPolicy().ttls).toContainEqual({
+        scope: 'IMDb (effective runtime values)',
+        name: 'SEARCH',
+        seconds: 1234,
+      });
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
+  describe('describePath', () => {
+    it('templates Stremio catalog paths and masks the config id', () => {
+      const info = describePath('/AbC123xyz0/catalog/movie/anilist-abc/skip=20.json');
+      expect(info.route).toBe('/:userId/catalog/:type/:catalogId/:extra.json');
+      expect(info.path).toBe('/:user/catalog/movie/anilist-abc/skip=20.json');
+      expect(info.source).toBe('anilist');
+      expect(info.resource).toBe('catalog');
+      expect(info.userId).toBe('AbC123xyz0');
+      expect(info.path).not.toContain('AbC123xyz0');
+    });
+
+    it('uses shared constants, millisecond conversion and effective IMDb overrides', () => {
+      const { ttls, lifecycle } = cachePolicy();
+      for (const [name, seconds] of Object.entries(CACHE_TTLS)) {
+        expect(ttls).toContainEqual({ scope: 'Shared cache / HTTP', name, seconds });
+      }
+      for (const [name, seconds] of Object.entries(CACHE_ERROR_TTLS)) {
+        expect(ttls).toContainEqual({ scope: 'Cached errors / negative results', name, seconds });
+      }
+      for (const [name, ms] of Object.entries(LOCAL_CACHE_TTLS)) {
+        expect(ttls).toContainEqual({
+          scope: 'Process-local (not included in lookup metrics)',
+          name,
+          seconds: ms / 1000,
+        });
+      }
+      expect(ttls).toContainEqual({
+        scope: 'IMDb (effective runtime values)',
+        name: 'SEARCH',
+        seconds: config.imdbApi.cacheTtlSearch,
+      });
+      expect(lifecycle.wrapperRetentionMultiplier).toBe(2.5);
+      expect(ttls.every((row) => Number.isFinite(row.seconds) && row.seconds >= 0)).toBe(true);
+    });
   });
 
   it('groups config-less calls from old bare-manifest installs under their own route', () => {

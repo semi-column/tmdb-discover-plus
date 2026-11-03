@@ -174,6 +174,12 @@ export function Overview({ range, rangeParams = { range }, params = {}, meta, on
           sub={`${fmtPct(rate(totals.slow), 1)} ≥ ${fmtMs(slowMs)}`}
         />
         <StatCard
+          label="Cache lookup hit rate"
+          value={fmtPct(totals.cacheHitRate)}
+          onClick={() => navigate('caching', { ...rangeParams, ...filters })}
+          sub={`${fmtInt(totals.cacheHits)} hits · ${fmtInt(totals.cacheMisses)} misses · ${fmtPct(totals.cacheHitRate == null ? null : 1 - totals.cacheHitRate)} miss rate`}
+        />
+        <StatCard
           label="Logged errors"
           value={fmtInt(totals.logErrors)}
           onClick={() => navigate('errors', rangeParams)}

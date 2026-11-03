@@ -36,15 +36,6 @@ export const EXTRA_FILTERS = [
 
 export const notKey = (key) => `not${key[0].toUpperCase()}${key.slice(1)}`;
 
-/** Calls from pre-2.13 bare-manifest installs, and paths no route handles. */
-export const NOISE_ROUTES = [
-  '(unmatched)',
-  '/meta/:type/:id.json',
-  '/meta/:type/:id/:extra.json',
-  '/catalog/:type/:catalogId.json',
-  '/catalog/:type/:catalogId/:extra.json',
-];
-
 const ALL_KEYS = [
   ...DIMENSIONS.flatMap((d) => [d.key, notKey(d.key)]),
   ...EXTRA_FILTERS.map((f) => f.key),
@@ -55,17 +46,6 @@ export const splitList = (value) => (value ? value.split(',').filter(Boolean) : 
 /** The filter subset of the URL params, ready to send to the API. */
 export function pickFilters(params) {
   return Object.fromEntries(ALL_KEYS.filter((k) => params[k]).map((k) => [k, params[k]]));
-}
-
-export function hidesNoise(filters) {
-  const excluded = splitList(filters.notRoute);
-  return NOISE_ROUTES.every((route) => excluded.includes(route));
-}
-
-export function withNoiseHidden(filters, hide) {
-  const others = splitList(filters.notRoute).filter((route) => !NOISE_ROUTES.includes(route));
-  const notRoute = hide ? [...others, ...NOISE_ROUTES] : others;
-  return { ...filters, notRoute: notRoute.join(',') || undefined };
 }
 
 /** Adds an "is" or "is not" condition; "is" replaces, "is not" accumulates. */

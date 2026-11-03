@@ -71,6 +71,30 @@ describe('admin routes', () => {
   it('rejects unauthenticated data access', async () => {
     const res = await request(app).get('/api/admin/meta').set(H);
     expect(res.status).toBe(401);
+    const caching = await request(app).get('/api/admin/caching').set(H);
+    expect(caching.status).toBe(401);
+  });
+
+  it('serves cache policy with explicit unavailable history and rejects invalid grouping', async () => {
+    const { token } = auth.issueSession();
+    const cookie = `${auth.ADMIN_COOKIE}=${token}`;
+    const res = await request(app)
+      .get('/api/admin/caching?range=1h&by=path')
+      .set(H)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.analytics).toBeNull();
+    expect(res.body.historyAvailable).toBe(false);
+    expect(res.body.ttls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'TMDB_API_KEY_STATUS', seconds: 60 }),
+      ])
+    );
+    const invalid = await request(app)
+      .get('/api/admin/caching?by=source')
+      .set(H)
+      .set('Cookie', cookie);
+    expect(invalid.status).toBe(400);
   });
 
   it('logs in, serves data, and revokes on logout', async () => {

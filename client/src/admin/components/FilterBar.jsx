@@ -1,16 +1,7 @@
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { fmtInt } from '../format.js';
-import {
-  DIMENSIONS,
-  EXTRA_FILTERS,
-  NOISE_ROUTES,
-  addFilter,
-  hidesNoise,
-  notKey,
-  splitList,
-  withNoiseHidden,
-} from '../filters.js';
+import { DIMENSIONS, EXTRA_FILTERS, addFilter, notKey, splitList } from '../filters.js';
 
 function Chip({ children, onRemove, label }) {
   return (
@@ -115,7 +106,6 @@ function FilterEditor({ facets, onApply, onCancel }) {
 /** Shared include/exclude filter chips; `onChange` receives the full next filter object. */
 export function FilterBar({ filters, facets, onChange }) {
   const [editing, setEditing] = useState(false);
-  const noiseHidden = hidesNoise(filters);
   const remove = (patch) => onChange({ ...filters, ...patch });
   const chips = [];
 
@@ -129,9 +119,7 @@ export function FilterBar({ filters, facets, onChange }) {
         </Chip>
       );
     }
-    const excluded = splitList(filters[notKey(d.key)]).filter(
-      (value) => !(d.key === 'route' && noiseHidden && NOISE_ROUTES.includes(value))
-    );
+    const excluded = splitList(filters[notKey(d.key)]);
     for (const value of excluded) {
       const label = `${d.label} is not ${value}`;
       chips.push(
@@ -167,14 +155,6 @@ export function FilterBar({ filters, facets, onChange }) {
   return (
     <div className="adm-filterbar" aria-label="Request filters">
       <div className="adm-filterbar-row">
-        <label className="adm-switch" title={NOISE_ROUTES.join('\n')}>
-          <input
-            type="checkbox"
-            checked={noiseHidden}
-            onChange={(e) => onChange(withNoiseHidden(filters, e.target.checked))}
-          />
-          <span>Hide config-less &amp; unmatched</span>
-        </label>
         {chips}
         {!editing && (
           <button type="button" className="adm-btn adm-btn-ghost" onClick={() => setEditing(true)}>
@@ -185,7 +165,7 @@ export function FilterBar({ filters, facets, onChange }) {
           <button
             type="button"
             className="adm-link adm-filterbar-clear"
-            onClick={() => onChange(withNoiseHidden({}, noiseHidden))}
+            onClick={() => onChange({})}
           >
             Clear filters
           </button>

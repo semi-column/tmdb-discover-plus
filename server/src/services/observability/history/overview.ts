@@ -171,6 +171,8 @@ export function buildHistoryOverview(
       p95Ms: percentiles ? percentiles.p95Ms : histPercentile(histogram, 0.95),
       p99Ms: percentiles ? percentiles.p99Ms : histPercentile(histogram, 0.99),
       cacheHitRate: cacheLookups ? totals.cacheHits / cacheLookups : null,
+      cacheHits: totals.cacheHits,
+      cacheMisses: totals.cacheMisses,
       logErrors: logCounts.errors,
       logWarnings: logCounts.warnings,
       userConfigErrors: logCounts.userConfigErrors ?? 0,

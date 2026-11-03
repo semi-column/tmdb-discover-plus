@@ -49,6 +49,30 @@ TMDB Discover+ is a Stremio addon that lets users create custom content catalogs
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Cache observability
+
+The admin Overview shows lookup hit/miss percentages; the Caching tab adds weighted
+request outcomes and the top 50 routes or redacted paths ranked by cache misses.
+Both use the selected time range and request filters across Postgres, MongoDB, and
+memory history. Totals include all matching groups, not only the top 50.
+
+Lookup rates use instrumented shared-cache hits divided by hits plus misses.
+Requests with at least one recorded lookup are classified as all hits, mixed, or
+misses only. "Miss + upstream" counts requests with a miss and a captured outbound
+call; it is correlation, not evidence that the miss caused that call. A request
+can have several lookups, all hits can still include API calls, and a miss may
+share another request's in-flight work. Stale reads count as hits; cached errors,
+cache failures, process-local caches, and browser/CDN caches are excluded from
+these hit/miss metrics. Sampling produces weighted estimates. Unavailable history
+is shown explicitly rather than as zero activity.
+
+The read-only TTL inventory comes from the current deployment's shared constants
+and effective IMDb environment overrides, including local/error TTLs and physical
+retention multipliers. It is not a historical snapshot or a cache-content browser.
+HTTP freshness, logical server freshness, and physical retention are distinct.
+The former configless/unmatched shortcut is removed; ordinary route exclusion
+filters remain supported, including existing bookmarked filters.
+
 ## Request Lifecycle
 
 ### Stremio Catalog Request

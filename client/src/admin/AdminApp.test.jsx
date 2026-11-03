@@ -12,6 +12,7 @@ vi.mock('./api.js', () => ({
     meta: vi.fn(),
     system: vi.fn(),
     overview: vi.fn(),
+    caching: vi.fn(),
     requests: vi.fn(),
     facets: vi.fn(),
     groups: vi.fn(),
@@ -64,7 +65,16 @@ beforeEach(() => {
   adminApi.meta.mockResolvedValue({ capabilities: {} });
   adminApi.system.mockResolvedValue({ instances: [], series: [] });
   adminApi.overview.mockResolvedValue({
-    totals: { requests: 100, errors5xx: 2, slow: 4, logErrors: 10, logWarnings: 20 },
+    totals: {
+      requests: 100,
+      errors5xx: 2,
+      slow: 4,
+      logErrors: 10,
+      logWarnings: 20,
+      cacheHits: 75,
+      cacheMisses: 25,
+      cacheHitRate: 0.75,
+    },
     series: {},
     range: { resolution: 'minute' },
     routes: [],
@@ -73,6 +83,38 @@ beforeEach(() => {
     breakdowns: { resources: [] },
   });
   adminApi.facets.mockResolvedValue({});
+  adminApi.caching.mockResolvedValue({
+    analytics: {
+      totals: {
+        requests: 10,
+        hits: 75,
+        misses: 25,
+        allHits: 5,
+        mixed: 3,
+        missesOnly: 2,
+        missesWithUpstream: 4,
+      },
+      groups: [
+        {
+          key: requestRow.route,
+          requests: 10,
+          hits: 75,
+          misses: 25,
+          allHits: 5,
+          mixed: 3,
+          missesOnly: 2,
+          missesWithUpstream: 4,
+        },
+      ],
+    },
+    ttls: [{ scope: 'Shared cache / HTTP', name: 'META_HEADER', seconds: 86400 }],
+    lifecycle: {
+      wrapperRetentionMultiplier: 2.5,
+      wrapperStaleMultiplier: 2,
+      imdbRetentionMultiplier: 2,
+      imdbAdvancedSearchDivisor: 2,
+    },
+  });
   adminApi.groups.mockResolvedValue({
     by: 'route',
     total: 30,
@@ -465,24 +507,88 @@ it('switches the group-by dimension without losing filters', async () => {
   );
 });
 
-it('hides config-less and unmatched calls everywhere with one toggle and keeps it across pages', async () => {
+it('removes the noise toggle but keeps explicit route exclusions visible and removable', async () => {
+  window.location.hash = '/overview?range=24h&notRoute=(unmatched)';
   render(<AdminApp />);
-  fireEvent.click(await screen.findByLabelText('Hide config-less & unmatched'));
-  await waitFor(() =>
-    expect(adminApi.overview).toHaveBeenLastCalledWith(
-      expect.objectContaining({ notRoute: expect.stringContaining('(unmatched)') })
-    )
-  );
-  const notRoute = adminApi.overview.mock.lastCall[0].notRoute.split(',');
-  expect(notRoute).toEqual(expect.arrayContaining(['/meta/:type/:id.json', '(unmatched)']));
+  await screen.findByRole('button', { name: 'Remove filter: Route is not (unmatched)' });
+  expect(screen.queryByLabelText('Hide config-less & unmatched')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+  await waitFor(() => expect(adminApi.overview).toHaveBeenLastCalledWith({ range: '24h' }));
+});
 
-  fireEvent.click(screen.getByRole('link', { name: 'Requests' }));
+it('links overview cache percentages to caching analytics and preserves filters when drilling', async () => {
+  window.location.hash = '/overview?range=6h&source=tmdb';
+  render(<AdminApp />);
+  const card = await screen.findByRole('button', { name: /Cache lookup hit rate/ });
+  expect(card).toHaveTextContent('75.00%');
+  fireEvent.click(card);
   await waitFor(() =>
-    expect(adminApi.groups).toHaveBeenCalledWith(
-      expect.objectContaining({ notRoute: notRoute.join(',') })
+    expect(adminApi.caching).toHaveBeenCalledWith({ range: '6h', source: 'tmdb', by: 'route' })
+  );
+  expect(await screen.findByText('Miss + upstream')).toBeInTheDocument();
+  expect(screen.getByText('META_HEADER')).toBeInTheDocument();
+  expect(screen.getByText('1d')).toBeInTheDocument();
+  expect(screen.getByRole('cell', { name: '75' })).toHaveAttribute('data-label', 'Hits');
+  fireEvent.change(screen.getByLabelText('Cache grouping'), { target: { value: 'path' } });
+  await waitFor(() =>
+    expect(adminApi.caching).toHaveBeenLastCalledWith({ range: '6h', source: 'tmdb', by: 'path' })
+  );
+  fireEvent.click(screen.getByRole('button', { name: requestRow.route }));
+  await waitFor(() =>
+    expect(adminApi.requests).toHaveBeenCalledWith(
+      expect.objectContaining({ range: '6h', source: 'tmdb', q: requestRow.route })
     )
   );
-  expect(screen.getByLabelText('Hide config-less & unmatched')).toBeChecked();
+});
+
+it('shows unavailable cache history without inventing zero rates and retains the TTL inventory', async () => {
+  window.location.hash = '/caching?range=1h';
+  adminApi.caching.mockResolvedValue({
+    analytics: null,
+    ttls: [{ scope: 'Shared', name: 'DETAIL', seconds: 3600 }],
+  });
+  render(<AdminApp />);
+  expect(await screen.findByText(/Request history is unavailable/)).toBeInTheDocument();
+  expect(screen.getByText('DETAIL')).toBeInTheDocument();
+  expect(screen.queryByText('Lookup hit rate')).not.toBeInTheDocument();
+});
+
+it('shows no-lookup rates as unavailable and preserves custom cache time bounds', async () => {
+  const from = Date.now() - 3_600_000;
+  const to = Date.now();
+  window.location.hash = `/caching?range=custom&from=${from}&to=${to}&source=tmdb`;
+  adminApi.caching.mockResolvedValue({
+    sampled: true,
+    analytics: {
+      totals: {
+        requests: 0,
+        hits: 0,
+        misses: 0,
+        allHits: 0,
+        mixed: 0,
+        missesOnly: 0,
+        missesWithUpstream: 0,
+      },
+      groups: [],
+    },
+    ttls: [],
+  });
+  render(<AdminApp />);
+  expect(
+    await screen.findByText('No recorded cache hits or misses in this range.')
+  ).toBeInTheDocument();
+  expect(screen.getByText('Lookup hit rate').parentElement).not.toHaveTextContent('0.00%');
+  expect(screen.getByText(/weighted estimates from sampled retained requests/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Cache grouping'), { target: { value: 'path' } });
+  await waitFor(() =>
+    expect(adminApi.caching).toHaveBeenLastCalledWith({
+      range: 'custom',
+      from,
+      to,
+      source: 'tmdb',
+      by: 'path',
+    })
+  );
 });
 
 it('starts each page at the top instead of keeping the previous page scroll offset', async () => {

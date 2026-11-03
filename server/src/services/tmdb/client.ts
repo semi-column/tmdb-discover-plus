@@ -28,7 +28,6 @@ const log = createLogger('tmdb:client') as Logger;
 /** TMDB status_code 7 = "Invalid API key"; other 401s can be endpoint permissions, not a bad key. */
 const TMDB_INVALID_API_KEY_STATUS = 7;
 const rejectedApiKeys = createRejectedCredentials();
-const API_KEY_STATUS_TTL_SECONDS = 60;
 
 function apiKeyStatusCacheKey(apiKeyId: string): string {
   return `tmdb:api-key-status:${apiKeyId}`;
@@ -39,7 +38,7 @@ async function cacheApiKeyStatus(apiKey: string, valid: boolean): Promise<void> 
   await getCache().set(
     apiKeyStatusCacheKey(apiKeyId),
     valid ? 'valid' : 'invalid',
-    API_KEY_STATUS_TTL_SECONDS
+    CACHE_TTLS.TMDB_API_KEY_STATUS
   );
 }
 

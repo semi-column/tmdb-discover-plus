@@ -2,6 +2,7 @@ import { hashIdentifier } from '../identity.ts';
 import type { TimeRange } from '../liveQueries.ts';
 import type { ErrorEvent, RequestEvent, SystemSample, UpstreamEvent } from '../types.ts';
 import type { HistoryOverview, HistoryUpstreamOverview } from './overview.ts';
+import type { CacheStats } from './cache.ts';
 
 export type HistoryKind = 'postgres' | 'mongo' | 'memory';
 
@@ -193,6 +194,7 @@ export interface HistoryStore {
     errors: Record<string, unknown>[];
   }>;
   routeStats(range: TimeRange): Promise<Record<string, unknown>[]>;
+  cacheStats(range: TimeRange, filter: RequestFilter, by: 'route' | 'path'): Promise<CacheStats>;
   groupRequests(
     range: TimeRange,
     filter: RequestFilter,
