@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.2](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.1...v2.14.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* recover shared admission from transient Redis failures instead of latching closed ([64da8ff](https://github.com/semi-column/tmdb-discover-plus/commit/64da8ff0f3ca7403f972d44100c3b12c143e8125))
+
 ## [2.14.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.0...v2.14.1) (2026-11-03)
 
 
