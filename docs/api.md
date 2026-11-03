@@ -1,6 +1,7 @@
 # API Reference
 
-All endpoints are served from the Express server. Rate limits are per IP address.
+All endpoints are served from the Express server. API rate limits are per IP;
+configured addon routes also have a separate per-configuration budget.
 
 ## Auth
 
@@ -331,7 +332,12 @@ Other unsupported paths can return an ordinary 404 or be rejected by ingress.
 
 These endpoints implement the [Stremio addon protocol](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/protocol.md). No authentication required — config is resolved from the `userId` path segment.
 
-Rate limit: 1000/min. All responses include ETag headers for caching.
+Rate limit: 1,000/min per existing configuration and 3,000/min per IP, separately
+from the API budget. Invalid/missing IDs have a 30/min per-IP budget checked
+before storage access once exhausted. Catalog/meta cache misses, search, random
+catalogs, manifest enrichment and prefetch also use bounded work admission;
+cache hits bypass that work limit. See [request protection](self-hosting.md#request-protection-and-monitoring).
+Successful responses support ETag caching where implemented.
 
 | Method | Path                                            | Description                                                 |
 | ------ | ----------------------------------------------- | ----------------------------------------------------------- |
@@ -397,12 +403,19 @@ Rate limit: 1000/min. All responses include ETag headers for caching.
 
 ## Rate Limit Summary
 
-| Tier   | Limit        | Applies To                           |
-| ------ | ------------ | ------------------------------------ |
-| Global | 300 req/min  | All routes                           |
-| API    | 300 req/min  | `/api/*` (stacks with global)        |
-| Strict | 60 req/min   | Auth login/verify, config writes     |
-| Addon  | 1000 req/min | `/:userId/*` Stremio protocol routes |
+| Tier             | Limit                                      | Applies To                                                                      |
+| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------- |
+| API/general      | 300 req/min per IP                         | All routes except configured addon resource paths                               |
+| Strict           | 60 req/min per IP                          | Auth login/verify, key validation, config writes and marketplace mutations      |
+| Addon IP         | 3,000 req/min per IP                       | Addon router, including cached responses                                        |
+| Addon user       | 1,000 req/min per existing configuration   | Configured Stremio protocol routes                                              |
+| Invalid addon ID | 30 req/min per IP                          | Missing/invalid configuration IDs; blocks further addon lookups on exhaustion   |
+| Addon work       | 6 active per configuration, 60 per process | Uncached builds; queue at most 100/user and 500/process, wait at most 5 seconds |
+| Monitoring       | 30 req/min per IP                          | `/health` (also subject to API/general budget)                                  |
+
+HTTP 429 responses include `policy`, `retryAfter`, `Retry-After` and
+`Cache-Control: no-store`. Local work-capacity rejections are not cached as
+errors or converted into successful empty responses.
 
 ## Error Responses
 

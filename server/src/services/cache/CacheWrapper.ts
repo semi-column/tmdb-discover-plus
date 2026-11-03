@@ -9,6 +9,7 @@ import {
 } from '../../utils/requestContext.ts';
 import { CACHE_ERROR_TTLS, CACHE_STORAGE } from '../../cacheTtls.ts';
 import { cacheReadLayer } from './keys.ts';
+import { AddonWorkLimitError } from '../../utils/addonWork.ts';
 import type {
   ICacheAdapter,
   CacheErrorType,
@@ -356,6 +357,7 @@ export class CacheWrapper {
         !isRequestAborted() &&
         (error as Error)?.name !== 'AbortError' &&
         (error as { code?: string })?.code !== 'VALIDATION_ERROR' &&
+        !(error instanceof AddonWorkLimitError) &&
         !(error instanceof CachedError)
       ) {
         const errorType = classifyError(error as Error);

@@ -21,6 +21,39 @@ with their own keys; an instance-wide `TMDB_API_KEY` is optional and is not a
 replacement for user authentication. Other catalog sources have additional
 [configuration options](environment.md).
 
+## Request protection and monitoring
+
+Addon resource requests use separate one-minute budgets: 1,000 requests per
+existing configuration and 3,000 per IP, including cached responses. Other
+routes retain the 300-per-IP API budget; sensitive endpoints retain their
+stricter limits. Invalid/missing configuration IDs consume a separate
+30-per-IP budget. Once exhausted, subsequent addon requests from that IP are
+blocked before configuration storage is queried, including valid IDs, until
+the window resets. This deliberately prevents ID rotation from bypassing the
+guard.
+
+Uncached catalog/meta builds, searches, randomized catalogs, manifest enrichment,
+and IMDb prefetch share a work admission limit: 6 active builds per configuration,
+60 per process, at most 100 queued per configuration and 500 per process.
+Queued work waits at most 5 seconds. Fresh cache hits bypass this work limit;
+stale responses remain available while their refresh uses the same budget.
+Capacity rejections return HTTP 429 with `Retry-After: 5` and `Cache-Control:
+no-store`; they are not stored as cached errors or successful empty results.
+
+Rate counters use Redis when configured (logged in-memory fallback if initial
+connection fails); work admission and upstream TMDB throttling are per process.
+Account for worker count before scaling replicas. These are application
+fairness/backpressure controls, not volumetric DDoS protection. Configure
+connection/request limits at your hosting provider or edge proxy, restrict
+direct origin access, and set `TRUST_PROXY` to only trusted proxy hops/networks.
+The repository Caddy configuration is not the public service's edge policy.
+
+In the admin dashboard, monitor 429 counts, upstream latency and cache hit rate.
+Rate-limit responses and logs include a `policy` identifying `api`, `addonIp`,
+`addonUser`, `addonInvalid`, or `addonWork`; work-limit logs include the user ID
+prefix and active/queued counts. Repeated work-limit rejections with low cache
+hits indicate cold-cache pressure rather than just high cached traffic.
+
 ## Docker Compose: PostgreSQL + Redis
 
 Create a dedicated directory. Save the following as `compose.selfhost.yml`.

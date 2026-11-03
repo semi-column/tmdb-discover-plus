@@ -16,6 +16,7 @@ import {
 import { decrypt } from '../../utils/encryption.ts';
 import { filterUnknownGenreMetas } from '../../utils/catalogGenreFilter.ts';
 import { isRequestAborted, throwIfRequestAborted } from '../../utils/requestContext.ts';
+import { acquireAddonWork, sendAddonWorkLimit } from '../../utils/addonWork.ts';
 
 const log = createLogger('addon:mal');
 const PAGE_SIZE = 20;
@@ -61,6 +62,7 @@ export async function handleMalCatalogRequest(
   req: Request
 ): Promise<void> {
   const startTime = Date.now();
+  let releaseWork: (() => void) | undefined;
   try {
     const skip = parseInt(extra.skip, 10) || 0;
     const searchQuery = extra.search || null;
@@ -102,6 +104,7 @@ export async function handleMalCatalogRequest(
         res.json({ metas: [] });
         return;
       }
+      releaseWork = await acquireAddonWork(userId);
       const metas = await fetchWithBackfill(
         (p) => mal.searchAnime(searchQuery, discoveryType, p),
         discoveryType,
@@ -177,6 +180,7 @@ export async function handleMalCatalogRequest(
       return;
     }
 
+    releaseWork = await acquireAddonWork(userId);
     let startPage = page;
     if (randomize) {
       const probe = await mal.discover(effectiveFilters, discoveryType, 1);
@@ -241,11 +245,14 @@ export async function handleMalCatalogRequest(
     });
   } catch (err) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (sendAddonWorkLimit(err, res)) return;
     log.error('MAL catalog error', {
       catalogId,
       error: err,
       durationMs: Date.now() - startTime,
     });
     res.json({ metas: [] });
+  } finally {
+    releaseWork?.();
   }
 }

@@ -221,7 +221,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Global generic rate limit for all routes
+// Addon resource routes have separate IP and validated-user limits.
 app.use(apiRateLimit);
 
 const clientDistPath = path.join(__dirname, '../../client/dist');

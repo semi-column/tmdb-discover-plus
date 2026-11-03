@@ -60,7 +60,16 @@ We take security seriously. If you discover a security vulnerability, please rep
 
 ### Rate Limiting
 
-API endpoints are rate-limited to 100 requests per minute per IP. This can be disabled via `DISABLE_RATE_LIMIT=true` for trusted environments.
+API/general routes are limited to 300 requests per minute per IP, with stricter
+60/min limits on sensitive endpoints. Configured addon resources instead use
+1,000/min per existing configuration and a 3,000/min IP ceiling; invalid IDs
+have a separate 30/min IP budget. Uncached addon work uses bounded per-user and
+per-process admission while cached responses remain available.
+
+`DISABLE_RATE_LIMIT=true` is honored only in development/test, not production;
+work admission remains enabled. These application controls do not replace
+edge-level DDoS protection. Restrict origin access and trust only your actual
+proxies. See [request protection](self-hosting.md#request-protection-and-monitoring).
 
 ### TLS Verification
 

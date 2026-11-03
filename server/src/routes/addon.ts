@@ -50,6 +50,13 @@ import { resolveRequestedMetaId } from '../utils/metaIdResolution.ts';
 import { decrypt } from '../utils/encryption.ts';
 import { filterUnknownGenreMetas } from '../utils/catalogGenreFilter.ts';
 import { buildArtworkOptions, getPlaceholderUrls } from './handlers/sharedHelpers.ts';
+import {
+  addonRateLimit,
+  addonUserRateLimit,
+  invalidAddonRateLimit,
+  checkInvalidAddonRateLimit,
+} from '../utils/rateLimit.ts';
+import { withAddonWork, sendAddonWorkLimit } from '../utils/addonWork.ts';
 
 const log = createLogger('addon');
 
@@ -111,11 +118,15 @@ const STATIC_GENRE_MAP = (() => {
 })();
 
 const router = Router();
+router.use(addonRateLimit, checkInvalidAddonRateLimit);
 router.use(etagMiddleware);
 
 router.param('userId', (req, res, next, value) => {
   if (!isValidUserId(value)) {
-    return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid user ID format');
+    return invalidAddonRateLimit(req, res, (error?: unknown) => {
+      if (error) return next(error);
+      sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid user ID format');
+    });
   }
   next();
 });
@@ -130,6 +141,20 @@ router.param('type', (req, res, next, value) => {
     );
   }
   next();
+});
+
+router.use('/:userId', async (req, res, next) => {
+  try {
+    const config = await getUserConfig(req.params.userId);
+    if (!config) {
+      return invalidAddonRateLimit(req, res, next);
+    }
+    return addonUserRateLimit(req, res, next);
+  } catch (error) {
+    log.error('Addon configuration lookup failed', { error });
+    res.set('Cache-Control', 'no-store');
+    return sendError(res, 503, ErrorCodes.INTERNAL_ERROR, 'Could not load addon configuration');
+  }
 });
 
 router.use('/:userId', async (req, res, next) => {
@@ -180,8 +205,10 @@ router.get('/:userId/manifest.json', async (req, res) => {
     const manifest = buildManifest(config, baseUrl);
 
     if (config) {
-      await enrichManifestWithGenres(manifest, config);
-      await enrichManifestWithExtras(manifest, config);
+      await withAddonWork(userId, async () => {
+        await enrichManifestWithGenres(manifest, config);
+        await enrichManifestWithExtras(manifest, config);
+      });
       throwIfRequestAborted();
 
       if (config.preferences?.shuffleCatalogs) {
@@ -200,6 +227,7 @@ router.get('/:userId/manifest.json', async (req, res) => {
     if (!res.headersSent && !res.destroyed) res.etagJson(manifest, { extra: userId });
   } catch (error) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (sendAddonWorkLimit(error, res)) return;
     if (tmdb.isInvalidApiKeyError(error)) {
       res.set('Cache-Control', 'no-store');
       return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
@@ -599,10 +627,11 @@ async function handleCatalogRequest(
       return mapped;
     };
 
+    const fetchCatalogMetas = () => withAddonWork(userId, computeCatalogMetas);
     const metas = (
       randomize || search
-        ? await computeCatalogMetas()
-        : await cache.wrap(catalogCacheKey, computeCatalogMetas, serverTtl, { allowStale: true })
+        ? await fetchCatalogMetas()
+        : await cache.wrap(catalogCacheKey, fetchCatalogMetas, serverTtl, { allowStale: true })
     ) as StremioMetaPreview[];
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
 
@@ -646,6 +675,7 @@ async function handleCatalogRequest(
     );
   } catch (error) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (sendAddonWorkLimit(error, res)) return;
     if (tmdb.isInvalidApiKeyError(error)) {
       res.set('Cache-Control', 'no-store');
       return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
@@ -809,10 +839,11 @@ async function handleMetaRequest(
       return fullMeta;
     };
 
+    const fetchMeta = () => withAddonWork(userId, computeMeta);
     let meta = null as Partial<StremioMeta> | null;
 
     try {
-      meta = (await cache.wrap(metaCacheKey, computeMeta, CACHE_TTLS.META_HEADER, {
+      meta = (await cache.wrap(metaCacheKey, fetchMeta, CACHE_TTLS.META_HEADER, {
         allowStale: true,
         onCacheRead: (entry) => {
           cacheState = entry?.__errorType
@@ -833,7 +864,7 @@ async function handleMetaRequest(
           cacheError: error.errorType,
         });
         await cache.del(metaCacheKey);
-        meta = await computeMeta();
+        meta = await fetchMeta();
         if (meta) {
           await cache.set(metaCacheKey, meta, CACHE_TTLS.META_HEADER);
         }
@@ -879,6 +910,7 @@ async function handleMetaRequest(
     );
   } catch (error) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (sendAddonWorkLimit(error, res)) return;
     if (tmdb.isInvalidApiKeyError(error)) {
       res.set('Cache-Control', 'no-store');
       return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');

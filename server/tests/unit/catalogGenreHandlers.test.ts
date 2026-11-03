@@ -107,6 +107,8 @@ vi.mock('../../src/services/simkl/index.ts', () => ({
 vi.mock('../../src/config.ts', () => ({
   config: {
     logging: { level: 'error', format: 'text' },
+    cache: { redisUrl: '' },
+    features: { disableRateLimit: true },
     addon: { variant: '' },
     simklApi: { clientId: '' },
   },
@@ -170,6 +172,14 @@ import { MockCacheAdapter } from './helpers/mocks.ts';
 import { AppError, ErrorCodes } from '../../src/utils/AppError.ts';
 import { setLogSink } from '../../src/utils/logger.ts';
 import { requestIdMiddleware, abortRequestContext } from '../../src/utils/requestContext.ts';
+import { acquireAddonWork } from '../../src/utils/addonWork.ts';
+import { config as serverConfig } from '../../src/config.ts';
+import {
+  apiRateLimit,
+  addonRateLimit,
+  addonUserRateLimit,
+  invalidAddonRateLimit,
+} from '../../src/utils/rateLimit.ts';
 
 const genrelessMeta = { id: 'genreless', genres: [] };
 const knownGenreMeta = { id: 'known', genres: ['Drama'] };
@@ -219,6 +229,74 @@ beforeEach(() => {
 });
 
 describe.each(sourceHandlers)('$source catalog handler', ({ source, type, handler }) => {
+  it('serves a cached response even when the user has six active builds', async () => {
+    const releases = await Promise.all(
+      Array.from({ length: 6 }, () => acquireAddonWork('cached-source'))
+    );
+    mockGetUserConfig.mockResolvedValue({
+      preferences: {},
+      catalogs: [{ catalogId: `${source}-cached`, type, filters: {} }],
+    });
+    mockCacheGet.mockResolvedValue({ metas: [knownGenreMeta] });
+    mockCacheWrap.mockResolvedValue([knownGenreMeta]);
+    const res = { json: vi.fn(), set: vi.fn(), etagJson: vi.fn() };
+    try {
+      await handler('cached-source', type, `${source}-cached`, {}, res as never, {} as never);
+      const body = res.etagJson.mock.calls[0]?.[0] ?? res.json.mock.calls[0]?.[0];
+      expect(body.metas).toEqual([knownGenreMeta]);
+      for (const upstream of [
+        mockAnilistBrowse,
+        mockImdbAdvancedSearch,
+        mockKitsuDiscover,
+        mockMalDiscover,
+        mockSimklDiscover,
+      ]) {
+        expect(upstream).not.toHaveBeenCalled();
+      }
+    } finally {
+      releases.forEach((release) => release());
+    }
+  });
+
+  it.each(['cold', 'search', 'random'])(
+    'rejects %s work explicitly when capacity stays full',
+    async (mode) => {
+      vi.useFakeTimers();
+      const releases = await Promise.all(
+        Array.from({ length: 6 }, () => acquireAddonWork('full-source'))
+      );
+      mockGetUserConfig.mockResolvedValue({
+        preferences: {},
+        catalogs: [
+          { catalogId: `${source}-full`, type, filters: { randomize: mode === 'random' } },
+        ],
+      });
+      serverConfig.simklApi.clientId = 'test-simkl-key';
+      const res = { json: vi.fn(), set: vi.fn(), etagJson: vi.fn(), status: vi.fn() };
+      res.status.mockReturnValue(res);
+      try {
+        const pending = handler(
+          'full-source',
+          type,
+          mode === 'search' ? `${source}-search-${type}` : `${source}-full`,
+          mode === 'search' ? { search: 'test' } : {},
+          res as never,
+          {} as never
+        );
+        await vi.advanceTimersByTimeAsync(5000);
+        await pending;
+        expect(res.status).toHaveBeenCalledWith(429);
+        expect(res.set).toHaveBeenCalledWith('Cache-Control', 'no-store');
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ policy: 'addonWork' }));
+        expect(mockCacheSet).not.toHaveBeenCalled();
+      } finally {
+        releases.forEach((release) => release());
+        serverConfig.simklApi.clientId = '';
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it('does not send a second response after cancellation while loading config', async () => {
     mockGetUserConfig.mockImplementationOnce(async () => {
       abortRequestContext();
@@ -268,6 +346,56 @@ describe.each(sourceHandlers)('$source catalog handler', ({ source, type, handle
 });
 
 describe('TMDB catalog route', () => {
+  it('wires burst and invalid-ID protection through the actual addon router', async () => {
+    const ip = '198.51.100.77';
+    serverConfig.features.disableRateLimit = false;
+    mockGetUserConfig.mockResolvedValue({
+      preferences: {},
+      catalogs: [{ catalogId: 'movies', type: 'movie', filters: {} }],
+    });
+    mockCacheWrap.mockResolvedValue([knownGenreMeta]);
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(apiRateLimit);
+    app.use(addonRouter);
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    try {
+      for (let i = 0; i < 12; i++) {
+        const responses = await Promise.all(
+          Array.from({ length: 50 }, () =>
+            request(server).get('/burstuser/catalog/movie/movies.json').set('X-Forwarded-For', ip)
+          )
+        );
+        expect(responses.every((response) => response.status === 200)).toBe(true);
+      }
+      expect(mockTmdbDiscover).not.toHaveBeenCalled();
+      mockGetUserConfig.mockResolvedValue(null);
+      for (let i = 0; i < 30; i++) {
+        const id = i < 10 ? 'x' : `missing${i}`;
+        const response = await request(server)
+          .get(`/${id}/catalog/movie/movies.json`)
+          .set('X-Forwarded-For', ip);
+        expect(response.status).toBe(i < 10 ? 400 : 200);
+      }
+      const lookups = mockGetUserConfig.mock.calls.length;
+      const rejected = await request(server)
+        .get('/missing-next/catalog/movie/movies.json')
+        .set('X-Forwarded-For', ip);
+      expect(rejected.status).toBe(429);
+      expect(rejected.body.policy).toBe('addonInvalid');
+      expect(mockGetUserConfig).toHaveBeenCalledTimes(lookups);
+    } finally {
+      serverConfig.features.disableRateLimit = true;
+      for (const limiter of [apiRateLimit, addonRateLimit, invalidAddonRateLimit])
+        limiter.resetKey(ip);
+      addonUserRateLimit.resetKey('burstuser');
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      );
+    }
+  });
+
   it('rejects invalid keys on manifest and catalog requests', async () => {
     mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
     mockValidateApiKeyCached.mockResolvedValue({

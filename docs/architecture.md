@@ -25,11 +25,11 @@ other sources have their own clients and source-specific throttling/caching.
 │                                                                 │
 │  Middleware Pipeline:                                           │
 │  CORS → JSON → Compression → Security Headers → Request ID     │
-│  → Rate Limit (300/min)                                        │
+│  → Rate Limit (300/IP/min except addon resource paths)          │
 │                                                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐    │
 │  │ Addon Routes │  │  API Routes  │  │   Auth Routes      │    │
-│  │ 1000/min     │  │  300/min     │  │   60/min (strict)  │    │
+│  │ 1000/user/min│  │  300/IP/min  │  │   60/IP/min        │    │
 │  └──────┬───────┘  └──────┬───────┘  └─────────┬──────────┘    │
 │         │                 │                     │               │
 │  ┌──────▼─────────────────▼─────────────────────▼──────────┐   │
@@ -108,12 +108,13 @@ filters remain supported, including existing bookmarked filters.
 ### Stremio Catalog Request
 
 1. **Inbound** — Stremio sends `GET /:userId/catalog/:type/:catalogId/:extra.json`
-2. **Middleware** — CORS, compression, security headers, request ID, rate limit (1000/min for addon routes), ETag
-3. **Config resolution** — `getUserConfig(userId)` loads user config via `ConfigCache` (LRU, 5-min TTL, stampede protection) backed by the storage adapter
+2. **Middleware** — CORS, compression, security headers, request ID, addon IP limit (3,000/min), invalid-ID budget check, ETag. Configured addon resources do not consume the API/general budget.
+3. **Config resolution** — `getUserConfig(userId)` loads user config via `ConfigCache` (LRU, 5-min TTL, stampede protection) backed by the storage adapter. Existing configurations use a 1,000/min per-user budget; missing/invalid IDs consume a 30/min per-IP budget.
 4. **API key decryption** — AES-256-GCM decrypts the stored TMDB API key
 5. **TMDB fetch** via `tmdbFetch()`:
    - Circuit breaker check — if open (≥10 failures in 60s), immediately returns 503
    - Cache check — `CacheWrapper.getEntry()` returns cached response if fresh, or serves stale data while triggering background refresh
+   - Uncached addon builds use bounded admission (6/user and 60/process); hits bypass admission, stale refresh and prefetch consume capacity. Queues are capped at 100/user and 500/process with a 5-second wait; saturation returns an uncacheable 429.
    - Token bucket throttle — `TokenBucket.acquire()` enforces rate limit (~35 req/s)
    - HTTP fetch with up to 3 retries (exponential backoff: 300ms × 2^attempt)
    - 429 handling — respects `Retry-After` header

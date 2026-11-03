@@ -21,6 +21,7 @@ import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { buildArtworkOptions, getPlaceholderUrls } from './sharedHelpers.ts';
 import { isRequestAborted, throwIfRequestAborted } from '../../utils/requestContext.ts';
+import { withAddonWork, sendAddonWorkLimit } from '../../utils/addonWork.ts';
 
 const log = createLogger('addon:imdb');
 const IMDB_PAGE_SIZE = DISPLAY.IMDB_PAGE_SIZE;
@@ -121,9 +122,11 @@ export async function handleImdbCatalogRequest(
         return;
       }
       const imdbTypes = type === 'series' ? ['tvSeries', 'tvMiniSeries'] : ['movie', 'tvMovie'];
-      const searchResult = await imdb.search(searchQuery, imdbTypes, IMDB_PAGE_SIZE);
-      const searchTitles = (searchResult.titles || []) as ImdbTitle[];
-      const metas = await computeEnrichedMetas(searchTitles);
+      const metas = await withAddonWork(userId, async () => {
+        const searchResult = await imdb.search(searchQuery, imdbTypes, IMDB_PAGE_SIZE);
+        const searchTitles = (searchResult.titles || []) as ImdbTitle[];
+        return computeEnrichedMetas(searchTitles);
+      });
       throwIfRequestAborted();
       const baseUrl = normalizeBaseUrl(userConfig.baseUrl || getBaseUrl(req));
       const { posterPlaceholder } = getPlaceholderUrls(baseUrl);
@@ -263,7 +266,7 @@ export async function handleImdbCatalogRequest(
 
     const metas = (await cache.wrap(
       enrichmentCacheKey,
-      () => fetchAndEnrichPage(skip),
+      () => withAddonWork(userId, () => fetchAndEnrichPage(skip)),
       CACHE_TTLS.CATALOG_SERVER_DISCOVER,
       { allowStale: true }
     )) as StremioMetaPreview[];
@@ -308,21 +311,17 @@ export async function handleImdbCatalogRequest(
         extra.genre || ''
       );
       cache
-        .get(nextEnrichmentKey)
-        .then((cached) => {
-          if (cached) return;
-          fetchAndEnrichPage(nextSkip)
-            .then((nextMetas) =>
-              cache
-                .set(nextEnrichmentKey, nextMetas, CACHE_TTLS.CATALOG_SERVER_DISCOVER)
-                .catch((e) => logSwallowedError('addon:imdb-prefetch-cache-set', e))
-            )
-            .catch((e) => logSwallowedError('addon:imdb-speculative-prefetch', e));
-        })
-        .catch(() => {});
+        .wrap(
+          nextEnrichmentKey,
+          () => withAddonWork(userId, () => fetchAndEnrichPage(nextSkip)),
+          CACHE_TTLS.CATALOG_SERVER_DISCOVER,
+          { allowStale: true }
+        )
+        .catch((error) => logSwallowedError('addon:imdb-speculative-prefetch', error));
     }
   } catch (error) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (sendAddonWorkLimit(error, res)) return;
     log.error('IMDb catalog error', {
       catalogId,
       type,

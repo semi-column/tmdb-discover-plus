@@ -17,6 +17,7 @@ import {
 import { decrypt } from '../../utils/encryption.ts';
 import { filterUnknownGenreMetas } from '../../utils/catalogGenreFilter.ts';
 import { isRequestAborted, throwIfRequestAborted } from '../../utils/requestContext.ts';
+import { acquireAddonWork, sendAddonWorkLimit } from '../../utils/addonWork.ts';
 
 const log = createLogger('addon:anilist');
 const PAGE_SIZE = 20;
@@ -63,6 +64,7 @@ export async function handleAnilistCatalogRequest(
   req: Request
 ): Promise<void> {
   const startTime = Date.now();
+  let releaseWork: (() => void) | undefined;
   try {
     const skip = parseInt(extra.skip, 10) || 0;
     const searchQuery = extra.search || null;
@@ -97,6 +99,7 @@ export async function handleAnilistCatalogRequest(
         res.json({ metas: [] });
         return;
       }
+      releaseWork = await acquireAddonWork(userId);
       const metas = await fetchWithBackfill(
         (p) => anilist.search(searchQuery, type, p),
         type,
@@ -169,6 +172,7 @@ export async function handleAnilistCatalogRequest(
       }
     }
 
+    releaseWork = await acquireAddonWork(userId);
     let metas: StremioMetaPreview[];
     const browseFilters = effectiveFilters as unknown as AnilistCatalogFilters;
     if (randomize) {
@@ -228,11 +232,14 @@ export async function handleAnilistCatalogRequest(
     });
   } catch (err) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (sendAddonWorkLimit(err, res)) return;
     log.error('AniList catalog error', {
       catalogId,
       error: err,
       durationMs: Date.now() - startTime,
     });
     res.json({ metas: [] });
+  } finally {
+    releaseWork?.();
   }
 }

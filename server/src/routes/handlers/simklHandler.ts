@@ -17,6 +17,7 @@ import {
 import { decrypt } from '../../utils/encryption.ts';
 import { filterUnknownGenreMetas } from '../../utils/catalogGenreFilter.ts';
 import { isRequestAborted, throwIfRequestAborted } from '../../utils/requestContext.ts';
+import { acquireAddonWork, sendAddonWorkLimit } from '../../utils/addonWork.ts';
 
 const log = createLogger('addon:simkl');
 const PAGE_SIZE = 20;
@@ -80,6 +81,7 @@ export async function handleSimklCatalogRequest(
   req: Request
 ): Promise<void> {
   const startTime = Date.now();
+  let releaseWork: (() => void) | undefined;
   try {
     const skip = parseInt(extra.skip, 10) || 0;
     const searchQuery = extra.search || null;
@@ -117,6 +119,7 @@ export async function handleSimklCatalogRequest(
         res.json({ metas: [] });
         return;
       }
+      releaseWork = await acquireAddonWork(userId);
       const results = await simkl.searchAnime(searchQuery, page, simklApiKey);
       const metas = simkl.batchConvertToStremioMeta(
         results.map((r) => ({ ...r, genres: [], overview: '' }) as simkl.SimklAnime),
@@ -190,6 +193,7 @@ export async function handleSimklCatalogRequest(
       }
     }
 
+    releaseWork = await acquireAddonWork(userId);
     let metas: StremioMetaPreview[];
     if (randomize) {
       const probe = await simkl.discover(filters, type, 1, simklApiKey);
@@ -256,11 +260,14 @@ export async function handleSimklCatalogRequest(
     });
   } catch (err) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (sendAddonWorkLimit(err, res)) return;
     log.error('Simkl catalog error', {
       catalogId,
       error: err,
       durationMs: Date.now() - startTime,
     });
     res.json({ metas: [] });
+  } finally {
+    releaseWork?.();
   }
 }
