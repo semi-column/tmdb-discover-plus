@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.3](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.2...v2.14.3) (2026-11-03)
+
+
+### Bug Fixes
+
+* prevent transient queue timeouts from poisoning Redis admission ([bd499c7](https://github.com/semi-column/tmdb-discover-plus/commit/bd499c7ff178ea4de35b5d0a944f3d45db251734))
+
 ## [2.14.2](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.1...v2.14.2) (2026-11-03)
 
 
