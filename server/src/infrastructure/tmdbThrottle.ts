@@ -207,6 +207,8 @@ return result
 `;
 
 export class RedisTokenBucket {
+  private redis: AdmissionRedis;
+  private options: { maxTokens: number; refillRate: number; maxQueueSize?: number };
   private pending: Promise<unknown> = Promise.resolve();
   private controller = new AbortController();
   private queued = 0;
@@ -221,9 +223,11 @@ export class RedisTokenBucket {
   };
 
   constructor(
-    private redis: AdmissionRedis,
-    private options: { maxTokens: number; refillRate: number; maxQueueSize?: number }
+    redis: AdmissionRedis,
+    options: { maxTokens: number; refillRate: number; maxQueueSize?: number }
   ) {
+    this.redis = redis;
+    this.options = options;
     if (!(options.maxTokens >= 1) || !(options.refillRate > 0)) {
       throw new Error('Shared TMDB budget requires positive capacity and refill rate');
     }

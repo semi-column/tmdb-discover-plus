@@ -191,6 +191,7 @@ Use conventional commit format:
 
 - Use ES modules (`import`/`export`)
 - The backend runs TypeScript directly with Node's type stripping; preserve explicit `.ts` imports and erasable syntax
+- Server typechecking enforces `erasableSyntaxOnly`: use explicit class fields and constructor assignments instead of parameter properties. Test transforms and container builds alone do not verify runtime compatibility.
 - Use `const` by default, `let` when reassignment is needed
 - Avoid `var`
 - Use async/await over raw promises

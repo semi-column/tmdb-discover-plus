@@ -87,11 +87,13 @@ type WorkRelease = () => void | Promise<void>;
 export class RedisAddonWork {
   private waiting = new Map<string, number>();
   private totalWaiting = 0;
+  private redis: AdmissionRedis;
+  private leaseMs: number;
 
-  constructor(
-    private redis: AdmissionRedis,
-    private leaseMs = ADDON_LEASE_MS
-  ) {}
+  constructor(redis: AdmissionRedis, leaseMs = ADDON_LEASE_MS) {
+    this.redis = redis;
+    this.leaseMs = leaseMs;
+  }
 
   async acquire(userId: string, requestSignal = getRequestSignal()): Promise<WorkRelease> {
     const signal = AbortSignal.any([

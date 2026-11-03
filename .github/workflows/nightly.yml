@@ -141,6 +141,9 @@ jobs:
           cd server && npm install
           cd ../client && npm install
 
+      - name: Typecheck server
+        run: npm --prefix server run typecheck
+
       - name: Run server tests
         env:
           PORT: 7000
@@ -201,7 +204,11 @@ jobs:
             "$version" "$DEPLOY_TAG" "${DEPLOY_SHA:0:7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             > server/src/metadata.json
 
-          docker compose -f docker-compose.production.yml up -d --build --remove-orphans
+          if ! docker compose -f docker-compose.production.yml up -d --build --remove-orphans; then
+            docker compose -f docker-compose.production.yml ps
+            docker logs --tail 120 tmdb-discover-plus || true
+            exit 1
+          fi
 
           ok=0
           for i in $(seq 1 45); do
