@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.1](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.0...v2.14.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* cancel background work when admission leases fail ([758fde8](https://github.com/semi-column/tmdb-discover-plus/commit/758fde8c8dc6b12a04619be8bbdfbda5c45c8521))
+* isolate addon rate limits and bound uncached work ([c186179](https://github.com/semi-column/tmdb-discover-plus/commit/c186179b7b452725469e8ba9e9c96c26cadcb5fe))
+* replace studio scraping with the official TMDB API ([758fde8](https://github.com/semi-column/tmdb-discover-plus/commit/758fde8c8dc6b12a04619be8bbdfbda5c45c8521))
+* resolve mixed saved genre IDs and names consistently ([758fde8](https://github.com/semi-column/tmdb-discover-plus/commit/758fde8c8dc6b12a04619be8bbdfbda5c45c8521))
+* respect metadata negative-cache expiry and preserve stale results ([758fde8](https://github.com/semi-column/tmdb-discover-plus/commit/758fde8c8dc6b12a04619be8bbdfbda5c45c8521))
+* retain TMDB error status and report transient metadata failures ([758fde8](https://github.com/semi-column/tmdb-discover-plus/commit/758fde8c8dc6b12a04619be8bbdfbda5c45c8521))
+* share work limits and TMDB throttling across Redis replicas ([758fde8](https://github.com/semi-column/tmdb-discover-plus/commit/758fde8c8dc6b12a04619be8bbdfbda5c45c8521))
+* validate collection selections across saves and imports ([758fde8](https://github.com/semi-column/tmdb-discover-plus/commit/758fde8c8dc6b12a04619be8bbdfbda5c45c8521))
+
 ## [2.14.0](https://github.com/semi-column/tmdb-discover-plus/compare/v2.13.1...v2.14.0) (2026-11-03)
 
 
