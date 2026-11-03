@@ -65,7 +65,21 @@ describe('describePath', () => {
 
   it('collapses unmatched paths to one route', () => {
     expect(describePath('/wp-login.php', null).route).toBe('(unmatched)');
+    expect(describePath('/AbC123xyz0/related/movie/tt0111161.json', null).route).toBe(
+      '(unmatched)'
+    );
   });
+
+  it.each(['/', '/configure'])(
+    'classifies %s even when static middleware or an array route has no string template',
+    (pathname) => {
+      expect(describePath(pathname, null)).toMatchObject({
+        route: pathname,
+        path: pathname,
+        userId: '',
+      });
+    }
+  );
 
   it('redacts search terms including encoded values while preserving pagination', () => {
     for (const extra of [

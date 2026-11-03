@@ -66,6 +66,10 @@ function genericTemplate(pathname: string): string {
 export function describePath(pathname: string, expressRoute?: string | null): RouteInfo {
   const empty = { resource: '', source: '', contentType: '', catalogId: '', userId: '' };
 
+  if (pathname === '/' || pathname === '/configure') {
+    return { ...empty, route: pathname, path: pathname };
+  }
+
   const manifest = MANIFEST_RE.exec(pathname);
   if (manifest && !pathname.startsWith('/api/')) {
     return {
