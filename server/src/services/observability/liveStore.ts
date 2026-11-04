@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { createClient, type RedisClientType } from 'redis';
+import { TIMEOUTS } from '../../constants.ts';
 import { createLogger } from '../../utils/logger.ts';
+import { awaitRedisCommand, redisRecoveryOptions } from '../../utils/redisConnection.ts';
 import type { InstanceInfo, LiveBatch, TailItem } from './types.ts';
 
 const log = createLogger('obs:live');
@@ -44,9 +46,24 @@ export class RedisLiveStore implements LiveStore {
   private emitter = new EventEmitter();
 
   constructor(url: string) {
-    this.client = createClient({ url });
+    this.client = createClient({
+      url,
+      disableOfflineQueue: true,
+      commandOptions: { timeout: TIMEOUTS.REDIS_STARTUP_MS },
+      ...redisRecoveryOptions(),
+    });
     this.client.on('error', (err: Error) => log.warn('Redis error', { error: err.message }));
+    this.client.on('ready', () => log.info('Connected to Redis live store'));
     this.emitter.setMaxListeners(50);
+  }
+
+  get isReady(): boolean {
+    return this.client.isReady;
+  }
+
+  private multi() {
+    if (!this.client.isReady) throw new Error('Observability Redis unavailable');
+    return this.client.multi();
   }
 
   async connect(): Promise<void> {
@@ -54,7 +71,7 @@ export class RedisLiveStore implements LiveStore {
   }
 
   async apply(batch: LiveBatch, hourTtlSec: number): Promise<void> {
-    const multi = this.client.multi();
+    const multi = this.multi();
     for (const [minute, fields] of batch.minutes) {
       const key = `obs:m:${minute}`;
       for (const [field, value] of fields) multi.hIncrBy(key, field, value);
@@ -78,7 +95,7 @@ export class RedisLiveStore implements LiveStore {
       multi.lTrim('obs:tail', 0, TAIL_MAX - 1);
       multi.publish(LIVE_CHANNEL, JSON.stringify(batch.tail));
     }
-    await multi.exec();
+    await awaitRedisCommand(multi.exec());
   }
 
   async readBuckets(kind: 'm' | 'h', from: number, to: number) {
@@ -87,9 +104,11 @@ export class RedisLiveStore implements LiveStore {
     for (let b = from; b <= to; b++) buckets.push(b);
     for (let i = 0; i < buckets.length; i += 200) {
       const chunk = buckets.slice(i, i + 200);
-      const multi = this.client.multi();
+      const multi = this.multi();
       for (const b of chunk) multi.hGetAll(`obs:${kind}:${b}`);
-      const results = (await multi.exec()) as unknown as Array<Record<string, string>>;
+      const results = (await awaitRedisCommand(multi.exec())) as unknown as Array<
+        Record<string, string>
+      >;
       chunk.forEach((b, idx) => {
         const raw = results[idx];
         if (raw && Object.keys(raw).length) out.set(b, toNumbers(raw));
@@ -100,11 +119,13 @@ export class RedisLiveStore implements LiveStore {
 
   async countUsers(keys: string[]): Promise<number> {
     if (!keys.length) return 0;
-    return this.client.pfCount(keys.map((k) => `obs:u:${k}`));
+    return awaitRedisCommand(this.client.pfCount(keys.map((k) => `obs:u:${k}`)));
   }
 
   async readTail(limit: number): Promise<TailItem[]> {
-    const raw = await this.client.lRange('obs:tail', 0, Math.min(limit, TAIL_MAX) - 1);
+    const raw = await awaitRedisCommand(
+      this.client.lRange('obs:tail', 0, Math.min(limit, TAIL_MAX) - 1)
+    );
     return raw.map((item) => JSON.parse(item) as TailItem);
   }
 
@@ -138,48 +159,47 @@ export class RedisLiveStore implements LiveStore {
   }
 
   async heartbeat(instance: string, sample: Record<string, unknown>): Promise<void> {
-    await this.client
-      .multi()
-      .zAdd('obs:instances', { score: Date.now(), value: instance })
-      .set(`obs:instance:${instance}`, JSON.stringify(sample), { EX: 120 })
-      .zRemRangeByScore('obs:instances', 0, Date.now() - 24 * 3600 * 1000)
-      .exec();
+    await awaitRedisCommand(
+      this.multi()
+        .zAdd('obs:instances', { score: Date.now(), value: instance })
+        .set(`obs:instance:${instance}`, JSON.stringify(sample), { EX: 120 })
+        .zRemRangeByScore('obs:instances', 0, Date.now() - 24 * 3600 * 1000)
+        .exec()
+    );
   }
 
   async listInstances(): Promise<InstanceInfo[]> {
-    const entries = await this.client.zRangeWithScores('obs:instances', 0, -1);
+    const entries = await awaitRedisCommand(this.client.zRangeWithScores('obs:instances', 0, -1));
     const out: InstanceInfo[] = [];
     for (const { value, score } of entries) {
       const fresh = Date.now() - score < INSTANCE_STALE_MS;
-      const raw = fresh ? await this.client.get(`obs:instance:${value}`) : null;
+      const raw = fresh ? await awaitRedisCommand(this.client.get(`obs:instance:${value}`)) : null;
       out.push({ instance: value, lastSeen: score, sample: raw ? JSON.parse(raw) : null });
     }
     return out.sort((a, b) => b.lastSeen - a.lastSeen);
   }
 
   async incr(key: string, ttlSec: number): Promise<number> {
-    const [count] = (await this.client
-      .multi()
-      .incr(`obs:${key}`)
-      .expire(`obs:${key}`, ttlSec, 'NX')
-      .exec()) as unknown as [number];
+    const [count] = (await awaitRedisCommand(
+      this.multi().incr(`obs:${key}`).expire(`obs:${key}`, ttlSec, 'NX').exec()
+    )) as unknown as [number];
     return Number(count);
   }
 
   async getCount(key: string): Promise<number> {
-    return Number((await this.client.get(`obs:${key}`)) ?? 0);
+    return Number((await awaitRedisCommand(this.client.get(`obs:${key}`))) ?? 0);
   }
 
   async del(key: string): Promise<void> {
-    await this.client.del(`obs:${key}`);
+    await awaitRedisCommand(this.client.del(`obs:${key}`));
   }
 
   async setFlag(key: string, ttlSec: number): Promise<void> {
-    await this.client.set(`obs:${key}`, '1', { EX: ttlSec });
+    await awaitRedisCommand(this.client.set(`obs:${key}`, '1', { EX: ttlSec }));
   }
 
   async hasFlag(key: string): Promise<boolean> {
-    return (await this.client.exists(`obs:${key}`)) === 1;
+    return (await awaitRedisCommand(this.client.exists(`obs:${key}`))) === 1;
   }
 
   async close(): Promise<void> {

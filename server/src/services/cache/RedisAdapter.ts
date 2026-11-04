@@ -1,5 +1,11 @@
 import { createClient, type RedisClientType } from 'redis';
 import { createLogger } from '../../utils/logger.ts';
+import {
+  awaitRedisCommand,
+  awaitRedisStartup,
+  redisRecoveryOptions,
+} from '../../utils/redisConnection.ts';
+import { TIMEOUTS } from '../../constants.ts';
 import type { ICacheAdapter } from '../../types/index.ts';
 
 const log = createLogger('RedisAdapter');
@@ -8,20 +14,30 @@ export class RedisAdapter implements ICacheAdapter {
   private client: RedisClientType;
 
   constructor(url: string) {
-    this.client = createClient({ url });
+    this.client = createClient({
+      url,
+      disableOfflineQueue: true,
+      commandOptions: { timeout: TIMEOUTS.REDIS_STARTUP_MS },
+      ...redisRecoveryOptions(),
+    });
     this.client.on('error', (err: Error) =>
       log.error('Redis Client Error', { error: err.message })
     );
   }
 
   async connect(): Promise<void> {
-    await this.client.connect();
+    try {
+      await awaitRedisStartup(this.client.connect());
+    } catch (error) {
+      if (this.client.isOpen) this.client.destroy();
+      throw error;
+    }
     log.info('Connected to Redis');
   }
 
   async get(key: string): Promise<unknown | null> {
     try {
-      const val = await this.client.get(key);
+      const val = await awaitRedisCommand(this.client.get(key));
       if (val) {
         return JSON.parse(val);
       }
@@ -35,7 +51,7 @@ export class RedisAdapter implements ICacheAdapter {
   async set(key: string, value: unknown, ttlSeconds: number): Promise<void> {
     try {
       const stringified = JSON.stringify(value);
-      await this.client.set(key, stringified, { EX: ttlSeconds });
+      await awaitRedisCommand(this.client.set(key, stringified, { EX: ttlSeconds }));
     } catch (err) {
       log.warn('Redis set error', { key, error: (err as Error).message });
     }
@@ -43,13 +59,13 @@ export class RedisAdapter implements ICacheAdapter {
 
   async del(key: string): Promise<void> {
     try {
-      await this.client.del(key);
+      await awaitRedisCommand(this.client.del(key));
     } catch (err) {
       log.warn('Redis del error', { key, error: (err as Error).message });
     }
   }
 
   getStats(): Record<string, unknown> {
-    return { driver: 'redis' };
+    return { driver: 'redis', connected: this.client.isReady };
   }
 }

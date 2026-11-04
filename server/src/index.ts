@@ -20,14 +20,21 @@ import {
   observabilityMiddleware,
   initObservability,
   stopObservability,
+  getLiveStoreStatus,
 } from './services/observability/index.ts';
 import { createLogger } from './utils/logger.ts';
 import { getBaseUrl, logSwallowedError } from './utils/helpers.ts';
-import { apiRateLimit } from './utils/rateLimit.ts';
-import { monitoringRateLimit } from './utils/rateLimit.ts';
-import { destroyRateLimitRedis } from './utils/rateLimit.ts';
+import {
+  apiRateLimit,
+  monitoringRateLimit,
+  readinessRateLimit,
+  destroyRateLimitRedis,
+  getRateLimitStatus,
+  rateLimitRedisUnavailable,
+} from './utils/rateLimit.ts';
+import { awaitRedisStartup } from './utils/redisConnection.ts';
 import { createShutdownHandler } from './utils/shutdown.ts';
-import { setRevocationStore, destroySecurity } from './utils/security.ts';
+import { setRevocationStore } from './utils/security.ts';
 import { RedisRevocationStore } from './infrastructure/revocationStore.ts';
 import { warmEssentialCaches } from './infrastructure/cacheWarmer.ts';
 import { destroyTmdbThrottle, getTmdbThrottle } from './infrastructure/tmdbThrottle.ts';
@@ -76,6 +83,7 @@ const serverStatus: {
     warmed: number;
     failed: number;
     skipped?: boolean;
+    skippedTasks?: number;
     elapsedMs?: number;
     inProgress?: boolean;
   };
@@ -224,8 +232,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Addon resource routes have separate IP and validated-user limits.
-app.use(apiRateLimit);
+// Probes use local budgets so a Redis outage cannot block the liveness check.
+app.use((req, res, next) => {
+  if (/^\/(?:health|ready)\/?$/i.test(req.path)) return next();
+  if (rateLimitRedisUnavailable(req)) {
+    res.set('Cache-Control', 'no-store');
+    return sendError(res, 503, ErrorCodes.RATE_LIMIT_UNAVAILABLE, 'Request limiting unavailable');
+  }
+  // Addon resource routes have separate IP and validated-user limits.
+  return apiRateLimit(req, res, next);
+});
 
 const clientDistPath = path.join(__dirname, '../../client/dist');
 
@@ -303,12 +319,23 @@ app.use(
   })
 );
 
-app.get('/ready', (req, res) => {
+app.get('/ready', readinessRateLimit, (req, res) => {
   if (isShuttingDown) {
     return res.status(503).json({ ready: false, reason: 'shutting_down' });
   }
   if (!serverStatus.healthy) {
     return res.status(503).json({ ready: false, reason: 'starting' });
+  }
+  if (config.cache.redisUrl && !revocationStoreInstance?.isReady) {
+    return res.status(503).json({ ready: false, reason: 'revocation_store_unavailable' });
+  }
+  const rateLimitStatus = getRateLimitStatus();
+  if (
+    !config.features.disableRateLimit &&
+    rateLimitStatus.driver === 'redis' &&
+    !rateLimitStatus.connected
+  ) {
+    return res.status(503).json({ ready: false, reason: 'rate_limit_store_unavailable' });
   }
   res.json({
     ready: true,
@@ -337,24 +364,39 @@ app.get('/health', monitoringRateLimit, (req, res) => {
     logSwallowedError('health:db-status', e);
   }
 
-  // Determine overall status
-  let status = 'ok';
-  if (!serverStatus.healthy) status = 'starting';
-  else if (serverStatus.degraded) status = 'degraded';
-
   const cacheStatus = getCacheStatus();
+  const rateLimitStatus = getRateLimitStatus();
+  const observabilityStatus = getLiveStoreStatus();
+  const revocationReady = !config.cache.redisUrl || Boolean(revocationStoreInstance?.isReady);
+  const degradedReasons = [
+    serverStatus.degraded ? serverStatus.reason : '',
+    cacheStatus.degraded ? 'Cache Redis unavailable' : '',
+    rateLimitStatus.degraded ? 'Rate-limit Redis unavailable' : '',
+    !revocationReady ? 'JWT revocation Redis unavailable' : '',
+    observabilityStatus.enabled && !observabilityStatus.connected
+      ? 'Observability store unavailable'
+      : '',
+  ].filter(Boolean);
+  const status = !serverStatus.healthy ? 'starting' : degradedReasons.length ? 'degraded' : 'ok';
+
   const throttleStats = getTmdbThrottle().getStats();
   const configCacheStats = getConfigCache().getStats();
 
   const health = {
     status,
-    degradedReason: serverStatus.degraded ? serverStatus.reason : undefined,
+    degradedReason: degradedReasons.join('; ') || undefined,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     startedAt: serverStatus.startedAt,
     version: SERVER_VERSION,
     database: dbStatus,
     cache: cacheStatus,
+    rateLimit: rateLimitStatus,
+    observability: observabilityStatus,
+    jwtRevocation: {
+      driver: config.cache.redisUrl ? 'redis' : 'memory',
+      connected: config.cache.redisUrl ? revocationReady : null,
+    },
     configCache: configCacheStats,
     tmdbThrottle: throttleStats,
     tmdbCircuitBreaker: getCircuitBreakerState(),
@@ -438,6 +480,7 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     return next(err);
   }
   if (err instanceof AppError) {
+    res.set('Cache-Control', 'no-store');
     return sendError(res, err.statusCode, err.code, err.message);
   }
   sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Internal server error');
@@ -450,7 +493,6 @@ const gracefulShutdown = createShutdownHandler({
     destroyTmdbThrottle();
     destroyAnilistThrottle();
     destroyImdbThrottle();
-    destroySecurity();
   },
   closeStreams: closeAdminLiveStreams,
   cleanup: {
@@ -480,36 +522,34 @@ async function start() {
   try {
     validateRequiredConfig();
 
-    try {
-      await initCache();
-    } catch (cacheErr) {
+    const cacheStartup = initCache().catch((cacheErr) => {
       log.warn('Cache initialization issue (degraded mode)', {
         error: (cacheErr as Error).message,
       });
       serverStatus.degraded = true;
       serverStatus.reason = 'Cache initialization failed — using memory fallback';
-    }
+    });
 
+    let revocationStartup: Promise<void> = Promise.resolve();
     if (config.cache.redisUrl) {
-      try {
-        const revocationStore = new RedisRevocationStore(config.cache.redisUrl);
-        await revocationStore.connect();
-        setRevocationStore(revocationStore);
-        revocationStoreInstance = revocationStore;
-        log.info('JWT revocation store: Redis (multi-replica safe)');
-      } catch (err) {
-        log.warn('Redis revocation store unavailable, using in-process fallback', {
-          error: (err as Error).message,
-        });
-        serverStatus.degraded = true;
-        serverStatus.reason =
-          serverStatus.reason || 'JWT revocation store unavailable — single-replica only';
-      }
+      const revocationStore = new RedisRevocationStore(config.cache.redisUrl);
+      setRevocationStore(revocationStore);
+      revocationStoreInstance = revocationStore;
+      revocationStartup = awaitRedisStartup(revocationStore.connect()).catch((err) => {
+        if (!isShuttingDown) {
+          log.warn('Redis revocation store unavailable; authentication remains fail-closed', {
+            error: (err as Error).message,
+          });
+        }
+      });
     } else {
       log.info('JWT revocation store: in-process Map (single-replica only)');
     }
 
+    await Promise.all([cacheStartup, revocationStartup]);
+    if (isShuttingDown) return;
     await initStorage();
+    if (isShuttingDown) return;
 
     const adminProblem = adminConfigProblem();
     if (adminProblem) log.error(`Admin dashboard disabled: ${adminProblem}`);
@@ -585,6 +625,7 @@ async function start() {
         log.warn('Anime ID map initialization failed (non-critical)', { error: err.message });
       });
   } catch (error) {
+    if (isShuttingDown) return;
     log.error('Failed to start server', { error: (error as Error).message });
     process.exit(1);
   }

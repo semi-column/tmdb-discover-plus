@@ -139,11 +139,12 @@ router.post('/login', strictRateLimit, async (req, res) => {
   }
 });
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
   const bearerToken = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   if (bearerToken) {
-    revokeToken(bearerToken);
+    await revokeToken(bearerToken);
   }
+  res.set('Cache-Control', 'no-store');
   return res.json({ success: true });
 });
 

@@ -1,10 +1,14 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   computeApiKeyId,
+  destroySecurity,
   generateToken,
   verifyToken,
   revokeToken,
+  setRevocationStore,
 } from '../../src/utils/security.ts';
+
+afterEach(() => destroySecurity());
 
 describe('computeApiKeyId', () => {
   it('returns consistent hash for same input', async () => {
@@ -54,18 +58,69 @@ describe('generateToken / verifyToken', () => {
 describe('revokeToken', () => {
   it('revokes a valid token', async () => {
     const { token } = await generateToken('revoke-test-key');
-    expect(revokeToken(token)).toBe(true);
+    expect(await revokeToken(token)).toBe(true);
     expect(await verifyToken(token)).toBeNull();
   });
 
-  it('returns false for invalid token', () => {
-    expect(revokeToken('invalid')).toBe(false);
+  it('returns false for invalid token', async () => {
+    expect(await revokeToken('invalid')).toBe(false);
+  });
+
+  it('does not persist revocations for tokens it did not sign', async () => {
+    const jwt = (await import('jsonwebtoken')).default;
+    const forged = jwt.sign({ jti: 'victim-jti' }, 'attacker-key', { expiresIn: '3650d' });
+    const store = { add: vi.fn(), has: vi.fn().mockResolvedValue(false) };
+    setRevocationStore(store);
+
+    expect(await revokeToken(forged)).toBe(false);
+    expect(store.add).not.toHaveBeenCalled();
   });
 
   it('previously verified token fails after revocation', async () => {
     const { token } = await generateToken('key2');
     expect(await verifyToken(token)).not.toBeNull();
-    revokeToken(token);
+    await revokeToken(token);
+    expect(await verifyToken(token)).toBeNull();
+  });
+
+  it('waits for shared persistence before confirming revocation', async () => {
+    const { token } = await generateToken('shared-revocation');
+    const write = Promise.withResolvers<void>();
+    const store = {
+      add: vi.fn(() => write.promise),
+      has: vi.fn().mockResolvedValue(false),
+    };
+    setRevocationStore(store);
+
+    const revocation = revokeToken(token);
+    expect(store.add).toHaveBeenCalledOnce();
+    expect(await verifyToken(token)).not.toBeNull();
+    write.resolve();
+    expect(await revocation).toBe(true);
+    expect(await verifyToken(token)).toBeNull();
+  });
+
+  it('fails closed without recording a false logout when the shared store fails', async () => {
+    const { token } = await generateToken('unavailable-revocation');
+    const store = {
+      add: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('Redis unavailable'))
+        .mockResolvedValue(undefined),
+      has: vi.fn().mockRejectedValueOnce(new Error('Redis unavailable')).mockResolvedValue(false),
+    };
+    setRevocationStore(store);
+
+    await expect(verifyToken(token)).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'AUTH_UNAVAILABLE',
+    });
+    await expect(revokeToken(token)).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'AUTH_UNAVAILABLE',
+    });
+    expect(await verifyToken(token)).not.toBeNull();
+    expect(await revokeToken(token)).toBe(true);
     expect(await verifyToken(token)).toBeNull();
   });
 });

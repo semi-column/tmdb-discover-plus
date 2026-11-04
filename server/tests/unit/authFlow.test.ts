@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   computeApiKeyId,
+  destroySecurity,
   generateToken,
   verifyToken,
   revokeToken,
+  setRevocationStore,
 } from '../../src/utils/security.ts';
 import { sendError } from '../../src/utils/AppError.ts';
 
@@ -76,12 +78,12 @@ describe('Auth flow', () => {
     it('revoked token fails verification', async () => {
       const { token } = await generateToken('revoke-test');
       expect(await verifyToken(token)).not.toBeNull();
-      revokeToken(token);
+      await revokeToken(token);
       expect(await verifyToken(token)).toBeNull();
     });
 
-    it('revoking invalid token returns false', () => {
-      expect(revokeToken('not-a-jwt')).toBe(false);
+    it('revoking invalid token returns false', async () => {
+      expect(await revokeToken('not-a-jwt')).toBe(false);
     });
   });
 
@@ -162,7 +164,7 @@ describe('Auth flow', () => {
 
     it('rejects revoked token', async () => {
       const { token } = await generateToken('to-revoke');
-      revokeToken(token);
+      await revokeToken(token);
       const req = mockReq({ headers: { authorization: `Bearer ${token}` } });
       const res = mockRes();
       const next = vi.fn();
@@ -216,5 +218,25 @@ describe('Auth flow', () => {
       expect(next).toHaveBeenCalled();
       expect(req.apiKeyId).toBeUndefined();
     });
+
+    it.each([requireAuth, optionalAuth])(
+      'does not treat a revocation-store outage as an invalid or anonymous session',
+      async (middleware) => {
+        const { token } = await generateToken('revocation-unavailable');
+        setRevocationStore({
+          add: vi.fn(),
+          has: vi.fn().mockRejectedValue(new Error('Redis unavailable')),
+        });
+        const next = vi.fn();
+        try {
+          await expect(
+            middleware(mockReq({ headers: { authorization: `Bearer ${token}` } }), mockRes(), next)
+          ).rejects.toMatchObject({ statusCode: 503, code: 'AUTH_UNAVAILABLE' });
+          expect(next).not.toHaveBeenCalled();
+        } finally {
+          destroySecurity();
+        }
+      }
+    );
   });
 });

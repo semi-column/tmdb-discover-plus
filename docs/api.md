@@ -55,6 +55,12 @@ Revokes the bearer token server-side.
 
 **Response:** `{ "success": true }`
 
+When a shared revocation store is configured, success is returned only after the
+revocation is acknowledged by Redis. A store outage returns HTTP 503 with
+`AUTH_UNAVAILABLE` (or `RATE_LIMIT_UNAVAILABLE` if request limiting fails
+first); clients should keep the token and retry logout. A timed-out revocation
+may still have been written, so a retry is safe even if the session has ended.
+
 ### GET `/api/auth/verify`
 
 Checks if a JWT is still valid.
@@ -66,6 +72,10 @@ Checks if a JWT is still valid.
 ```json
 { "valid": true, "userId": "abc123", "configName": "My Config" }
 ```
+
+An unavailable shared revocation store returns HTTP 503 with `AUTH_UNAVAILABLE`
+instead of treating the token as invalid. An unavailable Redis request limiter
+can return 503 with `RATE_LIMIT_UNAVAILABLE` before authentication is reached.
 
 ---
 
@@ -426,10 +436,14 @@ instead of overwriting it with a cached failure.
 
 ## Operational
 
-| Method | Path | Description |
-| ------ | --------- | ---------------------------------------------------------------- | ------------- |
-| GET | `/health` | Runtime diagnostics; 503 while starting or shutting down, 200 for healthy or degraded operation |
-| GET | `/ready` | Readiness probe — `{ ready: boolean, cacheWarming: "in_progress" | "complete" }` |
+| Method | Path      | Description                                                                                                         |
+| ------ | --------- | ------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/health` | Runtime diagnostics; 503 while starting or shutting down, 200 for healthy or degraded operation                     |
+| GET    | `/ready`  | Readiness probe — 503 while starting, shutting down, or shared revocation/active Redis rate limiting is unavailable |
+
+`/health` reports the observability store's enabled state, driver and
+connection status. Its outage makes health degraded without making the addon
+unready. Probe connection status does not verify Redis permissions or data.
 
 ---
 
@@ -437,13 +451,14 @@ instead of overwriting it with a cached failure.
 
 | Tier             | Limit                                      | Applies To                                                                      |
 | ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------- |
-| API/general      | 300 req/min per IP                         | All routes except configured addon resource paths                               |
+| API/general      | 300 req/min per IP                         | All routes except probes and configured addon resource paths                    |
 | Strict           | 60 req/min per IP                          | Auth login/verify, key validation, config writes and marketplace mutations      |
 | Addon IP         | 3,000 req/min per IP                       | Addon router, including cached responses                                        |
 | Addon user       | 1,000 req/min per existing configuration   | Configured Stremio protocol routes                                              |
 | Invalid addon ID | 30 req/min per IP                          | Missing/invalid configuration IDs; blocks further addon lookups on exhaustion   |
 | Addon work       | 6 active per configuration, 60 per process | Uncached builds; queue at most 100/user and 500/process, wait at most 5 seconds |
-| Monitoring       | 30 req/min per IP                          | `/health` (also subject to API/general budget)                                  |
+| Monitoring       | 30 req/min per IP                          | `/health`, using a process-local budget                                         |
+| Readiness        | 300 req/min per IP                         | `/ready`, using a process-local budget                                          |
 
 HTTP 429 responses include `policy`, `retryAfter`, `Retry-After` and
 `Cache-Control: no-store`. Local work-capacity rejections are not cached as

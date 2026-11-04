@@ -33,13 +33,23 @@ the window resets. This deliberately prevents ID rotation from bypassing the
 guard.
 
 Uncached catalog/meta builds, searches, randomized catalogs, manifest enrichment,
-and IMDb prefetch share a work admission limit: 6 active builds per configuration,
+and optional IMDb prefetch share a work admission limit: 6 active builds per configuration,
 60 total across Redis replicas, at most 100 queued per configuration and 500
 per process (queues remain local).
 Queued work waits at most 5 seconds. Fresh cache hits bypass this work limit;
 stale responses remain available while their refresh uses the same budget.
 Capacity rejections return HTTP 429 with `Retry-After: 5` and `Cache-Control:
 no-store`; they are not stored as cached errors or successful empty results.
+
+By default, IMDb catalog pages are enriched only when requested. Opportunistic
+stale refreshes, IMDb revalidation, and startup warming are limited to two
+tasks per process; startup warming runs one task at a time. Background addon
+work leaves one global and one per-configuration slot for foreground work and
+is skipped rather than queued when admission is busy. Background TMDB, IMDb,
+and AniList work also skips a busy provider budget rather than waiting. This is
+not strict global priority across replicas, and work already running is not
+preempted just because a foreground request arrives. The two
+[environment controls](environment.md#cache--redis) permit separate rollback.
 
 Rate counters use Redis when configured (logged in-memory fallback if initial
 connection fails). Work admission and outbound TMDB tokens/429 pauses use
@@ -70,6 +80,17 @@ prefix and active/queued counts in memory mode. Redis failures are logged withou
 credentials; active ceilings are shared, while local queue/throttle statistics
 are not a Redis-wide snapshot. Repeated work-limit rejections with low cache
 hits indicate cold-cache pressure rather than just high cached traffic.
+
+For a demand-first rollout, compare similar traffic windows and separate cold
+from warm requests. Check provider calls per catalog/meta request, metadata
+latency, admission waits and 429s, and the **Shared episode snapshots** cache
+layer. The caching page's opportunistic-work counters cover only the reporting
+process since startup, not the selected interval or other replicas; a snapshot
+lookup occurs only when an aggregate response is rebuilt. Watch for
+`X-Metadata-Status: degraded` and compare episode IDs, ordering, artwork and
+future availability. Exercise catalog, detail, season navigation, playback, and
+tracker synchronization in each supported client. A metadata request alone
+does not prove that a user opened a title.
 
 ## Docker Compose: PostgreSQL + Redis
 
@@ -271,7 +292,18 @@ port. The Compose example sets its port and healthcheck explicitly.
 Use `/ready` for readiness; `/health` includes runtime/cache/degradation details.
 A `200` health response can describe a degraded instance, so inspect its JSON
 and startup logs rather than treating status alone as proof every dependency is
-healthy.
+healthy. Use `/health`, not `/ready`, for liveness: `/ready` returns 503 while
+configured shared JWT revocation or an active Redis rate limiter is unavailable.
+Both probes use process-local per-IP limits so they do not depend on Redis;
+`/health` allows 30 requests per minute and `/ready` allows 300.
+
+An initial Redis connection failure leaves the cache and request-rate limiter
+on their respective in-memory fallbacks until restart. Their limits and cached
+data are then per process, not shared between replicas. Shared JWT revocation
+instead remains fail-closed and reconnects automatically; during an outage,
+authentication and logout can return 503. If all replicas are unready, traffic
+can remain unavailable until Redis recovers. Redis data loss can still remove
+previously persisted revocations, so use appropriate persistence and failover.
 
 ## HTTPS and reverse proxies
 

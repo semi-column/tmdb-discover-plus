@@ -1,5 +1,8 @@
 import { rateLimit, ipKeyGenerator, type Options } from 'express-rate-limit';
 import { createLogger } from './logger.ts';
+import { awaitRedisCommand, awaitRedisStartup, redisRecoveryOptions } from './redisConnection.ts';
+import { AppError, ErrorCodes } from './AppError.ts';
+import { TIMEOUTS } from '../constants.ts';
 import { config } from '../config.ts';
 import type { RedisClientType } from 'redis';
 import type { Request, Response, NextFunction } from 'express';
@@ -15,21 +18,77 @@ export function destroyRateLimitRedis(): void {
   if (client?.isOpen) client.destroy();
 }
 
+export function getRateLimitStatus(): {
+  driver: 'redis' | 'memory';
+  connected: boolean;
+  degraded: boolean;
+} {
+  const driver = createStore ? 'redis' : 'memory';
+  const connected = driver === 'redis' && Boolean(rateLimitRedis?.isReady);
+  return {
+    driver,
+    connected,
+    degraded: Boolean(config.cache.redisUrl) && !config.features.disableRateLimit && !connected,
+  };
+}
+
 if (config.cache.redisUrl) {
   try {
     const { RedisStore } = await import('rate-limit-redis');
     const { createClient } = await import('redis');
-    const redisClient = createClient({ url: config.cache.redisUrl });
+    const redisClient = createClient({
+      url: config.cache.redisUrl,
+      commandOptions: { timeout: TIMEOUTS.REDIS_STARTUP_MS },
+      ...redisRecoveryOptions(),
+    });
     rateLimitRedis = redisClient;
     redisClient.on('error', (err: Error) =>
       log.warn('Redis rate-limit client error', { error: err.message })
     );
-    await redisClient.connect();
-    createStore = (prefix: string) =>
-      new RedisStore({
-        sendCommand: (...args: string[]) => redisClient.sendCommand(args),
+    await awaitRedisStartup(redisClient.connect());
+    class RecoverableRedisStore extends RedisStore {
+      private async ensureScript(
+        field: 'incrementScriptSha' | 'getScriptSha',
+        load: () => Promise<string>
+      ): Promise<void> {
+        const previous = this[field];
+        try {
+          await previous;
+        } catch {
+          if (this[field] === previous) this[field] = load();
+          await this[field];
+        }
+      }
+
+      async increment(key: string) {
+        await this.ensureScript('incrementScriptSha', () => this.loadIncrementScript());
+        return super.increment(key);
+      }
+
+      async get(key: string) {
+        await this.ensureScript('getScriptSha', () => this.loadGetScript());
+        return super.get(key);
+      }
+    }
+
+    createStore = (prefix: string) => {
+      return new RecoverableRedisStore({
+        sendCommand: async (...args: string[]) => {
+          try {
+            return await awaitRedisCommand(redisClient.sendCommand(args));
+          } catch (error) {
+            if (error instanceof Error && /^NOSCRIPT(?:\s|$)/.test(error.message)) throw error;
+            log.warn('Redis rate-limit command failed', { error: (error as Error).message });
+            throw new AppError(
+              503,
+              ErrorCodes.RATE_LIMIT_UNAVAILABLE,
+              'Request limiting unavailable'
+            );
+          }
+        },
         prefix,
       });
+    };
     log.info('Rate limiting backed by Redis');
   } catch (err) {
     destroyRateLimitRedis();
@@ -48,6 +107,10 @@ function skipRateLimit(req: Request): boolean {
     ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip === '::ffff:127.0.0.1';
 
   return isDevOrTest && isLocalhost;
+}
+
+export function rateLimitRedisUnavailable(req: Request): boolean {
+  return !skipRateLimit(req) && createStore !== null && !rateLimitRedis?.isReady;
 }
 
 function rejectRateLimit(
@@ -177,9 +240,16 @@ export async function checkInvalidAddonRateLimit(req: Request, res: Response, ne
 
 export const monitoringRateLimit = rateLimit({
   ...baseOptions,
-  ...withStore('rl:monitor:'),
   windowMs: 60 * 1000,
   limit: 30,
   requestPropertyName: 'monitoring',
   message: 'Too many monitoring requests, please try again later',
+});
+
+export const readinessRateLimit = rateLimit({
+  ...baseOptions,
+  windowMs: 60 * 1000,
+  limit: 300,
+  requestPropertyName: 'api',
+  message: 'Too many API requests, please try again later',
 });

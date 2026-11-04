@@ -4,6 +4,7 @@ import { createLogger } from './logger.ts';
 import { logSwallowedError } from './helpers.ts';
 import { config } from '../config.ts';
 import { LOCAL_CACHE_TTLS } from '../cacheTtls.ts';
+import { AppError, ErrorCodes } from './AppError.ts';
 
 import type { Logger } from '../types/index.ts';
 
@@ -122,80 +123,86 @@ export async function generateToken(
 }
 
 export async function verifyToken(token: string): Promise<jwt.JwtPayload | null> {
+  let decoded: string | jwt.JwtPayload;
   try {
-    const decoded = jwt.verify(token, getJwtSecret());
-    if (typeof decoded !== 'object' || decoded === null) return null;
-    if (typeof decoded.jti !== 'string') return null;
-    // Reject tokens without an explicit expiry — policy requires bounded lifetime.
-    if (typeof decoded.exp !== 'number') {
-      log.debug('Rejected token without exp claim', { jti: decoded.jti });
-      return null;
-    }
-
-    if (revokedTokens.has(decoded.jti)) {
-      log.debug('Rejected revoked token (local)', { jti: decoded.jti });
-      return null;
-    }
-    if (externalStore) {
-      try {
-        if (await externalStore.has(decoded.jti)) {
-          revokedTokens.set(decoded.jti, decoded.exp * 1000);
-          log.debug('Rejected revoked token (external store)', { jti: decoded.jti });
-          return null;
-        }
-      } catch (err) {
-        log.warn('External revocation check failed, rejecting token', {
-          error: (err as Error).message,
-        });
-        return null;
-      }
-    }
-    return decoded;
+    decoded = jwt.verify(token, getJwtSecret());
   } catch (error) {
     log.debug('Token verification failed', { error: (error as Error).message });
     return null;
   }
+  if (typeof decoded !== 'object' || decoded === null) return null;
+  if (typeof decoded.jti !== 'string') return null;
+  // Reject tokens without an explicit expiry — policy requires bounded lifetime.
+  if (typeof decoded.exp !== 'number') {
+    log.debug('Rejected token without exp claim', { jti: decoded.jti });
+    return null;
+  }
+
+  if (revokedTokens.has(decoded.jti)) {
+    log.debug('Rejected revoked token (local)', { jti: decoded.jti });
+    return null;
+  }
+  if (externalStore) {
+    try {
+      if (await externalStore.has(decoded.jti)) {
+        revokedTokens.set(decoded.jti, decoded.exp * 1000);
+        log.debug('Rejected revoked token (external store)', { jti: decoded.jti });
+        return null;
+      }
+    } catch (err) {
+      log.warn('External revocation check failed, rejecting token', {
+        error: (err as Error).message,
+      });
+      throw new AppError(503, ErrorCodes.AUTH_UNAVAILABLE, 'Session verification unavailable');
+    }
+  }
+  return decoded;
 }
 
-export function revokeToken(token: string): boolean {
+export async function revokeToken(token: string): Promise<boolean> {
+  let decoded: jwt.JwtPayload | string;
   try {
-    const decoded = jwt.decode(token);
-    if (
-      !decoded ||
-      typeof decoded === 'string' ||
-      typeof decoded.jti !== 'string' ||
-      typeof decoded.exp !== 'number'
-    ) {
-      return false;
-    }
-    if (revokedTokens.size >= MAX_REVOKED_TOKENS) {
-      const now = Date.now();
-      for (const [jti, expiresAt] of revokedTokens) {
-        if (expiresAt <= now) revokedTokens.delete(jti);
-      }
-      if (revokedTokens.size >= MAX_REVOKED_TOKENS) {
-        const oldest = revokedTokens.keys().next().value;
-        if (oldest) revokedTokens.delete(oldest);
-      }
-    }
-    const expiresAtMs = decoded.exp * 1000;
-    revokedTokens.set(decoded.jti, expiresAtMs);
-
-    if (externalStore) {
-      externalStore.add(decoded.jti as string, expiresAtMs).catch((err) => {
-        log.warn('Failed to persist revocation externally', {
-          jti: decoded.jti,
-          error: (err as Error).message,
-        });
-      });
-    }
-
-    log.debug('Token revoked', { jti: decoded.jti });
-    return true;
+    // Only tokens we signed (and that are still live) may write revocation entries.
+    decoded = jwt.verify(token, getJwtSecret());
   } catch (err) {
     logSwallowedError('security:revoke-token', err);
     return false;
   }
+  if (
+    !decoded ||
+    typeof decoded === 'string' ||
+    typeof decoded.jti !== 'string' ||
+    typeof decoded.exp !== 'number'
+  ) {
+    return false;
+  }
+
+  const expiresAtMs = decoded.exp * 1000;
+  if (externalStore) {
+    try {
+      await externalStore.add(decoded.jti, expiresAtMs);
+    } catch (err) {
+      log.warn('Failed to persist revocation externally', {
+        jti: decoded.jti,
+        error: (err as Error).message,
+      });
+      throw new AppError(503, ErrorCodes.AUTH_UNAVAILABLE, 'Session revocation unavailable');
+    }
+  }
+
+  if (revokedTokens.size >= MAX_REVOKED_TOKENS) {
+    const now = Date.now();
+    for (const [jti, expiresAt] of revokedTokens) {
+      if (expiresAt <= now) revokedTokens.delete(jti);
+    }
+    if (revokedTokens.size >= MAX_REVOKED_TOKENS) {
+      const oldest = revokedTokens.keys().next().value;
+      if (oldest) revokedTokens.delete(oldest);
+    }
+  }
+  revokedTokens.set(decoded.jti, expiresAtMs);
+  log.debug('Token revoked', { jti: decoded.jti });
+  return true;
 }
 
 export function destroySecurity(): void {

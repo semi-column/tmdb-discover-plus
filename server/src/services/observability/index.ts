@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { config } from '../../config.ts';
 import { ADDON_VERSION } from '../../version.ts';
+import { AppError, ErrorCodes } from '../../utils/AppError.ts';
 import { createLogger, setLogSink } from '../../utils/logger.ts';
+import { awaitRedisStartup } from '../../utils/redisConnection.ts';
 import { runShutdownStage } from '../../utils/shutdown.ts';
 import { getRequestLiveState } from '../../utils/requestContext.ts';
 import { getStorage, getStorageDriver } from '../storage/index.ts';
@@ -29,6 +31,8 @@ const log = createLogger('obs');
 const FLUSH_INTERVAL_MS = 5_000;
 const MAINTENANCE_INTERVAL_MS = 5 * 60_000;
 const SYSTEM_SAMPLE_INTERVAL_MS = 30_000;
+const liveRedisUrl =
+  config.observability.redisUrl || (config.cache.driver !== 'memory' ? config.cache.redisUrl : '');
 
 const IGNORED_PREFIXES = ['/health', '/ready', '/assets/', '/static/', '/api/admin/', '/admin/'];
 const IGNORED_EXACT = new Set(['/admin', '/api/admin', '/favicon.ico']);
@@ -60,27 +64,29 @@ export function getHistory(): HistoryStore | null {
   return historyStore;
 }
 
-/** Live store is also used by admin auth (lockout, revocation). */
-export function getLiveStore(): Promise<LiveStore> {
+export function getLiveStoreStatus(): {
+  enabled: boolean;
+  driver: 'redis' | 'memory' | null;
+  connected: boolean | null;
+} {
+  if (!config.observability.enabled) return { enabled: false, driver: null, connected: null };
+  return {
+    enabled: true,
+    driver: liveStore?.driver ?? (liveRedisUrl ? 'redis' : 'memory'),
+    connected: liveStore instanceof RedisLiveStore ? liveStore.isReady : liveStore !== null,
+  };
+}
+
+function connectLiveStore(): Promise<LiveStore> {
   liveConnected ??= (async () => {
-    const redisUrl = config.observability.redisUrl || config.cache.redisUrl;
-    if (redisUrl && (config.observability.redisUrl || config.cache.driver !== 'memory')) {
-      try {
-        const store = new RedisLiveStore(redisUrl);
-        await store.connect();
-        return store;
-      } catch (err) {
-        if (config.observability.redisUrl) {
-          log.error(
-            'Dedicated observability Redis unavailable; refusing a different session store',
-            { error: err }
-          );
-          throw err;
-        }
-        log.warn('Redis unavailable for observability, using in-process store', {
-          error: (err as Error).message,
-        });
-      }
+    if (liveRedisUrl) {
+      const store = new RedisLiveStore(liveRedisUrl);
+      void awaitRedisStartup(store.connect()).catch((error) =>
+        log.warn('Observability Redis unavailable; admin sessions remain fail-closed', {
+          error: (error as Error).message,
+        })
+      );
+      return store;
     }
     return new MemoryLiveStore();
   })()
@@ -93,6 +99,15 @@ export function getLiveStore(): Promise<LiveStore> {
       throw error;
     });
   return liveConnected;
+}
+
+/** Live store is also used by admin auth (lockout, revocation). */
+export async function getLiveStore(): Promise<LiveStore> {
+  const store = await connectLiveStore();
+  if (store instanceof RedisLiveStore && !store.isReady) {
+    throw new AppError(503, ErrorCodes.INTERNAL_ERROR, 'Observability store unavailable');
+  }
+  return store;
 }
 
 function shouldTrack(pathname: string): boolean {
@@ -189,7 +204,7 @@ export async function initObservability(): Promise<void> {
 
   let live: LiveStore;
   try {
-    live = await getLiveStore();
+    live = await connectLiveStore();
   } catch (error) {
     started = false;
     throw error;

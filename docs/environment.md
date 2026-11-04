@@ -90,23 +90,84 @@ need to install first on managed services. Admin history needs its own
 
 ## Cache & Redis
 
-| Variable                 | Description                                                                         | Default                         |
-| ------------------------ | ----------------------------------------------------------------------------------- | ------------------------------- |
-| `CACHE_DRIVER`           | `redis` or `memory`                                                                 | URI detection                   |
-| `REDIS_URL`              | Redis URI for cache, rate limits and user-token revocation                          | Empty                           |
-| `CACHE_MAX_KEYS`         | In-memory cache maximum keys with eviction                                          | `20000` (`6000` nightly)        |
-| `CACHE_VERSION_OVERRIDE` | Override the cache namespace/version; changing it invalidates effective cache reuse | Empty                           |
-| `CACHE_WARM_REGIONS`     | Comma-separated ISO country codes for startup warming                               | `US,GB,DE,FR,ES` (`US` nightly) |
+| Variable                      | Description                                                                         | Default                         |
+| ----------------------------- | ----------------------------------------------------------------------------------- | ------------------------------- |
+| `CACHE_DRIVER`                | `redis` or `memory`                                                                 | URI detection                   |
+| `REDIS_URL`                   | Redis URI for cache, rate limits and user-token revocation                          | Empty                           |
+| `CACHE_MAX_KEYS`              | In-memory cache maximum keys with eviction                                          | `20000` (`6000` nightly)        |
+| `CACHE_VERSION_OVERRIDE`      | Override the cache namespace/version; changing it invalidates effective cache reuse | Empty                           |
+| `CACHE_WARM_REGIONS`          | Comma-separated ISO country codes for startup warming                               | `US,GB,DE,FR,ES` (`US` nightly) |
+| `DEMAND_FIRST_FETCHING`       | Share canonical series episodes and avoid speculative IMDb next-page enrichment     | `true`                          |
+| `BACKGROUND_PRIORITY_ENABLED` | Bound opportunistic refreshes and leave capacity for foreground work                | `true`                          |
 
-With a Redis URL, non-memory cache modes attempt Redis and may fall back to
-memory after connection failures. Without a Redis URL, the cache uses memory
-even if the driver says `redis`. Inspect actual logs/health.
+With a Redis URL, initial cache and request-rate-limit connections each have a
+two-second deadline. If either cannot connect, that service falls back to
+process-local memory **until the process restarts**, even if Redis later
+recovers. `/health` reports these fallbacks as degraded. Without a Redis URL,
+the cache uses memory even if the driver says `redis`.
+
+JWT revocation does not fall back when `REDIS_URL` is configured. Its Redis
+connection continues reconnecting after the startup deadline; verification and
+logout fail closed with HTTP 503 until the shared store is available. `/ready`
+also returns 503 while the revocation store or an already-selected Redis
+rate-limit store is disconnected. Once a Redis-backed rate limiter has started,
+runtime failures return 503 rather than silently switching to local limits.
+Redis-backed cache reads and writes fail promptly during a disconnect and
+resume after reconnection. Cache, request-limiter, revocation and live-store
+commands have a two-second response deadline; the clients send a Redis PING
+every two seconds and reconnect after a four-second socket stall. Each of these
+clients rejects new commands with `The queue is full` once 1,000 are pending, so
+a socket that accepts writes but never replies cannot grow memory without bound;
+when writes stop, the stall timeout reconnects it. A write that
+times out may still reach Redis, so retry logout if its result is uncertain.
+Logout only records revocations for unexpired tokens signed by this server.
+
+Readiness checks connection state, not Redis command permissions or retained
+data: a connected Redis can still reject requests while `/ready` returns 200.
+An undetected socket stall can take several seconds to change readiness.
+Cache reconnection and the admission recovery cooldown are not readiness
+dependencies, so provider-key validation can briefly return 503 after readiness
+recovers.
+An unavailable observability store makes `/health` degraded, but is not a
+readiness dependency, so an admin outage alone does not remove an otherwise
+usable replica from service.
+
+Redis must retain user revocation keys until their TTLs expire. Use `noeviction`
+with sufficient capacity and an appropriate persistence/failover policy: eviction
+or data loss can make revoked tokens valid again. If `noeviction` rejects writes
+under memory pressure, logout fails closed and rate-limited requests can fail
+until capacity is restored.
 
 `CACHE_DRIVER=memory` skips cache Redis, but other services can still use
 `REDIS_URL`. For an entirely Redis-free local test, clear both `REDIS_URL` and
 `OBS_REDIS_URL`. Memory cache/rate limits/revocation are process-local, not a
 multi-replica replacement. Configuration persistence is a separate database
 choice.
+
+Demand-first fetching keeps complete series episode lists while reusing a
+locale-specific, artwork-independent snapshot across configurations. It also
+reuses cached full TMDB details for compatible previews, retains eligible
+historical IMDb season data longer, and changes active-series metadata freshness
+from 24 to 6 hours. When a freshness marker has expired, eligible completed seasons may
+reuse a retained IMDb response less than 21 days old. IMDb pages are enriched
+when requested, not automatically in advance.
+Cold series can still query IMDb for every regular season and two additional
+seasons so IMDb-only episodes are not discarded. Gap-first ordering and
+historical reuse do not eliminate those cold requests.
+The per-season IMDb cache and stale serving can affect how quickly upstream
+changes appear; the six-hour metadata TTL is not a guarantee of upstream
+freshness.
+
+Set `DEMAND_FIRST_FETCHING=false` and restart to disable those demand-first
+optimizations, restore automatic next-page IMDb enrichment, and return the
+active-series response TTL to 24 hours. Safety checks for incomplete episodes
+and season-count changes remain enabled. Set `BACKGROUND_PRIORITY_ENABLED=false`
+independently to remove the separate background cap/reservations and restore
+parallel startup warming; the existing shared work and provider limits still apply. Use the same
+settings on all replicas. Existing cache entries expire under their stored
+lifetimes; changing `CACHE_VERSION_OVERRIDE` forces a cold cache and can cause
+an upstream traffic spike. A full rollback requires deploying the previous
+release.
 
 ## IMDb Ratings
 
@@ -237,8 +298,12 @@ For `OBS_REDIS_URL`, use a **separate Redis instance with `noeviction`** to
 avoid app-cache eviction deleting counters or revocations. Different logical
 databases on the same Redis do not isolate eviction. An explicitly configured
 observability Redis fails closed for the admin session store when unavailable,
-instead of silently choosing a different store. When moving it, rotate the
-admin password/hash in the same rollout: old lockouts/revocations are not copied.
+instead of silently choosing a different store. The same applies when the live
+store uses the shared cache Redis. Admin operations fail until Redis reconnects;
+live metrics may be dropped during the outage, while request
+history continues when its storage is available. When moving the live store,
+rotate the admin password/hash in the same rollout: old lockouts/revocations
+are not copied.
 
 Health checks run every minute without an open dashboard over the previous
 five completed minutes. A minute with at least 20 requests is flagged at
