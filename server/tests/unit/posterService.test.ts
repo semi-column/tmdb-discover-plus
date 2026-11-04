@@ -48,6 +48,20 @@ describe('generatePosterUrl', () => {
     expect(url).toContain('/tmdb/poster-default/series-1399.jpg');
   });
 
+  it('preserves the working legacy Top Posters poster path without a native fallback URL', () => {
+    expect(
+      generatePosterUrl({
+        apiKey: 'top-posters-key',
+        service: 'topPosters',
+        tmdbId: 550,
+        type: 'movie',
+        imdbId: 'tt0137523',
+      })
+    ).toBe(
+      'https://api.top-streaming.stream/top-posters-key/imdb/poster-default/tt0137523.jpg?fallback=true'
+    );
+  });
+
   it('supports custom URL pattern placeholders', () => {
     const url = generatePosterUrl({
       service: 'customUrl',
@@ -617,6 +631,40 @@ describe('checkPosterExists', () => {
     expect(
       await checkPosterExists(`${trustedPosterBase}/key-403/imdb/poster-default/tt1.jpg`)
     ).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps working Top Posters posters when logo access is rejected', async () => {
+    const nativePoster = 'https://image.tmdb.org/t/p/w500/native-top-poster.jpg';
+    const nativeLogo = 'https://image.tmdb.org/t/p/original/native-top-logo.png';
+    fetchMock.mockImplementation(async (url: string) => ({
+      ok: !url.includes('/logo/'),
+      status: url.includes('/logo/') ? 403 : 200,
+      headers: { get: () => 'image/jpeg' },
+    }));
+    const artwork = {
+      poster: { service: 'topPosters' as const, apiKey: 'top-poster-logo-scope' },
+      logo: { service: 'topPosters' as const, apiKey: 'top-poster-logo-scope' },
+    };
+    for (const imdbId of ['tt101', 'tt102']) {
+      const result = await applyArtworkOverrides(
+        { type: 'movie', imdbId },
+        { poster: nativePoster, logo: nativeLogo },
+        artwork,
+        { checkExistence: true }
+      );
+      expect(result.poster).toContain(`/poster-default/${imdbId}.jpg`);
+      expect(result.logo).toBe(nativeLogo);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not suppress other Top Posters logos after one item is missing', async () => {
+    const scope = 'https://api.top-streaming.stream/top-poster-logo-404/imdb/logo';
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404, headers: { get: () => null } });
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, headers: { get: () => 'image/png' } });
+    expect(await checkPosterExists(`${scope}/tt101.png`)).toBe(false);
+    expect(await checkPosterExists(`${scope}/tt102.png`)).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

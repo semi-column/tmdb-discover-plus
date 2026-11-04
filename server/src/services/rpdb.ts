@@ -8,7 +8,7 @@ import { createRejectedCredentials } from '../utils/rejectedCredentials.ts';
 
 const log = createLogger('rpdb');
 const RPDB_BASE_URL = 'https://api.ratingposterdb.com';
-const rejectedApiKeys = createRejectedCredentials();
+const rejectedRatingKeys = createRejectedCredentials();
 
 export async function getRpdbRating(apiKey: string, imdbId: string): Promise<string | null> {
   throwIfRequestAborted();
@@ -34,7 +34,7 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
     logSwallowedError('rpdb:cache-get', err);
   }
 
-  if (rejectedApiKeys.has(apiKey)) return null;
+  if (rejectedRatingKeys.has(apiKey)) return null;
 
   const url = `${RPDB_BASE_URL}/${apiKey}/imdb/rating/${imdbId}`;
 
@@ -46,6 +46,7 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
         ...(requestSignal ? [requestSignal] : []),
       ]),
     });
+    throwIfRequestAborted();
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -53,8 +54,8 @@ export async function getRpdbRating(apiKey: string, imdbId: string): Promise<str
         return null;
       }
       if (response.status === 403) {
-        log.debug('RPDB 403 Forbidden (Invalid Key?)', { imdbId });
-        rejectedApiKeys.add(apiKey);
+        log.debug('RPDB rejected the rating operation', { imdbId });
+        rejectedRatingKeys.add(apiKey);
         return null;
       }
       throw new Error(`RPDB Status ${response.status}`);

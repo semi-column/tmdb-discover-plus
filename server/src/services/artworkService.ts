@@ -1,8 +1,12 @@
 import { createLogger } from '../utils/logger.ts';
 import { config as appConfig } from '../config.ts';
-import { TIMEOUTS, metahubUrl } from '../constants.ts';
+import { CONCURRENCY, TIMEOUTS, metahubUrl } from '../constants.ts';
 import { LOCAL_CACHE_TTLS } from '../cacheTtls.ts';
-import { getRequestSignal, throwIfRequestAborted } from '../utils/requestContext.ts';
+import {
+  awaitWithRequestAbort,
+  getRequestSignal,
+  throwIfRequestAborted,
+} from '../utils/requestContext.ts';
 import { createRejectedCredentials } from '../utils/rejectedCredentials.ts';
 import type {
   ContentType,
@@ -102,6 +106,10 @@ interface TvdbTokenEntry {
 }
 
 const tvdbTokenCache = new Map<string, TvdbTokenEntry>();
+const tvdbTokenRequests = new Map<
+  string,
+  { promise: Promise<string | null>; signal?: AbortSignal }
+>();
 const TVDB_TOKEN_TTL_MS = LOCAL_CACHE_TTLS.TVDB_TOKEN;
 const rejectedTvdbKeys = createRejectedCredentials();
 
@@ -426,6 +434,7 @@ function pickFanartAssetUrl(
 }
 
 async function getTvdbToken(apiKey: string): Promise<string | null> {
+  throwIfRequestAborted();
   const now = Date.now();
   const cached = tvdbTokenCache.get(apiKey);
   if (cached && now - cached.ts < TVDB_TOKEN_TTL_MS) {
@@ -433,6 +442,29 @@ async function getTvdbToken(apiKey: string): Promise<string | null> {
   }
   if (rejectedTvdbKeys.has(apiKey)) return null;
 
+  const existing = tvdbTokenRequests.get(apiKey);
+  if (existing) {
+    try {
+      return await awaitWithRequestAbort(existing.promise);
+    } catch (error) {
+      throwIfRequestAborted();
+      if (!existing.signal?.aborted) throw error;
+      if (tvdbTokenRequests.get(apiKey) === existing) tvdbTokenRequests.delete(apiKey);
+      return getTvdbToken(apiKey);
+    }
+  }
+
+  const promise = fetchTvdbToken(apiKey);
+  const entry = { promise, signal: getRequestSignal() };
+  if (tvdbTokenRequests.size < CONCURRENCY.MAX_IN_FLIGHT) {
+    tvdbTokenRequests.set(apiKey, entry);
+  }
+  return awaitWithRequestAbort(promise).finally(() => {
+    if (tvdbTokenRequests.get(apiKey) === entry) tvdbTokenRequests.delete(apiKey);
+  });
+}
+
+async function fetchTvdbToken(apiKey: string): Promise<string | null> {
   try {
     const response = await fetch(`${TVDB_API_BASE_URL}/login`, {
       method: 'POST',
@@ -440,8 +472,11 @@ async function getTvdbToken(apiKey: string): Promise<string | null> {
       body: JSON.stringify({ apikey: apiKey }),
       signal: artworkRequestSignal(),
     });
+    throwIfRequestAborted();
 
     if (!response.ok) {
+      await response.body?.cancel();
+      throwIfRequestAborted();
       if (response.status === 401 || response.status === 403) rejectedTvdbKeys.add(apiKey);
       return null;
     }
@@ -451,7 +486,7 @@ async function getTvdbToken(apiKey: string): Promise<string | null> {
     if (!token) return null;
 
     throwIfRequestAborted();
-    tvdbTokenCache.set(apiKey, { token, ts: now });
+    tvdbTokenCache.set(apiKey, { token, ts: Date.now() });
     return token;
   } catch {
     throwIfRequestAborted();

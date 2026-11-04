@@ -57,7 +57,7 @@ const ARTWORK_TYPE_LABELS = {
 
 const PREMIUM_REQUIRED_BY_PROVIDER = {
   rpdb: new Set(['backdrop', 'logo', 'landscape']),
-  topPosters: new Set(['episode']),
+  topPosters: new Set(['logo', 'episode']),
 };
 
 function isPremiumRequiredForKind(provider, kind) {
@@ -209,7 +209,7 @@ function ArtKindSelector({ contentType, artKind, artworkSettings, preferences, o
         name: 'TVDB',
         url: 'https://thetvdb.com',
         requiresKey: true,
-        note: 'High-quality fallback artwork from TheTVDB.',
+        note: 'High-quality fallback artwork from TheTVDB. User-supported keys require a subscriber PIN, which is not currently supported.',
       };
     }
     if (service === 'fanart') {
@@ -225,7 +225,7 @@ function ArtKindSelector({ contentType, artKind, artworkSettings, preferences, o
         name: 'RPDB',
         url: 'https://ratingposterdb.com',
         requiresKey: true,
-        note: 'Rating Poster Database with custom posters, plus paid backdrops and logos.',
+        note: 'Rating Poster Database with custom posters, plus paid backdrops and logos. Rating lookup permission is separate from artwork access.',
       };
     }
     if (service === 'topPosters') {
@@ -233,7 +233,7 @@ function ArtKindSelector({ contentType, artKind, artworkSettings, preferences, o
         name: 'Top Posters',
         url: 'https://api.top-streaming.stream',
         requiresKey: true,
-        note: 'Supports posters and logos. Premium tier also supports episode thumbnails.',
+        note: 'Supports posters. Logos require Premium and must be enabled in the Top Posters dashboard. Premium also supports episode thumbnails.',
       };
     }
     return null;
