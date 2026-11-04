@@ -67,6 +67,12 @@ Confirmed invalid keys return 401 and permit export-only configuration recovery.
 The short shared validity cache currently lasts 60 seconds; temporary upstream
 failures are not proof a key is invalid.
 
+After a connection reset or refusal from `api.themoviedb.org`, each process
+sends TMDB API calls to `api.tmdb.org` (same TMDB backend) for 10 minutes, then
+tries the official host again; a reset on `api.tmdb.org` switches back at once. Some Indian networks (e.g. Airtel, Oracle Cloud
+India) intermittently reset `api.themoviedb.org` by TLS SNI; DNS changes do not
+help. Cache keys and logs keep the `api.themoviedb.org` URL.
+
 ## Database
 
 | Variable          | Description                                                                                                | Default       |

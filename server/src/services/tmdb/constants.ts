@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 export const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
 
 export const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+// Same TMDB CloudFront backend; Indian ISPs (Airtel, Oracle Cloud India) reset SNI api.themoviedb.org.
+export const TMDB_FALLBACK_API_HOST = 'api.tmdb.org';
 export const TMDB_WEBSITE_BASE_URL = 'https://www.themoviedb.org';
 export const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 

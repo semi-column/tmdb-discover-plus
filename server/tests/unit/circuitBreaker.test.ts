@@ -45,6 +45,56 @@ describe('TMDB Circuit Breaker', () => {
     expect(getCircuitBreakerState().state).toBe('closed');
   });
 
+  it('retries a connection reset on api.tmdb.org and keeps canonical cache keys', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    mockFetch
+      .mockRejectedValueOnce(
+        Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } })
+      )
+      .mockResolvedValue({ ok: true, json: async () => ({ id: 550 }) });
+
+    await expect(tmdbFetch('/movie/550', 'test-key', {}, 1)).resolves.toEqual({ id: 550 });
+    const hosts = mockFetch.mock.calls.map(([url]) => new URL(url).host);
+    expect(hosts).toEqual(['api.themoviedb.org', 'api.tmdb.org']);
+    const cache = vi.mocked(getCache).mock.results.at(-1)!.value;
+    expect(cache.set.mock.calls[0][0]).toMatch(/^https:\/\/api\.themoviedb\.org\/3\/movie\/550/);
+
+    await tmdbFetch('/movie/551', 'test-key', {}, 0);
+    expect(new URL(mockFetch.mock.calls[2][0]).host).toBe('api.tmdb.org');
+
+    vi.advanceTimersByTime(10 * 60_000);
+    await tmdbFetch('/movie/552', 'test-key', {}, 0);
+    expect(new URL(mockFetch.mock.calls[3][0]).host).toBe('api.themoviedb.org');
+  });
+
+  it('returns to api.themoviedb.org when api.tmdb.org resets', async () => {
+    const reset = () =>
+      Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } });
+    mockFetch
+      .mockRejectedValueOnce(reset())
+      .mockRejectedValueOnce(reset())
+      .mockResolvedValue({ ok: true, json: async () => ({ id: 550 }) });
+
+    await expect(tmdbFetch('/movie/550', 'test-key', {}, 2)).resolves.toEqual({ id: 550 });
+    expect(mockFetch.mock.calls.map(([url]) => new URL(url).host)).toEqual([
+      'api.themoviedb.org',
+      'api.tmdb.org',
+      'api.themoviedb.org',
+    ]);
+  });
+
+  it('keeps the official TMDB host after a timeout', async () => {
+    mockFetch
+      .mockRejectedValueOnce(Object.assign(new Error('timed out'), { name: 'TimeoutError' }))
+      .mockResolvedValue({ ok: true, json: async () => ({ id: 550 }) });
+
+    await tmdbFetch('/movie/550', 'test-key', {}, 1);
+    expect(mockFetch.mock.calls.map(([url]) => new URL(url).host)).toEqual([
+      'api.themoviedb.org',
+      'api.themoviedb.org',
+    ]);
+  });
+
   it('does not trip the TMDB circuit breaker for a local limiter timeout', async () => {
     vi.mocked(getTmdbThrottle).mockReturnValueOnce({
       acquire: vi

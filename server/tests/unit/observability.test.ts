@@ -317,6 +317,7 @@ describe('client and upstream classification', () => {
 
   it('maps hosts and strips query strings (and keys) from upstream paths', () => {
     expect(providerForHost('api.themoviedb.org')).toBe('tmdb');
+    expect(providerForHost('api.tmdb.org')).toBe('tmdb');
     expect(providerForHost('graphql.anilist.co')).toBe('anilist');
     expect(templateUpstreamPath('/3/movie/550/credits?api_key=SECRET')).toBe(
       '/3/movie/:id/credits'

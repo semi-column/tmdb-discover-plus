@@ -15,7 +15,12 @@ import { CACHE_TTLS, tmdbResponseTtl } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { createRejectedCredentials } from '../../utils/rejectedCredentials.ts';
 import { computeApiKeyId } from '../../utils/security.ts';
-import { TMDB_API_ORIGIN, TMDB_API_BASE_PATH, TMDB_SITE_ORIGIN } from './constants.ts';
+import {
+  TMDB_API_ORIGIN,
+  TMDB_API_BASE_PATH,
+  TMDB_SITE_ORIGIN,
+  TMDB_FALLBACK_API_HOST,
+} from './constants.ts';
 
 import type { ApiKeyValidationResult, CacheErrorType, Logger } from '../../types/index.ts';
 
@@ -46,6 +51,8 @@ const FETCH_TIMEOUT_MS = TIMEOUTS.TMDB_FETCH_MS;
 const MAX_IN_FLIGHT = CONCURRENCY.MAX_IN_FLIGHT;
 
 const inFlightRequests = new Map<string, { promise: Promise<unknown>; signal?: AbortSignal }>();
+const FALLBACK_HOST_MS = 10 * 60_000;
+let fallbackHostUntil = 0;
 const validations = new Map<
   string,
   { promise: Promise<ApiKeyValidationResult>; signal?: AbortSignal }
@@ -100,6 +107,7 @@ export function getCircuitBreakerState(): {
 export function resetCircuitBreaker(): void {
   CIRCUIT_BREAKER.failures = [];
   CIRCUIT_BREAKER.openedAt = 0;
+  fallbackHostUntil = 0;
 }
 
 export function redactTmdbUrl(urlString: string): string {
@@ -284,6 +292,7 @@ async function _tmdbFetchInner(
   let lastError: TmdbFetchError | undefined;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    let usedFallback = false;
     try {
       throwIfRequestAborted();
       if (config.tmdb.debug) {
@@ -299,7 +308,10 @@ async function _tmdbFetchInner(
         AbortSignal.timeout(FETCH_TIMEOUT_MS),
         ...(requestSignal ? [requestSignal] : []),
       ]);
-      const response = await fetch(url.toString(), {
+      const target = new URL(url);
+      usedFallback = Date.now() < fallbackHostUntil;
+      if (usedFallback) target.hostname = TMDB_FALLBACK_API_HOST;
+      const response = await fetch(target.toString(), {
         signal,
         headers: {
           Accept: 'application/json',
@@ -375,6 +387,18 @@ async function _tmdbFetchInner(
         error.name === 'FetchError' ||
         error.name === 'AbortError' ||
         error.name === 'TimeoutError';
+
+      if (['ECONNRESET', 'ECONNREFUSED', 'UND_ERR_SOCKET'].includes(networkCode ?? '')) {
+        // Alternate hosts so a block on either one never pins every request to it.
+        const useFallback = !usedFallback;
+        if (useFallback !== Date.now() < fallbackHostUntil) {
+          fallbackHostUntil = useFallback ? Date.now() + FALLBACK_HOST_MS : 0;
+          log.warn(
+            `TMDB connection failed; using ${useFallback ? TMDB_FALLBACK_API_HOST : 'api.themoviedb.org'}`,
+            { error: networkCode }
+          );
+        }
+      }
 
       if (attempt < retries && isNetworkError) {
         const delayMs = 300 * Math.pow(2, attempt);

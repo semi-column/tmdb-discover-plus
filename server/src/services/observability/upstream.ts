@@ -18,7 +18,7 @@ interface Pending {
 }
 
 const HOST_PROVIDERS: Array<[RegExp, string]> = [
-  [/^api\.themoviedb\.org$/, 'tmdb'],
+  [/^api\.(themoviedb|tmdb)\.org$/, 'tmdb'],
   [/(^|\.)themoviedb\.org$/, 'tmdb-web'],
   [/^graphql\.anilist\.co$/, 'anilist'],
   [/^api\.jikan\.moe$/, 'jikan'],
