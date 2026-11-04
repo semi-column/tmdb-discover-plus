@@ -1,6 +1,6 @@
 import { rateLimit, ipKeyGenerator, type Options } from 'express-rate-limit';
 import { createLogger } from './logger.ts';
-import { awaitRedisCommand, awaitRedisStartup, redisRecoveryOptions } from './redisConnection.ts';
+import { awaitRedisCommand, redisRecoveryOptions } from './redisConnection.ts';
 import { AppError, ErrorCodes } from './AppError.ts';
 import { TIMEOUTS } from '../constants.ts';
 import { config } from '../config.ts';
@@ -45,8 +45,22 @@ if (config.cache.redisUrl) {
     redisClient.on('error', (err: Error) =>
       log.warn('Redis rate-limit client error', { error: err.message })
     );
-    await awaitRedisStartup(redisClient.connect());
+    // Don't block startup or fall back to per-pod memory limits: keep retrying in the
+    // background while /ready and the request gate fail closed until Redis is ready.
+    redisClient.connect().then(
+      () => log.info('Rate-limit Redis connected'),
+      (error: Error) => log.warn('Rate-limit Redis connection stopped', { error: error.message })
+    );
     class RecoverableRedisStore extends RedisStore {
+      // Scripts reload on first use, so a store created before Redis is ready is fine.
+      async init(options: Options) {
+        try {
+          await super.init(options);
+        } catch {
+          // Reloaded by ensureScript on first use.
+        }
+      }
+
       private async ensureScript(
         field: 'incrementScriptSha' | 'getScriptSha',
         load: () => Promise<string>

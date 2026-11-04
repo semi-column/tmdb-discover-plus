@@ -51,8 +51,8 @@ not strict global priority across replicas, and work already running is not
 preempted just because a foreground request arrives. The two
 [environment controls](environment.md#cache--redis) permit separate rollback.
 
-Rate counters use Redis when configured (logged in-memory fallback if initial
-connection fails). Work admission and outbound TMDB tokens/429 pauses use
+Rate counters use Redis when configured; until the first connection succeeds,
+requests other than `/health` and `/ready` get 503. Work admission and outbound TMDB tokens/429 pauses use
 atomic shared Redis state when `REDIS_URL` is set and `CACHE_DRIVER` is not
 `memory`: two replicas still share 6/configuration, 60 global active builds,
 and the default 35 TMDB requests/second token refill. Memory mode retains
@@ -297,10 +297,12 @@ configured shared JWT revocation or an active Redis rate limiter is unavailable.
 Both probes use process-local per-IP limits so they do not depend on Redis;
 `/health` allows 30 requests per minute and `/ready` allows 300.
 
-An initial Redis connection failure leaves the cache and request-rate limiter
-on their respective in-memory fallbacks until restart. Their limits and cached
-data are then per process, not shared between replicas. Shared JWT revocation
-instead remains fail-closed and reconnects automatically; during an outage,
+If Redis is unavailable at startup, the server still listens, but the cache
+and request-rate limiter keep retrying Redis in the background instead of
+switching to per-process memory. Until Redis connects, `/ready` returns 503,
+requests other than the probes get 503, and `/health` reports `degraded`; all
+three recover automatically once Redis is reachable. Shared JWT revocation
+likewise remains fail-closed and reconnects automatically; during an outage,
 authentication and logout can return 503. If all replicas are unready, traffic
 can remain unavailable until Redis recovers. Redis data loss can still remove
 previously persisted revocations, so use appropriate persistence and failover.

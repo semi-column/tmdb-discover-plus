@@ -1,10 +1,6 @@
 import { createClient, type RedisClientType } from 'redis';
 import { createLogger } from '../../utils/logger.ts';
-import {
-  awaitRedisCommand,
-  awaitRedisStartup,
-  redisRecoveryOptions,
-} from '../../utils/redisConnection.ts';
+import { awaitRedisCommand, redisRecoveryOptions } from '../../utils/redisConnection.ts';
 import { TIMEOUTS } from '../../constants.ts';
 import type { ICacheAdapter } from '../../types/index.ts';
 
@@ -25,13 +21,9 @@ export class RedisAdapter implements ICacheAdapter {
     );
   }
 
+  // node-redis retries until connected; this only rejects if the client is destroyed.
   async connect(): Promise<void> {
-    try {
-      await awaitRedisStartup(this.client.connect());
-    } catch (error) {
-      if (this.client.isOpen) this.client.destroy();
-      throw error;
-    }
+    await this.client.connect();
     log.info('Connected to Redis');
   }
 

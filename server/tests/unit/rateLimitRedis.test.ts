@@ -98,18 +98,16 @@ describe('Redis request-rate client lifecycle', () => {
     expect(state.createClient).toHaveBeenCalledOnce();
   });
 
-  it('destroys a failed startup client before retaining the existing memory fallback', async () => {
-    const redis = client();
-    redis.connect.mockRejectedValueOnce(new Error('connect failed'));
-    state.createClient.mockReturnValue(redis);
-    const { destroyRateLimitRedis } = await import('../../src/utils/rateLimit.ts');
-    expect(redis.destroy).toHaveBeenCalledOnce();
+  it('falls back to memory only when the Redis client cannot be created', async () => {
+    state.createClient.mockImplementation(() => {
+      throw new Error('invalid url');
+    });
+    const { getRateLimitStatus } = await import('../../src/utils/rateLimit.ts');
     expect(state.stores).toEqual([]);
     expect(state.warn).toHaveBeenCalledWith('Redis rate-limit store unavailable, using in-memory', {
-      error: 'connect failed',
+      error: 'invalid url',
     });
-    destroyRateLimitRedis();
-    expect(redis.destroy).toHaveBeenCalledOnce();
+    expect(getRateLimitStatus()).toMatchObject({ driver: 'memory', degraded: true });
   });
 
   it('does not destroy an already closed client', async () => {
@@ -150,29 +148,22 @@ describe('Redis request-rate client lifecycle', () => {
     expect(store.loadGetScript).toHaveBeenCalledOnce();
   });
 
-  it('bounds a pending initial connection and destroys its retrying client', async () => {
+  it('keeps the Redis store while the initial connection is pending', async () => {
     vi.useFakeTimers();
     const redis = client();
-    const started = Promise.withResolvers<void>();
+    redis.isReady = false;
     const connection = Promise.withResolvers<void>();
-    redis.connect.mockImplementation(() => {
-      started.resolve();
-      return connection.promise;
-    });
+    redis.connect.mockImplementation(() => connection.promise);
     state.createClient.mockReturnValue(redis);
 
-    const loading = import('../../src/utils/rateLimit.ts');
-    await started.promise;
-    await vi.advanceTimersByTimeAsync(1_999);
+    const { getRateLimitStatus } = await import('../../src/utils/rateLimit.ts');
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(redis.destroy).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    const { getRateLimitStatus } = await loading;
+    expect(state.stores.length).toBeGreaterThan(0);
+    expect(getRateLimitStatus()).toEqual({ driver: 'redis', connected: false, degraded: true });
 
-    expect(redis.destroy).toHaveBeenCalledOnce();
-    expect(state.stores).toEqual([]);
-    expect(getRateLimitStatus()).toMatchObject({ driver: 'memory', degraded: true });
+    redis.isReady = true;
     connection.resolve();
-    await Promise.resolve();
-    expect(state.stores).toEqual([]);
+    expect(getRateLimitStatus()).toEqual({ driver: 'redis', connected: true, degraded: false });
   });
 });

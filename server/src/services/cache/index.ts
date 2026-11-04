@@ -27,7 +27,12 @@ export async function initCache(): Promise<CacheWrapper> {
     driver: config.cache.driver,
     createRedis: async (url) => {
       const redis = new RedisAdapter(url);
-      await redis.connect();
+      // Serve cache misses until Redis is ready instead of pinning this pod to memory.
+      redis
+        .connect()
+        .catch((error: Error) =>
+          log.warn('Cache Redis connection stopped', { error: error.message })
+        );
       return redis;
     },
     createMemory: () => new MemoryAdapter(),

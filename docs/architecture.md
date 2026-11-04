@@ -175,9 +175,9 @@ Wraps a raw cache adapter with resilience features:
 | Adapter         | Backend                                           | Selection                                   |
 | --------------- | ------------------------------------------------- | ------------------------------------------- |
 | `RedisAdapter`  | Redis with JSON serialization                     | `CACHE_DRIVER=redis` or `REDIS_URL` present |
-| `MemoryAdapter` | `node-cache` with LRU eviction (50K keys default) | Fallback                                    |
+| `MemoryAdapter` | `node-cache` with LRU eviction (50K keys default) | `CACHE_DRIVER=memory` or no `REDIS_URL`     |
 
-Redis failure triggers automatic degradation to the memory adapter.
+When Redis is configured but unreachable, the Redis adapter keeps reconnecting and serves cache misses; it does not switch to the memory adapter.
 
 ### ConfigCache
 

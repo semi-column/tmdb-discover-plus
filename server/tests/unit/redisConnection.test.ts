@@ -46,7 +46,7 @@ describe('Redis connection deadlines', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('destroys a timed-out cache startup client', async () => {
+  it('keeps a pending cache startup connection retrying', async () => {
     vi.useFakeTimers();
     const client = Object.assign(new EventEmitter(), {
       isOpen: false,
@@ -60,14 +60,11 @@ describe('Redis connection deadlines', () => {
     state.createClient.mockReturnValue(client);
     const { RedisAdapter } = await import('../../src/services/cache/RedisAdapter.ts');
     const adapter = new RedisAdapter('redis://fixture.invalid');
-    const connection = adapter.connect();
-    const assertion = expect(connection).rejects.toThrow('Redis startup connection timed out');
+    void adapter.connect();
 
-    await vi.advanceTimersByTimeAsync(1_999);
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(client.destroy).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await assertion;
-    expect(client.destroy).toHaveBeenCalledOnce();
+    expect(adapter.getStats()).toEqual({ driver: 'redis', connected: false });
   });
 
   it('destroys a revocation client even while its initial connection is pending', async () => {

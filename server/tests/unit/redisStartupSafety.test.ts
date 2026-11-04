@@ -237,8 +237,8 @@ describe.skipIf(!available || process.platform === 'win32')(
         status: 200,
         body: {
           status: 'degraded',
-          cache: { driver: 'memory', degraded: true },
-          rateLimit: { driver: 'memory', degraded: true },
+          cache: { driver: 'redis', degraded: true },
+          rateLimit: { driver: 'redis', degraded: true },
           jwtRevocation: { driver: 'redis', connected: false },
         },
       });
@@ -248,23 +248,28 @@ describe.skipIf(!available || process.platform === 'win32')(
       });
       expect(await request('/api/auth/verify', token('startup-check'))).toMatchObject({
         status: 503,
-        body: { code: 'AUTH_UNAVAILABLE' },
+        body: { code: 'RATE_LIMIT_UNAVAILABLE' },
         cacheControl: 'no-store',
       });
       expect(await request('/api/auth/logout', token('startup-logout'), 'POST')).toMatchObject({
         status: 503,
-        body: { code: 'AUTH_UNAVAILABLE' },
+        body: { code: 'RATE_LIMIT_UNAVAILABLE' },
       });
 
       await unblockRedis();
       await startRedis(redisPort);
       await waitFor(async () => (await request('/ready')).status === 200, 'revocation recovery');
+      // /ready doesn't cover the cache client, which may still be in reconnect backoff.
+      await waitFor(
+        () => appOutput.includes('[RedisAdapter] Connected to Redis'),
+        'cache recovery'
+      );
       expect(await request('/health')).toMatchObject({
         status: 200,
         body: {
-          status: 'degraded',
-          cache: { driver: 'memory', degraded: true },
-          rateLimit: { driver: 'memory', degraded: true },
+          status: 'ok',
+          cache: { driver: 'redis', degraded: false },
+          rateLimit: { driver: 'redis', connected: true, degraded: false },
           jwtRevocation: { driver: 'redis', connected: true },
         },
       });
@@ -376,7 +381,7 @@ describe.skipIf(!available || process.platform === 'win32')(
       await waitFor(() => appOutput.includes('Observability started'), 'observability startup');
 
       expect((await adminLogin()).status).toBe(503);
-      expect((await request('/api/auth/verify')).status).toBe(401);
+      expect((await request('/api/auth/verify')).status).toBe(503);
       await waitFor(() => appOutput.includes('Live store flush failed'), 'bounded live flush');
       expect(app!.exitCode, appOutput).toBeNull();
 
@@ -386,6 +391,7 @@ describe.skipIf(!available || process.platform === 'win32')(
         () => appOutput.includes('Connected to Redis live store'),
         'live store recovery'
       );
+      await waitFor(async () => (await request('/ready')).status === 200, 'Redis recovery');
       const response = await adminLogin();
       expect(response.status).toBe(200);
       const cookie = response.headers.get('set-cookie')?.split(';')[0];
