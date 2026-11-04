@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.4](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.3...v2.14.4) (2026-11-04)
+
+
+### Bug Fixes
+
+* bound provider retries and prevent incomplete metadata caching ([31e89e8](https://github.com/semi-column/tmdb-discover-plus/commit/31e89e8225facf0cc709a6a690d87411850b62cb))
+* bound Redis stalls and keep shared authentication fail-closed ([157ece3](https://github.com/semi-column/tmdb-discover-plus/commit/157ece39751a43e0dfff25159561df5b9aef8f08))
+* coalesce artwork authentication and isolate credential failures ([1b53bab](https://github.com/semi-column/tmdb-discover-plus/commit/1b53bab8146e85fe5c9c41828c494d3932a6e6cb))
+* fall back to api.tmdb.org when Indian ISPs reset TMDB connections ([db0837b](https://github.com/semi-column/tmdb-discover-plus/commit/db0837b5aef50c35b51a45e760bc731324c9137c))
+* preserve client sessions during authentication outages ([71bff3c](https://github.com/semi-column/tmdb-discover-plus/commit/71bff3c2afed001a963052c1c844768628dc088c))
+* prioritize foreground work and reuse complete metadata ([83783b9](https://github.com/semi-column/tmdb-discover-plus/commit/83783b95bc0841f080d867305196cda62d9bcb06))
+* separate provider error fingerprints and clarify historical samples ([f4833aa](https://github.com/semi-column/tmdb-discover-plus/commit/f4833aad12985f4dd700ae3287f97402ec9abe1b))
+* survive Redis rate-limit failures and bound graceful shutdown ([d1f433f](https://github.com/semi-column/tmdb-discover-plus/commit/d1f433f82999329694890dee6c20224967d03e0f))
+* wait for Redis instead of pinning cache and rate limits to memory at startup ([6875a2f](https://github.com/semi-column/tmdb-discover-plus/commit/6875a2f6596a369b3bc8ef0adda4eb323a2be0ec))
+
 ## [2.14.3](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.2...v2.14.3) (2026-11-03)
 
 
