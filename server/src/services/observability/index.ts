@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { config } from '../../config.ts';
 import { ADDON_VERSION } from '../../version.ts';
 import { createLogger, setLogSink } from '../../utils/logger.ts';
+import { runShutdownStage } from '../../utils/shutdown.ts';
 import { getRequestLiveState } from '../../utils/requestContext.ts';
 import { getStorage, getStorageDriver } from '../storage/index.ts';
 import { Collector } from './collector.ts';
@@ -11,7 +12,7 @@ import { MemoryHistory } from './history/memory.ts';
 import { startUpstreamCapture } from './upstream.ts';
 import { startSystemSampler } from './system.ts';
 import { startHealthMonitor } from './health.ts';
-import { classifyError, computeFingerprint, extractDetail } from './errors.ts';
+import { classifyError, computeFingerprint, extractDetail, extractHttpStatus } from './errors.ts';
 import { describePath } from './routeInfo.ts';
 import {
   INSTANCE_ID,
@@ -160,7 +161,8 @@ function captureLog(
 ): void {
   if (context.startsWith('obs') || context === 'swallowed') return;
   const { detail, stack } = extractDetail(data);
-  const classification = typeof data?.statusCode === 'number' ? `http:${data.statusCode}` : '';
+  const statusCode = extractHttpStatus(data);
+  const classification = statusCode !== undefined ? `http:${statusCode}` : '';
   const fingerprint = computeFingerprint(level, context, message, detail, stack, classification);
   const state = getRequestLiveState();
   if (state && level === 'error' && !state.obs.errorFingerprint) {
@@ -287,12 +289,14 @@ async function openHistory(): Promise<HistoryStore> {
 
 export async function stopObservability(): Promise<void> {
   if (!started) return;
+  started = false;
   for (const stop of stoppers.splice(0)) stop();
-  try {
-    await collector.flush();
-  } catch {
-    // best effort on shutdown
+  const flushed = await runShutdownStage('observability-flush', 1_000, () => collector.flush());
+  const closed = await Promise.all([
+    runShutdownStage('observability-history', 3_000, () => historyStore?.close()),
+    runShutdownStage('observability-live', 3_000, () => liveStore?.close()),
+  ]);
+  if (!flushed || closed.some((ok) => !ok)) {
+    throw new Error('Observability shutdown did not complete cleanly');
   }
-  await historyStore?.close().catch(() => undefined);
-  await liveStore?.close().catch(() => undefined);
 }

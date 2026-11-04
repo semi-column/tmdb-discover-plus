@@ -1,17 +1,29 @@
 import { rateLimit, ipKeyGenerator, type Options } from 'express-rate-limit';
 import { createLogger } from './logger.ts';
 import { config } from '../config.ts';
+import type { RedisClientType } from 'redis';
 import type { Request, Response, NextFunction } from 'express';
 
 const log = createLogger('rateLimit');
 
 let createStore: ((prefix: string) => Options['store']) | null = null;
+let rateLimitRedis: RedisClientType | undefined;
+
+export function destroyRateLimitRedis(): void {
+  const client = rateLimitRedis;
+  rateLimitRedis = undefined;
+  if (client?.isOpen) client.destroy();
+}
 
 if (config.cache.redisUrl) {
   try {
     const { RedisStore } = await import('rate-limit-redis');
     const { createClient } = await import('redis');
     const redisClient = createClient({ url: config.cache.redisUrl });
+    rateLimitRedis = redisClient;
+    redisClient.on('error', (err: Error) =>
+      log.warn('Redis rate-limit client error', { error: err.message })
+    );
     await redisClient.connect();
     createStore = (prefix: string) =>
       new RedisStore({
@@ -20,6 +32,7 @@ if (config.cache.redisUrl) {
       });
     log.info('Rate limiting backed by Redis');
   } catch (err) {
+    destroyRateLimitRedis();
     log.warn('Redis rate-limit store unavailable, using in-memory', {
       error: (err as Error).message,
     });

@@ -2,6 +2,131 @@
 
 Date: 2026-11-01
 
+## Redis failover crash and shutdown follow-up (2026-11-04, not deployed)
+
+The request-rate Redis client had no `error` listener. A socket-close event
+therefore escalated to `uncaughtException`, independently of the recovering
+shared-admission client. The listener now attaches **before connect**, logs
+socket errors, and lets node-redis retain its existing reconnect behavior.
+The owned client is destroyed on failed startup and during shutdown. Request
+limits, prefixes, headers, and existing initial-memory fallback are unchanged;
+a runtime Redis outage does not silently switch shared limits to memory.
+
+Shutdown now runs once across repeated signals/exceptions. It stops accepting
+connections, explicitly ends admin Live Tail streams (including pending backlog
+loads), and allows ordinary active HTTP requests **five seconds** to drain.
+Remaining HTTP connections are then closed. Independent cleanup stages run in
+parallel with **five-second** bounds and named duration/failure logs. An
+uncaught exception or incomplete cleanup exits nonzero; a successful normal
+stop exits zero. The existing 30-second watchdog remains a final safety net,
+not the normal wait for asynchronous cleanup. Slow in-flight requests may be
+terminated during shutdown; normal request deadlines are unchanged.
+
+Observability gets one second for a final best-effort flush, then closes history
+and live stores independently with three-second bounds. Redis live/subscriber
+connections are destroyed rather than awaiting an offline queued `QUIT`.
+Timed-out flushes may lose unpersisted telemetry; this is logged, not treated as
+successful persistence. The incident logs do not identify which stage caused
+the historical shutdown stall; the stream/flush/close weaknesses were reproduced
+or directly verified, without claiming a single proven stall cause.
+
+Validation:
+
+- `npm --prefix server test`: **102 files passed; 1,126 tests passed, 54
+  skipped**. The skipped tests require optional PostgreSQL/Mongo backends (36)
+  or a local Redis executable (18). No production service was used.
+- New runnable regressions cover socket error logging, startup cleanup,
+  preserved rate prefixes, repeated/fatal signals, exact five-/ten-second
+  drain/cleanup thresholds, late rejection, real HTTP streams, actual admin
+  backlog races, and stalled observability flush/store closure.
+- `npm --prefix server run typecheck` and `git diff --check`: passed.
+- Two native Node 24 processes survived simultaneous **real TCP socket
+  closure**, logged request-rate client errors, and reconnected to a disposable
+  RESP test fixture. This verifies transport event handling, not Redis data
+  persistence or a production failover.
+- Native Node 24 startup/readiness and normal SIGTERM shutdown passed with
+  memory backends and outbound fetch disabled; shutdown took 6 ms locally.
+- Production Node 22 container validation remains unrun (Docker unavailable).
+- No production deployment or production Redis failover was performed.
+
+## Follow-up remediation (2026-11-04, not deployed)
+
+The historical 02:00-09:30 browser interval was investigated read-only. Its TMDB
+"429 retry" group actually contained three **500** retries from one request;
+new fingerprints distinguish provider statuses and nested error metadata.
+Historical fingerprints, counts, and triage states are not rewritten. Admin
+labels explicitly identify all-time message/stack samples.
+
+Implemented safeguards:
+
+- TMDB page 501 and later return exhausted catalogs without an upstream call;
+  locally paginated collections stop repeating their last page. Valid random
+  catalogs and other providers retain their own pagination.
+- Shared retries stop on deterministic 4xx, combine cancellation/deadline
+  signals, and retain typed quota exhaustion without a final unnecessary sleep.
+  AniList admits **every attempt** through one Redis-coordinated 2.1-second
+  spacing/cooldown gate, or a bounded local gate in no-Redis mode. Redis mode
+  remains fail-closed and recovers through the existing admission connection.
+- AniList rejects GraphQL error/null/partial-page responses explicitly. Complete
+  search pages use existing cache/coalescing with hashed effective-input keys.
+- Invalid credentials, missing media, cancellation, and quota exhaustion do
+  not trip the shared provider circuit breakers as availability failures.
+- Concurrent TMDB credential validation and TVDB login are coalesced per
+  credential, with cancellation-safe healthy-waiter recovery.
+- Catalog error fallbacks retain their compatible empty body but are
+  `no-store` and marked `X-Catalog-Status: degraded` (or TMDB `not-found`).
+  Series results missing primary season data retain IMDb supplementation,
+  carry a non-serialized incomplete marker through coalescing, and cannot
+  overwrite complete cached metadata. Their HTTP/body cache hints disable
+  caching. Existing cached results expire normally; no bulk cache flush occurs.
+- Work-admission rejections log queue versus wait versus Redis failure.
+  Genre warnings include mapping source/type/counts and bounded numeric IDs,
+  without mutating filters or logging whole configurations.
+- Artwork rejection remains credential/operation-scoped. Optional-feature
+  guidance explains Top Posters Premium/enabled logos and TVDB PIN limitations.
+  Existing native fallbacks, probe deadlines, and legacy artwork URLs remain.
+
+Provider references: [AniList quota](https://docs.anilist.co/guide/rate-limiting),
+[GraphQL errors](https://docs.anilist.co/guide/graphql/errors),
+[TMDB errors](https://developer.themoviedb.org/docs/errors),
+[Top Posters API](https://top-posters.com/openapi.json),
+[RPDB reference](https://rpdb.apidoc.io/), and
+[TVDB login contract](https://thetvdb.github.io/v4-api/swagger.yml).
+
+Canonical artwork URL migration, subscriber-PIN plumbing, automatic saved
+configuration repair, and global artwork suppression remain deferred: the
+historical data does not establish safe causes/contracts for these changes.
+Limits, timeouts, and TTLs were not raised. No production setting was changed.
+
+Roll out independently reviewable changes, preserving existing authentication,
+result IDs/order, native fallbacks, and negative-cache behavior. The new AniList
+budget only coordinates upgraded replicas; mixed-version replicas still bypass
+it. Coordinate the participating replicas rather than adding an uncontrolled
+extra canary. Watch content degradation as well as HTTP status, and roll back on
+uncaught errors/restarts, lost fallback, auth isolation failure, stuck admission,
+or comparable latency regression.
+
+Validation completed locally:
+
+| Command                                                                                                  | Result                                                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm --prefix server test`                                                                               | 97 files; 1,132 passed, 36 skipped. The skips are opt-in PostgreSQL/Mongo history contracts, not Redis admission tests.                                                  |
+| `npm --prefix server test -- tests/unit/catalogGenreHandlers.test.ts tests/unit/sharedAdmission.test.ts` | 76 passed, none skipped; includes two-replica quota spacing, cooldown, outage/recovery, cancellation, queue bounds, shutdown, and degraded metadata HTTP/cache behavior. |
+| `npm --prefix client test`                                                                               | 27 files, 167 passed; existing jsdom `scrollTo` notices.                                                                                                                 |
+| `npm --prefix server run typecheck`                                                                      | Passed, including the erasable-only TypeScript constraint.                                                                                                               |
+| `npm --prefix client run lint`                                                                           | Passed with five existing warnings in unchanged files.                                                                                                                   |
+| `npm --prefix client run build`                                                                          | Passed.                                                                                                                                                                  |
+| `git diff --check`                                                                                       | Passed.                                                                                                                                                                  |
+
+Server tests ran with memory cache/storage, empty provider/database URLs, and
+`ADMISSION_REDIS_SERVER` pointing to a privately built Redis binary. The tests
+own/start/stop their disposable Redis; no production Redis was used. Native
+stripped-TypeScript route/provider imports also passed on local Node 24 with
+dotenv loading and network calls disabled. **The production Node 22 container
+build was not run:** Docker is unavailable locally. Production rollout and
+post-deploy observation are still required; test results do not guarantee a
+crash-free deployment.
+
 ## Status and confidence
 
 Implemented and tested in the working tree; **not deployed**. Production was accessed read-only.

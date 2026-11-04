@@ -14,7 +14,7 @@ import { buildManifest } from './services/manifestService.ts';
 import { apiRouter } from './routes/api.ts';
 import { authRouter } from './routes/auth.ts';
 import marketplaceRouter from './routes/marketplace.ts';
-import { adminRouter } from './routes/admin.ts';
+import { adminRouter, closeAdminLiveStreams } from './routes/admin.ts';
 import { adminConfigProblem, isAdminEnabled } from './services/admin/auth.ts';
 import {
   observabilityMiddleware,
@@ -25,10 +25,13 @@ import { createLogger } from './utils/logger.ts';
 import { getBaseUrl, logSwallowedError } from './utils/helpers.ts';
 import { apiRateLimit } from './utils/rateLimit.ts';
 import { monitoringRateLimit } from './utils/rateLimit.ts';
+import { destroyRateLimitRedis } from './utils/rateLimit.ts';
+import { createShutdownHandler } from './utils/shutdown.ts';
 import { setRevocationStore, destroySecurity } from './utils/security.ts';
 import { RedisRevocationStore } from './infrastructure/revocationStore.ts';
 import { warmEssentialCaches } from './infrastructure/cacheWarmer.ts';
 import { destroyTmdbThrottle, getTmdbThrottle } from './infrastructure/tmdbThrottle.ts';
+import { destroyAnilistThrottle } from './infrastructure/anilistThrottle.ts';
 import { destroyImdbThrottle } from './infrastructure/imdbThrottle.ts';
 import { getConfigCache } from './infrastructure/configCache.ts';
 import {
@@ -440,49 +443,24 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Internal server error');
 });
 
-function gracefulShutdown(signal: string) {
-  log.info(`Received ${signal}, starting graceful shutdown...`);
-  isShuttingDown = true;
-
-  const shutdownTimeout = setTimeout(() => {
-    log.warn('Shutdown timeout reached, forcing exit');
-    process.exit(1);
-  }, TIMEOUTS.SHUTDOWN_MS);
-
-  // Cleanup singletons
-  destroyTmdbThrottle();
-  destroyImdbThrottle();
-  destroySecurity();
-  if (revocationStoreInstance) {
-    revocationStoreInstance
-      .destroy()
-      .catch((err) => logSwallowedError('shutdown:revocation-store', err));
-  }
-  destroyImdbRatings().catch((err) => logSwallowedError('shutdown:imdb-ratings', err));
-
-  if (server) {
-    server.close(async (err) => {
-      await stopObservability().catch((e) => logSwallowedError('shutdown:observability', e));
-      try {
-        const storage = getStorage();
-        if (storage) await storage.disconnect();
-      } catch (e) {
-        log.error('Error disconnecting storage', { error: (e as Error).message });
-      }
-
-      clearTimeout(shutdownTimeout);
-      if (err) {
-        log.error('Error during shutdown', { error: err.message });
-        process.exit(1);
-      }
-      log.info('Server closed successfully');
-      process.exit(0);
-    });
-  } else {
-    clearTimeout(shutdownTimeout);
-    process.exit(0);
-  }
-}
+const gracefulShutdown = createShutdownHandler({
+  getServer: () => server,
+  onStart: () => {
+    isShuttingDown = true;
+    destroyTmdbThrottle();
+    destroyAnilistThrottle();
+    destroyImdbThrottle();
+    destroySecurity();
+  },
+  closeStreams: closeAdminLiveStreams,
+  cleanup: {
+    'rate-limit-redis': destroyRateLimitRedis,
+    'revocation-store': () => revocationStoreInstance?.destroy(),
+    'imdb-ratings': destroyImdbRatings,
+    observability: stopObservability,
+    storage: () => getStorage()?.disconnect(),
+  },
+});
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

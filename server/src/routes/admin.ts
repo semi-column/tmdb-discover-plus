@@ -50,6 +50,21 @@ import { getCacheStatus } from '../services/cache/index.ts';
 
 const log = createLogger('admin');
 const router = Router();
+const liveStreams = new Set<() => void>();
+let liveStopping = false;
+
+export function closeAdminLiveStreams(): void {
+  liveStopping = true;
+  const errors: unknown[] = [];
+  for (const close of liveStreams) {
+    try {
+      close();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length) throw new AggregateError(errors, 'Live stream cleanup failed');
+}
 
 const LOCKOUT_WINDOW_SEC = 15 * 60;
 const MAX_FAILS_PER_IP = 5;
@@ -519,8 +534,28 @@ router.get(
 // ---------- Live tail (Server-Sent Events) ----------
 
 router.get('/live', async (req, res) => {
+  if (liveStopping) {
+    res.set('Cache-Control', 'no-store');
+    return sendError(res, 503, ErrorCodes.INTERNAL_ERROR, 'Server shutting down');
+  }
   let closed = false;
+  let unsubscribe: (() => void) | undefined;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
+    try {
+      unsubscribe?.();
+    } finally {
+      liveStreams.delete(close);
+      res.end();
+    }
+  };
+  liveStreams.add(close);
+  res.once('close', close);
   const live = await getLiveStore();
+  if (closed) return;
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     // no-transform keeps the compression middleware from buffering the stream.
@@ -532,13 +567,9 @@ router.get('/live', async (req, res) => {
     if (!closed) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
   send('backlog', await live.readTail(100).catch(() => [] as TailItem[]));
-  const unsubscribe = live.subscribe((items) => send('requests', items));
-  const heartbeat = setInterval(() => !closed && res.write(': ping\n\n'), 15_000);
-  req.on('close', () => {
-    closed = true;
-    clearInterval(heartbeat);
-    unsubscribe();
-  });
+  if (closed) return;
+  unsubscribe = live.subscribe((items) => send('requests', items));
+  heartbeat = setInterval(() => !closed && res.write(': ping\n\n'), 15_000);
 });
 
 // ---------- Export ----------

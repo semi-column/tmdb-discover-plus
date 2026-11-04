@@ -132,7 +132,7 @@ export class RedisLiveStore implements LiveStore {
       if (this.emitter.listenerCount('live') === 0 && this.subscriber) {
         const sub = this.subscriber;
         this.subscriber = null;
-        sub.quit().catch(() => undefined);
+        if (sub.isOpen) sub.destroy();
       }
     };
   }
@@ -183,8 +183,10 @@ export class RedisLiveStore implements LiveStore {
   }
 
   async close(): Promise<void> {
-    await this.subscriber?.quit().catch(() => undefined);
-    await this.client.quit().catch(() => undefined);
+    const subscriber = this.subscriber;
+    this.subscriber = null;
+    if (subscriber?.isOpen) subscriber.destroy();
+    if (this.client.isOpen) this.client.destroy();
   }
 }
 
