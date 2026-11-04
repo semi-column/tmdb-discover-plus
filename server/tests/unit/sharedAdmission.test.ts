@@ -25,6 +25,7 @@ import {
   AddonWorkLimitError,
 } from '../../src/utils/addonWork.ts';
 import { getRequestSignal, requestIdMiddleware } from '../../src/utils/requestContext.ts';
+import { AnilistThrottle } from '../../src/infrastructure/anilistThrottle.ts';
 
 // Never connect to REDIS_URL: all destructive operations target our own disposable server.
 const binary = process.env.ADMISSION_REDIS_SERVER || 'redis-server';
@@ -120,6 +121,57 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     const elapsed = Date.now() - start;
     expect(elapsed).toBeGreaterThanOrEqual(850);
     expect(elapsed).toBeLessThan(2000);
+  });
+
+  it('keeps cancelled AniList commands inside the queue bound until Redis settles', async () => {
+    const client = connection();
+    const command = Promise.withResolvers<number>();
+    const evaluate = vi.spyOn(client, 'eval').mockImplementation(() => command.promise);
+    const throttle = new AnilistThrottle(client);
+    const controller = new AbortController();
+    const waiting = Array.from({ length: 100 }, () =>
+      throttle.acquire(controller.signal).catch((error) => error)
+    );
+    controller.abort();
+    await Promise.all(waiting);
+    await expect(throttle.acquire()).rejects.toMatchObject({ statusCode: 429 });
+    expect(evaluate).toHaveBeenCalledTimes(100);
+    command.resolve(0);
+    await command.promise;
+    await expect(throttle.acquire()).resolves.toBeUndefined();
+    throttle.destroy();
+  });
+
+  it('shares AniList spacing and the longest cooldown across replicas without an idle burst', async () => {
+    const a = new AnilistThrottle(connection());
+    const b = new AnilistThrottle(connection());
+    await a.acquire();
+    const started = Date.now();
+    await b.acquire();
+    expect(Date.now() - started).toBeGreaterThanOrEqual(2000);
+    await a.pause(1200);
+    await b.pause(500);
+    const paused = Date.now();
+    await b.acquire();
+    expect(Date.now() - paused).toBeGreaterThanOrEqual(2000);
+    const controller = new AbortController();
+    const pending = a.acquire(controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    a.destroy();
+    b.destroy();
+  });
+
+  it('keeps AniList fail closed and recovers after Redis reconnects', async () => {
+    const client = connection();
+    const throttle = new AnilistThrottle(client);
+    await throttle.acquire();
+    client.fail(new Error('simulated AniList outage'));
+    await expect(throttle.acquire()).rejects.toBeInstanceOf(SharedAdmissionError);
+    await expect(throttle.pause(1000)).rejects.toBeInstanceOf(SharedAdmissionError);
+    await sleep(ADMISSION_RECOVERY_MS);
+    await expect(throttle.acquire()).resolves.toBeUndefined();
+    throttle.destroy();
   });
 
   it('shares the maximum pause and earns no tokens during idle paused time', async () => {
@@ -392,6 +444,21 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
 });
 
 describe('admission wait cleanup without Redis', () => {
+  it('bounds AniList waiters and releases all of them at shutdown', async () => {
+    const throttle = new AnilistThrottle();
+    await throttle.pause(60_000);
+    const waiting = Array.from({ length: 100 }, () => throttle.acquire().catch((error) => error));
+    await expect(throttle.acquire()).rejects.toMatchObject({
+      statusCode: 429,
+      rateLimitExhausted: true,
+    });
+    throttle.destroy();
+    const results = await Promise.all(waiting);
+    expect(results).toHaveLength(100);
+    results.forEach((error) => expect(error.message).toBe('AniList admission shutting down'));
+    await expect(throttle.acquire()).rejects.toThrow('shutting down');
+  });
+
   it('rejects an already aborted signal and an in-flight wait', async () => {
     const controller = new AbortController();
     const pending = admissionDelay(5000, controller.signal);

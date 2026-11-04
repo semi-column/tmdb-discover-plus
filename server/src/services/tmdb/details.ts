@@ -2,7 +2,7 @@ import { createLogger } from '../../utils/logger.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { getCache } from '../cache/index.ts';
 import { tmdbFetch } from './client.ts';
-import { CachedError } from '../cache/CacheWrapper.ts';
+import { CachedError, INCOMPLETE_RESULT } from '../cache/CacheWrapper.ts';
 import { TMDB_IMAGE_BASE } from './constants.ts';
 import { formatRuntime } from './stremioMeta.ts';
 import { generateEpisodeThumbnailUrl, isValidPosterConfig } from '../artworkService.ts';
@@ -394,6 +394,7 @@ export async function getSeriesEpisodes(
   const seasonQueue = regularSeasons;
   const seasonResults: StremioVideo[][] = [];
   const seasonDataByNumber = new Map<number, SeasonDetailsResult>();
+  let incomplete = false;
   const cache = getCache();
   const seasonCacheKey = (number: number) => `season_${tmdbId}_${number}_${language || 'en'}`;
   await Promise.all(
@@ -448,7 +449,10 @@ export async function getSeriesEpisodes(
             ...options,
             completedSeason: seriesEnded || season.season_number < latestSeasonNumber,
           })) as SeasonDetailsResult | null);
-        if (!seasonData?.episodes) return [];
+        if (!seasonData?.episodes) {
+          incomplete = true;
+          return [];
+        }
 
         return seasonData.episodes.map((ep) => {
           const episodeId = imdbId
@@ -559,6 +563,7 @@ export async function getSeriesEpisodes(
           mergedCount: merged.length,
         });
       }
+      if (incomplete) Object.defineProperty(merged, INCOMPLETE_RESULT, { value: true });
       return merged;
     }
   }
@@ -572,6 +577,7 @@ export async function getSeriesEpisodes(
   }
 
   throwIfRequestAborted();
+  if (incomplete) Object.defineProperty(videos, INCOMPLETE_RESULT, { value: true });
   return videos;
 }
 

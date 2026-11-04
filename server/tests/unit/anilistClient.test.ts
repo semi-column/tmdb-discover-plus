@@ -1,4 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
+import type { CacheWrapper } from '../../src/services/cache/CacheWrapper.ts';
+
+const state = vi.hoisted(() => ({ cache: null as CacheWrapper | null }));
+vi.mock('../../src/services/cache/index.ts', () => ({ getCache: () => state.cache }));
+
+vi.mock('../../src/config.ts', () => ({
+  config: { cache: { driver: 'memory' }, logging: { level: 'silent' } },
+}));
 
 const ok = () => new Response(JSON.stringify({ data: {} }), { status: 200 });
 const limited = (retryAfter: string) =>
@@ -8,9 +17,12 @@ const limited = (retryAfter: string) =>
   });
 
 describe('anilistFetch rate-limit pause', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
     vi.useFakeTimers();
+    const { CacheWrapper } = await import('../../src/services/cache/CacheWrapper.ts');
+    const { MockCacheAdapter } = await import('./helpers/mocks.ts');
+    state.cache = new CacheWrapper(new MockCacheAdapter());
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -59,5 +71,126 @@ describe('anilistFetch rate-limit pause', () => {
 
     await vi.advanceTimersByTimeAsync(61_000);
     await expect(background).resolves.toEqual({ data: {} });
+  });
+
+  it('spaces transient retries and other callers by the same attempt budget', async () => {
+    const times: number[] = [];
+    const fetchMock = vi.fn(async () => {
+      times.push(Date.now());
+      return times.length === 1 ? new Response('', { status: 500 }) : ok();
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { anilistFetch } = await import('../../src/services/anilist/client.ts');
+    const work = Promise.all([anilistFetch('query A'), anilistFetch('query B')]);
+    await vi.advanceTimersByTimeAsync(6000);
+    await expect(work).resolves.toHaveLength(2);
+    expect(times).toHaveLength(3);
+    expect(times[1] - times[0]).toBeGreaterThanOrEqual(2100);
+    expect(times[2] - times[1]).toBeGreaterThanOrEqual(2100);
+  });
+
+  it.each(['120', 'invalid', '1e308'])(
+    'does not shorten a cooldown with Retry-After %s',
+    async (header) => {
+      const fetchMock = vi.fn().mockResolvedValueOnce(limited(header)).mockImplementation(ok);
+      vi.stubGlobal('fetch', fetchMock);
+      const { anilistFetch } = await import('../../src/services/anilist/client.ts');
+      const result = anilistFetch('query A');
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(fetchMock).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(header === '120' ? 62_000 : 2000);
+      await expect(result).resolves.toEqual({ data: {} });
+    }
+  );
+
+  it.each(['reset', 'date', 'malformed-reset'])(
+    'honors exhausted successful-response quota (%s)',
+    async (kind) => {
+      vi.setSystemTime(1_700_000_000_000);
+      const headers: Record<string, string> = { 'x-ratelimit-remaining': '0' };
+      if (kind === 'reset')
+        headers['x-ratelimit-reset'] = String(Math.floor(Date.now() / 1000) + 75);
+      else if (kind === 'date')
+        headers['retry-after'] = new Date(Date.now() + 75_000).toUTCString();
+      else headers['x-ratelimit-reset'] = 'Infinity';
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(new Response('{"data":{}}', { headers }))
+        .mockImplementation(ok);
+      vi.stubGlobal('fetch', fetchMock);
+      const { anilistFetch } = await import('../../src/services/anilist/client.ts');
+      await anilistFetch('first');
+      const next = anilistFetch('second');
+      await vi.advanceTimersByTimeAsync((kind === 'malformed-reset' ? 60_000 : 75_000) - 1);
+      expect(fetchMock).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(next).resolves.toEqual({ data: {} });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    }
+  );
+  it('removes a cancelled queued caller without starting its transport later', async () => {
+    const fetchMock = vi.fn().mockImplementation(ok);
+    vi.stubGlobal('fetch', fetchMock);
+    const { anilistFetch } = await import('../../src/services/anilist/client.ts');
+    const { requestIdMiddleware } = await import('../../src/utils/requestContext.ts');
+    await anilistFetch('first');
+    const res = Object.assign(new EventEmitter(), { writableFinished: false, setHeader() {} });
+    const result = new Promise((resolve) => {
+      requestIdMiddleware()({ headers: {} } as any, res as any, () => {
+        anilistFetch('cancelled').then(resolve, resolve);
+      });
+    });
+    res.emit('close');
+    expect(await result).toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    null,
+    { data: null, errors: [{ status: 400, message: 'validation' }] },
+    { data: { Page: null }, errors: [{ status: 500 }] },
+    { data: null },
+    { data: {}, errors: 'invalid' },
+  ])('rejects erroneous GraphQL envelopes: %j', async (body) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(body)))
+    );
+    const { anilistFetch } = await import('../../src/services/anilist/client.ts');
+    await expect(anilistFetch('query')).rejects.toBeInstanceOf(Error);
+  });
+
+  it('accepts valid Media absence but rejects missing batch pages', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{"data":{"Media":null}}'))
+      .mockResolvedValueOnce(new Response('{"data":{}}'));
+    vi.stubGlobal('fetch', fetchMock);
+    const { fetchAnilistMedia } = await import('../../src/services/anilist/detail.ts');
+    const { browseBatch } = await import('../../src/services/anilist/discover.ts');
+    await expect(fetchAnilistMedia({ anilistId: 1 })).resolves.toBeNull();
+    const result = browseBatch({}, 'anime', [1, 2]).catch((error) => error);
+    await vi.advanceTimersByTimeAsync(2200);
+    expect(await result).toMatchObject({ statusCode: 502 });
+  });
+
+  it('coalesces and caches complete search pages with distinct type/page/query keys', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response('{"data":{"Page":{"media":[],"pageInfo":{"hasNextPage":false}}}}')
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { search } = await import('../../src/services/anilist/discover.ts');
+    await Promise.all([search('fixture', 'anime', 1), search('fixture', 'anime', 1)]);
+    await search('fixture', 'anime', 1);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const remaining = Promise.all([
+      search('fixture', 'movie', 1),
+      search('fixture', 'anime', 2),
+      search('other', 'anime', 1),
+    ]);
+    await vi.advanceTimersByTimeAsync(7000);
+    await remaining;
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });

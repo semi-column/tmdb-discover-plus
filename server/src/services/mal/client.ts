@@ -1,7 +1,7 @@
 import { createLogger } from '../../utils/logger.ts';
 import { TIMEOUTS } from '../../constants.ts';
 import { ADDON_VERSION } from '../../version.ts';
-import { createCircuitBreaker } from '../common/circuitBreaker.ts';
+import { createCircuitBreaker, shouldRecordCircuitFailure } from '../common/circuitBreaker.ts';
 import { fetchWithRetry } from '../common/fetchWithRetry.ts';
 
 const log = createLogger('mal:client');
@@ -91,7 +91,7 @@ export async function jikanFetch<T>(path: string): Promise<T> {
     circuitBreaker.recordSuccess();
     return data;
   } catch (err) {
-    circuitBreaker.recordFailure();
+    if (shouldRecordCircuitFailure(err)) circuitBreaker.recordFailure();
     throw err;
   }
 }

@@ -5,9 +5,19 @@ import { stableStringify } from '../../utils/stableStringify.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { AppError, ErrorCodes } from '../../utils/AppError.ts';
-import { isValidTmdbId } from '../../utils/validation.ts';
+import { isValidTmdbId, sanitizePage } from '../../utils/validation.ts';
 
 const log = createLogger('tmdb:discover');
+const MAX_TMDB_PAGE = 500;
+
+function getTmdbPage(page: unknown): number {
+  const parsedPage = parseInt(String(page), 10);
+  return parsedPage > MAX_TMDB_PAGE ? parsedPage : sanitizePage(page);
+}
+
+function emptyPage(page: number) {
+  return { page, results: [], total_pages: 0, total_results: 0 };
+}
 
 import type {
   ContentType,
@@ -146,7 +156,7 @@ function mapCollectionToPaginatedResult(
   );
   const totalResults = sortedParts.length;
   const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
-  const normalizedPage = Math.max(1, Math.min(page, totalPages));
+  const normalizedPage = getTmdbPage(page);
   const start = (normalizedPage - 1) * pageSize;
   const results = sortedParts.slice(start, start + pageSize).map((part) => ({
     ...part,
@@ -217,13 +227,17 @@ export async function discover(apiKey: string, options: DiscoverOptions = {}): P
     watchMonetizationType,
     releasedOnly,
   } = options;
+  const requestedPage = getTmdbPage(page);
+  if (!randomize && requestedPage > MAX_TMDB_PAGE) {
+    return emptyPage(requestedPage);
+  }
 
   const mediaType = type === 'series' ? 'tv' : 'movie';
   const endpoint = `/discover/${mediaType}`;
 
   const params: Record<string, string | number | boolean | undefined> = {
     sort_by: sortBy,
-    page,
+    page: sanitizePage(page),
     include_adult: includeAdult,
     'vote_count.gte': voteCountMin,
   };
@@ -414,9 +428,12 @@ export async function fetchSpecialList(
   options: SpecialListOptions = {}
 ): Promise<unknown> {
   const { page = 1, language, displayLanguage, region, collectionId, studioId, sortBy } = options;
+  const requestedPage = getTmdbPage(page);
   const mediaType = type === 'series' ? 'tv' : 'movie';
 
-  const params: Record<string, string | number | boolean | undefined> = { page };
+  const params: Record<string, string | number | boolean | undefined> = {
+    page: sanitizePage(page),
+  };
   const languageParam = displayLanguage || language;
   if (languageParam) params.language = languageParam;
   if (region) params.region = region;
@@ -461,6 +478,7 @@ export async function fetchSpecialList(
           'A valid collection ID is required for collection list type'
         );
       }
+      if (requestedPage > MAX_TMDB_PAGE) return emptyPage(requestedPage);
       const collection = (await tmdbFetch(`/collection/${collectionId}`, apiKey, {
         ...(languageParam ? { language: languageParam } : {}),
       })) as TmdbCollectionDetails;
@@ -483,6 +501,10 @@ export async function fetchSpecialList(
       return discover(apiKey, { type, page, ...options, randomize: true });
     default:
       throw new Error(`Unknown special list type: ${listType}`);
+  }
+
+  if (!options.randomize && requestedPage > MAX_TMDB_PAGE) {
+    return emptyPage(requestedPage);
   }
 
   if (options.randomize) {

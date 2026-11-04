@@ -14,6 +14,7 @@ import { resolveDynamicDatePreset } from '../utils/dateHelpers.ts';
 import { createLogger } from '../utils/logger.ts';
 import { getApiKeyFromConfig } from './configService.ts';
 import { config } from '../config.ts';
+import { throwIfRequestAborted } from '../utils/requestContext.ts';
 import { SORT_OPTIONS } from './tmdb/referenceData.ts';
 import type { UserConfig, StremioManifest, ManifestCatalog, TmdbGenre } from '../types/index.ts';
 
@@ -429,6 +430,7 @@ export async function enrichManifestWithGenres(
 
         let idToName: Record<string, string> = {};
         let fullNames: string[] | null = null;
+        let mapSource = 'unavailable';
 
         try {
           const resolvedApiKey = getApiKeyFromConfig(config);
@@ -439,9 +441,16 @@ export async function enrichManifestWithGenres(
                 idToName[String(g.id)] = g.name;
               });
               fullNames = live.map((g) => g.name);
+              mapSource = 'tmdb';
             }
           }
-        } catch (err) {}
+        } catch (err) {
+          throwIfRequestAborted();
+          log.debug('Live genre lookup failed; using static mapping', {
+            type: helperType,
+            error: err,
+          });
+        }
 
         if (!fullNames) {
           try {
@@ -453,6 +462,7 @@ export async function enrichManifestWithGenres(
               idToName[String(id)] = name as string;
             });
             fullNames = Object.values(mapping || {}) as string[];
+            mapSource = fullNames.length ? 'static' : 'unavailable';
           } catch (err) {
             idToName = {};
             fullNames = null;
@@ -506,6 +516,12 @@ export async function enrichManifestWithGenres(
                   catalogId: catalog.id,
                   selectedCount: selected.length,
                   unmappedCount: selected.length - options.length,
+                  type: helperType,
+                  mapSource,
+                  mappingSize: fullNames?.length || 0,
+                  unmappedNumericIds: selected
+                    .filter((value) => /^[0-9]{1,8}$/.test(value.trim()) && !resolveGenre(value))
+                    .slice(0, 20),
                 });
               }
             } else if (fullNames && fullNames.length > 0) {

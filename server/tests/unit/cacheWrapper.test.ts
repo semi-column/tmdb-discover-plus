@@ -4,6 +4,7 @@ import {
   CachedError,
   classifyError,
   classifyResult,
+  INCOMPLETE_RESULT,
 } from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter, FailingCacheAdapter } from './helpers/mocks.ts';
 import { getRequestCacheStats, requestIdMiddleware } from '../../src/utils/requestContext.ts';
@@ -63,6 +64,43 @@ describe('CacheWrapper', () => {
   beforeEach(() => {
     adapter = new MockCacheAdapter();
     cache = new CacheWrapper(adapter, { version: '1.0.0' });
+  });
+
+  it('shares a marked incomplete result without caching it or serializing the marker', async () => {
+    const partial = { videos: [{ id: 'partial' }] };
+    Object.defineProperty(partial, INCOMPLETE_RESULT, { value: true });
+    let finish!: (value: unknown) => void;
+    const loader = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const first = cache.wrap('partial-meta', loader, 86400);
+    await vi.waitFor(() => expect(loader).toHaveBeenCalledOnce());
+    const second = cache.wrap('partial-meta', loader, 86400);
+    finish(partial);
+    expect(await first).toBe(partial);
+    expect(await second).toBe(partial);
+    expect(INCOMPLETE_RESULT in partial).toBe(true);
+    expect(JSON.stringify(partial)).toBe('{"videos":[{"id":"partial"}]}');
+    expect(await cache.getEntry('partial-meta')).toBeNull();
+  });
+
+  it('does not replace a complete stale entry with a partial background refresh', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      await cache.set('stale-meta', { videos: ['complete'] }, 60);
+      now.mockReturnValue(62000);
+      const partial = Object.defineProperty({ videos: [] }, INCOMPLETE_RESULT, { value: true });
+      expect(await cache.wrap('stale-meta', async () => partial, 60)).toEqual({
+        videos: ['complete'],
+      });
+      await vi.waitFor(() => expect(cache.getStats().inFlightRequests).toBe(0));
+      expect((await cache.getEntry('stale-meta'))?.data).toEqual({ videos: ['complete'] });
+    } finally {
+      now.mockRestore();
+    }
   });
 
   describe('key prefixing', () => {

@@ -44,6 +44,9 @@ async function fetchTagCollection(
 
   try {
     const resp = await anilistFetch<TagCollectionResponse>(TAG_COLLECTION_QUERY);
+    if (!Array.isArray(resp.data.MediaTagCollection)) {
+      throw Object.assign(new Error('Invalid AniList tag collection'), { statusCode: 502 });
+    }
     const allTags = resp.data.MediaTagCollection.map((t) => ({
       value: t.name,
       label: t.name,

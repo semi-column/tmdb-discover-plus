@@ -29,9 +29,11 @@ let totalActive = 0;
 const queue: { userId: string; start: () => void }[] = [];
 
 export class AddonWorkLimitError extends Error {
-  constructor() {
+  readonly reason: 'queue' | 'wait';
+  constructor(reason: 'queue' | 'wait' = 'queue') {
     super('Addon work capacity exceeded');
     this.name = 'AddonWorkLimitError';
+    this.reason = reason;
   }
 }
 
@@ -124,11 +126,16 @@ export class RedisAddonWork {
       for (;;) {
         signal.throwIfAborted();
         const remaining = deadline - Date.now();
-        if (remaining <= 0) throw new AddonWorkLimitError();
+        if (remaining <= 0) throw new AddonWorkLimitError('wait');
         const pending = command('acquire');
         let granted: number;
         try {
-          granted = await admissionAwait(pending, remaining, signal, new AddonWorkLimitError());
+          granted = await admissionAwait(
+            pending,
+            remaining,
+            signal,
+            new AddonWorkLimitError('wait')
+          );
         } catch (error) {
           // A grant can arrive after the caller has stopped waiting.
           cleanup = pending.then((result) => (result === 1 ? command('release') : undefined));
@@ -138,7 +145,7 @@ export class RedisAddonWork {
           if (signal.aborted || Date.now() >= deadline) {
             cleanup = command('release');
             signal.throwIfAborted();
-            throw new AddonWorkLimitError();
+            throw new AddonWorkLimitError('wait');
           }
           let released = false;
           let releasing: Promise<void> | undefined;
@@ -216,7 +223,7 @@ export async function acquireAddonWork(userId: string): Promise<WorkRelease> {
     return shared!.acquire(userId);
   }
   if (canStart(userId)) return startWork(userId);
-  const capacityError = () => {
+  const capacityError = (reason: 'queue' | 'wait' = 'queue') => {
     log.warn('Addon work limit exceeded', {
       policy: 'addonWork',
       userIdPrefix: userId.slice(0, 8),
@@ -224,7 +231,7 @@ export async function acquireAddonWork(userId: string): Promise<WorkRelease> {
       totalActive,
       queued: queue.length,
     });
-    return new AddonWorkLimitError();
+    return new AddonWorkLimitError(reason);
   };
   if (
     queue.length >= GLOBAL_QUEUED ||
@@ -253,7 +260,7 @@ export async function acquireAddonWork(userId: string): Promise<WorkRelease> {
     };
     const timer = setTimeout(() => {
       remove();
-      reject(capacityError());
+      reject(capacityError('wait'));
     }, WAIT_MS);
     queue.push(waiting);
     signal?.addEventListener('abort', onAbort, { once: true });
@@ -275,6 +282,12 @@ export async function withAddonWork<T>(userId: string, work: () => Promise<T>): 
 export function sendAddonWorkLimit(error: unknown, res: Response): boolean {
   if (!(error instanceof SharedAdmissionError) && !(error instanceof AddonWorkLimitError))
     return false;
+  log.warn('Addon work admission rejected', {
+    policy: 'addonWork',
+    reason: error instanceof AddonWorkLimitError ? error.reason : 'redis-unavailable',
+    statusCode: error instanceof SharedAdmissionError ? 503 : 429,
+    waitBudgetMs: WAIT_MS,
+  });
   res.set('Cache-Control', 'no-store');
   res.set('Retry-After', '5');
   res

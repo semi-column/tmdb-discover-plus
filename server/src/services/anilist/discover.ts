@@ -1,9 +1,12 @@
 import { createLogger } from '../../utils/logger.ts';
-import { anilistFetch } from './client.ts';
+import { anilistFetch, requireAnilistField } from './client.ts';
 import { BROWSE_QUERY, MEDIA_FIELDS, SEARCH_QUERY, STUDIO_SEARCH_QUERY } from './queries.ts';
 import type { AnilistPageResponse, AnilistMedia } from './types.ts';
 import type { AnilistCatalogFilters } from '../../types/config.ts';
 import type { ContentType } from '../../types/common.ts';
+import { createHash } from 'node:crypto';
+import { getCache } from '../cache/index.ts';
+import { CACHE_TTLS } from '../../cacheTtls.ts';
 
 const log = createLogger('anilist:discover');
 
@@ -20,6 +23,16 @@ interface BatchPageData {
 
 interface BrowseBatchResponse {
   data: Record<string, BatchPageData>;
+}
+
+function requirePage<T extends { media: AnilistMedia[]; pageInfo: { hasNextPage: boolean } }>(
+  value: T | undefined
+): T {
+  const page = requireAnilistField(value, 'Page');
+  if (!Array.isArray(page.media) || typeof page.pageInfo?.hasNextPage !== 'boolean') {
+    throw Object.assign(new Error('Invalid AniList page response'), { statusCode: 502 });
+  }
+  return page;
 }
 
 function contentTypeToFormats(type: ContentType): string[] {
@@ -176,7 +189,7 @@ export async function browse(
   log.debug('AniList browse', { type, page, sort: variables.sort });
 
   const response = await anilistFetch<AnilistPageResponse>(BROWSE_QUERY, variables);
-  const pageData = response.data.Page;
+  const pageData = requirePage(response.data.Page);
   let media = pageData.media;
 
   if (studioIds) {
@@ -214,20 +227,9 @@ export async function browseBatch(
 
   return selectedPages.map((requestedPage, index) => {
     const key = `p${index + 1}`;
-    const pageData = response.data[key];
-    const fallbackPage: BatchPageData = {
-      pageInfo: {
-        total: 0,
-        perPage: 0,
-        currentPage: requestedPage,
-        lastPage: requestedPage,
-        hasNextPage: false,
-      },
-      media: [],
-    };
-    const resolved = pageData || fallbackPage;
+    const resolved = requirePage(response.data[key]);
 
-    let media = resolved.media || [];
+    let media = resolved.media;
     if (studioIds) {
       media = media.filter((m) => m.studios?.nodes?.some((s) => studioIds.has(s.id)));
     }
@@ -256,12 +258,19 @@ export async function search(
 
   log.debug('AniList search', { query, type, page });
 
-  const response = await anilistFetch<AnilistPageResponse>(SEARCH_QUERY, variables);
-  const pageData = response.data.Page;
-  return {
-    media: pageData.media,
-    hasNextPage: pageData.pageInfo.hasNextPage,
-  };
+  const key = `anilist:search:${createHash('sha256').update(JSON.stringify(variables)).digest('hex')}`;
+  return getCache().wrap(
+    key,
+    async () => {
+      const response = await anilistFetch<AnilistPageResponse>(SEARCH_QUERY, variables);
+      const pageData = requirePage(response.data.Page);
+      return {
+        media: pageData.media,
+        hasNextPage: pageData.pageInfo.hasNextPage,
+      };
+    },
+    CACHE_TTLS.CATALOG_SERVER_TRENDING
+  ) as Promise<{ media: AnilistMedia[]; hasNextPage: boolean }>;
 }
 
 interface StudioSearchResponse {
@@ -282,5 +291,9 @@ export async function searchStudios(
     page: 1,
     perPage: 20,
   });
-  return response.data.Page.studios;
+  const page = requireAnilistField(response.data.Page, 'studio Page');
+  if (!Array.isArray(page.studios)) {
+    throw Object.assign(new Error('Invalid AniList studio response'), { statusCode: 502 });
+  }
+  return page.studios;
 }

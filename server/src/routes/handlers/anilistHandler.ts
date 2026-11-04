@@ -64,7 +64,7 @@ export async function handleAnilistCatalogRequest(
   req: Request
 ): Promise<void> {
   const startTime = Date.now();
-  let releaseWork: (() => void) | undefined;
+  let releaseWork: (() => void | Promise<void>) | undefined;
   try {
     const skip = parseInt(extra.skip, 10) || 0;
     const searchQuery = extra.search || null;
@@ -238,8 +238,10 @@ export async function handleAnilistCatalogRequest(
       error: err,
       durationMs: Date.now() - startTime,
     });
+    res.set('Cache-Control', 'no-store');
+    res.set('X-Catalog-Status', 'degraded');
     res.json({ metas: [] });
   } finally {
-    releaseWork?.();
+    await releaseWork?.();
   }
 }

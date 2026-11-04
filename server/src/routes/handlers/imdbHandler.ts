@@ -328,6 +328,8 @@ export async function handleImdbCatalogRequest(
       error,
       durationMs: Date.now() - startTime,
     });
+    res.set('Cache-Control', 'no-store');
+    res.set('X-Catalog-Status', 'degraded');
     res.json({ metas: [] });
   }
 }

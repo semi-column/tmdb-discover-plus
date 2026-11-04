@@ -20,6 +20,7 @@ const {
   mockTmdbToMeta,
   mockTmdbGetDetails,
   mockTmdbFullMeta,
+  mockTmdbEpisodes,
   mockTmdbSpecialList,
   mockBuildArtworkOptions,
   mockValidateApiKeyCached,
@@ -41,6 +42,7 @@ const {
   mockTmdbToMeta: vi.fn(),
   mockTmdbGetDetails: vi.fn(),
   mockTmdbFullMeta: vi.fn(),
+  mockTmdbEpisodes: vi.fn(),
   mockTmdbSpecialList: vi.fn(),
   mockBuildArtworkOptions: vi.fn(),
   mockValidateApiKeyCached: vi.fn(),
@@ -84,6 +86,7 @@ vi.mock('../../src/services/tmdb/index.ts', () => ({
   toStremioMetaPreview: mockTmdbToMeta,
   getDetails: mockTmdbGetDetails,
   toStremioFullMeta: mockTmdbFullMeta,
+  getSeriesEpisodes: mockTmdbEpisodes,
   fetchSpecialList: mockTmdbSpecialList,
 }));
 
@@ -116,7 +119,7 @@ vi.mock('../../src/config.ts', () => ({
 
 vi.mock('../../src/constants.ts', () => ({
   buildCatalogId: (_source: string, catalog: { catalogId: string }) => catalog.catalogId,
-  DISPLAY: { IMDB_PAGE_SIZE: 20 },
+  DISPLAY: { IMDB_PAGE_SIZE: 20, TMDB_PAGE_SIZE: 20 },
   normalizeBaseUrl: () => 'https://example.test',
 }));
 
@@ -167,7 +170,11 @@ import { handleMalCatalogRequest } from '../../src/routes/handlers/malHandler.ts
 import { handleSimklCatalogRequest } from '../../src/routes/handlers/simklHandler.ts';
 import { addonRouter } from '../../src/routes/addon.ts';
 import { etagMiddleware } from '../../src/utils/etag.ts';
-import { CacheWrapper, CachedError } from '../../src/services/cache/CacheWrapper.ts';
+import {
+  CacheWrapper,
+  CachedError,
+  INCOMPLETE_RESULT,
+} from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter } from './helpers/mocks.ts';
 import { AppError, ErrorCodes } from '../../src/utils/AppError.ts';
 import { setLogSink } from '../../src/utils/logger.ts';
@@ -197,6 +204,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockTmdbGetDetails.mockReset();
   mockTmdbFullMeta.mockReset();
+  mockTmdbEpisodes.mockReset();
   mockBuildArtworkOptions.mockReturnValue(null);
   mockCacheGet.mockResolvedValue(null);
   mockCacheSet.mockResolvedValue(undefined);
@@ -231,6 +239,26 @@ beforeEach(() => {
 });
 
 describe.each(sourceHandlers)('$source catalog handler', ({ source, type, handler }) => {
+  it('does not cache an empty error fallback as successful catalog data', async () => {
+    mockGetUserConfig.mockResolvedValue({
+      preferences: {},
+      catalogs: [{ catalogId: `${source}-failed`, type, filters: {} }],
+    });
+    for (const fetch of [
+      mockAnilistBrowse,
+      mockImdbAdvancedSearch,
+      mockKitsuDiscover,
+      mockMalDiscover,
+      mockSimklDiscover,
+    ]) {
+      fetch.mockRejectedValue(new Error('Provider unavailable'));
+    }
+    const res = { json: vi.fn(), set: vi.fn(), etagJson: vi.fn() };
+    await handler('test-user', type, `${source}-failed`, {}, res as never, {} as never);
+    expect(res.json).toHaveBeenCalledWith({ metas: [] });
+    expect(res.set).toHaveBeenCalledWith('Cache-Control', 'no-store');
+    expect(res.set).toHaveBeenCalledWith('X-Catalog-Status', 'degraded');
+  });
   it('serves a cached response even when the user has six active builds', async () => {
     const releases = await Promise.all(
       Array.from({ length: 6 }, () => acquireAddonWork('cached-source'))
@@ -348,6 +376,33 @@ describe.each(sourceHandlers)('$source catalog handler', ({ source, type, handle
 });
 
 describe('TMDB catalog route', () => {
+  it.each([10000, 10020])(
+    'returns exhaustion for skip=%i without fetching TMDB catalogs',
+    async (skip) => {
+      mockGetUserConfig.mockResolvedValue({
+        preferences: {},
+        catalogs: [{ catalogId: 'movies', type: 'movie', filters: {} }],
+      });
+      const app = express();
+      app.use(addonRouter);
+      const response = await request(app).get(`/testuser/catalog/movie/movies/skip=${skip}.json`);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ metas: [] });
+      expect(mockTmdbDiscover).not.toHaveBeenCalled();
+      expect(mockTmdbDetails).not.toHaveBeenCalled();
+    }
+  );
+
+  it('returns a visible validation error for a negative offset', async () => {
+    mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+    const app = express();
+    app.use(addonRouter);
+    const response = await request(app).get('/testuser/catalog/movie/movies/skip=-20.json');
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('VALIDATION_ERROR');
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(mockTmdbDiscover).not.toHaveBeenCalled();
+  });
   it('wires burst and invalid-ID protection through the actual addon router', async () => {
     const ip = '198.51.100.77';
     serverConfig.features.disableRateLimit = false;
@@ -510,6 +565,38 @@ describe('TMDB catalog route', () => {
 });
 
 describe('metadata route cache dependencies', () => {
+  it('serves incomplete episodes without caching the aggregate or advertising cacheable hints', async () => {
+    const cache = new CacheWrapper(new MockCacheAdapter());
+    const wrap = vi.spyOn(cache, 'wrap');
+    mockCacheWrap.mockImplementation(cache.wrap.bind(cache));
+    mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+    mockTmdbGetDetails.mockResolvedValue({ id: 550, images: { logos: [{}] } });
+    const episodes = [{ id: 'tt0137523:1:1', season: 1, episode: 1, thumbnail: 'thumbnail' }];
+    Object.defineProperty(episodes, INCOMPLETE_RESULT, { value: true });
+    mockTmdbEpisodes.mockResolvedValue(episodes);
+    mockTmdbFullMeta.mockImplementation(async () => ({
+      id: 'tt0137523',
+      poster: 'poster',
+      videos: episodes,
+    }));
+    const app = express();
+    app.use(etagMiddleware);
+    app.use(addonRouter);
+    for (let i = 0; i < 2; i++) {
+      const response = await request(app).get('/testuser/meta/series/tmdb:550.json');
+      expect(response.status).toBe(200);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['x-metadata-status']).toBe('degraded');
+      expect(response.body).toMatchObject({
+        meta: { videos: episodes },
+        cacheMaxAge: 0,
+        staleRevalidate: 0,
+        staleError: 0,
+      });
+      expect(await cache.getEntry(wrap.mock.calls[0][0])).toBeNull();
+    }
+    expect(mockTmdbGetDetails).toHaveBeenCalledTimes(2);
+  });
   it.each(['NOT_FOUND', 'TEMPORARY_ERROR', 'RATE_LIMITED'] as const)(
     'respects cached %s without deleting or recomputing metadata',
     async (errorType) => {

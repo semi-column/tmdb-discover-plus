@@ -29,7 +29,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { etagMiddleware } from '../utils/etag.ts';
-import { CachedError, classifyError } from '../services/cache/CacheWrapper.ts';
+import { CachedError, classifyError, INCOMPLETE_RESULT } from '../services/cache/CacheWrapper.ts';
 import { getCache } from '../services/cache/index.ts';
 import { buildMetaCacheKey } from '../services/cache/keys.ts';
 import {
@@ -427,6 +427,10 @@ async function handleCatalogRequest(
     const skip = parseInt(extra.skip, 10) || 0;
     const search = extra.search || null;
 
+    if (skip < 0 || !Number.isSafeInteger(skip)) {
+      res.set('Cache-Control', 'no-store');
+      return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid catalog offset');
+    }
     const page = Math.floor(skip / TMDB_PAGE_SIZE) + 1;
 
     log.debug('Catalog request', { catalogId, skip, page, extra });
@@ -465,6 +469,15 @@ async function handleCatalogRequest(
 
     if (!catalogConfig) {
       log.debug('Catalog not found', { catalogId });
+      return res.json({ metas: [] });
+    }
+    // Collections are sliced locally; only upstream-paginated TMDB catalogs have this cap.
+    const randomized =
+      !search &&
+      (catalogConfig.filters?.randomize ||
+        catalogConfig.filters?.sortBy === 'random' ||
+        catalogConfig.filters?.listType === 'random');
+    if (page > 500 && (search || catalogConfig.filters?.listType !== 'collection') && !randomized) {
       return res.json({ metas: [] });
     }
 
@@ -710,6 +723,11 @@ async function handleCatalogRequest(
         code: (error as Error & { code?: string }).code || 'CATALOG_FETCH_ERROR',
       });
     }
+    res.set('Cache-Control', 'no-store');
+    res.set(
+      'X-Catalog-Status',
+      classifyError(error as Error) === 'NOT_FOUND' ? 'not-found' : 'degraded'
+    );
     res.json({ metas: [] });
   }
 }
@@ -842,6 +860,9 @@ async function handleMetaRequest(
       );
 
       throwIfRequestAborted();
+      if (fullMeta && episodesResult && INCOMPLETE_RESULT in episodesResult) {
+        Object.defineProperty(fullMeta, INCOMPLETE_RESULT, { value: true });
+      }
       return fullMeta;
     };
 
@@ -864,6 +885,7 @@ async function handleMetaRequest(
     }
 
     const responseMeta = meta;
+    const incomplete = INCOMPLETE_RESULT in meta;
     const { posterPlaceholder, backdropPlaceholder } = getPlaceholderUrls(resolvedBaseUrl);
     if (!responseMeta.poster) responseMeta.poster = posterPlaceholder;
     if (responseMeta.videos) {
@@ -889,12 +911,16 @@ async function handleMetaRequest(
       'Cache-Control',
       `max-age=${CACHE_TTLS.META_HEADER}, stale-while-revalidate=${CACHE_TTLS.META_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
     );
+    if (incomplete) {
+      res.set('Cache-Control', 'no-store');
+      res.set('X-Metadata-Status', 'degraded');
+    }
     res.etagJson(
       {
         meta: responseMeta,
-        cacheMaxAge: CACHE_TTLS.META_HEADER,
-        staleRevalidate: CACHE_TTLS.META_STALE_REVALIDATE,
-        staleError: CACHE_TTLS.CATALOG_STALE_IF_ERROR,
+        cacheMaxAge: incomplete ? 0 : CACHE_TTLS.META_HEADER,
+        staleRevalidate: incomplete ? 0 : CACHE_TTLS.META_STALE_REVALIDATE,
+        staleError: incomplete ? 0 : CACHE_TTLS.CATALOG_STALE_IF_ERROR,
       },
       { extra: `${userId}:${id}` }
     );

@@ -46,6 +46,10 @@ const FETCH_TIMEOUT_MS = TIMEOUTS.TMDB_FETCH_MS;
 const MAX_IN_FLIGHT = CONCURRENCY.MAX_IN_FLIGHT;
 
 const inFlightRequests = new Map<string, { promise: Promise<unknown>; signal?: AbortSignal }>();
+const validations = new Map<
+  string,
+  { promise: Promise<ApiKeyValidationResult>; signal?: AbortSignal }
+>();
 
 const CIRCUIT_BREAKER = {
   threshold: CIRCUIT_BREAKER_DEFAULTS.THRESHOLD,
@@ -573,7 +577,24 @@ export async function validateApiKeyCached(apiKey: string): Promise<ApiKeyValida
       };
     }
   }
-  return validateApiKey(apiKey);
+  const pending = validations.get(apiKeyId);
+  if (pending) {
+    const result = await awaitWithRequestAbort(pending.promise);
+    throwIfRequestAborted();
+    if (pending.signal?.aborted) return validateApiKeyCached(apiKey);
+    return result;
+  }
+  if (validations.size >= MAX_IN_FLIGHT) {
+    log.warn('API key validation coalescing at capacity');
+    return validateApiKey(apiKey);
+  }
+  const entry = { promise: validateApiKey(apiKey), signal: getRequestSignal() };
+  validations.set(apiKeyId, entry);
+  try {
+    return await awaitWithRequestAbort(entry.promise);
+  } finally {
+    if (validations.get(apiKeyId) === entry) validations.delete(apiKeyId);
+  }
 }
 
 export function isInvalidApiKeyError(error: unknown): boolean {

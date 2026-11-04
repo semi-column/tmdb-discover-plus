@@ -23,6 +23,8 @@ const log = createLogger('CacheWrapper');
 const MAX_IN_FLIGHT = 5000;
 const IN_FLIGHT_WARN_THRESHOLD = MAX_IN_FLIGHT * 0.8;
 const ERROR_TTLS = CACHE_ERROR_TTLS;
+/** Non-serialized producer marker: coalesced callers must also recognize partial results. */
+export const INCOMPLETE_RESULT = Symbol('incompleteResult');
 export function classifyError(
   error: { message?: string; code?: string; name?: string; statusCode?: number } | null | undefined,
   statusCode?: number
@@ -355,6 +357,7 @@ export class CacheWrapper {
       throwIfRequestAborted();
       const result = await awaitWithRequestAbort(fetchFn());
       throwIfRequestAborted();
+      if (result && typeof result === 'object' && INCOMPLETE_RESULT in result) return result;
       const resultType = classifyResult(result);
       const effectiveTtl = resultType === 'EMPTY_RESULT' ? ERROR_TTLS.EMPTY_RESULT : ttlSeconds;
       await this.set(key, result, effectiveTtl);

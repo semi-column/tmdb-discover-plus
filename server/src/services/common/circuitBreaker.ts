@@ -1,4 +1,14 @@
 import { CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
+import { isRequestAborted } from '../../utils/requestContext.ts';
+
+export function shouldRecordCircuitFailure(error: unknown): boolean {
+  if (isRequestAborted()) return false;
+  if (!error || typeof error !== 'object') return true;
+  if ('code' in error && error.code === 'SHARED_ADMISSION_UNAVAILABLE') return false;
+  if ('name' in error && error.name === 'AbortError') return false;
+  if ('rateLimitExhausted' in error && error.rateLimitExhausted) return false;
+  return !('statusCode' in error && typeof error.statusCode === 'number' && error.statusCode < 500);
+}
 
 export interface CircuitBreakerConfig {
   /** Consecutive failures within `windowMs` before the circuit opens. */

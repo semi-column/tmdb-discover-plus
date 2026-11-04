@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CacheWrapper, CachedError } from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter } from './helpers/mocks.ts';
 import { setLogSink } from '../../src/utils/logger.ts';
+import { abortRequestContext, withRequestAbortContext } from '../../src/utils/requestContext.ts';
 
 const state = vi.hoisted(() => ({
   cache: null as CacheWrapper | null,
@@ -13,7 +14,11 @@ vi.mock('../../src/infrastructure/tmdbThrottle.ts', () => ({
   RATE_LIMITER_TIMEOUT_CODE: 'RATE_LIMITER_TIMEOUT',
 }));
 
-import { tmdbFetch, getCircuitBreakerState } from '../../src/services/tmdb/client.ts';
+import {
+  tmdbFetch,
+  getCircuitBreakerState,
+  validateApiKeyCached,
+} from '../../src/services/tmdb/client.ts';
 import { getDetails } from '../../src/services/tmdb/details.ts';
 
 beforeEach(() => {
@@ -27,6 +32,82 @@ afterEach(() => {
 });
 
 describe('TMDB negative caching', () => {
+  it('restarts validation for a healthy waiter when its producer is cancelled', async () => {
+    const started = Promise.withResolvers<void>();
+    const cancel = Promise.withResolvers<void>();
+    const fetch = vi
+      .fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>()
+      .mockImplementationOnce((_input, init) => {
+        started.resolve();
+        if (!init?.signal) throw new Error('Expected cancellation signal');
+        const signal = init.signal;
+        return new Promise((_resolve, reject) =>
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+        );
+      })
+      .mockResolvedValue(new Response('{"configuration":true}'));
+    vi.stubGlobal('fetch', fetch);
+    const producer = withRequestAbortContext(async () => {
+      const work = validateApiKeyCached('cancelled-producer-fixture-key').catch((error) => error);
+      await cancel.promise;
+      abortRequestContext();
+      return work;
+    });
+    await started.promise;
+    const waiter = withRequestAbortContext(() =>
+      validateApiKeyCached('cancelled-producer-fixture-key')
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    cancel.resolve();
+    expect(await producer).toMatchObject({ name: 'AbortError' });
+    await expect(waiter).resolves.toEqual({ valid: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cancel validation when only a waiter leaves', async () => {
+    const started = Promise.withResolvers<void>();
+    const reply = Promise.withResolvers<Response>();
+    const cancel = Promise.withResolvers<void>();
+    const fetch = vi.fn(() => {
+      started.resolve();
+      return reply.promise;
+    });
+    vi.stubGlobal('fetch', fetch);
+    const producer = withRequestAbortContext(() =>
+      validateApiKeyCached('cancelled-waiter-fixture-key')
+    );
+    await started.promise;
+    const waiter = withRequestAbortContext(async () => {
+      const work = validateApiKeyCached('cancelled-waiter-fixture-key').catch((error) => error);
+      await cancel.promise;
+      abortRequestContext();
+      return work;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    cancel.resolve();
+    expect(await waiter).toMatchObject({ name: 'AbortError' });
+    reply.resolve(new Response('{"configuration":true}'));
+    await expect(producer).resolves.toEqual({ valid: true });
+    await expect(validateApiKeyCached('cancelled-waiter-fixture-key')).resolves.toEqual({
+      valid: true,
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('coalesces concurrent credential validation without sharing validity between keys', async () => {
+    const fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ configuration: true }),
+    }));
+    vi.stubGlobal('fetch', fetch);
+    await Promise.all(
+      Array.from({ length: 10 }, () => validateApiKeyCached('coalesced-fixture-key'))
+    );
+    expect(fetch).toHaveBeenCalledOnce();
+    await validateApiKeyCached('different-fixture-key');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
   it('does not cache shared admission outages or count them as TMDB circuit failures', async () => {
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);

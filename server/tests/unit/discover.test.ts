@@ -45,6 +45,54 @@ describe('discover', () => {
     expect(mockedFetch).toHaveBeenCalledWith('/discover/tv', 'key', expect.any(Object));
   });
 
+  it('returns an empty page above TMDB’s limit without an upstream request', async () => {
+    await expect(discover('key', { page: 501 })).resolves.toEqual({
+      page: 501,
+      results: [],
+      total_pages: 0,
+      total_results: 0,
+    });
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it('still fetches the last TMDB page', async () => {
+    mockedFetch.mockResolvedValue({ page: 500, results: [] });
+    await discover('key', { page: 500 });
+    expect(mockedFetch).toHaveBeenCalledWith(
+      '/discover/movie',
+      'key',
+      expect.objectContaining({ page: 500 })
+    );
+  });
+
+  it.each([0, -2, NaN, Infinity, -Infinity])(
+    'normalizes invalid page %s to page 1',
+    async (page) => {
+      mockedFetch.mockResolvedValue({ page: 1, results: [] });
+      await discover('key', { page });
+      expect(mockedFetch).toHaveBeenCalledWith(
+        '/discover/movie',
+        'key',
+        expect.objectContaining({ page: 1 })
+      );
+    }
+  );
+
+  it('keeps randomized discovery working when the requested page is above the limit', async () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.999);
+    mockedFetch
+      .mockResolvedValueOnce({ page: 1, results: [], total_pages: 600 })
+      .mockResolvedValueOnce({ page: 500, results: [{ id: 1 }], total_pages: 600 });
+    try {
+      await discover('key', { page: 501, randomize: true });
+      expect(mockedFetch).toHaveBeenCalledTimes(2);
+      expect(mockedFetch.mock.calls[0][2]).toMatchObject({ page: 1 });
+      expect(mockedFetch.mock.calls[1][2]).toMatchObject({ page: 500 });
+    } finally {
+      random.mockRestore();
+    }
+  });
+
   it('maps genres with correct separator for match mode', async () => {
     mockedFetch.mockResolvedValue({ page: 1, results: [] });
     await discover('key', { type: 'movie', genres: ['28', '12'], genreMatchMode: 'all' });
@@ -223,6 +271,69 @@ describe('fetchSpecialList', () => {
     expect(result.results).toHaveLength(5);
     expect(result.results[0].id).toBe(21);
   });
+
+  it('preserves the requested collection page instead of clamping to the last page', async () => {
+    mockedFetch.mockResolvedValue({
+      id: 10,
+      name: 'Example Collection',
+      parts: Array.from({ length: 25 }, (_, i) => ({ id: i + 1 })),
+    });
+
+    await expect(
+      fetchSpecialList('key', 'collection', 'movie', { collectionId: 10, page: 3 })
+    ).resolves.toMatchObject({
+      page: 3,
+      total_pages: 2,
+      total_results: 25,
+      results: [],
+    });
+    expect(mockedFetch).toHaveBeenCalledExactlyOnceWith('/collection/10', 'key', {});
+  });
+
+  it('returns an empty collection page above TMDB’s limit without fetching the collection', async () => {
+    await expect(
+      fetchSpecialList('key', 'collection', 'movie', { collectionId: 10, page: 501 })
+    ).resolves.toEqual({
+      page: 501,
+      results: [],
+      total_pages: 0,
+      total_results: 0,
+    });
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty special-list page above TMDB’s limit without an upstream request', async () => {
+    await expect(fetchSpecialList('key', 'popular', 'movie', { page: 501 })).resolves.toEqual({
+      page: 501,
+      results: [],
+      total_pages: 0,
+      total_results: 0,
+    });
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it('still fetches the last TMDB special-list page', async () => {
+    mockedFetch.mockResolvedValue({ page: 500, results: [] });
+    await fetchSpecialList('key', 'popular', 'movie', { page: 500 });
+    expect(mockedFetch).toHaveBeenCalledWith(
+      '/movie/popular',
+      'key',
+      expect.objectContaining({ page: 500 })
+    );
+  });
+
+  it.each([0, -2, NaN, Infinity, -Infinity])(
+    'normalizes special-list page %s to page 1',
+    async (page) => {
+      mockedFetch.mockResolvedValue({ page: 1, results: [] });
+      await fetchSpecialList('key', 'popular', 'movie', { page });
+      expect(mockedFetch).toHaveBeenCalledWith(
+        '/movie/popular',
+        'key',
+        expect.objectContaining({ page: 1 })
+      );
+    }
+  );
 
   it('fetches studio credits through the official API without narrowing Discover filters', async () => {
     mockedFetch.mockResolvedValue({

@@ -27,6 +27,7 @@ vi.mock('../../src/config.ts', () => ({
 }));
 
 import { getSeriesEpisodes } from '../../src/services/tmdb/details.ts';
+import { INCOMPLETE_RESULT } from '../../src/services/cache/CacheWrapper.ts';
 import * as imdb from '../../src/services/imdb/index.ts';
 import { tmdbFetch } from '../../src/services/tmdb/client.ts';
 import { getRequestRemainingMs, throwIfRequestAborted } from '../../src/utils/requestContext.ts';
@@ -87,6 +88,15 @@ function makeImdbSeasonResponse(imageUrl: string | null) {
 }
 
 describe('getSeriesEpisodes — thumbnail priority', () => {
+  it('marks missing primary season data as partial while retaining IMDb fallback', async () => {
+    mockedFetch.mockRejectedValue(Object.assign(new Error('Missing season'), { statusCode: 404 }));
+    mockedImdb.mockResolvedValue(makeImdbSeasonResponse(IMDB_STILL));
+    const videos = await getSeriesEpisodes('api-key', 123, BASE_DETAILS as any);
+    expect(
+      videos.some((video) => video.season === 1 && video.episode === 1 && video.id === 'tt9999991')
+    ).toBe(true);
+    expect(INCOMPLETE_RESULT in videos).toBe(true);
+  });
   it('does not start provider batches for an aborted request', async () => {
     mockedFetch.mockClear();
     mockedImdb.mockClear();

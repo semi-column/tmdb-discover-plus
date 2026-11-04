@@ -1,83 +1,55 @@
 import { createLogger } from '../../utils/logger.ts';
 import { TIMEOUTS } from '../../constants.ts';
-import { createCircuitBreaker } from '../common/circuitBreaker.ts';
+import { createCircuitBreaker, shouldRecordCircuitFailure } from '../common/circuitBreaker.ts';
 import { fetchWithRetry } from '../common/fetchWithRetry.ts';
-import { getRequestRemainingMs } from '../../utils/requestContext.ts';
+import { getAnilistThrottle } from '../../infrastructure/anilistThrottle.ts';
 
 const log = createLogger('anilist:client');
 
 const ANILIST_API_URL = 'https://graphql.anilist.co';
 const ANILIST_API_ORIGIN = new URL(ANILIST_API_URL).origin;
 
-// Rate limiting: AniList allows 30 req/min (degraded from 90)
-const MIN_INTERVAL_MS = 2100; // ~28 req/min to stay safely under 30
-const MAX_PAUSE_MS = 65_000;
-let lastRequestTime = 0;
-// ponytail: per-process pause; multiple instances behind one IP still share AniList's limit.
-let pausedUntil = 0;
-const requestQueue: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
-let processingQueue = false;
-
 function parseRetryAfterMs(value: string | null, now: number): number {
   if (!value) return 0;
   const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  if (Number.isFinite(seconds)) {
+    return Number.isSafeInteger(seconds * 1000) ? Math.max(0, seconds * 1000) : 0;
+  }
   const date = Date.parse(value);
   return Number.isNaN(date) ? 0 : Math.max(0, date - now);
 }
 
 /** Pauses the whole queue when AniList says to back off (429 or no remaining quota). */
-function noteRateLimitHeaders(headers: Headers, status: number): void {
+async function noteRateLimitHeaders(headers: Headers, status: number): Promise<void> {
   const now = Date.now();
   let waitMs = parseRetryAfterMs(headers.get('retry-after'), now);
   if (!waitMs && (status === 429 || headers.get('x-ratelimit-remaining') === '0')) {
     const resetSeconds = Number(headers.get('x-ratelimit-reset'));
-    waitMs = resetSeconds > 0 ? resetSeconds * 1000 - now : 60_000;
+    waitMs =
+      resetSeconds > 0 && Number.isSafeInteger(resetSeconds * 1000)
+        ? Math.max(0, resetSeconds * 1000 - now)
+        : 0;
+    if (!Number.isFinite(waitMs) || waitMs <= 0) waitMs = 60_000;
   }
-  if (waitMs > 0) pausedUntil = Math.max(pausedUntil, now + Math.min(waitMs, MAX_PAUSE_MS));
+  await getAnilistThrottle().pause(waitMs);
 }
 
 const anilistFetchImplementation: typeof fetch = async (input, init) => {
   const response = await fetch(input, init);
-  noteRateLimitHeaders(response.headers, response.status);
+  try {
+    await noteRateLimitHeaders(response.headers, response.status);
+  } catch (error) {
+    await response.body?.cancel();
+    throw error;
+  }
   return response;
 };
 
-async function processQueue(): Promise<void> {
-  if (processingQueue) return;
-  processingQueue = true;
-  while (requestQueue.length > 0) {
-    // Re-check after sleeping: a 429 may extend the pause meanwhile.
-    let waitMs: number;
-    while ((waitMs = Math.max(lastRequestTime + MIN_INTERVAL_MS, pausedUntil) - Date.now()) > 0) {
-      await new Promise((r) => setTimeout(r, waitMs));
-    }
-    lastRequestTime = Date.now();
-    const item = requestQueue.shift();
-    item?.resolve();
+export function requireAnilistField<T>(value: T | null | undefined, field: string): T {
+  if (value == null) {
+    throw Object.assign(new Error(`AniList response missing ${field}`), { statusCode: 502 });
   }
-  processingQueue = false;
-}
-
-async function acquireSlot(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Waiting out the pause past the parent request's timeout only turns a 429 into a 504.
-    if (pausedUntil - Date.now() >= getRequestRemainingMs(TIMEOUTS.REQUEST_MS)) {
-      reject(
-        Object.assign(new Error('AniList API rate limited'), {
-          statusCode: 429,
-          rateLimitExhausted: true,
-        })
-      );
-      return;
-    }
-    if (requestQueue.length >= 100) {
-      reject(new Error('AniList request queue full'));
-      return;
-    }
-    requestQueue.push({ resolve, reject });
-    processQueue();
-  });
+  return value;
 }
 
 // Circuit breaker
@@ -93,10 +65,10 @@ export async function anilistFetch<T>(
     throw Object.assign(new Error('AniList circuit breaker open'), { statusCode: 503 });
   }
 
-  await acquireSlot();
-
   try {
-    const data = await fetchWithRetry<T>(
+    const data = await fetchWithRetry<
+      T & { data?: unknown; errors?: Array<{ status?: number; message?: string }> }
+    >(
       ANILIST_API_URL,
       {
         method: 'POST',
@@ -109,16 +81,40 @@ export async function anilistFetch<T>(
         allowedOrigins: [ANILIST_API_ORIGIN],
         includeResponseBodyInError: true,
         fetchImplementation: anilistFetchImplementation,
-        onRateLimited: (_response, attempt) => {
-          log.warn('AniList rate limited', { pauseMs: pausedUntil - Date.now(), attempt });
-        },
-        getRetryDelayMs: () => Math.max(pausedUntil - Date.now(), MIN_INTERVAL_MS),
+        beforeAttempt: (signal) => getAnilistThrottle().acquire(signal),
+        onRateLimited: (_response, attempt) =>
+          log.warn('AniList rate limited', { statusCode: 429, attempt }),
+        // The shared admission gate owns the complete cooldown, including retry attempts.
+        getRetryDelayMs: () => 0,
       }
     );
+    if (
+      !data ||
+      typeof data !== 'object' ||
+      (data.errors !== undefined && !Array.isArray(data.errors))
+    ) {
+      throw Object.assign(new Error('Invalid AniList GraphQL response'), { statusCode: 502 });
+    }
+    if (data.errors?.length) {
+      const statusCode =
+        data.errors.find(
+          (error) =>
+            typeof error?.status === 'number' &&
+            Number.isInteger(error.status) &&
+            error.status >= 400 &&
+            error.status <= 599
+        )?.status ?? 502;
+      if (statusCode === 429) await getAnilistThrottle().pause(60_000);
+      throw Object.assign(new Error('AniList GraphQL response contains errors'), { statusCode });
+    }
+    requireAnilistField(data.data, 'data');
+    if (typeof data.data !== 'object') {
+      throw Object.assign(new Error('Invalid AniList GraphQL data'), { statusCode: 502 });
+    }
     circuitBreaker.recordSuccess();
     return data;
   } catch (err) {
-    circuitBreaker.recordFailure();
+    if (shouldRecordCircuitFailure(err)) circuitBreaker.recordFailure();
     throw err;
   }
 }

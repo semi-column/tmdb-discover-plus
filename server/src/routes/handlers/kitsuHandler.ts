@@ -227,6 +227,8 @@ export async function handleKitsuCatalogRequest(
       error: err,
       durationMs: Date.now() - startTime,
     });
+    res.set('Cache-Control', 'no-store');
+    res.set('X-Catalog-Status', 'degraded');
     res.json({ metas: [] });
   } finally {
     releaseWork?.();

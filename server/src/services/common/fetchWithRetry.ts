@@ -1,5 +1,6 @@
 import { TIMEOUTS } from '../../constants.ts';
-import { getRequestRemainingMs, throwIfRequestAborted } from '../../utils/requestContext.ts';
+import { getRequestRemainingMs, getRequestSignal } from '../../utils/requestContext.ts';
+import { admissionDelay } from '../../infrastructure/sharedAdmission.ts';
 
 export interface FetchWithRetryConfig {
   /** Provider name used in generated error messages, e.g. "AniList API error: 500". */
@@ -22,18 +23,12 @@ export interface FetchWithRetryConfig {
   allowedOrigins?: readonly string[];
   /** Optional fetch implementation for providers that require a specific HTTP client. */
   fetchImplementation?: typeof fetch;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  /** Provider admission runs before the transport timeout, once for every attempt. */
+  beforeAttempt?: (signal: AbortSignal) => Promise<void>;
 }
 
 /**
- * Shared fetch-with-retry loop for provider API clients: retries on network
- * errors and non-ok responses with exponential backoff, and separately
- * handles rate-limit responses by waiting and retrying without consuming an
- * error. Does not manage circuit breaker state — callers should record
- * success/failure around this call.
+ * Retries transient transport/status failures, preserving provider-specific quota handling.
  */
 export async function fetchWithRetry<T>(
   url: string,
@@ -51,8 +46,19 @@ export async function fetchWithRetry<T>(
     includeResponseBodyInError = false,
     allowedOrigins,
     fetchImplementation = fetch,
+    beforeAttempt,
   } = config;
 
+  if (
+    !Number.isSafeInteger(maxAttempts) ||
+    maxAttempts < 1 ||
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs <= 0 ||
+    !Number.isFinite(backoffBaseMs) ||
+    backoffBaseMs < 0
+  ) {
+    throw new Error('Invalid provider retry configuration');
+  }
   const requestUrl = new URL(url);
   if (requestUrl.protocol !== 'https:') {
     throw Object.assign(new Error(`${providerName} API URL must use HTTPS`), { statusCode: 400 });
@@ -68,52 +74,81 @@ export async function fetchWithRetry<T>(
     });
   }
 
-  let lastError: Error | null = null;
+  const requestSignal = getRequestSignal();
+  const signal = AbortSignal.any([
+    ...(init.signal ? [init.signal] : []),
+    ...(requestSignal ? [requestSignal] : []),
+  ]);
+  let lastError: unknown;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    signal.throwIfAborted();
+    if (getRequestRemainingMs(TIMEOUTS.REQUEST_MS) <= 0) {
+      throw new DOMException(`${providerName} request deadline exceeded`, 'TimeoutError');
+    }
+    // Admission failures are not transport failures and must not be retried.
+    await beforeAttempt?.(signal);
+    signal.throwIfAborted();
+    if (getRequestRemainingMs(TIMEOUTS.REQUEST_MS) <= 0) {
+      throw new DOMException(`${providerName} request deadline exceeded`, 'TimeoutError');
+    }
+    let delayMs = backoffBaseMs * Math.pow(2, attempt);
     try {
       // lgtm[js/request-forgery] URL is parsed above, restricted to HTTPS, stripped of credentials, and checked against caller-provided allowed origins.
       const response = await fetchImplementation(requestUrl.toString(), {
         ...init,
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.any([
+          signal,
+          AbortSignal.timeout(
+            Math.max(1, Math.min(timeoutMs, getRequestRemainingMs(TIMEOUTS.REQUEST_MS)))
+          ),
+        ]),
       });
 
       if (isRateLimited(response.status)) {
         onRateLimited?.(response, attempt);
-        const delayMs = getRetryDelayMs
+        delayMs = getRetryDelayMs
           ? getRetryDelayMs(response, attempt)
           : backoffBaseMs * Math.pow(2, attempt);
-        // Waiting past the parent request's timeout only turns a 429 into a 504.
-        if (delayMs >= getRequestRemainingMs(TIMEOUTS.REQUEST_MS)) {
-          throw Object.assign(new Error(`${providerName} API rate limited`), {
-            statusCode: response.status,
-            rateLimitExhausted: true,
-          });
-        }
-        await sleep(delayMs);
-        throwIfRequestAborted();
-        continue;
-      }
-
-      if (!response.ok) {
+        await response.body?.cancel();
+        lastError = Object.assign(new Error(`${providerName} API rate limited`), {
+          statusCode: response.status,
+          rateLimitExhausted: true,
+        });
+      } else if (!response.ok) {
         const message = includeResponseBodyInError
-          ? `${providerName} API error: ${response.status} ${await response.text().catch(() => '')}`
+          ? `${providerName} API error: ${response.status} ${await response.text()}`
           : `${providerName} API error: ${response.status}`;
+        if (!includeResponseBodyInError) await response.body?.cancel();
         throw Object.assign(new Error(message), { statusCode: response.status });
+      } else {
+        const data = (await response.json()) as T;
+        signal.throwIfAborted();
+        return data;
       }
-
-      return (await response.json()) as T;
     } catch (err) {
-      lastError = err as Error;
-      throwIfRequestAborted();
-      if ((err as { rateLimitExhausted?: boolean }).rateLimitExhausted) throw err;
-      const statusCode = (err as { statusCode?: number }).statusCode;
-      if (statusCode !== undefined && isRateLimited(statusCode)) continue;
-      if (attempt < maxAttempts - 1) {
-        await sleep(backoffBaseMs * Math.pow(2, attempt));
+      signal.throwIfAborted();
+      lastError = err;
+      const statusCode =
+        err && typeof err === 'object' && 'statusCode' in err ? err.statusCode : undefined;
+      if (
+        err instanceof SyntaxError ||
+        (err &&
+          typeof err === 'object' &&
+          'code' in err &&
+          err.code === 'SHARED_ADMISSION_UNAVAILABLE') ||
+        (typeof statusCode === 'number' && statusCode < 500)
+      ) {
+        throw err;
       }
     }
+    if (attempt === maxAttempts - 1) break;
+    if (!Number.isFinite(delayMs) || delayMs < 0) {
+      throw new Error(`${providerName} returned an invalid retry delay`, { cause: lastError });
+    }
+    if (delayMs >= getRequestRemainingMs(TIMEOUTS.REQUEST_MS)) throw lastError;
+    await admissionDelay(delayMs, signal);
   }
 
-  throw lastError || new Error(`${providerName} API request failed`);
+  throw lastError;
 }

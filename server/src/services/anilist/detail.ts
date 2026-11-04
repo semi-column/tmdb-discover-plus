@@ -31,7 +31,10 @@ export async function fetchAnilistMedia(
   log.debug('AniList media lookup', { anilistId, malId });
 
   const response = await anilistFetch<AnilistMediaResponse>(DETAIL_QUERY, variables);
-  return response.data.Media ?? null;
+  if (!Object.hasOwn(response.data, 'Media')) {
+    throw Object.assign(new Error('AniList response missing Media'), { statusCode: 502 });
+  }
+  return response.data.Media;
 }
 
 /**
