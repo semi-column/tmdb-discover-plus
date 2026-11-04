@@ -1,6 +1,10 @@
 import { createLogger } from '../utils/logger.ts';
 import { config } from '../config.ts';
-import { getRequestSignal } from '../utils/requestContext.ts';
+import {
+  getRequestSignal,
+  isOpportunisticWork,
+  skipOpportunisticWork,
+} from '../utils/requestContext.ts';
 import {
   ADMISSION_PREFIX,
   AdmissionRedis,
@@ -109,10 +113,22 @@ class TokenBucket {
     this.stats.totalRequests++;
     this._refill();
 
-    if (Date.now() >= this._pausedUntil && this.tokens >= 1) {
+    const opportunistic = isOpportunisticWork();
+    const capacity = this._warmupActive ? Math.ceil(this.maxTokens / 2) : this.maxTokens;
+    const required = opportunistic ? Math.min(2, capacity) : 1;
+    if (
+      Date.now() >= this._pausedUntil &&
+      this.tokens >= required &&
+      (!opportunistic || this.queue.length === 0)
+    ) {
       this.tokens -= 1;
       this.stats.immediateGrants++;
       return;
+    }
+
+    if (opportunistic) {
+      this.stats.rejectedRequests++;
+      skipOpportunisticWork('provider budget is busy');
     }
 
     if (this.queue.length >= this.maxQueueSize) {
@@ -264,6 +280,7 @@ export class RedisTokenBucket {
   }
 
   async acquire(timeoutMs = 10000, requestSignal = getRequestSignal()): Promise<void> {
+    const opportunistic = isOpportunisticWork();
     const signal = AbortSignal.any([
       this.controller.signal,
       this.redis.getSignal(),
@@ -271,6 +288,10 @@ export class RedisTokenBucket {
     ]);
     signal.throwIfAborted();
     this.stats.totalRequests++;
+    if (opportunistic && this.queued > 0) {
+      this.stats.rejectedRequests++;
+      skipOpportunisticWork('provider work is waiting');
+    }
     if (this.queued >= (this.options.maxQueueSize ?? 500)) {
       this.stats.rejectedRequests++;
       throw new Error('TMDB rate limiter queue full — too many concurrent requests');
@@ -300,6 +321,7 @@ export class RedisTokenBucket {
           else this.stats.totalWaitMs += Date.now() - started;
           return;
         }
+        if (opportunistic) skipOpportunisticWork('provider budget is busy');
         if (!waited) {
           waited = true;
           this.stats.queuedRequests++;

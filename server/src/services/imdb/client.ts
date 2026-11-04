@@ -8,6 +8,7 @@ import {
   getRequestSignal,
   throwIfRequestAborted,
   awaitWithRequestAbort,
+  startOpportunisticWork,
 } from '../../utils/requestContext.ts';
 import { setTimeout as delay } from 'node:timers/promises';
 import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
@@ -100,7 +101,8 @@ export async function imdbFetch(
   endpoint: string,
   params: Record<string, string | number | boolean | string[] | undefined | null> = {},
   cacheTtl: number = IMDB_CACHE_TTL_DEFAULTS.DEFAULT_REQUEST,
-  retries: number = 3
+  retries: number = 3,
+  options: { maxStaleAgeMs?: number } = {}
 ): Promise<unknown> {
   throwIfRequestAborted();
   const apiKey = config.imdbApi.apiKey;
@@ -146,26 +148,37 @@ export async function imdbFetch(
   const freshnessKey = `imdb:fresh:${url.pathname}${url.search}`;
   const cache = getCache();
 
-  if (isCircuitOpen()) {
-    const err = new Error('IMDb circuit breaker is open') as ImdbFetchError;
-    err.statusCode = 503;
-    throw err;
-  }
-
   try {
     const cached = await cache.get(cacheKey);
     throwIfRequestAborted();
     if (cached !== null && cached !== undefined) {
+      if (isCircuitOpen()) return cached;
+
       const isFresh = await cache.get(freshnessKey).catch(() => null);
       throwIfRequestAborted();
       if (isFresh) return cached;
 
-      doBackgroundRevalidation(ep, url, cacheKey, freshnessKey, cacheTtl, retries);
+      if (options.maxStaleAgeMs) {
+        const entry = await cache.getEntry(cacheKey);
+        const age = entry?.__cacheWrapper ? Date.now() - entry.__storedAt : Infinity;
+        if (age >= 0 && age < options.maxStaleAgeMs) return cached;
+      }
+
+      if (!isCircuitOpen()) {
+        doBackgroundRevalidation(ep, url, cacheKey, freshnessKey, cacheTtl, retries);
+      }
       return cached;
     }
   } catch (err) {
     throwIfRequestAborted();
     log.warn('IMDb cache get failed', { error: err });
+  }
+
+  // Checked after the cache so an IMDb outage still serves cached data.
+  if (isCircuitOpen()) {
+    const err = new Error('IMDb circuit breaker is open') as ImdbFetchError;
+    err.statusCode = 503;
+    throw err;
   }
 
   const existing = inFlightRequests.get(cacheKey);
@@ -176,7 +189,7 @@ export async function imdbFetch(
       throwIfRequestAborted();
       if (!existing.signal?.aborted) throw error;
       if (inFlightRequests.get(cacheKey) === existing) inFlightRequests.delete(cacheKey);
-      return imdbFetch(endpoint, params, cacheTtl, retries);
+      return imdbFetch(endpoint, params, cacheTtl, retries, options);
     }
   }
 
@@ -201,10 +214,12 @@ function doBackgroundRevalidation(
 ): void {
   if (inFlightRequests.has(cacheKey)) return;
 
-  const promise = executeImdbFetch(ep, url, cacheKey, freshnessKey, cacheTtl, retries);
-  const entry = { promise, signal: getRequestSignal() };
+  const entry = startOpportunisticWork(() =>
+    executeImdbFetch(ep, url, cacheKey, freshnessKey, cacheTtl, retries)
+  );
+  if (!entry) return;
   inFlightRequests.set(cacheKey, entry);
-  promise
+  entry.promise
     .catch((err) => {
       if (!entry.signal?.aborted) log.warn('IMDb background revalidation failed', { error: err });
     })

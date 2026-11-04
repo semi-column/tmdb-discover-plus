@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { config } from '../config.ts';
 import type { CacheReadLayer, CacheReadMetrics, CacheReads } from '../types/cache.ts';
 
 export interface RequestCacheStats {
@@ -34,9 +35,13 @@ interface RequestStore {
   cache: RequestCacheStats;
   obs: RequestObsState;
   cacheReads: CacheReads;
+  opportunistic?: boolean;
 }
 
 const asyncLocalStorage = new AsyncLocalStorage<RequestStore>();
+// ponytail: per-process cap; coordinate across replicas if background pressure remains measurable.
+const BACKGROUND_LIMIT = 2;
+const backgroundStats = { active: 0, started: 0, skipped: 0 };
 
 const buildEmptyCacheStats = (): RequestCacheStats => ({
   hits: 0,
@@ -77,6 +82,76 @@ export function withRequestAbortContext<T>(work: () => Promise<T>): Promise<T> {
     },
     work
   );
+}
+
+export function isOpportunisticWork(): boolean {
+  return asyncLocalStorage.getStore()?.opportunistic === true;
+}
+
+export function skipOpportunisticWork(reason: string): never {
+  backgroundStats.skipped++;
+  const error = Object.assign(new Error(`Background work skipped: ${reason}`), {
+    code: 'OPPORTUNISTIC_SKIPPED',
+  });
+  abortRequestContext(error);
+  throw error;
+}
+
+export function getBackgroundWorkStats(): {
+  active: number;
+  started: number;
+  skipped: number;
+  limit: number;
+  enabled: boolean;
+} {
+  return {
+    ...backgroundStats,
+    limit: BACKGROUND_LIMIT,
+    enabled: config.features?.backgroundPriority !== false,
+  };
+}
+
+export function startOpportunisticWork<T>(
+  work: () => Promise<T>
+): { promise: Promise<T>; signal: AbortSignal } | undefined {
+  const parent = asyncLocalStorage.getStore();
+  const parentSignal = parent?.abortController.signal;
+  if (parentSignal?.aborted) return undefined;
+  if (config.features?.backgroundPriority === false) {
+    return { promise: work(), signal: parentSignal ?? new AbortController().signal };
+  }
+  if (backgroundStats.active >= BACKGROUND_LIMIT) {
+    backgroundStats.skipped++;
+    return undefined;
+  }
+
+  const controller = new AbortController();
+  const onAbort = () => controller.abort(parentSignal?.reason);
+  parentSignal?.addEventListener('abort', onAbort, { once: true });
+  const store: RequestStore = parent
+    ? { ...parent, startedAt: Date.now(), abortController: controller, opportunistic: true }
+    : {
+        requestId: randomBytes(9).toString('base64url'),
+        method: 'BACKGROUND',
+        path: '',
+        startedAt: Date.now(),
+        abortController: controller,
+        cache: buildEmptyCacheStats(),
+        cacheReads: {},
+        obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
+        opportunistic: true,
+      };
+  backgroundStats.active++;
+  backgroundStats.started++;
+  const promise = asyncLocalStorage.run(store, async () => {
+    try {
+      return await work();
+    } finally {
+      backgroundStats.active--;
+      parentSignal?.removeEventListener('abort', onAbort);
+    }
+  });
+  return { promise, signal: controller.signal };
 }
 
 export function throwIfRequestAborted(): void {

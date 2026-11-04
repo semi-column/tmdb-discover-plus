@@ -6,7 +6,12 @@ import {
   getAdmissionRedis,
 } from './sharedAdmission.ts';
 import { TIMEOUTS } from '../constants.ts';
-import { getRequestRemainingMs, getRequestSignal } from '../utils/requestContext.ts';
+import {
+  getRequestRemainingMs,
+  getRequestSignal,
+  isOpportunisticWork,
+  skipOpportunisticWork,
+} from '../utils/requestContext.ts';
 
 const INTERVAL_MS = 2100;
 const MAX_QUEUE = 100;
@@ -48,12 +53,16 @@ export class AnilistThrottle {
   }
 
   async acquire(requestSignal = getRequestSignal()): Promise<void> {
+    const opportunistic = isOpportunisticWork();
     const signal = AbortSignal.any([
       this.controller.signal,
       ...(this.redis ? [this.redis.getSignal()] : []),
       ...(requestSignal ? [requestSignal] : []),
     ]);
     signal.throwIfAborted();
+    if (opportunistic && this.queued > 0) {
+      skipOpportunisticWork('AniList work is waiting');
+    }
     const exhausted = () =>
       Object.assign(new Error('AniList API rate limited'), {
         statusCode: 429,
@@ -83,6 +92,7 @@ export class AnilistThrottle {
         signal.throwIfAborted();
         if (getRequestRemainingMs(TIMEOUTS.REQUEST_MS) <= 0) throw exhausted();
         if (!wait) return;
+        if (opportunistic) skipOpportunisticWork('AniList budget is busy');
         if (wait >= getRequestRemainingMs(TIMEOUTS.REQUEST_MS)) throw exhausted();
         await admissionDelay(Math.min(wait, 250), signal);
       }

@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { config as serverConfig } from '../config.ts';
 import { getUserConfig, getApiKeyFromConfig } from '../services/configService.ts';
 import type {
   UserConfig,
@@ -867,8 +868,21 @@ async function handleMetaRequest(
     };
 
     const fetchMeta = () => withAddonWork(userId, computeMeta);
+    const metaTtl = (value: unknown): number => {
+      const status =
+        value && typeof value === 'object' && 'status' in value ? value.status : undefined;
+      return serverConfig.features?.demandFirst !== false &&
+        tmdbType === 'series' &&
+        status !== 'Ended' &&
+        status !== 'Canceled' &&
+        status !== 'FINISHED' &&
+        status !== 'CANCELLED'
+        ? CACHE_TTLS.META_ACTIVE_SERIES
+        : CACHE_TTLS.META_HEADER;
+    };
     const meta = (await cache.wrap(metaCacheKey, fetchMeta, CACHE_TTLS.META_HEADER, {
       allowStale: true,
+      ttlForResult: metaTtl,
       onCacheRead: (entry) => {
         cacheState = entry?.__errorType
           ? 'error'
@@ -907,9 +921,14 @@ async function handleMetaRequest(
 
     if (res.headersSent) return;
 
+    const cacheMaxAge = metaTtl(meta);
+    const staleRevalidate =
+      cacheMaxAge === CACHE_TTLS.META_ACTIVE_SERIES
+        ? CACHE_TTLS.META_ACTIVE_SERIES
+        : CACHE_TTLS.META_STALE_REVALIDATE;
     res.set(
       'Cache-Control',
-      `max-age=${CACHE_TTLS.META_HEADER}, stale-while-revalidate=${CACHE_TTLS.META_STALE_REVALIDATE}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
+      `max-age=${cacheMaxAge}, stale-while-revalidate=${staleRevalidate}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
     );
     if (incomplete) {
       res.set('Cache-Control', 'no-store');
@@ -918,8 +937,8 @@ async function handleMetaRequest(
     res.etagJson(
       {
         meta: responseMeta,
-        cacheMaxAge: incomplete ? 0 : CACHE_TTLS.META_HEADER,
-        staleRevalidate: incomplete ? 0 : CACHE_TTLS.META_STALE_REVALIDATE,
+        cacheMaxAge: incomplete ? 0 : cacheMaxAge,
+        staleRevalidate: incomplete ? 0 : staleRevalidate,
         staleError: incomplete ? 0 : CACHE_TTLS.CATALOG_STALE_IF_ERROR,
       },
       { extra: `${userId}:${id}` }

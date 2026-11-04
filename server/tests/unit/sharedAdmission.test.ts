@@ -24,7 +24,11 @@ import {
   ADDON_WORK_SCRIPT,
   AddonWorkLimitError,
 } from '../../src/utils/addonWork.ts';
-import { getRequestSignal, requestIdMiddleware } from '../../src/utils/requestContext.ts';
+import {
+  getRequestSignal,
+  requestIdMiddleware,
+  startOpportunisticWork,
+} from '../../src/utils/requestContext.ts';
 import { AnilistThrottle } from '../../src/infrastructure/anilistThrottle.ts';
 
 // Never connect to REDIS_URL: all destructive operations target our own disposable server.
@@ -254,6 +258,48 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     expect(keys.some((key) => key.includes('same-secret-user'))).toBe(false);
     await Promise.all(releases.splice(0).map((release) => release()));
     expect(await inspector.keys(`${ADMISSION_PREFIX}addon:*`)).toEqual([]);
+  });
+
+  it('reserves the final per-user work slot across Redis replicas for foreground requests', async () => {
+    const a = new RedisAddonWork(connection());
+    const b = new RedisAddonWork(connection());
+    await occupy(a, 'priority-user', 5);
+
+    const background = startOpportunisticWork(() => b.acquire('priority-user'))!;
+    await expect(background.promise).rejects.toMatchObject({ code: 'OPPORTUNISTIC_SKIPPED' });
+    releases.push(await b.acquire('priority-user'));
+  });
+
+  it('reserves the final global work slot across Redis replicas for foreground requests', async () => {
+    const a = new RedisAddonWork(connection());
+    const b = new RedisAddonWork(connection());
+    for (let i = 0; i < 59; i++) releases.push(await a.acquire(`priority-user-${i}`));
+
+    const background = startOpportunisticWork(() => b.acquire('another-user'))!;
+    await expect(background.promise).rejects.toMatchObject({ code: 'OPPORTUNISTIC_SKIPPED' });
+    releases.push(await b.acquire('another-user'));
+  });
+
+  it('skips busy background provider admission rather than joining a Redis queue', async () => {
+    const limiter = bucket(connection(), 1, 0.01);
+    await limiter.acquire();
+
+    const background = startOpportunisticWork(() => limiter.acquire(1000))!;
+    await expect(background.promise).rejects.toMatchObject({ code: 'OPPORTUNISTIC_SKIPPED' });
+    expect(limiter.getStats().queueDepth).toBe(0);
+  });
+
+  it('skips a busy shared AniList slot instead of waiting behind another replica', async () => {
+    const a = new AnilistThrottle(connection());
+    const b = new AnilistThrottle(connection());
+    try {
+      await a.acquire();
+      const background = startOpportunisticWork(() => b.acquire())!;
+      await expect(background.promise).rejects.toMatchObject({ code: 'OPPORTUNISTIC_SKIPPED' });
+    } finally {
+      a.destroy();
+      b.destroy();
+    }
   });
 
   it('bounds work queues, removes aborts and expires waiting work after five seconds', async () => {

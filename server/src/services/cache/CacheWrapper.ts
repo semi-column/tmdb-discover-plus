@@ -6,6 +6,7 @@ import {
   throwIfRequestAborted,
   getRequestSignal,
   awaitWithRequestAbort,
+  startOpportunisticWork,
 } from '../../utils/requestContext.ts';
 import { CACHE_ERROR_TTLS, CACHE_STORAGE } from '../../cacheTtls.ts';
 import { cacheReadLayer } from './keys.ts';
@@ -103,7 +104,10 @@ export class CacheWrapper {
     return entry;
   }
 
-  async getEntry(key: string): Promise<CacheWrapperEntry | null> {
+  async getEntry(
+    key: string,
+    ttlForResult?: (value: unknown) => number
+  ): Promise<CacheWrapperEntry | null> {
     const storageKey = this._prefixKey(key);
     try {
       const raw = await this.adapter.get(storageKey);
@@ -161,7 +165,8 @@ export class CacheWrapper {
 
         if (entry.__storedAt && entry.__ttl) {
           const age = (Date.now() - entry.__storedAt) / 1000;
-          if (age > entry.__ttl) {
+          const ttl = ttlForResult ? Math.min(entry.__ttl, ttlForResult(entry.data)) : entry.__ttl;
+          if (age > ttl) {
             if (age < entry.__ttl * CACHE_STORAGE.WRAPPER_STALE_MULTIPLIER) {
               this.stats.hits++;
               this.stats.staleServed++;
@@ -296,7 +301,7 @@ export class CacheWrapper {
   ): Promise<unknown> {
     throwIfRequestAborted();
     const { allowStale = true } = options;
-    const cached = await this.getEntry(key);
+    const cached = await this.getEntry(key, options.ttlForResult);
     throwIfRequestAborted();
     options.onCacheRead?.(cached);
 
@@ -308,7 +313,7 @@ export class CacheWrapper {
         return cached.__cacheWrapper ? cached.data : cached;
       }
       if (allowStale && cached.__isStale) {
-        this._refreshInBackground(key, fetchFn, ttlSeconds);
+        this._refreshInBackground(key, fetchFn, ttlSeconds, options.ttlForResult);
         return cached.data;
       }
     }
@@ -325,10 +330,17 @@ export class CacheWrapper {
       }
     }
 
+    const promise = this._executeFetch(
+      key,
+      fetchFn,
+      ttlSeconds,
+      !!cached?.__isStale,
+      options.ttlForResult
+    );
     if (this.inFlight.size >= MAX_IN_FLIGHT) {
       this.stats.inFlightOverflows++;
       log.warn('inFlight map at capacity, executing directly', { size: this.inFlight.size });
-      return this._executeFetch(key, fetchFn, ttlSeconds);
+      return promise;
     }
 
     if (this.inFlight.size >= IN_FLIGHT_WARN_THRESHOLD && this.inFlight.size % 100 === 0) {
@@ -337,7 +349,6 @@ export class CacheWrapper {
         max: MAX_IN_FLIGHT,
       });
     }
-    const promise = this._executeFetch(key, fetchFn, ttlSeconds);
     const entry = { promise, signal: getRequestSignal() };
     this.inFlight.set(key, entry);
 
@@ -351,7 +362,8 @@ export class CacheWrapper {
     key: string,
     fetchFn: () => Promise<unknown>,
     ttlSeconds: number,
-    preserveStale = false
+    preserveStale = false,
+    ttlForResult?: (value: unknown) => number
   ): Promise<unknown> {
     try {
       throwIfRequestAborted();
@@ -359,7 +371,10 @@ export class CacheWrapper {
       throwIfRequestAborted();
       if (result && typeof result === 'object' && INCOMPLETE_RESULT in result) return result;
       const resultType = classifyResult(result);
-      const effectiveTtl = resultType === 'EMPTY_RESULT' ? ERROR_TTLS.EMPTY_RESULT : ttlSeconds;
+      const effectiveTtl =
+        resultType === 'EMPTY_RESULT'
+          ? ERROR_TTLS.EMPTY_RESULT
+          : (ttlForResult?.(result) ?? ttlSeconds);
       await this.set(key, result, effectiveTtl);
       return result;
     } catch (error) {
@@ -380,13 +395,20 @@ export class CacheWrapper {
       throw error;
     }
   }
-  _refreshInBackground(key: string, fetchFn: () => Promise<unknown>, ttlSeconds: number): void {
+  _refreshInBackground(
+    key: string,
+    fetchFn: () => Promise<unknown>,
+    ttlSeconds: number,
+    ttlForResult?: (value: unknown) => number
+  ): void {
     if (this.inFlight.has(key)) return;
 
-    const promise = this._executeFetch(key, fetchFn, ttlSeconds, true);
-    const entry = { promise, signal: getRequestSignal() };
+    const entry = startOpportunisticWork(() =>
+      this._executeFetch(key, fetchFn, ttlSeconds, true, ttlForResult)
+    );
+    if (!entry) return;
     this.inFlight.set(key, entry);
-    promise
+    entry.promise
       .catch((err: unknown) => {
         if (!entry.signal?.aborted) {
           log.debug('Background refresh failed', { key: key.substring(0, 80), error: err });

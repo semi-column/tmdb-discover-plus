@@ -7,6 +7,7 @@ interface ImdbEpisodesBySeasonParams {
   season: number;
   limit?: number;
   endCursor?: string;
+  maxStaleAgeMs?: number;
 }
 
 interface ImdbEpisodeEdge {
@@ -28,9 +29,9 @@ export interface ImdbEpisodesBySeasonResponse {
         edges?: ImdbEpisodeEdge[];
         pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
         total?: number;
-      };
-    };
-  };
+      } | null;
+    } | null;
+  } | null;
 }
 
 function sanitizeImdbTitleId(imdbId: string): string {
@@ -69,7 +70,9 @@ export async function getEpisodesBySeason(
       limit: params.limit,
       endCursor: params.endCursor,
     },
-    ttl
+    ttl,
+    3,
+    { maxStaleAgeMs: params.maxStaleAgeMs }
   )) as ImdbEpisodesBySeasonResponse;
 
   return data;

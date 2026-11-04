@@ -5,6 +5,8 @@ import { createLogger } from './logger.ts';
 import {
   abortRequestContext,
   getRequestSignal,
+  isOpportunisticWork,
+  skipOpportunisticWork,
   throwIfRequestAborted,
   withRequestAbortContext,
 } from './requestContext.ts';
@@ -99,9 +101,13 @@ export class RedisAddonWork {
   }
 
   async acquire(userId: string, requestSignal = getRequestSignal()): Promise<WorkRelease> {
+    const opportunistic = isOpportunisticWork();
     const generation = this.redis.getSignal();
     const signal = AbortSignal.any([generation, ...(requestSignal ? [requestSignal] : [])]);
     signal.throwIfAborted();
+    if (opportunistic && this.totalWaiting > 0) {
+      skipOpportunisticWork('addon work is waiting');
+    }
     if (this.totalWaiting >= GLOBAL_QUEUED || (this.waiting.get(userId) ?? 0) >= PER_USER_QUEUED)
       throw new AddonWorkLimitError();
     // Queue bounds are local, including requests currently attempting admission.
@@ -117,8 +123,8 @@ export class RedisAddonWork {
         action,
         id,
         String(this.leaseMs),
-        String(GLOBAL_ACTIVE),
-        String(PER_USER_ACTIVE),
+        String(opportunistic ? GLOBAL_ACTIVE - 1 : GLOBAL_ACTIVE),
+        String(opportunistic ? PER_USER_ACTIVE - 1 : PER_USER_ACTIVE),
       ]);
     const deadline = Date.now() + WAIT_MS;
     let cleanup: Promise<unknown> | undefined;
@@ -193,6 +199,7 @@ export class RedisAddonWork {
             return releasing;
           };
         }
+        if (opportunistic) skipOpportunisticWork('addon work is at capacity');
         await admissionDelay(Math.min(50, Math.max(1, deadline - Date.now())), signal);
       }
     } finally {
@@ -221,6 +228,16 @@ export async function acquireAddonWork(userId: string): Promise<WorkRelease> {
       shared = new RedisAddonWork(redis);
     }
     return shared!.acquire(userId);
+  }
+  if (isOpportunisticWork()) {
+    if (
+      queue.length > 0 ||
+      totalActive >= GLOBAL_ACTIVE - 1 ||
+      (active.get(userId) || 0) >= PER_USER_ACTIVE - 1
+    ) {
+      skipOpportunisticWork('addon work is at capacity');
+    }
+    return startWork(userId);
   }
   if (canStart(userId)) return startWork(userId);
   const capacityError = (reason: 'queue' | 'wait' = 'queue') => {

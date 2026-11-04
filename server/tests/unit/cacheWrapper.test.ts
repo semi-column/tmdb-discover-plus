@@ -66,6 +66,28 @@ describe('CacheWrapper', () => {
     cache = new CacheWrapper(adapter, { version: '1.0.0' });
   });
 
+  it('executes overflow fetches once without growing the in-flight map', async () => {
+    const gate = Promise.withResolvers<string>();
+    const pending = Array.from({ length: 5_000 }, (_, i) =>
+      cache.wrap(`pending-${i}`, () => gate.promise, 60)
+    );
+    try {
+      await vi.waitFor(() => expect(cache.getStats().inFlightRequests).toBe(5_000));
+      const fetch = vi.fn(async () => 'overflow');
+      expect(await cache.wrap('overflow', fetch, 60)).toBe('overflow');
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(cache.getStats()).toMatchObject({
+        inFlightRequests: 5_000,
+        inFlightOverflows: 1,
+      });
+      expect(await cache.get('overflow')).toBe('overflow');
+    } finally {
+      gate.resolve('complete');
+      await Promise.all(pending);
+    }
+    expect(cache.getStats().inFlightRequests).toBe(0);
+  });
+
   it('shares a marked incomplete result without caching it or serializing the marker', async () => {
     const partial = { videos: [{ id: 'partial' }] };
     Object.defineProperty(partial, INCOMPLETE_RESULT, { value: true });
@@ -98,6 +120,30 @@ describe('CacheWrapper', () => {
       });
       await vi.waitFor(() => expect(cache.getStats().inFlightRequests).toBe(0));
       expect((await cache.getEntry('stale-meta'))?.data).toEqual({ videos: ['complete'] });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('shortens legacy active-series entries and uses the selected TTL for refreshes', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      await cache.set('legacy-meta', { status: 'Returning Series', version: 1 }, 86_400);
+      now.mockReturnValue(1000 + 6 * 3_600_000 + 1);
+      const onCacheRead = vi.fn();
+      const result = await cache.wrap(
+        'legacy-meta',
+        async () => ({ status: 'Returning Series', version: 2 }),
+        86_400,
+        { ttlForResult: () => 21_600, onCacheRead }
+      );
+      expect(result).toEqual({ status: 'Returning Series', version: 1 });
+      expect(onCacheRead).toHaveBeenCalledWith(expect.objectContaining({ __isStale: true }));
+      await vi.waitFor(() => expect(cache.getStats().inFlightRequests).toBe(0));
+      expect(await cache.getEntry('legacy-meta')).toMatchObject({
+        __ttl: 21_600,
+        data: { version: 2 },
+      });
     } finally {
       now.mockRestore();
     }

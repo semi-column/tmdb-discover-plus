@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { config } from '../../config.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { getCache } from '../cache/index.ts';
@@ -8,10 +10,12 @@ import { formatRuntime } from './stremioMeta.ts';
 import { generateEpisodeThumbnailUrl, isValidPosterConfig } from '../artworkService.ts';
 import * as imdb from '../imdb/index.ts';
 import { CONCURRENCY, DISPLAY, TIMEOUTS } from '../../constants.ts';
-import { CACHE_TTLS } from '../../cacheTtls.ts';
+import { CACHE_ERROR_TTLS, CACHE_TTLS } from '../../cacheTtls.ts';
 import {
   getRequestRemainingMs,
+  isOpportunisticWork,
   isRequestAborted,
+  skipOpportunisticWork,
   throwIfRequestAborted,
 } from '../../utils/requestContext.ts';
 
@@ -21,7 +25,6 @@ import type {
   Logger,
   TmdbImage,
   TmdbSeason,
-  TmdbTvDetails,
   StremioVideo,
 } from '../../types/index.ts';
 
@@ -34,6 +37,18 @@ interface DetailsOptions {
   language?: string;
   artworkOptions?: ArtworkOptions | null;
   completedSeason?: boolean;
+  recentSeason?: boolean;
+  forceRefresh?: boolean;
+  expectedEpisodes?: number;
+}
+
+function fullDetailsParams(language?: string): Record<string, string> {
+  return {
+    append_to_response: 'external_ids,credits,videos,release_dates,content_ratings,images',
+    ...(language ? { language } : {}),
+    include_video_language: language ? `${language},en,null` : 'en,null',
+    include_image_language: language ? `${language},en,null` : 'en,null',
+  };
 }
 
 export async function getDetails(
@@ -45,21 +60,8 @@ export async function getDetails(
   const mediaType = type === 'series' ? 'tv' : 'movie';
   const languageParam = options?.displayLanguage || options?.language;
 
-  const params: Record<string, string | number | boolean | undefined> = {
-    append_to_response: 'external_ids,credits,videos,release_dates,content_ratings,images',
-  };
-
-  if (languageParam) {
-    params.language = languageParam;
-    params.include_video_language = `${languageParam},en,null`;
-    params.include_image_language = `${languageParam},en,null`;
-  } else {
-    params.include_video_language = 'en,null';
-    params.include_image_language = 'en,null';
-  }
-
   try {
-    return await tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, params);
+    return await tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, fullDetailsParams(languageParam));
   } catch (error) {
     throwIfRequestAborted();
     if (
@@ -117,23 +119,38 @@ export async function getSeasonDetails(
   const cacheKey = `season_${tmdbId}_${seasonNumber}_${languageParam || 'en'}`;
   const cache = getCache();
 
-  try {
-    const cached = await cache.get(cacheKey);
-    if (cached) return cached;
-  } catch (e) {
-    log.debug('Cache get failed', { key: cacheKey, error: (e as Error).message });
+  if (!options.forceRefresh) {
+    try {
+      const cached = await cache.get(cacheKey);
+      if (cached) return cached;
+    } catch (e) {
+      log.debug('Cache get failed', { key: cacheKey, error: (e as Error).message });
+    }
   }
 
   const params: Record<string, string | undefined> = {};
   if (languageParam) params.language = languageParam;
 
   try {
-    const data = await tmdbFetch(`/tv/${tmdbId}/season/${seasonNumber}`, apiKey, params);
+    const endpoint = `/tv/${tmdbId}/season/${seasonNumber}`;
+    const data = options.forceRefresh
+      ? await tmdbFetch(endpoint, apiKey, params, 3, { skipCache: true })
+      : await tmdbFetch(endpoint, apiKey, params);
+    if (options.expectedEpisodes !== undefined) {
+      const episodes = (data as SeasonDetailsResult | null)?.episodes;
+      if (!Array.isArray(episodes) || episodes.length !== options.expectedEpisodes) {
+        throw new Error('TMDB season response does not match the expected episode count');
+      }
+    }
     try {
       await cache.set(
         cacheKey,
         data,
-        options.completedSeason ? CACHE_TTLS.SEASON_COMPLETED : CACHE_TTLS.DETAIL
+        options.completedSeason
+          ? CACHE_TTLS.SEASON_COMPLETED
+          : options.recentSeason
+            ? CACHE_TTLS.TMDB_RECENT_DETAIL
+            : CACHE_TTLS.DETAIL
       );
     } catch (e) {
       log.debug('Cache set failed', { key: cacheKey, error: (e as Error).message });
@@ -210,8 +227,9 @@ async function settlesWithinImdbBudget(work: Promise<unknown>): Promise<boolean>
 
 async function getImdbEpisodesForSeason(
   imdbId: string,
-  season: number
-): Promise<ImdbEpisodeEdge[]> {
+  season: number,
+  maxStaleAgeMs?: number
+): Promise<{ edges: ImdbEpisodeEdge[]; complete: boolean }> {
   const edges: ImdbEpisodeEdge[] = [];
   let endCursor: string | undefined;
   const cursors = new Set<string>();
@@ -219,21 +237,31 @@ async function getImdbEpisodesForSeason(
   while (true) {
     throwIfRequestAborted();
     // Pages already fetched are cached, so a later request picks up where this one stopped.
-    if (!hasImdbEnrichmentBudget()) break;
+    if (!hasImdbEnrichmentBudget()) return { edges, complete: false };
 
     const response = await imdb.getEpisodesBySeason(imdbId, {
       season,
       limit: IMDB_EPISODE_PAGE_LIMIT,
       endCursor,
+      maxStaleAgeMs,
     });
 
     const page = response?.title?.episodes?.episodes;
-    const pageEdges = Array.isArray(page?.edges) ? page.edges : [];
-    edges.push(...(pageEdges as ImdbEpisodeEdge[]));
+    if (
+      !endCursor &&
+      (response?.title === null || response?.title?.episodes === null || page === null)
+    ) {
+      return { edges, complete: true };
+    }
+    if (!page || !Array.isArray(page.edges)) {
+      throw new Error('IMDb episode response is missing episode data');
+    }
+    edges.push(...(page.edges as ImdbEpisodeEdge[]));
 
     const hasNext = Boolean(page?.pageInfo?.hasNextPage);
     const nextCursor = page?.pageInfo?.endCursor || undefined;
-    if (!hasNext || !nextCursor) break;
+    if (!hasNext) break;
+    if (!nextCursor) throw new Error('IMDb episode pagination returned no next cursor');
     if (cursors.has(nextCursor))
       throw new Error('IMDb episode pagination returned a repeated cursor');
     cursors.add(nextCursor);
@@ -241,7 +269,7 @@ async function getImdbEpisodesForSeason(
   }
 
   throwIfRequestAborted();
-  return edges;
+  return { edges, complete: true };
 }
 
 function mapImdbEpisodesToStremioVideos(
@@ -350,35 +378,95 @@ export async function getSeriesEpisodes(
 ): Promise<StremioVideo[]> {
   throwIfRequestAborted();
   if (!details?.seasons || !Array.isArray(details.seasons)) {
-    return [];
+    log.warn('Series details are missing seasons', { tmdbId });
+    const incomplete: StremioVideo[] = [];
+    Object.defineProperty(incomplete, INCOMPLETE_RESULT, { value: true });
+    return incomplete;
   }
 
+  const imdbEnabled = imdb.isImdbApiEnabled();
   const imdbId = details?.external_ids?.imdb_id || null;
   const language = options.displayLanguage || options.language || null;
+  const cacheKey = `episodes:canonical:${createHash('sha256')
+    .update(
+      JSON.stringify({
+        tmdbId: String(tmdbId),
+        imdbId,
+        imdbEnabled,
+        language: language || 'en',
+        status: details.status,
+        backdrop: details.backdrop_path,
+        seasons: details.seasons.map((season) => [
+          season.id,
+          season.season_number,
+          season.episode_count,
+          season.air_date,
+          season.poster_path,
+        ]),
+      })
+    )
+    .digest('hex')}`;
+  const ended = details.status === 'Ended' || details.status === 'Canceled';
+  const demandFirst = config.features?.demandFirst !== false;
+  let staleSnapshot: StremioVideo[] | undefined;
+  const build = () => buildCanonicalSeriesEpisodes(apiKey, tmdbId, details, language, imdbEnabled);
+  const canonical = demandFirst
+    ? ((await getCache().wrap(
+        cacheKey,
+        build,
+        ended ? CACHE_TTLS.DETAIL : CACHE_TTLS.TMDB_RECENT_DETAIL,
+        {
+          allowStale: false,
+          onCacheRead: (entry) => {
+            if (entry?.__isStale && Array.isArray(entry.data)) {
+              staleSnapshot = entry.data as StremioVideo[];
+            }
+          },
+        }
+      )) as StremioVideo[])
+    : await build();
+  throwIfRequestAborted();
+
   const episodeOptions = options.artworkOptions?.episode || null;
-  const videos: StremioVideo[] = [];
-
-  const applyEpisodeThumbnailOverride = (video: StremioVideo): void => {
-    if (!episodeOptions || !isValidPosterConfig(episodeOptions)) return;
-
-    const enhancedThumbnail = generateEpisodeThumbnailUrl({
-      ...episodeOptions,
-      tmdbId,
-      type: 'series',
-      imdbId,
-      language,
-      season: video.season,
-      episode: video.episode,
-    });
-
-    if (enhancedThumbnail) {
-      video.thumbnail = enhancedThumbnail;
+  const source = INCOMPLETE_RESULT in canonical && staleSnapshot ? staleSnapshot : canonical;
+  const videos = source.map((episode) => {
+    const video = { ...episode };
+    if (video.released && video.available !== undefined) {
+      video.available = new Date(video.released) <= new Date();
     }
-  };
+    if (episodeOptions && isValidPosterConfig(episodeOptions)) {
+      const thumbnail = generateEpisodeThumbnailUrl({
+        ...episodeOptions,
+        tmdbId,
+        type: 'series',
+        imdbId,
+        language,
+        season: video.season,
+        episode: video.episode,
+      });
+      if (thumbnail) video.thumbnail = thumbnail;
+    }
+    return video;
+  });
+  if (INCOMPLETE_RESULT in canonical)
+    Object.defineProperty(videos, INCOMPLETE_RESULT, { value: true });
+  return videos;
+}
 
-  const regularSeasons = details.seasons.filter((s) => s.season_number > 0);
+async function buildCanonicalSeriesEpisodes(
+  apiKey: string,
+  tmdbId: number | string,
+  details: TvDetailsForEpisodes,
+  language: string | null,
+  imdbEnabled: boolean
+): Promise<StremioVideo[]> {
+  const imdbId = details.external_ids?.imdb_id || null;
+  const videos: StremioVideo[] = [];
+  const seasons = details.seasons || [];
+  const regularSeasons = seasons.filter((s) => s.season_number > 0);
   const latestSeasonNumber = Math.max(0, ...regularSeasons.map((season) => season.season_number));
   const seriesEnded = details.status === 'Ended' || details.status === 'Canceled';
+  const demandFirst = config.features?.demandFirst !== false;
 
   const seriesBackdrop = details.backdrop_path
     ? `${TMDB_IMAGE_BASE}/w500${details.backdrop_path}`
@@ -394,6 +482,7 @@ export async function getSeriesEpisodes(
   const seasonQueue = regularSeasons;
   const seasonResults: StremioVideo[][] = [];
   const seasonDataByNumber = new Map<number, SeasonDetailsResult>();
+  const outdatedSeasonData = new Map<number, SeasonDetailsResult>();
   let incomplete = false;
   const cache = getCache();
   const seasonCacheKey = (number: number) => `season_${tmdbId}_${number}_${language || 'en'}`;
@@ -402,57 +491,109 @@ export async function getSeriesEpisodes(
       const cached = (await cache.get(
         seasonCacheKey(season.season_number)
       )) as SeasonDetailsResult | null;
-      if (cached?.episodes) seasonDataByNumber.set(season.season_number, cached);
+      if (!Array.isArray(cached?.episodes)) return;
+      if (
+        Number.isInteger(season.episode_count) &&
+        season.episode_count !== cached.episodes.length
+      ) {
+        outdatedSeasonData.set(season.season_number, cached);
+      } else {
+        seasonDataByNumber.set(season.season_number, cached);
+      }
     })
   );
   const missingSeasons = seasonQueue.filter(
-    (season) => !seasonDataByNumber.has(season.season_number)
+    (season) =>
+      !seasonDataByNumber.has(season.season_number) && !outdatedSeasonData.has(season.season_number)
   );
-  // TMDB supports up to 20 appended subresources per TV details request.
   for (let i = 0; i < missingSeasons.length; i += 20) {
     throwIfRequestAborted();
     const batch = missingSeasons.slice(i, i + 20);
-    if (batch.length === 1) continue; // The normal season endpoint is smaller for one miss.
+    if (batch.length === 1) continue;
     try {
       const data = (await tmdbFetch(`/tv/${tmdbId}`, apiKey, {
         append_to_response: batch.map((season) => `season/${season.season_number}`).join(','),
         ...(language ? { language } : {}),
-      })) as Record<string, SeasonDetailsResult>;
+      })) as Record<string, SeasonDetailsResult> | null;
       throwIfRequestAborted();
+      let missing = 0;
       for (const season of batch) {
-        const seasonData = data[`season/${season.season_number}`];
-        if (!Array.isArray(seasonData?.episodes)) continue;
+        const seasonData = data?.[`season/${season.season_number}`];
+        if (
+          !Array.isArray(seasonData?.episodes) ||
+          (Number.isInteger(season.episode_count) &&
+            seasonData.episodes.length !== season.episode_count)
+        ) {
+          missing++;
+          continue;
+        }
         seasonDataByNumber.set(season.season_number, seasonData);
+        const completedSeason = seriesEnded || season.season_number < latestSeasonNumber;
         await cache.set(
           seasonCacheKey(season.season_number),
           seasonData,
-          seriesEnded || season.season_number < latestSeasonNumber
+          completedSeason
             ? CACHE_TTLS.SEASON_COMPLETED
-            : CACHE_TTLS.DETAIL
+            : demandFirst
+              ? CACHE_TTLS.TMDB_RECENT_DETAIL
+              : CACHE_TTLS.DETAIL
         );
+      }
+      if (missing) {
+        log.warn('Season batch omitted expected data; fetching seasons individually', {
+          tmdbId,
+          missing,
+        });
       }
     } catch (error) {
       throwIfRequestAborted();
       log.warn('Season batch fetch failed, falling back to individual seasons', { tmdbId, error });
     }
   }
-
-  for (let i = 0; i < seasonQueue.length; i += DETAIL_CONCURRENCY) {
+  const seasonConcurrency = isOpportunisticWork() ? 1 : DETAIL_CONCURRENCY;
+  for (let i = 0; i < seasonQueue.length; i += seasonConcurrency) {
     throwIfRequestAborted();
 
-    const batch = seasonQueue.slice(i, i + DETAIL_CONCURRENCY);
+    const batch = seasonQueue.slice(i, i + seasonConcurrency);
     const batchResults = await Promise.all(
       batch.map(async (season) => {
-        const seasonData =
-          seasonDataByNumber.get(season.season_number) ||
-          ((await getSeasonDetails(apiKey, tmdbId, season.season_number, {
-            ...options,
-            completedSeason: seriesEnded || season.season_number < latestSeasonNumber,
-          })) as SeasonDetailsResult | null);
-        if (!seasonData?.episodes) {
+        const previous = outdatedSeasonData.get(season.season_number);
+        const retryKey = `${seasonCacheKey(season.season_number)}:expected:${season.episode_count}`;
+        let seasonData = seasonDataByNumber.get(season.season_number);
+        if (!seasonData && previous) {
+          const retry = await cache.getEntry(retryKey);
+          if (retry && !retry.__isStale && !retry.__errorType) {
+            incomplete = true;
+            seasonData = previous;
+          }
+        }
+        if (!seasonData) {
+          seasonData =
+            ((await getSeasonDetails(apiKey, tmdbId, season.season_number, {
+              language: language || undefined,
+              completedSeason: seriesEnded || season.season_number < latestSeasonNumber,
+              recentSeason:
+                demandFirst && !seriesEnded && season.season_number === latestSeasonNumber,
+              forceRefresh: !!previous,
+              expectedEpisodes: previous ? season.episode_count : undefined,
+            })) as SeasonDetailsResult | null) ?? undefined;
+          if (!seasonData && previous) {
+            incomplete = true;
+            seasonData = previous;
+            await cache.set(retryKey, true, CACHE_ERROR_TTLS.EMPTY_RESULT);
+          }
+        }
+        if (!Array.isArray(seasonData?.episodes)) {
           incomplete = true;
           return [];
         }
+        if (
+          Number.isInteger(season.episode_count) &&
+          seasonData.episodes.length !== season.episode_count
+        ) {
+          incomplete = true;
+        }
+        seasonDataByNumber.set(season.season_number, seasonData);
 
         return seasonData.episodes.map((ep) => {
           const episodeId = imdbId
@@ -487,9 +628,27 @@ export async function getSeriesEpisodes(
     return a.episode - b.episode;
   });
 
-  if (imdbId) {
+  if (imdbId && imdbEnabled) {
     const fallbackVideos: StremioVideo[] = [];
-    const IMDB_SEASON_CONCURRENCY = CONCURRENCY.IMDB_SEASON;
+    const imdbSeasonConcurrency = isOpportunisticWork() ? 1 : CONCURRENCY.IMDB_SEASON;
+    const completeTmdbSeasons = new Set(
+      regularSeasons
+        .filter((season) => {
+          const episodes = seasonDataByNumber.get(season.season_number)?.episodes;
+          return (
+            Number.isInteger(season.episode_count) &&
+            episodes?.length === season.episode_count &&
+            episodes.every(
+              (episode) =>
+                episode.name &&
+                episode.air_date &&
+                !new RegExp(`^Episode\\s+${episode.episode_number}$`, 'i').test(episode.name)
+            )
+          );
+        })
+        .map((season) => season.season_number)
+    );
+    const hasTmdbGap = (seasonNumber: number): boolean => !completeTmdbSeasons.has(seasonNumber);
     const tmdbSeasonNumbers = seasonQueue.map((s) => s.season_number).filter((n) => n > 0);
     const maxTmdbSeason = tmdbSeasonNumbers.length > 0 ? Math.max(...tmdbSeasonNumbers) : 0;
     const seasonNumbersToProbe = Array.from(
@@ -497,13 +656,29 @@ export async function getSeriesEpisodes(
         ...tmdbSeasonNumbers,
         ...(maxTmdbSeason > 0 ? [maxTmdbSeason + 1, maxTmdbSeason + 2] : [1, 2]),
       ])
-    ).sort((a, b) => a - b);
+    );
+    if (demandFirst) {
+      seasonNumbersToProbe.sort((a, b) => {
+        const priority = (season: number) =>
+          season <= maxTmdbSeason && hasTmdbGap(season)
+            ? 0
+            : !seriesEnded && season === maxTmdbSeason
+              ? 1
+              : season > maxTmdbSeason
+                ? seriesEnded
+                  ? 3
+                  : 2
+                : 2;
+        return priority(a) - priority(b) || a - b;
+      });
+    }
 
     const imdbSeasonQueue = seasonNumbersToProbe.map((season_number) => ({ season_number }));
 
-    for (let i = 0; i < imdbSeasonQueue.length; i += IMDB_SEASON_CONCURRENCY) {
+    for (let i = 0; i < imdbSeasonQueue.length; i += imdbSeasonConcurrency) {
       throwIfRequestAborted();
       if (!hasImdbEnrichmentBudget()) {
+        incomplete = true;
         log.info('IMDb episode enrichment stopped early to meet request deadline', {
           imdbId,
           seasonsFetched: i,
@@ -512,19 +687,28 @@ export async function getSeriesEpisodes(
         break;
       }
 
-      const batch = imdbSeasonQueue.slice(i, i + IMDB_SEASON_CONCURRENCY);
+      const batch = imdbSeasonQueue.slice(i, i + imdbSeasonConcurrency);
       // Seasons are kept as they finish, so a deadline cut still merges the ones that made it.
       const finished: StremioVideo[][] = [];
       const work = Promise.all(
         batch.map(async (season) => {
           try {
-            const episodeEdges = await getImdbEpisodesForSeason(imdbId, season.season_number);
-            if (episodeEdges.length)
+            const historical =
+              (seriesEnded || season.season_number < latestSeasonNumber) &&
+              !hasTmdbGap(season.season_number);
+            const result = await getImdbEpisodesForSeason(
+              imdbId,
+              season.season_number,
+              demandFirst && historical ? CACHE_TTLS.IMDB_HISTORICAL_MAX_AGE * 1000 : undefined
+            );
+            if (!result.complete) incomplete = true;
+            if (result.edges.length)
               finished.push(
-                mapImdbEpisodesToStremioVideos(imdbId, season.season_number, episodeEdges)
+                mapImdbEpisodesToStremioVideos(imdbId, season.season_number, result.edges)
               );
           } catch (error) {
             if (isRequestAborted()) return;
+            incomplete = true;
             log.debug('IMDb season episode fetch failed', {
               imdbId,
               season: season.season_number,
@@ -535,8 +719,12 @@ export async function getSeriesEpisodes(
       );
       const completed = await settlesWithinImdbBudget(work);
       throwIfRequestAborted();
+      if (!completed && isOpportunisticWork()) {
+        skipOpportunisticWork('IMDb enrichment deadline reached');
+      }
       for (const arr of finished.splice(0)) fallbackVideos.push(...arr);
       if (!completed) {
+        incomplete = true;
         log.info('IMDb episode enrichment cut off to meet request deadline', {
           imdbId,
           seasonsStarted: i + batch.length,
@@ -550,7 +738,6 @@ export async function getSeriesEpisodes(
       throwIfRequestAborted();
       const merged = mergeSeriesVideos(videos, fallbackVideos);
       for (const v of merged) {
-        applyEpisodeThumbnailOverride(v);
         if (!v.thumbnail) {
           v.thumbnail = seasonPosterMap[v.season] || seriesBackdrop || undefined;
         }
@@ -570,7 +757,6 @@ export async function getSeriesEpisodes(
 
   // Apply season poster / backdrop fallback for episodes without a thumbnail
   for (const v of videos) {
-    applyEpisodeThumbnailOverride(v);
     if (!v.thumbnail) {
       v.thumbnail = seasonPosterMap[v.season] || seriesBackdrop || undefined;
     }
@@ -588,11 +774,12 @@ export async function batchGetDetails(
   options?: { displayLanguage?: string }
 ): Promise<Map<number, unknown>> {
   const results = new Map<number, unknown>();
+  const concurrency = isOpportunisticWork() ? 1 : DETAIL_CONCURRENCY;
 
-  for (let i = 0; i < tmdbIds.length; i += DETAIL_CONCURRENCY) {
+  for (let i = 0; i < tmdbIds.length; i += concurrency) {
     throwIfRequestAborted();
 
-    const batch = tmdbIds.slice(i, i + DETAIL_CONCURRENCY);
+    const batch = tmdbIds.slice(i, i + concurrency);
     await Promise.all(
       batch.map(async (tmdbId) => {
         try {
@@ -620,6 +807,26 @@ export async function getPreviewDetails(
 ): Promise<unknown> {
   const mediaType = type === 'series' ? 'tv' : 'movie';
   const languageParam = options?.displayLanguage || options?.language;
+  const endpoint = `/${mediaType}/${tmdbId}`;
+  if (config.features?.demandFirst !== false) {
+    const full = await tmdbFetch(endpoint, apiKey, fullDetailsParams(languageParam), 3, {
+      cacheOnly: true,
+    });
+    if (
+      full &&
+      typeof full === 'object' &&
+      'id' in full &&
+      String(full.id) === String(tmdbId) &&
+      'external_ids' in full &&
+      full.external_ids &&
+      'credits' in full &&
+      full.credits &&
+      'images' in full &&
+      full.images
+    ) {
+      return full;
+    }
+  }
 
   const params: Record<string, string | number | boolean | undefined> = {
     append_to_response: 'external_ids,credits,images',
@@ -632,7 +839,7 @@ export async function getPreviewDetails(
     params.include_image_language = 'en,null';
   }
 
-  return tmdbFetch(`/${mediaType}/${tmdbId}`, apiKey, params);
+  return tmdbFetch(endpoint, apiKey, params);
 }
 
 export async function batchGetPreviewDetails(
@@ -642,10 +849,11 @@ export async function batchGetPreviewDetails(
   options?: { displayLanguage?: string }
 ): Promise<Map<number, unknown>> {
   const results = new Map<number, unknown>();
+  const concurrency = isOpportunisticWork() ? 1 : DETAIL_CONCURRENCY;
 
-  for (let i = 0; i < tmdbIds.length; i += DETAIL_CONCURRENCY) {
+  for (let i = 0; i < tmdbIds.length; i += concurrency) {
     throwIfRequestAborted();
-    const batch = tmdbIds.slice(i, i + DETAIL_CONCURRENCY);
+    const batch = tmdbIds.slice(i, i + concurrency);
     await Promise.all(
       batch.map(async (tmdbId) => {
         try {

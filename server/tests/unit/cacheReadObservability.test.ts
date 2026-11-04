@@ -23,6 +23,7 @@ describe('bounded cache read layers', () => {
     ['https://api.themoviedb.org/3/movie/1?api_key=SECRET', 'tmdb_api'],
     ['https://api.themoviedb.org/3/tv/1/season/2?api_key=SECRET', 'seasons'],
     ['season_1_2_en', 'seasons'],
+    ['episodes:canonical:private-hash', 'episode_snapshot'],
     ['https://api.themoviedb.org/3/genre/movie/list?api_key=SECRET', 'tmdb_reference'],
     ['https://api.themoviedb.org/3/configuration?api_key=SECRET', 'tmdb_reference'],
     ['tmdb_watch_providers_movie_US', 'tmdb_reference'],

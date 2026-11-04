@@ -9,6 +9,7 @@ export function cacheReadLayer(key: string): CacheReadLayer {
     return 'addon_response';
   if (key.startsWith('tmdb:api-key-status:')) return 'key_validation';
   if (key.startsWith('season_')) return 'seasons';
+  if (key.startsWith('episodes:canonical:')) return 'episode_snapshot';
   if (/^(logos_|rpdb_)/.test(key)) return 'artwork';
   if (/^(external_ids_|find_)/.test(key)) return 'id_lookup';
   if (

@@ -156,6 +156,8 @@ export const config = Object.freeze({
   }),
 
   features: Object.freeze({
+    demandFirst: envBool('DEMAND_FIRST_FETCHING', true),
+    backgroundPriority: envBool('BACKGROUND_PRIORITY_ENABLED', true),
     disableRateLimit:
       envBool('DISABLE_RATE_LIMIT') &&
       ['development', 'test'].includes(env('NODE_ENV', 'production')),

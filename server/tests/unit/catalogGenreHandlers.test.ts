@@ -136,6 +136,7 @@ vi.mock('../../src/cacheTtls.ts', () => ({
     CATALOG_STALE_IF_ERROR: 60,
     CATALOG_STALE_REVALIDATE: 60,
     META_HEADER: 86_400,
+    META_ACTIVE_SERIES: 21_600,
     META_STALE_REVALIDATE: 172_800,
   },
   CACHE_STORAGE: { WRAPPER_RETENTION_MULTIPLIER: 2.5, WRAPPER_STALE_MULTIPLIER: 2 },
@@ -375,6 +376,64 @@ describe.each(sourceHandlers)('$source catalog handler', ({ source, type, handle
   );
 });
 
+describe('IMDb catalog demand', () => {
+  it('fetches and enriches the next page only when it is requested', async () => {
+    mockGetUserConfig.mockResolvedValue({
+      preferences: {},
+      catalogs: [{ catalogId: 'imdb-demand', type: 'movie', filters: {} }],
+    });
+    const res = { json: vi.fn(), set: vi.fn(), etagJson: vi.fn() };
+
+    await handleImdbCatalogRequest(
+      'test-user',
+      'movie',
+      'imdb-demand',
+      {},
+      res as never,
+      {} as never
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockImdbAdvancedSearch.mock.calls.map((call) => call[2])).toEqual([0]);
+    expect(mockTmdbResolve).toHaveBeenCalledTimes(1);
+    expect(res.etagJson.mock.calls[0][0].metas).toEqual([genrelessMeta, knownGenreMeta]);
+
+    await handleImdbCatalogRequest(
+      'test-user',
+      'movie',
+      'imdb-demand',
+      { skip: '20' },
+      res as never,
+      {} as never
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockImdbAdvancedSearch.mock.calls.map((call) => call[2])).toEqual([0, 20]);
+    expect(mockTmdbResolve).toHaveBeenCalledTimes(2);
+  });
+
+  it('can restore next-page enrichment when demand-first fetching is disabled', async () => {
+    Object.assign(serverConfig.features, { demandFirst: false });
+    try {
+      mockGetUserConfig.mockResolvedValue({
+        preferences: {},
+        catalogs: [{ catalogId: 'imdb-demand', type: 'movie', filters: {} }],
+      });
+      const res = { json: vi.fn(), set: vi.fn(), etagJson: vi.fn() };
+      await handleImdbCatalogRequest(
+        'test-user',
+        'movie',
+        'imdb-demand',
+        {},
+        res as never,
+        {} as never
+      );
+      await vi.waitFor(() => expect(mockImdbAdvancedSearch).toHaveBeenCalledTimes(2));
+      expect(mockImdbAdvancedSearch.mock.calls.map((call) => call[2])).toEqual([0, 20]);
+    } finally {
+      Object.assign(serverConfig.features, { demandFirst: true });
+    }
+  });
+});
+
 describe('TMDB catalog route', () => {
   it.each([10000, 10020])(
     'returns exhaustion for skip=%i without fetching TMDB catalogs',
@@ -565,6 +624,58 @@ describe('TMDB catalog route', () => {
 });
 
 describe('metadata route cache dependencies', () => {
+  it.each([
+    ['series', 'Returning Series', 21_600],
+    ['series', 'Ended', 86_400],
+    ['anime', 'RELEASING', 21_600],
+    ['anime', 'FINISHED', 86_400],
+    ['anime', 'CANCELLED', 86_400],
+    ['movie', 'Released', 86_400],
+  ] as const)(
+    'advertises the appropriate freshness for %s with status %s',
+    async (type, status, expectedTtl) => {
+      const cache = new CacheWrapper(new MockCacheAdapter());
+      mockCacheWrap.mockImplementation(cache.wrap.bind(cache));
+      mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+      mockTmdbGetDetails.mockResolvedValue({ id: 550, images: { logos: [{}] } });
+      mockTmdbEpisodes.mockResolvedValue([]);
+      mockTmdbFullMeta.mockResolvedValue({ id: 'tmdb:550', poster: 'poster', status });
+      const app = express();
+      app.use(etagMiddleware);
+      app.use(addonRouter);
+
+      const response = await request(app).get(`/testuser/meta/${type}/tmdb:550.json`);
+      expect(response.status).toBe(200);
+      expect(response.body.cacheMaxAge).toBe(expectedTtl);
+      expect(response.headers['cache-control']).toContain(`max-age=${expectedTtl}`);
+    }
+  );
+
+  it('restores the original active-series response TTL when demand-first fetching is disabled', async () => {
+    Object.assign(serverConfig.features, { demandFirst: false });
+    try {
+      const cache = new CacheWrapper(new MockCacheAdapter());
+      mockCacheWrap.mockImplementation(cache.wrap.bind(cache));
+      mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+      mockTmdbGetDetails.mockResolvedValue({ id: 550, images: { logos: [{}] } });
+      mockTmdbEpisodes.mockResolvedValue([]);
+      mockTmdbFullMeta.mockResolvedValue({
+        id: 'tmdb:550',
+        poster: 'poster',
+        status: 'Returning Series',
+      });
+      const app = express();
+      app.use(etagMiddleware);
+      app.use(addonRouter);
+
+      const response = await request(app).get('/testuser/meta/series/tmdb:550.json');
+      expect(response.status).toBe(200);
+      expect(response.body.cacheMaxAge).toBe(86_400);
+    } finally {
+      Object.assign(serverConfig.features, { demandFirst: true });
+    }
+  });
+
   it('serves incomplete episodes without caching the aggregate or advertising cacheable hints', async () => {
     const cache = new CacheWrapper(new MockCacheAdapter());
     const wrap = vi.spyOn(cache, 'wrap');

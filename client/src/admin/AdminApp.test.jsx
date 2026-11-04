@@ -611,6 +611,7 @@ it('distinguishes Redis cache/live counters from retained memory history and leg
     history: {
       backend: 'memory',
       cacheBackend: 'redis',
+      backgroundWork: { started: 12, skipped: 3, active: 1, limit: 2, enabled: true },
       liveBackend: 'redis',
       retentionDays: 7,
       storage: { memory: { requests: 500, capacity: 3000 } },
@@ -621,6 +622,9 @@ it('distinguishes Redis cache/live counters from retained memory history and leg
   expect(screen.getByText('memory')).toBeInTheDocument();
   expect(screen.getAllByText('redis')).toHaveLength(2);
   expect(screen.getByText(/500 \/ 3,000 request rows/)).toBeInTheDocument();
+  expect(screen.getByText(/Opportunistic work on this process/)).toHaveTextContent(
+    '12 started, 3 skip events, 1 / 2 active'
+  );
   expect(screen.getByText(/5 retained request rows/)).toHaveTextContent(
     '3 have detailed cache instrumentation'
   );

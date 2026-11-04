@@ -5,6 +5,7 @@ import { createLogger } from '../../utils/logger.ts';
 import { resolveRedisOrMemory } from '../../utils/resolveRedisOrMemory.ts';
 import { config } from '../../config.ts';
 import { ADDON_VERSION } from '../../version.ts';
+import { getBackgroundWorkStats } from '../../utils/requestContext.ts';
 import type { ICacheAdapter } from '../../types/index.ts';
 
 const log = createLogger('CacheFactory');
@@ -52,10 +53,11 @@ export function getCache(): CacheWrapper {
   return cacheInstance;
 }
 export function getCacheStatus(): Record<string, unknown> {
-  const stats = cacheInstance ? cacheInstance.getStats() : {};
+  const stats = cacheInstance?.getStats();
   return {
     driver: activeDriver,
-    degraded,
+    degraded: degraded || (activeDriver === 'redis' && stats?.adapter?.connected === false),
+    backgroundWork: getBackgroundWorkStats(),
     ...stats,
   };
 }

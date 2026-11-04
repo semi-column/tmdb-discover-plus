@@ -1,17 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../../src/services/tmdb/client.ts', () => ({ tmdbFetch: vi.fn() }));
-vi.mock('../../src/services/imdb/index.ts', () => ({ getEpisodesBySeason: vi.fn() }));
+vi.mock('../../src/services/imdb/index.ts', () => ({
+  getEpisodesBySeason: vi.fn(),
+  isImdbApiEnabled: () => true,
+}));
 vi.mock('../../src/utils/requestContext.ts', () => ({
   getRequestId: vi.fn(),
   throwIfRequestAborted: vi.fn(),
   getRequestRemainingMs: vi.fn(() => Infinity),
   isRequestAborted: vi.fn(() => false),
+  isOpportunisticWork: vi.fn(() => false),
 }));
 vi.mock('../../src/services/cache/index.ts', () => ({
   getCache: vi.fn(() => ({
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue(undefined),
+    wrap: vi.fn((_key, fetch) => fetch()),
   })),
 }));
 vi.mock('../../src/config.ts', () => ({
@@ -179,20 +184,25 @@ describe('getSeriesEpisodes — thumbnail priority', () => {
   });
 
   it.each([35, 51])(
-    'batches all %s TMDB seasons without dropping IMDb enrichment',
+    'loads all %s TMDB seasons without dropping IMDb enrichment',
     async (seasonCount) => {
       mockedFetch.mockClear();
       mockedImdb.mockClear();
-      mockedFetch.mockImplementation(async (_endpoint, _key, params) =>
-        Object.fromEntries(
-          params.append_to_response.split(',').map((path: string) => {
-            const season = Number(path.split('/')[1]);
-            const response = makeTmdbSeasonResponse('/still.jpg');
-            response.episodes[0].season_number = season;
-            return [path, response];
-          })
-        )
-      );
+      mockedFetch.mockImplementation(async (endpoint, _key, params) => {
+        if (endpoint === '/tv/123') {
+          return Object.fromEntries(
+            params.append_to_response.split(',').map((path: string) => {
+              const response = makeTmdbSeasonResponse('/still.jpg');
+              response.episodes[0].season_number = Number(path.split('/').at(-1));
+              return [path, response];
+            })
+          );
+        }
+        const season = Number(endpoint.split('/').at(-1));
+        const response = makeTmdbSeasonResponse('/still.jpg');
+        response.episodes[0].season_number = season;
+        return response;
+      });
       mockedImdb.mockResolvedValue({ title: { episodes: { episodes: { edges: [] } } } });
       const videos = await getSeriesEpisodes('key', 123, {
         ...BASE_DETAILS,
@@ -201,12 +211,40 @@ describe('getSeriesEpisodes — thumbnail priority', () => {
       expect(videos).toHaveLength(seasonCount);
       expect(videos.at(-1)?.season).toBe(seasonCount);
       expect(mockedFetch).toHaveBeenCalledTimes(Math.ceil(seasonCount / 20));
+      expect(
+        mockedFetch.mock.calls.every(
+          ([, , params]) => params.append_to_response.split(',').length <= 20
+        )
+      ).toBe(true);
       expect(mockedImdb).toHaveBeenCalledTimes(seasonCount + 2);
-      for (const [, , params] of mockedFetch.mock.calls) {
-        expect(params.append_to_response.split(',').length).toBeLessThanOrEqual(20);
-      }
     }
   );
+
+  it('falls back individually when a season batch omits or malforms a season', async () => {
+    mockedFetch.mockReset();
+    mockedImdb.mockResolvedValue({ title: { episodes: { episodes: { edges: [] } } } });
+    mockedFetch.mockImplementation(async (endpoint) => {
+      if (endpoint === '/tv/123') {
+        return { 'season/1': makeTmdbSeasonResponse('/still.jpg'), 'season/2': {} };
+      }
+      const response = makeTmdbSeasonResponse('/still.jpg');
+      response.episodes[0].season_number = Number(endpoint.split('/').at(-1));
+      return response;
+    });
+
+    const videos = await getSeriesEpisodes('key', 123, {
+      ...BASE_DETAILS,
+      seasons: [1, 2, 3].map((season_number) => ({ season_number })),
+    } as any);
+    expect(videos.map((video) => video.season)).toEqual([1, 2, 3]);
+    expect(mockedFetch).toHaveBeenCalledTimes(3);
+    expect(
+      mockedFetch.mock.calls
+        .slice(1)
+        .map(([endpoint]) => endpoint)
+        .sort()
+    ).toEqual(['/tv/123/season/2', '/tv/123/season/3']);
+  });
 
   it('returns TMDB episodes without IMDb enrichment when the request deadline is near', async () => {
     mockedFetch.mockReset();

@@ -12,6 +12,7 @@ export const CACHE_READ_LAYERS = [
   'tmdb_api',
   'tmdb_reference',
   'seasons',
+  'episode_snapshot',
   'artwork',
   'id_lookup',
   'imdb',
@@ -67,4 +68,5 @@ export interface CacheWrapperStats {
 export interface CacheWrapOptions {
   allowStale?: boolean;
   onCacheRead?: (entry: CacheWrapperEntry | null) => void;
+  ttlForResult?: (value: unknown) => number;
 }

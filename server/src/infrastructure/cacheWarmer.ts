@@ -3,12 +3,17 @@ import { config } from '../config.ts';
 import * as tmdb from '../services/tmdb/index.ts';
 import * as imdb from '../services/imdb/index.ts';
 import { getTmdbThrottle } from './tmdbThrottle.ts';
+import { startOpportunisticWork, throwIfRequestAborted } from '../utils/requestContext.ts';
 
 const log = createLogger('CacheWarmer');
 
-export async function warmEssentialCaches(
-  apiKey: string | null
-): Promise<{ warmed: number; failed: number; skipped?: boolean; elapsedMs?: number }> {
+export async function warmEssentialCaches(apiKey: string | null): Promise<{
+  warmed: number;
+  failed: number;
+  skipped?: boolean;
+  skippedTasks?: number;
+  elapsedMs?: number;
+}> {
   if (!apiKey) {
     log.info('No default TMDB API key configured, skipping cache warming');
     return { warmed: 0, failed: 0, skipped: true };
@@ -39,46 +44,61 @@ export async function warmEssentialCaches(
     });
   }
 
-  const results = await Promise.allSettled(tasks.map((t) => t.fn()));
-
-  let warmed = 0;
-  let failed = 0;
-
-  results.forEach((result, i) => {
-    if (result.status === 'fulfilled') {
-      warmed++;
-      log.debug(`Warmed: ${tasks[i].name}`);
-    } else {
-      failed++;
-      log.warn(`Failed to warm: ${tasks[i].name}`, { error: result.reason?.message });
-    }
-  });
-
+  const tmdbTaskCount = tasks.length;
   if (imdb.isImdbApiEnabled()) {
-    const imdbTasks = [
+    tasks.push(
       { name: 'imdb_genres', fn: () => imdb.getGenres() },
       { name: 'imdb_top250_movie', fn: () => imdb.getTopRanking('movie') },
       { name: 'imdb_top250_series', fn: () => imdb.getTopRanking('series') },
       { name: 'imdb_popular_movie', fn: () => imdb.getPopular('movie') },
-      { name: 'imdb_popular_series', fn: () => imdb.getPopular('series') },
-    ];
+      { name: 'imdb_popular_series', fn: () => imdb.getPopular('series') }
+    );
+  }
 
-    const imdbResults = await Promise.allSettled(imdbTasks.map((t) => t.fn()));
-    imdbResults.forEach((result, i) => {
-      if (result.status === 'fulfilled') {
-        warmed++;
-        log.debug(`Warmed: ${imdbTasks[i].name}`);
-      } else {
-        failed++;
-        log.warn(`Failed to warm: ${imdbTasks[i].name}`, { error: result.reason?.message });
-      }
+  let warmed = 0;
+  let failed = 0;
+  let skippedTasks = 0;
+  const warmTask = async (task: (typeof tasks)[number]) => {
+    const work = startOpportunisticWork(async () => {
+      await task.fn();
+      throwIfRequestAborted();
     });
+    if (!work) {
+      skippedTasks++;
+      return;
+    }
+    try {
+      await work.promise;
+      warmed++;
+      log.debug(`Warmed: ${task.name}`);
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'OPPORTUNISTIC_SKIPPED'
+      ) {
+        skippedTasks++;
+        return;
+      }
+      failed++;
+      log.warn(`Failed to warm: ${task.name}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+  try {
+    if (config.features?.backgroundPriority === false) {
+      await Promise.all(tasks.slice(0, tmdbTaskCount).map(warmTask));
+      await Promise.all(tasks.slice(tmdbTaskCount).map(warmTask));
+    } else {
+      for (const task of tasks) await warmTask(task);
+    }
+  } finally {
+    await getTmdbThrottle().endWarmup();
   }
 
   const elapsed = Date.now() - startTime;
-  log.info('Cache warming complete', { warmed, failed, elapsedMs: elapsed });
-
-  getTmdbThrottle().endWarmup();
-
-  return { warmed, failed, elapsedMs: elapsed };
+  log.info('Cache warming complete', { warmed, failed, skippedTasks, elapsedMs: elapsed });
+  return { warmed, failed, skippedTasks, elapsedMs: elapsed };
 }

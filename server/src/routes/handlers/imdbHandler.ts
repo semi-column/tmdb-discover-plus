@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import type { ContentType } from '../../types/common.ts';
 import type { StremioMetaPreview, TmdbDetails } from '../../types/index.ts';
 import type { ImdbTitle } from '../../services/imdb/types.ts';
+import { config as serverConfig } from '../../config.ts';
 
 import * as imdb from '../../services/imdb/index.ts';
 import * as tmdb from '../../services/tmdb/index.ts';
@@ -20,7 +21,11 @@ import { DISPLAY, normalizeBaseUrl, buildCatalogId } from '../../constants.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { buildArtworkOptions, getPlaceholderUrls } from './sharedHelpers.ts';
-import { isRequestAborted, throwIfRequestAborted } from '../../utils/requestContext.ts';
+import {
+  isRequestAborted,
+  startOpportunisticWork,
+  throwIfRequestAborted,
+} from '../../utils/requestContext.ts';
 import { withAddonWork, sendAddonWorkLimit } from '../../utils/addonWork.ts';
 
 const log = createLogger('addon:imdb');
@@ -299,9 +304,13 @@ export async function handleImdbCatalogRequest(
       { extra: `${userId}:${catalogId}:${skip}` }
     );
 
-    if (metas.length > 0 && skip % IMDB_PAGE_SIZE === 0 && imdb.isImdbApiEnabled()) {
+    if (
+      serverConfig.features?.demandFirst === false &&
+      metas.length > 0 &&
+      skip % IMDB_PAGE_SIZE === 0
+    ) {
       const nextSkip = skip + IMDB_PAGE_SIZE;
-      const nextEnrichmentKey = buildImdbEnrichmentCacheKey(
+      const nextKey = buildImdbEnrichmentCacheKey(
         type,
         listType,
         filters,
@@ -310,14 +319,17 @@ export async function handleImdbCatalogRequest(
         artworkIntegrationScope,
         extra.genre || ''
       );
-      cache
-        .wrap(
-          nextEnrichmentKey,
+      const work = startOpportunisticWork(() =>
+        cache.wrap(
+          nextKey,
           () => withAddonWork(userId, () => fetchAndEnrichPage(nextSkip)),
           CACHE_TTLS.CATALOG_SERVER_DISCOVER,
           { allowStale: true }
         )
-        .catch((error) => logSwallowedError('addon:imdb-speculative-prefetch', error));
+      );
+      work?.promise.catch((error) => {
+        if (!work.signal.aborted) logSwallowedError('addon:imdb-speculative-prefetch', error);
+      });
     }
   } catch (error) {
     if (res.headersSent || res.destroyed || isRequestAborted()) return;

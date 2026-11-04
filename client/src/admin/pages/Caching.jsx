@@ -19,6 +19,7 @@ const LAYERS = {
   tmdb_api: 'TMDB API responses',
   tmdb_reference: 'TMDB reference data',
   seasons: 'Series seasons',
+  episode_snapshot: 'Shared episode snapshots',
   artwork: 'Artwork / logos / RPDB',
   id_lookup: 'ID lookups',
   imdb: 'IMDb data / cursors',
@@ -94,6 +95,18 @@ export function Caching({ range, rangeParams = { range }, params = {} }) {
                 ? ` History storage: ${fmtBytes(storage.totalBytes)} / ${storage.capBytes === null ? 'no configured size cap' : fmtBytes(storage.capBytes)}. A size cap can remove older days before retention expires.`
                 : ''}
           </p>
+          {history.backgroundWork?.enabled && (
+            <p className="adm-muted">
+              Opportunistic work on this process since startup:{' '}
+              {fmtInt(history.backgroundWork.started)} started,{' '}
+              {fmtInt(history.backgroundWork.skipped)} skip events,{' '}
+              {fmtInt(history.backgroundWork.active)} / {fmtInt(history.backgroundWork.limit)}{' '}
+              active. These counters are not scoped to the selected interval or other replicas.
+            </p>
+          )}
+          {history.backgroundWork?.enabled === false && (
+            <p className="adm-muted">Opportunistic work priority is disabled on this process.</p>
+          )}
           {coverage && (
             <p className="adm-muted">
               Selected range and filters contain {fmtInt(coverage.retainedRequests)} retained

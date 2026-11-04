@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockFetch, mockConfig, cacheGet, cacheSet, cacheSetError, throttleAcquire } = vi.hoisted(
-  () => ({
+const { mockFetch, mockConfig, cacheGet, cacheGetEntry, cacheSet, cacheSetError, throttleAcquire } =
+  vi.hoisted(() => ({
     mockFetch: vi.fn(),
     mockConfig: {
       imdbApi: {
@@ -19,11 +19,11 @@ const { mockFetch, mockConfig, cacheGet, cacheSet, cacheSetError, throttleAcquir
       nodeEnv: 'test',
     },
     cacheGet: vi.fn(),
+    cacheGetEntry: vi.fn(),
     cacheSet: vi.fn(),
     cacheSetError: vi.fn(),
     throttleAcquire: vi.fn(),
-  })
-);
+  }));
 
 vi.mock('../../src/config.ts', () => ({
   config: mockConfig,
@@ -32,6 +32,7 @@ vi.mock('../../src/config.ts', () => ({
 vi.mock('../../src/services/cache/index.ts', () => ({
   getCache: vi.fn(() => ({
     get: cacheGet,
+    getEntry: cacheGetEntry,
     set: cacheSet,
     setError: cacheSetError,
   })),
@@ -49,7 +50,12 @@ vi.mock('../../src/utils/requestContext.ts', async (importOriginal) => ({
   getRequestId: vi.fn(() => 'req-test-1'),
 }));
 
-import { imdbFetch, resetImdbCircuitBreaker } from '../../src/services/imdb/client.ts';
+import {
+  getImdbCircuitBreakerState,
+  imdbFetch,
+  resetImdbCircuitBreaker,
+} from '../../src/services/imdb/client.ts';
+import { CIRCUIT_BREAKER_DEFAULTS } from '../../src/constants.ts';
 
 describe('imdb client outbound caller headers', () => {
   beforeEach(() => {
@@ -109,5 +115,55 @@ describe('imdb client outbound caller headers', () => {
     expect(
       (await import('../../src/services/imdb/client.ts')).getImdbCircuitBreakerState()
     ).toMatchObject({ state: 'closed', recentFailures: 0 });
+  });
+
+  it('serves cached data without refreshing while the circuit is open', async () => {
+    mockFetch.mockRejectedValue(Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+    for (let i = 0; i < CIRCUIT_BREAKER_DEFAULTS.THRESHOLD; i++) {
+      await expect(imdbFetch('/api/imdb/fail', {}, 120, 0)).rejects.toThrow('ECONNREFUSED');
+    }
+    expect(getImdbCircuitBreakerState().state).toBe('open');
+    mockFetch.mockClear();
+    throttleAcquire.mockClear();
+    cacheGet.mockClear();
+
+    const cached = { title: { id: 'tt1' } };
+    cacheGet.mockImplementation(async (key: string) =>
+      key === 'imdb:/api/imdb/cached' ? cached : null
+    );
+
+    expect(await imdbFetch('/api/imdb/cached', {}, 120, 0, { maxStaleAgeMs: 21_600_000 })).toEqual(
+      cached
+    );
+    expect(cacheGet).not.toHaveBeenCalledWith('imdb:fresh:/api/imdb/cached');
+    expect(cacheGetEntry).not.toHaveBeenCalled();
+    await expect(imdbFetch('/api/imdb/uncached', {}, 120, 0)).rejects.toMatchObject({
+      message: 'IMDb circuit breaker is open',
+      statusCode: 503,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(throttleAcquire).not.toHaveBeenCalled();
+  });
+
+  it('reuses a historical season without starting a refresh before its longer freshness limit', async () => {
+    const episodes = { title: { episodes: { episodes: { edges: [] } } } };
+    cacheGet.mockImplementation(async (key: string) =>
+      key.startsWith('imdb:fresh:') ? null : episodes
+    );
+    cacheGetEntry.mockResolvedValue({
+      __cacheWrapper: true,
+      __storedAt: Date.now() - 15 * 86_400_000,
+      __ttl: 14 * 86_400,
+      data: episodes,
+    });
+
+    expect(
+      await imdbFetch('/api/imdb/tt1234567/episodes', { season: 1 }, 604_800, 0, {
+        maxStaleAgeMs: 21 * 86_400_000,
+      })
+    ).toEqual(episodes);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });

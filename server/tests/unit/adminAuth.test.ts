@@ -88,6 +88,7 @@ describe('admin routes', () => {
     expect(res.body.history).toMatchObject({
       backend: null,
       cacheBackend: 'none',
+      backgroundWork: { active: 0, limit: 2 },
       liveBackend: 'memory',
       storage: null,
     });

@@ -3,7 +3,7 @@ import { config } from '../config.ts';
 import { ADDON_VERSION } from '../version.ts';
 import { createLogger } from '../utils/logger.ts';
 import { strictRateLimit } from '../utils/rateLimit.ts';
-import { sendError, ErrorCodes } from '../utils/AppError.ts';
+import { AppError, sendError, ErrorCodes } from '../utils/AppError.ts';
 import {
   ADMIN_COOKIE,
   adminCredentialSource,
@@ -118,6 +118,9 @@ function handle(fn: (req: Request, res: Response) => Promise<unknown>) {
     } catch (err) {
       if (err instanceof RangeError) {
         return sendError(res, 400, ErrorCodes.VALIDATION_ERROR, err.message);
+      }
+      if (err instanceof AppError) {
+        return sendError(res, err.statusCode, err.code, err.message);
       }
       log.error('Admin endpoint failed', { path: req.path, error: err });
       if (!res.headersSent) sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Query failed');
@@ -329,11 +332,13 @@ router.get(
       history ? history.storageInfo() : null,
       getLiveStore(),
     ]);
+    const cacheStatus = getCacheStatus();
     return {
       analytics,
       history: {
         backend: history?.kind ?? null,
-        cacheBackend: getCacheStatus().driver,
+        cacheBackend: cacheStatus.driver,
+        backgroundWork: cacheStatus.backgroundWork,
         liveBackend: live.driver,
         retentionDays: config.observability.retentionDays,
         storage,

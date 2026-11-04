@@ -11,6 +11,7 @@ import type {
 import { CONCURRENCY } from '../../constants.ts';
 import { CACHE_TTLS } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
+import { isOpportunisticWork, throwIfRequestAborted } from '../../utils/requestContext.ts';
 
 const log = createLogger('tmdb:lookup');
 
@@ -45,6 +46,7 @@ export async function getExternalIds(
     }
     return data;
   } catch (err) {
+    throwIfRequestAborted();
     logSwallowedError('tmdb:lookup:fetch-external-ids', err);
     return null;
   }
@@ -58,9 +60,11 @@ export async function enrichItemsWithImdbIds(
   type: string = 'movie'
 ): Promise<TmdbResult[]> {
   if (!items || !Array.isArray(items) || items.length === 0) return items;
+  const concurrency = isOpportunisticWork() ? 1 : ENRICHMENT_CONCURRENCY;
 
-  for (let i = 0; i < items.length; i += ENRICHMENT_CONCURRENCY) {
-    const batch = items.slice(i, i + ENRICHMENT_CONCURRENCY);
+  for (let i = 0; i < items.length; i += concurrency) {
+    throwIfRequestAborted();
+    const batch = items.slice(i, i + concurrency);
     await Promise.all(
       batch.map(async (item) => {
         if (item.imdb_id) return;
@@ -130,6 +134,7 @@ export async function findByImdbId(
 
     return null;
   } catch (err) {
+    throwIfRequestAborted();
     logSwallowedError('tmdb:lookup:find-by-imdb', err);
     return null;
   }
@@ -144,15 +149,18 @@ export async function batchResolveImdbIds(
   options: { language?: string } = {}
 ): Promise<Map<string, number>> {
   const results = new Map<string, number>();
+  const concurrency = isOpportunisticWork() ? 1 : RESOLVE_CONCURRENCY;
 
-  for (let i = 0; i < imdbIds.length; i += RESOLVE_CONCURRENCY) {
-    const batch = imdbIds.slice(i, i + RESOLVE_CONCURRENCY);
+  for (let i = 0; i < imdbIds.length; i += concurrency) {
+    throwIfRequestAborted();
+    const batch = imdbIds.slice(i, i + concurrency);
     await Promise.all(
       batch.map(async (imdbId) => {
         try {
           const found = await findByImdbId(apiKey, imdbId, type, options);
           if (found?.tmdbId) results.set(imdbId, found.tmdbId);
         } catch (err) {
+          throwIfRequestAborted();
           logSwallowedError('tmdb:lookup:batch-resolve', err);
         }
       })
@@ -171,9 +179,11 @@ export async function batchResolveAndFetchDetails(
 ): Promise<{ resolvedIds: Map<string, number>; detailsMap: Map<number, unknown> }> {
   const resolvedIds = new Map<string, number>();
   const detailsMap = new Map<number, unknown>();
+  const concurrency = isOpportunisticWork() ? 1 : RESOLVE_CONCURRENCY;
 
-  for (let i = 0; i < imdbIds.length; i += RESOLVE_CONCURRENCY) {
-    const batch = imdbIds.slice(i, i + RESOLVE_CONCURRENCY);
+  for (let i = 0; i < imdbIds.length; i += concurrency) {
+    throwIfRequestAborted();
+    const batch = imdbIds.slice(i, i + concurrency);
 
     const batchResolved = await Promise.all(
       batch.map(async (imdbId) => {
@@ -184,6 +194,7 @@ export async function batchResolveAndFetchDetails(
             return found.tmdbId;
           }
         } catch (err) {
+          throwIfRequestAborted();
           logSwallowedError('tmdb:lookup:resolve-and-fetch', err);
         }
         return null;

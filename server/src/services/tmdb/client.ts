@@ -22,7 +22,7 @@ import type { ApiKeyValidationResult, CacheErrorType, Logger } from '../../types
 type TmdbFetchError = Error & { code?: string; statusCode?: number; invalidApiKey?: boolean };
 
 type TmdbApiParams = Record<string, string | number | boolean | undefined | null>;
-type TmdbFetchOptions = { skipCache?: boolean };
+type TmdbFetchOptions = { skipCache?: boolean; cacheOnly?: boolean };
 
 const log = createLogger('tmdb:client') as Logger;
 /** TMDB status_code 7 = "Invalid API key"; other 401s can be endpoint permissions, not a bad key. */
@@ -205,6 +205,9 @@ export async function tmdbFetch(
   if (options.skipCache) {
     return awaitWithRequestAbort(_tmdbFetchInner(url, cacheKey, retries, true));
   }
+  if (options.cacheOnly) {
+    return awaitWithRequestAbort(_tmdbFetchInner(url, cacheKey, retries, false, true));
+  }
 
   const existingRequest = inFlightRequests.get(cacheKey);
   if (existingRequest) {
@@ -234,7 +237,8 @@ async function _tmdbFetchInner(
   url: URL,
   cacheKey: string,
   retries: number,
-  skipCache = false
+  skipCache = false,
+  cacheOnly = false
 ): Promise<unknown> {
   const cache = getCache();
   const apiKey = url.searchParams.get('api_key') ?? '';
@@ -258,6 +262,7 @@ async function _tmdbFetchInner(
       throwIfRequestAborted();
       if (cached !== null && cached !== undefined) {
         if (cached.__errorType) {
+          if (cacheOnly) return null;
           throw new CachedError(
             cached.__errorType as CacheErrorType,
             cached.__errorMessage as string
@@ -273,6 +278,8 @@ async function _tmdbFetchInner(
       log.warn('Cache get failed', { error: cacheErr });
     }
   }
+
+  if (cacheOnly) return null;
 
   let lastError: TmdbFetchError | undefined;
 
