@@ -85,6 +85,9 @@ function ErrorDetail({ fingerprint, onOpenTrace, onChanged, range, params }) {
     >
       <ErrorNote error={actionError} />
       <p className="mono adm-error-message">{g.message}</p>
+      <p className="adm-muted">
+        Message and stack are all-time samples; events below show their individual causes.
+      </p>
       <Badge tone={g.classification === 'user_config' ? 'warn' : 'muted'}>
         {g.classification || 'Unclassified historical event'}
       </Badge>
@@ -285,6 +288,10 @@ export function Errors({ range, rangeParams = { range }, params, onOpenTrace }) 
       }
     >
       <ErrorNote error={list.error} />
+      <p className="adm-muted">
+        Issue labels are all-time samples. Inspect individual events before attributing a cause to
+        this range.
+      </p>
       {list.loading && !list.data ? (
         <Loading />
       ) : groups.length === 0 ? (

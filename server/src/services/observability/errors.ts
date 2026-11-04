@@ -31,12 +31,16 @@ export function computeFingerprint(
   stack: string,
   classification = ''
 ): string {
+  const status =
+    /\b(?:HTTP(?: status)?|API(?: retryable)? error|status(?: code)?)[:= ]+([45]\d{2})\b/i.exec(
+      `${message} ${detail}`
+    )?.[1];
   return createHash('sha1')
     .update(
       [
         level,
         context,
-        classification,
+        classification || (status ? `http:${status}` : ''),
         normalizeMessage(message),
         normalizeMessage(detail),
         topAppFrame(stack),
@@ -44,6 +48,20 @@ export function computeFingerprint(
     )
     .digest('hex')
     .slice(0, 16);
+}
+
+export function extractHttpStatus(data: Record<string, unknown> | null): number | undefined {
+  for (const value of [data, data?.error, data?.err, data?.reason]) {
+    if (
+      value &&
+      typeof value === 'object' &&
+      'statusCode' in value &&
+      typeof value.statusCode === 'number'
+    ) {
+      return value.statusCode;
+    }
+  }
+  return undefined;
 }
 
 export function extractDetail(data: Record<string, unknown> | null): {

@@ -10,6 +10,7 @@ import {
   topAppFrame,
   extractDetail,
   classifyError,
+  extractHttpStatus,
 } from '../../src/services/observability/errors.ts';
 import { classifyClient } from '../../src/services/observability/identity.ts';
 import {
@@ -199,6 +200,22 @@ describe('error fingerprints', () => {
     const c = computeFingerprint('error', 'imdb', 'Movie 987 failed', 'timeout after 8000ms', '');
     expect(a).toBe(b);
     expect(a).not.toBe(c);
+  });
+
+  it('separates 429 and 500 retries without splitting attempt timings or media IDs', () => {
+    const fingerprint = (status: number, delay: number) =>
+      computeFingerprint(
+        'warn',
+        'tmdb:client',
+        `TMDB request failed, retrying in ${delay}ms: TMDB API retryable error: ${status}`,
+        '',
+        ''
+      );
+    expect(fingerprint(429, 300)).not.toBe(fingerprint(500, 300));
+    expect(fingerprint(500, 300)).toBe(fingerprint(500, 1200));
+    expect(extractHttpStatus({ error: { statusCode: 429 } })).toBe(429);
+    expect(extractHttpStatus({ statusCode: 401 })).toBe(401);
+    expect(extractHttpStatus({ error: 'Movie 500 failed' })).toBeUndefined();
   });
 
   it('keeps HTTP status classes separate in error fingerprints', () => {
