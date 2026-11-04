@@ -38,4 +38,12 @@ describe('ApiKeySetup', () => {
     expect(screen.getByRole('button', { name: /export saved config/i })).toBeTruthy();
     expect(screen.getByText(/import the file into a new account/i)).toBeTruthy();
   });
+
+  it('shows a retry instead of an expired-session prompt during an outage', () => {
+    render(<ApiKeySetup sessionUnavailable isSessionExpired />);
+    expect(screen.getByText('Session temporarily unavailable')).toBeTruthy();
+    expect(screen.getByText(/your session is saved/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy();
+    expect(screen.queryByText('Session Expired')).toBeNull();
+  });
 });

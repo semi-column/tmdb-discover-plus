@@ -108,7 +108,13 @@ export function useConfigManager(config, addToast, deps) {
         window.history.replaceState({}, '', `/?userId=${encodeURIComponent(remaining[0].userId)}`);
         setUrlUserId(remaining[0].userId);
       } else {
-        await config.logout();
+        try {
+          await config.logout();
+        } catch (err) {
+          logger.error('Logout after configuration deletion failed:', err);
+          addToast('Configuration deleted, but sign out failed. Please try again.', 'error');
+          return;
+        }
         window.history.replaceState({}, '', '/');
         setUrlUserId(null);
       }

@@ -9,6 +9,7 @@ export function ApiKeySetup({
   isSessionExpired = false,
   returnUserId = null,
   recoveryConfigs: initialRecoveryConfigs = null,
+  sessionUnavailable = false,
 }) {
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -70,6 +71,24 @@ export function ApiKeySetup({
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+
+  if (sessionUnavailable) {
+    return (
+      <div className="setup-page">
+        <div className="setup-card" role="status">
+          <h2>Session temporarily unavailable</h2>
+          <p>Your session is saved, but it cannot be verified right now. Please try again.</p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => window.location.reload()}
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="setup-page">

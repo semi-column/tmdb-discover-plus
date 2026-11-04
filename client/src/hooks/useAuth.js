@@ -151,17 +151,23 @@ export function useAuth(config, addToast, urlUserId, deps) {
   ]);
 
   const handleLogout = useCallback(
-    ({ changeKey = false } = {}) => {
+    async ({ changeKey = false } = {}) => {
+      try {
+        await config.logout();
+      } catch (err) {
+        logger.error('Logout request failed:', err);
+        addToast('Could not sign out. Please try again.', 'error');
+        return;
+      }
       window.history.replaceState({}, '', '/');
       setUrlUserId(null);
       setIsSessionExpired(false);
       setWantsToChangeKey(changeKey);
       configsLoadedRef.current = false;
-      config.logout();
       setIsSetup(true);
       setPageLoading(false);
     },
-    [config, setUrlUserId]
+    [config, setUrlUserId, addToast]
   );
 
   const handleLogin = async (userId, configs = []) => {

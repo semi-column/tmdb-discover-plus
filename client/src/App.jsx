@@ -143,6 +143,7 @@ function App() {
         <Header stats={stats} />
         <ApiKeySetup
           recoveryConfigs={config.recoveryConfigs}
+          sessionUnavailable={config.sessionUnavailable}
           onLogin={(userId, configs) => {
             state.setWantsToChangeKey(false);
             actions.handleLogin(userId, configs);

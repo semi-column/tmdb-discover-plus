@@ -29,6 +29,7 @@ export function useConfig(initialUserId = null) {
   const [recoveryConfigs, setRecoveryConfigs] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
   const setApiKey = useCallback((key) => {
@@ -53,6 +54,11 @@ export function useConfig(initialUserId = null) {
   useEffect(() => {
     const checkAuth = async () => {
       const sessionResult = await api.verifySession();
+      if (sessionResult.unavailable) {
+        setSessionUnavailable(true);
+        setAuthChecked(true);
+        return;
+      }
       if (sessionResult.recoveryConfigs?.length) {
         setRecoveryConfigs(sessionResult.recoveryConfigs);
       }
@@ -263,6 +269,7 @@ export function useConfig(initialUserId = null) {
     isDirty,
     isAuthenticated,
     authChecked,
+    sessionUnavailable,
     markAsSaved,
     login,
     logout,

@@ -137,8 +137,8 @@ describe('useAuth', () => {
 
     await waitFor(() => expect(result.current.isSetup).toBe(false));
 
-    act(() => {
-      result.current.handleLogout();
+    await act(async () => {
+      await result.current.handleLogout();
     });
 
     expect(logout).toHaveBeenCalled();
@@ -158,11 +158,32 @@ describe('useAuth', () => {
 
     await waitFor(() => expect(result.current.isSetup).toBe(false));
 
-    act(() => {
-      result.current.handleLogout({ changeKey: true });
+    await act(async () => {
+      await result.current.handleLogout({ changeKey: true });
     });
 
     expect(result.current.wantsToChangeKey).toBe(true);
+  });
+
+  it('keeps the session and reports a failed logout', async () => {
+    const config = createMockConfig({
+      isAuthenticated: true,
+      userId: 'user1',
+      logout: vi.fn().mockRejectedValue(new Error('Redis unavailable')),
+    });
+    const setUrlUserId = vi.fn();
+    const deps = createMockDeps({ setUrlUserId });
+    const { result } = renderHook(() => useAuth(config, addToast, null, deps));
+    await waitFor(() => expect(result.current.isSetup).toBe(false));
+    setUrlUserId.mockClear();
+
+    await act(async () => {
+      await result.current.handleLogout();
+    });
+
+    expect(result.current.isSetup).toBe(false);
+    expect(setUrlUserId).not.toHaveBeenCalled();
+    expect(addToast).toHaveBeenCalledWith('Could not sign out. Please try again.', 'error');
   });
 
   it('handleLogin with existing configs', async () => {

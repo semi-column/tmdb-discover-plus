@@ -172,16 +172,12 @@ class ApiService {
         return { valid: false, recoveryConfigs: e.recoveryConfigs || [] };
       }
       console.warn('Session verification failed:', e);
-      return { valid: false };
+      return e.status === 401 ? { valid: false } : { valid: false, unavailable: true };
     }
   }
 
   async logout() {
-    try {
-      await this.request('/auth/logout', { method: 'POST' });
-    } catch (e) {
-      console.warn('Logout request failed:', e);
-    }
+    await this.request('/auth/logout', { method: 'POST' });
     this.clearSession();
   }
 

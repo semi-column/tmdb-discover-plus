@@ -130,6 +130,28 @@ describe('ApiService', () => {
     expect(api.getSessionToken()).toBe('new-jwt');
   });
 
+  it('retains the session and distinguishes temporary verification failures', async () => {
+    api.setSessionToken('saved-token');
+    vi.spyOn(api, '_isTokenExpired').mockReturnValue(false);
+    vi.spyOn(api, 'request').mockRejectedValue({ status: 503, code: 'AUTH_UNAVAILABLE' });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(await api.verifySession()).toEqual({ valid: false, unavailable: true });
+    expect(api.getSessionToken()).toBe('saved-token');
+    vi.restoreAllMocks();
+  });
+
+  it('keeps a token for retry when server-side logout fails', async () => {
+    api.setSessionToken('saved-token');
+    vi.spyOn(api, 'request').mockRejectedValueOnce(new Error('Redis unavailable'));
+
+    await expect(api.logout()).rejects.toThrow('Redis unavailable');
+    expect(api.getSessionToken()).toBe('saved-token');
+    api.request.mockResolvedValueOnce({ success: true });
+    await api.logout();
+    expect(api.getSessionToken()).toBeNull();
+  });
+
   it('keeps recovery details for an invalid-key login', async () => {
     const recoveryConfigs = [{ userId: 'old-config', catalogs: [{ name: 'Movies' }] }];
     const dispatchEvent = vi.spyOn(window, 'dispatchEvent');
