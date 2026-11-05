@@ -7,6 +7,7 @@ import {
   getRequestSignal,
   awaitWithRequestAbort,
   startOpportunisticWork,
+  measureRequestStage,
 } from '../../utils/requestContext.ts';
 import { CACHE_ERROR_TTLS, CACHE_STORAGE } from '../../cacheTtls.ts';
 import { cacheReadLayer } from './keys.ts';
@@ -26,6 +27,7 @@ const IN_FLIGHT_WARN_THRESHOLD = MAX_IN_FLIGHT * 0.8;
 const ERROR_TTLS = CACHE_ERROR_TTLS;
 /** Non-serialized producer marker: coalesced callers must also recognize partial results. */
 export const INCOMPLETE_RESULT = Symbol('incompleteResult');
+export const STALE_RESULT = Symbol('staleResult');
 export function classifyError(
   error: { message?: string; code?: string; name?: string; statusCode?: number } | null | undefined,
   statusCode?: number
@@ -110,7 +112,10 @@ export class CacheWrapper {
   ): Promise<CacheWrapperEntry | null> {
     const storageKey = this._prefixKey(key);
     try {
-      const raw = await this.adapter.get(storageKey);
+      const raw = await measureRequestStage(
+        cacheReadLayer(key) === 'episode_snapshot' ? 'episode_snapshot_read' : 'cache_read',
+        () => this.adapter.get(storageKey)
+      );
       if (raw === null || raw === undefined) {
         this.stats.misses++;
         trackCacheRead(cacheReadLayer(key), 'misses');
@@ -369,7 +374,12 @@ export class CacheWrapper {
       throwIfRequestAborted();
       const result = await awaitWithRequestAbort(fetchFn());
       throwIfRequestAborted();
-      if (result && typeof result === 'object' && INCOMPLETE_RESULT in result) return result;
+      if (
+        result &&
+        typeof result === 'object' &&
+        (INCOMPLETE_RESULT in result || STALE_RESULT in result)
+      )
+        return result;
       const resultType = classifyResult(result);
       const effectiveTtl =
         resultType === 'EMPTY_RESULT'

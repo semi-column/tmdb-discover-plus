@@ -3,6 +3,7 @@ import { TIMEOUTS } from '../../constants.ts';
 import { createCircuitBreaker, shouldRecordCircuitFailure } from '../common/circuitBreaker.ts';
 import { fetchWithRetry } from '../common/fetchWithRetry.ts';
 import { getAnilistThrottle } from '../../infrastructure/anilistThrottle.ts';
+import { measureRequestStage } from '../../utils/requestContext.ts';
 
 const log = createLogger('anilist:client');
 
@@ -81,7 +82,8 @@ export async function anilistFetch<T>(
         allowedOrigins: [ANILIST_API_ORIGIN],
         includeResponseBodyInError: true,
         fetchImplementation: anilistFetchImplementation,
-        beforeAttempt: (signal) => getAnilistThrottle().acquire(signal),
+        beforeAttempt: (signal) =>
+          measureRequestStage('anilist_throttle', () => getAnilistThrottle().acquire(signal)),
         onRateLimited: (_response, attempt) =>
           log.warn('AniList rate limited', { statusCode: 429, attempt }),
         // The shared admission gate owns the complete cooldown, including retry attempts.

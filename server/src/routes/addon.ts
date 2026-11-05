@@ -30,7 +30,12 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { etagMiddleware } from '../utils/etag.ts';
-import { CachedError, classifyError, INCOMPLETE_RESULT } from '../services/cache/CacheWrapper.ts';
+import {
+  CachedError,
+  classifyError,
+  INCOMPLETE_RESULT,
+  STALE_RESULT,
+} from '../services/cache/CacheWrapper.ts';
 import { getCache } from '../services/cache/index.ts';
 import { buildMetaCacheKey } from '../services/cache/keys.ts';
 import {
@@ -872,6 +877,9 @@ async function handleMetaRequest(
       if (fullMeta && episodesResult && INCOMPLETE_RESULT in episodesResult) {
         Object.defineProperty(fullMeta, INCOMPLETE_RESULT, { value: true });
       }
+      if (fullMeta && episodesResult && STALE_RESULT in episodesResult) {
+        Object.defineProperty(fullMeta, STALE_RESULT, { value: true });
+      }
       return fullMeta;
     };
 
@@ -908,6 +916,8 @@ async function handleMetaRequest(
 
     const responseMeta = meta;
     const incomplete = INCOMPLETE_RESULT in meta;
+    const staleEpisodes = STALE_RESULT in meta;
+    const uncacheable = incomplete || staleEpisodes;
     const { posterPlaceholder, backdropPlaceholder } = getPlaceholderUrls(resolvedBaseUrl);
     if (!responseMeta.poster) responseMeta.poster = posterPlaceholder;
     if (responseMeta.videos) {
@@ -938,16 +948,16 @@ async function handleMetaRequest(
       'Cache-Control',
       `max-age=${cacheMaxAge}, stale-while-revalidate=${staleRevalidate}, stale-if-error=${CACHE_TTLS.CATALOG_STALE_IF_ERROR}`
     );
-    if (incomplete) {
+    if (uncacheable) {
       res.set('Cache-Control', 'no-store');
-      res.set('X-Metadata-Status', 'degraded');
+      res.set('X-Metadata-Status', incomplete ? 'degraded' : 'stale');
     }
     res.etagJson(
       {
         meta: responseMeta,
-        cacheMaxAge: incomplete ? 0 : cacheMaxAge,
-        staleRevalidate: incomplete ? 0 : staleRevalidate,
-        staleError: incomplete ? 0 : CACHE_TTLS.CATALOG_STALE_IF_ERROR,
+        cacheMaxAge: uncacheable ? 0 : cacheMaxAge,
+        staleRevalidate: uncacheable ? 0 : staleRevalidate,
+        staleError: uncacheable ? 0 : CACHE_TTLS.CATALOG_STALE_IF_ERROR,
       },
       { extra: `${userId}:${id}` }
     );

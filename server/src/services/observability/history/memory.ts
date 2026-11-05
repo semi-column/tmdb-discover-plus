@@ -60,6 +60,7 @@ function toRequestRow(e: RequestEvent): Row {
     cache_hits: e.cacheHits,
     cache_misses: e.cacheMisses,
     cache_reads: e.cacheReads ?? null,
+    timings: e.timings ?? null,
     upstream_calls: e.upstreamCalls,
     upstream_ms: e.upstreamMs,
     error_fp: e.errorFp,

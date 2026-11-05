@@ -6,6 +6,7 @@ import {
   abortRequestContext,
   getRequestSignal,
   isOpportunisticWork,
+  measureRequestStage,
   skipOpportunisticWork,
   throwIfRequestAborted,
   withRequestAbortContext,
@@ -286,7 +287,7 @@ export async function acquireAddonWork(userId: string): Promise<WorkRelease> {
 
 export async function withAddonWork<T>(userId: string, work: () => Promise<T>): Promise<T> {
   return withRequestAbortContext(async () => {
-    const release = await acquireAddonWork(userId);
+    const release = await measureRequestStage('addon_admission', () => acquireAddonWork(userId));
     try {
       throwIfRequestAborted();
       return await work();

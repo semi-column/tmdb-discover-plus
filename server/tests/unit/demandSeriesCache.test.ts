@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ArtworkOptions } from '../../src/types/index.ts';
-import { CacheWrapper, INCOMPLETE_RESULT } from '../../src/services/cache/CacheWrapper.ts';
+import {
+  CacheWrapper,
+  INCOMPLETE_RESULT,
+  STALE_RESULT,
+} from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter } from './helpers/mocks.ts';
 import {
   getRequestSignal,
+  getBackgroundWorkStats,
+  abortRequestContext,
   startOpportunisticWork,
   withRequestAbortContext,
 } from '../../src/utils/requestContext.ts';
@@ -12,9 +18,15 @@ const { fetchTmdb, fetchImdb, imdbEnabled, flags } = vi.hoisted(() => ({
   fetchTmdb: vi.fn(),
   fetchImdb: vi.fn(),
   imdbEnabled: vi.fn(),
-  flags: { demandFirst: true, backgroundPriority: true, disableRateLimit: false },
+  flags: {
+    demandFirst: true,
+    endedEpisodeSwr: true,
+    backgroundPriority: true,
+    disableRateLimit: false,
+  },
 }));
 let cache: CacheWrapper;
+let adapter: MockCacheAdapter;
 
 vi.mock('../../src/config.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/config.ts')>();
@@ -57,11 +69,14 @@ function artwork(host: string): ArtworkOptions {
 }
 
 beforeEach(() => {
-  cache = new CacheWrapper(new MockCacheAdapter());
+  adapter = new MockCacheAdapter();
+  cache = new CacheWrapper(adapter);
   fetchTmdb.mockReset();
   fetchImdb.mockReset();
   imdbEnabled.mockReturnValue(true);
   flags.demandFirst = true;
+  flags.endedEpisodeSwr = true;
+  flags.backgroundPriority = true;
   const seasonResponse = (season: number) => ({
     episodes: [
       {
@@ -103,6 +118,195 @@ beforeEach(() => {
       },
     },
   }));
+});
+
+describe('ended-series stale snapshots', () => {
+  const endedDetails = { ...details, status: 'Ended' };
+  const day = 86_400_000;
+
+  async function seedSnapshot(status = 'Ended', age = day + 1) {
+    const complete = await getSeriesEpisodes('key', 123, { ...details, status });
+    const key = [...adapter.store.keys()].find((key) => key.startsWith('episodes:canonical:'))!;
+    const entry = (await cache.getEntry(key))!;
+    entry.__storedAt = Date.now() - age;
+    fetchImdb.mockClear();
+    return { complete, key, storedAt: entry.__storedAt };
+  }
+
+  it('does not rebuild a fresh ended snapshot', async () => {
+    await seedSnapshot('Ended', day - 60_000);
+    const fresh = await getSeriesEpisodes('key', 123, endedDetails);
+    expect(STALE_RESULT in fresh).toBe(false);
+    expect(fetchImdb).not.toHaveBeenCalled();
+  });
+
+  it.each(['Ended', 'Canceled'])(
+    'returns a complete stale %s snapshot while one sequential refresh is blocked',
+    async (status) => {
+      const { complete, key, storedAt } = await seedSnapshot(status);
+      const gate = Promise.withResolvers<void>();
+      const fetch = fetchImdb.getMockImplementation()!;
+      fetchImdb.mockImplementation(async (...args) => {
+        await gate.promise;
+        return fetch(...args);
+      });
+      try {
+        const reads = Array.from({ length: 8 }, (_, index) =>
+          getSeriesEpisodes(
+            'key',
+            123,
+            { ...details, status },
+            {
+              artworkOptions: artwork(`user${index}.example`),
+            }
+          )
+        );
+        const results = await Promise.all(reads);
+        expect(results.every((result) => STALE_RESULT in result)).toBe(true);
+        expect(results.every((result) => !(INCOMPLETE_RESULT in result))).toBe(true);
+        expect(results[0].map(({ id }) => id)).toEqual(complete.map(({ id }) => id));
+        expect(results[0][0].thumbnail).toBe('https://user0.example/1/1');
+        expect(results[1][0].thumbnail).toBe('https://user1.example/1/1');
+        await vi.waitFor(() => expect(fetchImdb).toHaveBeenCalledTimes(1));
+        expect(getBackgroundWorkStats().active).toBe(1);
+        expect((await cache.getEntry(key))?.__storedAt).toBe(storedAt);
+      } finally {
+        gate.resolve();
+        await vi.waitFor(() => expect(getBackgroundWorkStats().active).toBe(0));
+      }
+      const fresh = await getSeriesEpisodes('key', 123, { ...details, status });
+      expect(STALE_RESULT in fresh).toBe(false);
+      expect(fetchImdb).toHaveBeenCalledTimes(14);
+    }
+  );
+
+  it.each([
+    'cold',
+    'expired',
+    'language',
+    'season metadata',
+    'rollback',
+    'background rollback',
+    'ongoing',
+  ])('keeps the existing foreground completeness path for %s snapshots', async (scenario) => {
+    if (scenario !== 'cold')
+      await seedSnapshot(
+        scenario === 'ongoing' ? details.status : 'Ended',
+        scenario === 'expired' ? 2 * day : day + 1
+      );
+    if (scenario === 'rollback') flags.endedEpisodeSwr = false;
+    if (scenario === 'background rollback') flags.backgroundPriority = false;
+    const gate = Promise.withResolvers<void>();
+    const fetch = fetchImdb.getMockImplementation()!;
+    fetchImdb.mockImplementation(async (...args) => {
+      await gate.promise;
+      return fetch(...args);
+    });
+    const updated =
+      scenario === 'ongoing'
+        ? details
+        : scenario === 'season metadata'
+          ? {
+              ...endedDetails,
+              seasons: seasons.map((s) => ({ ...s, poster_path: '/changed.jpg' })),
+            }
+          : endedDetails;
+    let settled = false;
+    const result = getSeriesEpisodes('key', 123, updated, {
+      language: scenario === 'language' ? 'fr' : 'en',
+    }).then((videos) => {
+      settled = true;
+      return videos;
+    });
+    try {
+      await vi.waitFor(() => expect(fetchImdb).toHaveBeenCalledTimes(5));
+      expect(settled).toBe(false);
+    } finally {
+      gate.resolve();
+      const videos = await result;
+      expect(STALE_RESULT in videos).toBe(false);
+      expect(INCOMPLETE_RESULT in videos).toBe(false);
+    }
+  });
+
+  it('preserves IMDb-only episodes after a degraded refresh and applies valid removals later', async () => {
+    const { complete, key, storedAt } = await seedSnapshot();
+    fetchImdb.mockRejectedValue(new Error('IMDb unavailable'));
+    const stale = await getSeriesEpisodes('key', 123, endedDetails);
+    await vi.waitFor(() => expect(getBackgroundWorkStats().active).toBe(0));
+    expect(stale.map(({ id }) => id)).toEqual(complete.map(({ id }) => id));
+    expect((await cache.getEntry(key))?.__storedAt).toBe(storedAt);
+    fetchImdb.mockResolvedValue({
+      title: { episodes: { episodes: { edges: [], pageInfo: { hasNextPage: false } } } },
+    });
+    await getSeriesEpisodes('key', 123, endedDetails);
+    await vi.waitFor(() => expect(getBackgroundWorkStats().active).toBe(0));
+    const corrected = await getSeriesEpisodes('key', 123, endedDetails);
+    expect(corrected).toHaveLength(12);
+    expect(corrected.some(({ id }) => id === 'tt99913')).toBe(false);
+    expect(STALE_RESULT in corrected).toBe(false);
+    expect(INCOMPLETE_RESULT in corrected).toBe(false);
+  });
+
+  it('serves stale without renewing age when the background cap skips the refresh', async () => {
+    const { key, storedAt } = await seedSnapshot();
+    const gate = Promise.withResolvers<void>();
+    const tasks = [0, 1].map(() => startOpportunisticWork(() => gate.promise)!);
+    try {
+      const stale = await getSeriesEpisodes('key', 123, endedDetails);
+      expect(STALE_RESULT in stale).toBe(true);
+      expect(fetchImdb).not.toHaveBeenCalled();
+      expect((await cache.getEntry(key))?.__storedAt).toBe(storedAt);
+    } finally {
+      gate.resolve();
+      await Promise.all(tasks.map(({ promise }) => promise));
+    }
+  });
+
+  it('keeps the complete snapshot when a disconnect cancels its refresh', async () => {
+    const { key, storedAt } = await seedSnapshot();
+    const gate = Promise.withResolvers<void>();
+    const fetch = fetchImdb.getMockImplementation()!;
+    fetchImdb.mockImplementation(async (...args) => {
+      await gate.promise;
+      return fetch(...args);
+    });
+    try {
+      await withRequestAbortContext(async () => {
+        expect(STALE_RESULT in (await getSeriesEpisodes('key', 123, endedDetails))).toBe(true);
+        await vi.waitFor(() => expect(fetchImdb).toHaveBeenCalledTimes(1));
+        abortRequestContext(new DOMException('Disconnected', 'AbortError'));
+        await vi.waitFor(() => expect(getBackgroundWorkStats().active).toBe(0));
+      });
+      expect((await cache.getEntry(key))?.__storedAt).toBe(storedAt);
+    } finally {
+      gate.resolve();
+      await vi.waitFor(() => expect(cache.getStats().inFlightRequests).toBe(0));
+    }
+  });
+
+  it('bounds duplicate work from independent wrappers without claiming distributed single-flight', async () => {
+    await seedSnapshot();
+    const gate = Promise.withResolvers<void>();
+    const fetch = fetchImdb.getMockImplementation()!;
+    fetchImdb.mockImplementation(async (...args) => {
+      await gate.promise;
+      return fetch(...args);
+    });
+    try {
+      const first = await getSeriesEpisodes('key', 123, endedDetails);
+      cache = new CacheWrapper(adapter);
+      const second = await getSeriesEpisodes('key', 123, endedDetails);
+      expect(first.map(({ id }) => id)).toEqual(second.map(({ id }) => id));
+      expect(STALE_RESULT in second).toBe(true);
+      await vi.waitFor(() => expect(fetchImdb).toHaveBeenCalledTimes(2));
+      expect(getBackgroundWorkStats().active).toBe(2);
+    } finally {
+      gate.resolve();
+      await vi.waitFor(() => expect(getBackgroundWorkStats().active).toBe(0));
+    }
+    expect(fetchImdb).toHaveBeenCalledTimes(28);
+  });
 });
 
 describe('shared complete series episodes', () => {

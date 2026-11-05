@@ -9,6 +9,9 @@ import {
   getRequestCacheStats,
   trackCacheOperation,
   withRequestAbortContext,
+  getRequestLiveState,
+  measureRequestStage,
+  startOpportunisticWork,
 } from '../../src/utils/requestContext.ts';
 
 describe('withRequestAbortContext', () => {
@@ -21,6 +24,31 @@ describe('withRequestAbortContext', () => {
       expect(getRequestSignal()?.reason).toBe(reason);
     });
     expect(getRequestSignal()).toBeUndefined();
+  });
+
+  describe('request stage timings', () => {
+    it('counts successful and failed attempts without merging background work into the parent', async () => {
+      await withRequestAbortContext(async () => {
+        await expect(measureRequestStage('tmdb_throttle', async () => 42)).resolves.toBe(42);
+        const failure = new Error('admission failed');
+        await expect(
+          measureRequestStage('tmdb_throttle', async () => {
+            throw failure;
+          })
+        ).rejects.toBe(failure);
+        expect(getRequestLiveState()?.timings.tmdb_throttle).toMatchObject({
+          calls: 2,
+          durationMs: expect.any(Number),
+        });
+        const parent = structuredClone(getRequestLiveState()?.timings);
+        const background = startOpportunisticWork(() =>
+          measureRequestStage('imdb_throttle', async () => 'background')
+        )!;
+        await expect(background.promise).resolves.toBe('background');
+        expect(getRequestLiveState()?.timings).toEqual(parent);
+      });
+      expect(await measureRequestStage('cache_read', async () => 'outside')).toBe('outside');
+    });
   });
 
   it('preserves the existing signal and accounting across nested work', async () => {

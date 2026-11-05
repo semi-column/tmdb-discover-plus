@@ -7,11 +7,14 @@ import { acquireAddonWork, RedisAddonWork, withAddonWork } from '../../src/utils
 import {
   getBackgroundWorkStats,
   getRequestSignal,
+  requestIdMiddleware,
   skipOpportunisticWork,
   startOpportunisticWork,
   withRequestAbortContext,
 } from '../../src/utils/requestContext.ts';
 import { MockCacheAdapter } from './helpers/mocks.ts';
+import express from 'express';
+import request from 'supertest';
 
 const flags = vi.hoisted(() => ({
   demandFirst: true,
@@ -33,6 +36,36 @@ afterEach(() => {
 });
 
 describe('opportunistic background work', () => {
+  it('lets a refresh finish after a successful HTTP response closes', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const cache = new CacheWrapper(new MockCacheAdapter());
+    await cache.set('key', 'stale', 1);
+    now.mockReturnValue(2500);
+    const gate = Promise.withResolvers<void>();
+    const app = express();
+    app.use(requestIdMiddleware());
+    app.get('/meta', async (_req, res) => {
+      const data = await cache.wrap(
+        'key',
+        async () => {
+          await gate.promise;
+          getRequestSignal()?.throwIfAborted();
+          return 'fresh';
+        },
+        60
+      );
+      res.json({ data });
+    });
+    try {
+      await request(app).get('/meta').expect(200, { data: 'stale' });
+      expect(getBackgroundWorkStats().active).toBe(1);
+    } finally {
+      gate.resolve();
+      await vi.waitFor(() => expect(getBackgroundWorkStats().active).toBe(0));
+    }
+    expect(await cache.get('key')).toBe('fresh');
+  });
+
   it('can disable background prioritization for rollback', async () => {
     flags.backgroundPriority = false;
     const gate = Promise.withResolvers<void>();

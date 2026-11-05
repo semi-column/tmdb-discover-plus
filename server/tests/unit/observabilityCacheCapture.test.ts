@@ -18,7 +18,7 @@ it('freezes read details at response finish rather than including later backgrou
     vi.stubEnv(key, value);
   const { initObservability, stopObservability, getHistory, observabilityMiddleware } =
     await import('../../src/services/observability/index.ts');
-  const { getRequestLiveState, requestIdMiddleware, trackCacheRead } =
+  const { getRequestLiveState, requestIdMiddleware, trackCacheRead, measureRequestStage } =
     await import('../../src/utils/requestContext.ts');
   const { parseRequestFilter } = await import('../../src/services/observability/history/types.ts');
   const { adminRouter } = await import('../../src/routes/admin.ts');
@@ -35,10 +35,12 @@ it('freezes read details at response finish rather than including later backgrou
     const app = express();
     app.use(requestIdMiddleware(), observabilityMiddleware());
     app.use('/api/admin', adminRouter);
-    app.get('/catalog', (_req, res) => {
+    app.get('/catalog', async (_req, res) => {
+      await measureRequestStage('addon_admission', async () => undefined);
       trackCacheRead('addon_response', 'freshHits');
       res.once('finish', () => {
-        setImmediate(() => {
+        setImmediate(async () => {
+          await measureRequestStage('imdb_throttle', async () => undefined);
           trackCacheRead('addon_response', 'misses');
           trackCacheRead('artwork', 'readErrors');
           lateMisses = getRequestLiveState()?.cacheReads.addon_response?.misses;
@@ -64,7 +66,9 @@ it('freezes read details at response finish rather than including later backgrou
       cache_reads: {
         addon_response: { freshHits: 1, staleHits: 0, misses: 0, cachedErrors: 0, readErrors: 0 },
       },
+      timings: { addon_admission: { calls: 1, durationMs: expect.any(Number) } },
     });
+    expect(rows.rows[0].timings).not.toHaveProperty('imdb_throttle');
     expect(rows.rows[0].cache_reads).not.toHaveProperty('artwork');
     const { token } = issueSession();
     const response = await request(app)

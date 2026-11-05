@@ -1,4 +1,5 @@
 import type { CacheReads } from '../../types/cache.ts';
+import type { RequestTimings } from '../../utils/requestContext.ts';
 
 export interface RequestEvent {
   ts: number;
@@ -23,6 +24,7 @@ export interface RequestEvent {
   cacheMisses: number;
   /** Absent on legacy history; an empty object means new instrumentation saw no reads. */
   cacheReads?: CacheReads;
+  timings?: RequestTimings;
   upstreamCalls: number;
   upstreamMs: number;
   errorFp: string;

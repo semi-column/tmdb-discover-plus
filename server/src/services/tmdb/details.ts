@@ -4,7 +4,7 @@ import { createLogger } from '../../utils/logger.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { getCache } from '../cache/index.ts';
 import { tmdbFetch } from './client.ts';
-import { CachedError, INCOMPLETE_RESULT } from '../cache/CacheWrapper.ts';
+import { CachedError, INCOMPLETE_RESULT, STALE_RESULT } from '../cache/CacheWrapper.ts';
 import { TMDB_IMAGE_BASE } from './constants.ts';
 import { formatRuntime } from './stremioMeta.ts';
 import { generateEpisodeThumbnailUrl, isValidPosterConfig } from '../artworkService.ts';
@@ -15,6 +15,7 @@ import {
   getRequestRemainingMs,
   isOpportunisticWork,
   isRequestAborted,
+  measureRequestStage,
   skipOpportunisticWork,
   throwIfRequestAborted,
 } from '../../utils/requestContext.ts';
@@ -408,15 +409,23 @@ export async function getSeriesEpisodes(
     .digest('hex')}`;
   const ended = details.status === 'Ended' || details.status === 'Canceled';
   const demandFirst = config.features?.demandFirst !== false;
+  const allowStale =
+    ended &&
+    config.features?.endedEpisodeSwr !== false &&
+    config.features?.backgroundPriority !== false &&
+    !isOpportunisticWork();
   let staleSnapshot: StremioVideo[] | undefined;
-  const build = () => buildCanonicalSeriesEpisodes(apiKey, tmdbId, details, language, imdbEnabled);
+  const build = () =>
+    measureRequestStage('episode_snapshot_build', () =>
+      buildCanonicalSeriesEpisodes(apiKey, tmdbId, details, language, imdbEnabled)
+    );
   const canonical = demandFirst
     ? ((await getCache().wrap(
         cacheKey,
         build,
         ended ? CACHE_TTLS.DETAIL : CACHE_TTLS.TMDB_RECENT_DETAIL,
         {
-          allowStale: false,
+          allowStale,
           onCacheRead: (entry) => {
             if (entry?.__isStale && Array.isArray(entry.data)) {
               staleSnapshot = entry.data as StremioVideo[];
@@ -450,6 +459,8 @@ export async function getSeriesEpisodes(
   });
   if (INCOMPLETE_RESULT in canonical)
     Object.defineProperty(videos, INCOMPLETE_RESULT, { value: true });
+  else if (allowStale && staleSnapshot === canonical)
+    Object.defineProperty(videos, STALE_RESULT, { value: true });
   return videos;
 }
 
@@ -696,10 +707,12 @@ async function buildCanonicalSeriesEpisodes(
             const historical =
               (seriesEnded || season.season_number < latestSeasonNumber) &&
               !hasTmdbGap(season.season_number);
-            const result = await getImdbEpisodesForSeason(
-              imdbId,
-              season.season_number,
-              demandFirst && historical ? CACHE_TTLS.IMDB_HISTORICAL_MAX_AGE * 1000 : undefined
+            const result = await measureRequestStage('imdb_enrichment', () =>
+              getImdbEpisodesForSeason(
+                imdbId,
+                season.season_number,
+                demandFirst && historical ? CACHE_TTLS.IMDB_HISTORICAL_MAX_AGE * 1000 : undefined
+              )
             );
             if (!result.complete) incomplete = true;
             if (result.edges.length)

@@ -176,6 +176,7 @@ import {
   CacheWrapper,
   CachedError,
   INCOMPLETE_RESULT,
+  STALE_RESULT,
 } from '../../src/services/cache/CacheWrapper.ts';
 import { MockCacheAdapter } from './helpers/mocks.ts';
 import { AppError, ErrorCodes } from '../../src/utils/AppError.ts';
@@ -809,14 +810,17 @@ describe('metadata route cache dependencies', () => {
     }
   });
 
-  it('serves incomplete episodes without caching the aggregate or advertising cacheable hints', async () => {
+  it.each([
+    [INCOMPLETE_RESULT, 'degraded'],
+    [STALE_RESULT, 'stale'],
+  ] as const)('does not renew outer freshness for %s episodes', async (marker, status) => {
     const cache = new CacheWrapper(new MockCacheAdapter());
     const wrap = vi.spyOn(cache, 'wrap');
     mockCacheWrap.mockImplementation(cache.wrap.bind(cache));
     mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
     mockTmdbGetDetails.mockResolvedValue({ id: 550, images: { logos: [{}] } });
     const episodes = [{ id: 'tt0137523:1:1', season: 1, episode: 1, thumbnail: 'thumbnail' }];
-    Object.defineProperty(episodes, INCOMPLETE_RESULT, { value: true });
+    Object.defineProperty(episodes, marker, { value: true });
     mockTmdbEpisodes.mockResolvedValue(episodes);
     mockTmdbFullMeta.mockImplementation(async () => ({
       id: 'tt0137523',
@@ -830,7 +834,7 @@ describe('metadata route cache dependencies', () => {
       const response = await request(app).get('/testuser/meta/series/tmdb:550.json');
       expect(response.status).toBe(200);
       expect(response.headers['cache-control']).toBe('no-store');
-      expect(response.headers['x-metadata-status']).toBe('degraded');
+      expect(response.headers['x-metadata-status']).toBe(status);
       expect(response.body).toMatchObject({
         meta: { videos: episodes },
         cacheMaxAge: 0,

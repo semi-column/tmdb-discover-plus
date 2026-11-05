@@ -157,6 +157,7 @@ export const config = Object.freeze({
 
   features: Object.freeze({
     demandFirst: envBool('DEMAND_FIRST_FETCHING', true),
+    endedEpisodeSwr: envBool('ENDED_EPISODE_SWR_ENABLED', true),
     backgroundPriority: envBool('BACKGROUND_PRIORITY_ENABLED', true),
     disableRateLimit:
       envBool('DISABLE_RATE_LIMIT') &&

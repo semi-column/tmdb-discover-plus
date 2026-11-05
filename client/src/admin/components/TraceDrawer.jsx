@@ -130,6 +130,23 @@ export function TraceDrawer({ requestId, onClose, onOpenError, onInvestigate }) 
               <Field label="Upstream calls (summed, may overlap)">{`${req.upstream_calls} (${fmtMs(req.upstream_ms)} total)`}</Field>
             </div>
 
+            {req.timings && Object.keys(req.timings).length > 0 && (
+              <Panel title="Request stage timings">
+                <p className="adm-muted">
+                  Summed completed work before response finish, including failed attempts. Stages
+                  nest and parallel calls overlap; do not add them to request latency. Background
+                  refreshes are excluded. IMDb enrichment is measured per season.
+                </p>
+                <div className="adm-trace-grid">
+                  {Object.entries(req.timings).map(([stage, timing]) => (
+                    <Field key={stage} label={stage.replaceAll('_', ' ')}>
+                      {`${fmtMs(timing.durationMs)} (${timing.calls} ${timing.calls === 1 ? 'call' : 'calls'})`}
+                    </Field>
+                  ))}
+                </div>
+              </Panel>
+            )}
+
             <Panel title={`Upstream calls (${data.upstream.length})`}>
               <p className="adm-muted">
                 Dependency timings end at response headers and may overlap. They exclude queue

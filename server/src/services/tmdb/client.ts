@@ -8,6 +8,7 @@ import {
   getRequestSignal,
   throwIfRequestAborted,
   awaitWithRequestAbort,
+  measureRequestStage,
 } from '../../utils/requestContext.ts';
 import { setTimeout as delay } from 'node:timers/promises';
 import { TIMEOUTS, CONCURRENCY, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
@@ -300,7 +301,7 @@ async function _tmdbFetchInner(
       }
 
       const throttle = getTmdbThrottle();
-      await throttle.acquire();
+      await measureRequestStage('tmdb_throttle', () => throttle.acquire());
 
       throwIfRequestAborted();
       const requestSignal = getRequestSignal();
@@ -527,7 +528,7 @@ export async function tmdbWebsiteFetchJson(
   }
 
   const throttle = getTmdbThrottle();
-  await throttle.acquire();
+  await measureRequestStage('tmdb_throttle', () => throttle.acquire());
 
   const response = await fetch(url.toString(), {
     signal: AbortSignal.any([

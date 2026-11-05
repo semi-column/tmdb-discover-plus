@@ -104,6 +104,7 @@ need to install first on managed services. Admin history needs its own
 | `CACHE_VERSION_OVERRIDE`      | Override the cache namespace/version; changing it invalidates effective cache reuse | Empty                           |
 | `CACHE_WARM_REGIONS`          | Comma-separated ISO country codes for startup warming                               | `US,GB,DE,FR,ES` (`US` nightly) |
 | `DEMAND_FIRST_FETCHING`       | Share canonical series episodes and avoid speculative IMDb next-page enrichment     | `true`                          |
+| `ENDED_EPISODE_SWR_ENABLED`   | Serve retained complete ended/cancelled episode snapshots during bounded refresh    | `true`                          |
 | `BACKGROUND_PRIORITY_ENABLED` | Bound opportunistic refreshes and leave capacity for foreground work                | `true`                          |
 
 With a Redis URL, initial cache and request-rate-limit connections each have a
@@ -163,6 +164,17 @@ historical reuse do not eliminate those cold requests.
 The per-season IMDb cache and stale serving can affect how quickly upstream
 changes appear; the six-hour metadata TTL is not a guarantee of upstream
 freshness.
+
+Ended/cancelled series can serve a previously complete canonical snapshot after
+its one-day TTL, but only while it is less than two days old and its identity
+(language, provider and season metadata) still matches. Reads do not renew that
+age. The existing background cap and provider admission limits apply; ongoing
+series and cold snapshots still await enrichment. Incomplete or failed refreshes
+cannot replace a complete snapshot. Responses using a stale snapshot are not
+stored as fresh aggregate metadata and advertise `no-store` with zero Stremio
+cache hints. Personal thumbnails and availability are recalculated as usual.
+Set `ENDED_EPISODE_SWR_ENABLED=false` and restart to roll back only this behavior.
+It is also disabled when demand-first fetching or background priority is disabled.
 
 Set `DEMAND_FIRST_FETCHING=false` and restart to disable those demand-first
 optimizations, restore automatic next-page IMDb enrichment, and return the

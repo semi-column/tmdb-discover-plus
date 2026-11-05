@@ -215,6 +215,17 @@ for (const backend of ['memory', 'postgres', 'mongo'] as const) {
       }
     });
 
+    it('preserves stage timings in request lists and traces without inventing legacy timings', async () => {
+      const timings = { addon_admission: { calls: 1, durationMs: 125.5 } };
+      await history.insertRequests([request(1, { timings }), request(2)]);
+      const rows = await history.listRequests(range, parseRequestFilter({ requestId: 'r001' }), 10);
+      expect(rows.rows[0].timings).toEqual(timings);
+      const trace = await history.getTrace('r001');
+      expect(trace.requests[0].timings).toEqual(timings);
+      const legacy = await history.getTrace('r002');
+      expect(legacy.requests[0].timings ?? null).toBeNull();
+    });
+
     it('returns exact raw headline, route and bucket percentiles, not histogram bounds', async () => {
       await history.insertRequests([
         ...Array.from({ length: 19 }, (_, i) => request(i, { ts: now - 60_000 })),

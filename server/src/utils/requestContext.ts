@@ -26,6 +26,17 @@ export interface RequestObsState {
   errorFingerprint: string;
 }
 
+export type RequestStage =
+  | 'addon_admission'
+  | 'cache_read'
+  | 'episode_snapshot_read'
+  | 'episode_snapshot_build'
+  | 'imdb_enrichment'
+  | 'tmdb_throttle'
+  | 'imdb_throttle'
+  | 'anilist_throttle';
+export type RequestTimings = Partial<Record<RequestStage, { calls: number; durationMs: number }>>;
+
 interface RequestStore {
   requestId: string;
   method: string;
@@ -35,6 +46,7 @@ interface RequestStore {
   cache: RequestCacheStats;
   obs: RequestObsState;
   cacheReads: CacheReads;
+  timings: RequestTimings;
   opportunistic?: boolean;
 }
 
@@ -78,6 +90,7 @@ export function withRequestAbortContext<T>(work: () => Promise<T>): Promise<T> {
       abortController: new AbortController(),
       cache: buildEmptyCacheStats(),
       cacheReads: {},
+      timings: {},
       obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
     },
     work
@@ -118,7 +131,10 @@ export function startOpportunisticWork<T>(
   const parentSignal = parent?.abortController.signal;
   if (parentSignal?.aborted) return undefined;
   if (config.features?.backgroundPriority === false) {
-    return { promise: work(), signal: parentSignal ?? new AbortController().signal };
+    return {
+      promise: parent ? asyncLocalStorage.run({ ...parent, timings: {} }, work) : work(),
+      signal: parentSignal ?? new AbortController().signal,
+    };
   }
   if (backgroundStats.active >= BACKGROUND_LIMIT) {
     backgroundStats.skipped++;
@@ -129,7 +145,13 @@ export function startOpportunisticWork<T>(
   const onAbort = () => controller.abort(parentSignal?.reason);
   parentSignal?.addEventListener('abort', onAbort, { once: true });
   const store: RequestStore = parent
-    ? { ...parent, startedAt: Date.now(), abortController: controller, opportunistic: true }
+    ? {
+        ...parent,
+        startedAt: Date.now(),
+        abortController: controller,
+        opportunistic: true,
+        timings: {},
+      }
     : {
         requestId: randomBytes(9).toString('base64url'),
         method: 'BACKGROUND',
@@ -138,6 +160,7 @@ export function startOpportunisticWork<T>(
         abortController: controller,
         cache: buildEmptyCacheStats(),
         cacheReads: {},
+        timings: {},
         obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
         opportunistic: true,
       };
@@ -205,10 +228,27 @@ export function getRequestLiveState():
       path: string;
       cache: RequestCacheStats;
       cacheReads: CacheReads;
+      timings: RequestTimings;
       obs: RequestObsState;
     }
   | undefined {
   return asyncLocalStorage.getStore();
+}
+
+export async function measureRequestStage<T>(
+  stage: RequestStage,
+  work: () => Promise<T>
+): Promise<T> {
+  const store = asyncLocalStorage.getStore();
+  if (!store) return work();
+  const started = performance.now();
+  try {
+    return await work();
+  } finally {
+    const timing = (store.timings[stage] ??= { calls: 0, durationMs: 0 });
+    timing.calls++;
+    timing.durationMs += Math.max(0, performance.now() - started);
+  }
 }
 
 export function trackCacheRead(layer: CacheReadLayer, outcome: keyof CacheReadMetrics): void {
@@ -256,6 +296,7 @@ export function requestIdMiddleware() {
       abortController: new AbortController(),
       cache: buildEmptyCacheStats(),
       cacheReads: {},
+      timings: {},
       obs: { upstreamCalls: 0, upstreamMs: 0, errorFingerprint: '' },
     };
     asyncLocalStorage.run(store, () => {

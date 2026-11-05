@@ -185,6 +185,7 @@ export class MongoHistory implements HistoryStore {
         cache_hits: e.cacheHits,
         cache_misses: e.cacheMisses,
         ...(e.cacheReads === undefined ? {} : { cache_reads: e.cacheReads }),
+        ...(e.timings === undefined ? {} : { timings: e.timings }),
         upstream_calls: e.upstreamCalls,
         upstream_ms: e.upstreamMs,
         error_fp: e.errorFp,

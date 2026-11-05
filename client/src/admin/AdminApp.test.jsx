@@ -204,6 +204,29 @@ it('closes a deep-linked trace with Escape without losing filters', async () => 
   expect(window.location.hash).toContain('range=24h');
 });
 
+it('shows recorded stage timings and warns against summing overlapping work', async () => {
+  window.location.hash = '/requests?range=24h&trace=request-1';
+  adminApi.trace.mockResolvedValue({
+    requests: [
+      {
+        ...requestRow,
+        timings: {
+          addon_admission: { calls: 1, durationMs: 125 },
+          imdb_enrichment: { calls: 12, durationMs: 6000 },
+        },
+      },
+    ],
+    upstream: [],
+    errors: [],
+  });
+  render(<AdminApp />);
+  expect(await screen.findByText('Request stage timings')).toBeInTheDocument();
+  expect(screen.getByText('addon admission')).toBeInTheDocument();
+  expect(screen.getByText('imdb enrichment')).toBeInTheDocument();
+  expect(screen.getByText('125ms (1 call)')).toBeInTheDocument();
+  expect(screen.getByText(/Stages nest and parallel calls overlap/)).toBeInTheDocument();
+});
+
 it('uses a selected custom interval for overview and requests and preserves it when navigating', async () => {
   const from = Date.parse('2026-11-01T17:20:00Z');
   const to = Date.parse('2026-11-01T20:00:00Z');

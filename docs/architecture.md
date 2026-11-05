@@ -86,6 +86,25 @@ Fresh/stale means the shared wrapper's logical TTL, not end-to-end HTTP/source
 freshness: IMDb additionally checks a separate freshness marker. Refresh work
 starting after response completion is outside the request snapshot.
 
+New traces also retain bounded, fixed-name stage timings for addon admission,
+shared-cache reads, canonical episode reads/builds, per-season IMDb enrichment
+and TMDB/IMDb/AniList throttle waits. These include failed attempts and only
+completed foreground work at response finish. Background refresh timings are
+isolated. Nested stages and concurrent calls overlap, so their sums are not an
+exclusive breakdown of request latency. Legacy traces have no stage timings.
+
+Ended/cancelled canonical episode snapshots use the existing stale-while-refresh
+path between one and two days of age, without renewing their timestamp. The
+snapshot key includes language, provider configuration and season metadata.
+Incomplete refreshes do not replace complete snapshots; successful corrections
+can remove episodes. A stale snapshot marks its aggregate metadata non-cacheable
+and gives clients zero cache hints, preventing a new outer TTL on old episodes.
+Ongoing and cold series still await the complete enrichment path.
+Refreshes coalesce per process, not across replicas. Each process permits two
+opportunistic tasks, IMDb seasons run sequentially there, and existing shared
+TMDB admission limits still apply. The snapshot path does not create another
+background task when already running inside an outer background refresh.
+
 Legacy rows retain their original hit/miss counts but have no layer/freshness/error
 detail. They are not backfilled as zero reads. Coverage reports unweighted
 matching retained rows, including requests without cache reads, their actual

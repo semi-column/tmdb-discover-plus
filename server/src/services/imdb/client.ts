@@ -9,6 +9,7 @@ import {
   throwIfRequestAborted,
   awaitWithRequestAbort,
   startOpportunisticWork,
+  measureRequestStage,
 } from '../../utils/requestContext.ts';
 import { setTimeout as delay } from 'node:timers/promises';
 import { TIMEOUTS, CIRCUIT_BREAKER_DEFAULTS } from '../../constants.ts';
@@ -248,7 +249,7 @@ async function executeImdbFetch(
     try {
       throwIfRequestAborted();
       const throttle = getImdbThrottle();
-      await throttle.acquire();
+      await measureRequestStage('imdb_throttle', () => throttle.acquire());
 
       throwIfRequestAborted();
       const requestSignal = getRequestSignal();

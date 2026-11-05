@@ -5,7 +5,8 @@ vi.mock('../../src/services/imdb/index.ts', () => ({
   getEpisodesBySeason: vi.fn(),
   isImdbApiEnabled: () => true,
 }));
-vi.mock('../../src/utils/requestContext.ts', () => ({
+vi.mock('../../src/utils/requestContext.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/utils/requestContext.ts')>()),
   getRequestId: vi.fn(),
   throwIfRequestAborted: vi.fn(),
   getRequestRemainingMs: vi.fn(() => Infinity),

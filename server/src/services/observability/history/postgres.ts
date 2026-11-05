@@ -135,6 +135,7 @@ ALTER TABLE obs_error_events ADD COLUMN IF NOT EXISTS classification text NOT NU
 ALTER TABLE obs_error_groups ADD COLUMN IF NOT EXISTS classification text NOT NULL DEFAULT '';
 ALTER TABLE obs_upstream ADD COLUMN IF NOT EXISTS cancelled boolean NOT NULL DEFAULT false;
 ALTER TABLE obs_requests ADD COLUMN IF NOT EXISTS cache_reads jsonb;
+ALTER TABLE obs_requests ADD COLUMN IF NOT EXISTS timings jsonb;
 
 CREATE TABLE IF NOT EXISTS obs_system_samples (
   ts       timestamptz NOT NULL,
@@ -146,7 +147,7 @@ CREATE INDEX IF NOT EXISTS obs_system_samples_ts_idx ON obs_system_samples (ts D
 
 const REQUEST_COLUMNS = `ts, request_id, instance, method, route, path, status, duration_ms, resource,
   source, content_type, catalog_id, user_hash, client, ua, country, colo, ip_hash, cache_hits,
-  cache_misses, upstream_calls, upstream_ms, error_fp, weight, cache_reads`;
+  cache_misses, upstream_calls, upstream_ms, error_fp, weight, cache_reads, timings`;
 
 const CATALOGS_SQL = `CASE WHEN jsonb_typeof(data->'catalogs') = 'array' THEN data->'catalogs' ELSE '[]'::jsonb END`;
 
@@ -305,11 +306,11 @@ export class PostgresHistory implements HistoryStore {
       await this.pool.query(
         `INSERT INTO obs_requests (ts, request_id, instance, method, route, path, status, duration_ms,
            resource, source, content_type, catalog_id, user_hash, client, ua, country, colo, ip_hash,
-           cache_hits, cache_misses, upstream_calls, upstream_ms, error_fp, weight, cache_reads)
+           cache_hits, cache_misses, upstream_calls, upstream_ms, error_fp, weight, cache_reads, timings)
          SELECT * FROM unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[],
            $6::text[], $7::smallint[], $8::int[], $9::text[], $10::text[], $11::text[], $12::text[],
            $13::text[], $14::text[], $15::text[], $16::text[], $17::text[], $18::text[], $19::int[],
-           $20::int[], $21::int[], $22::int[], $23::text[], $24::real[], $25::jsonb[])`,
+           $20::int[], $21::int[], $22::int[], $23::text[], $24::real[], $25::jsonb[], $26::jsonb[])`,
         [
           chunk.map((e) => new Date(e.ts)),
           chunk.map((e) => e.requestId),
@@ -336,6 +337,7 @@ export class PostgresHistory implements HistoryStore {
           chunk.map((e) => e.errorFp),
           chunk.map((e) => e.weight),
           chunk.map((e) => (e.cacheReads === undefined ? null : JSON.stringify(e.cacheReads))),
+          chunk.map((e) => (e.timings === undefined ? null : JSON.stringify(e.timings))),
         ]
       );
     }
