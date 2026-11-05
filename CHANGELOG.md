@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.5](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.4...v2.14.5) (2026-11-05)
+
+
+### Bug Fixes
+
+* align Top Posters URLs, language and preview host detection ([fe08554](https://github.com/semi-column/tmdb-discover-plus/commit/fe08554fceb7488e491a84333e57b0702051e6aa))
+* avoid logging disconnected API-key validations as errors ([fe08554](https://github.com/semi-column/tmdb-discover-plus/commit/fe08554fceb7488e491a84333e57b0702051e6aa))
+* expose request-stage timings and isolate background measurements ([35e7000](https://github.com/semi-column/tmdb-discover-plus/commit/35e70000984b1a452e4ceb5747a7251cf16a27b6))
+* prevent stale episode snapshots from renewing metadata freshness ([35e7000](https://github.com/semi-column/tmdb-discover-plus/commit/35e70000984b1a452e4ceb5747a7251cf16a27b6))
+* refresh complete ended-series episodes without blocking ([35e7000](https://github.com/semi-column/tmdb-discover-plus/commit/35e70000984b1a452e4ceb5747a7251cf16a27b6))
+* respond promptly to shared admission failures ([fe08554](https://github.com/semi-column/tmdb-discover-plus/commit/fe08554fceb7488e491a84333e57b0702051e6aa))
+* use the IMDb dataset instead of undocumented RPDB rating calls ([fe08554](https://github.com/semi-column/tmdb-discover-plus/commit/fe08554fceb7488e491a84333e57b0702051e6aa))
+* use TVDB IDs for Fanart series and anime artwork ([fe08554](https://github.com/semi-column/tmdb-discover-plus/commit/fe08554fceb7488e491a84333e57b0702051e6aa))
+
 ## [2.14.4](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.3...v2.14.4) (2026-11-04)
 
 
