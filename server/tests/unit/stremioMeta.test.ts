@@ -6,6 +6,8 @@ import {
   toStremioMetaPreview,
   toStremioFullMeta,
 } from '../../src/services/tmdb/stremioMeta.ts';
+import { getImdbRatingString } from '../../src/services/imdbRatings/index.ts';
+import { applyArtworkOverrides } from '../../src/services/artworkService.ts';
 
 vi.mock('../../src/services/artworkService.ts', async () => {
   const { metahubUrl } = await import('../../src/constants.ts');
@@ -31,7 +33,7 @@ vi.mock('../../src/services/artworkService.ts', async () => {
   }
 
   return {
-    applyArtworkOverrides: (_ctx, nativeUrls, _opts, _extra) => {
+    applyArtworkOverrides: vi.fn((_ctx, nativeUrls, _opts, _extra) => {
       return Promise.resolve({
         poster: resolveKind('poster', nativeUrls, _ctx),
         backdrop: resolveKind('backdrop', nativeUrls, _ctx),
@@ -39,7 +41,7 @@ vi.mock('../../src/services/artworkService.ts', async () => {
         landscape: resolveKind('landscape', nativeUrls, _ctx),
         episode: null,
       });
-    },
+    }),
     applyArtworkOverridesSync: (_ctx, nativeUrls) => ({
       poster: resolveKind('poster', nativeUrls, _ctx),
       backdrop: resolveKind('backdrop', nativeUrls, _ctx),
@@ -55,11 +57,8 @@ vi.mock('../../src/services/artworkService.ts', async () => {
     generateEpisodeThumbnailUrl: () => null,
   };
 });
-vi.mock('../../src/services/rpdb.ts', () => ({
-  getRpdbRating: () => Promise.resolve(null),
-}));
 vi.mock('../../src/services/imdbRatings/index.ts', () => ({
-  getImdbRatingString: () => Promise.resolve(null),
+  getImdbRatingString: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('../../src/config.ts', () => ({
   config: {
@@ -209,6 +208,46 @@ describe('toStremioFullMeta — poster fallbacks', () => {
     external_ids: {},
     release_dates: { results: [] },
   };
+
+  it('passes TMDB external TVDB IDs to full and preview artwork resolution', async () => {
+    const details = {
+      ...baseFullDetails,
+      external_ids: { imdb_id: 'tt1234567', tvdb_id: 121361 },
+    };
+    vi.mocked(applyArtworkOverrides).mockClear();
+    await toStremioFullMeta(details as never, 'series');
+    const preview = await toStremioMetaPreview(details as never, 'series');
+    expect(vi.mocked(applyArtworkOverrides).mock.calls).toHaveLength(2);
+    for (const [context] of vi.mocked(applyArtworkOverrides).mock.calls) {
+      expect(context.tvdbId).toBe(121361);
+    }
+    expect(preview?.tvdbId).toBe(121361);
+  });
+
+  it.each(['8.7', null])(
+    'uses the IMDb dataset rating %s without making an RPDB numeric-rating request',
+    async (rating) => {
+      vi.mocked(getImdbRatingString).mockResolvedValueOnce(rating);
+      const fetch = vi.fn();
+      vi.stubGlobal('fetch', fetch);
+      try {
+        const result = await toStremioFullMeta(
+          { ...baseFullDetails, external_ids: { imdb_id: 'tt1234567' } } as never,
+          'movie',
+          null,
+          null,
+          { poster: { service: 'rpdb', apiKey: 'rpdb-test-key' } }
+        );
+        expect(result?.imdbRating).toBe(rating || undefined);
+        expect(result?.links?.find((link) => link.category === 'imdb')?.name).toBe(
+          rating || 'IMDb'
+        );
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  );
 
   it('uses poster_path when available', async () => {
     const details = { ...baseFullDetails, poster_path: '/poster.jpg' } as any;

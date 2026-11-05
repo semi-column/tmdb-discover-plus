@@ -40,6 +40,49 @@ afterEach(() => {
 });
 
 describe('addon work renewal context', () => {
+  it('responds promptly when Redis fails during an active build', async () => {
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    vi.spyOn(redis, 'eval').mockImplementation(async () => {
+      if (redis.shutdown.signal.aborted) throw new SharedAdmissionError();
+      return 1;
+    });
+    const app = express();
+    app.use(requestIdMiddleware());
+    app.get('/', async (_req, res) => {
+      try {
+        await withAddonWork('active-request', async () => {
+          setImmediate(() => redis.fail(new Error('Redis command timed out')));
+          await admissionDelay(30000, getRequestSignal()!);
+        });
+        res.json({ unexpected: 'success' });
+      } catch {
+        // Providers can mask the thrown error; the request's abort reason must survive.
+        sendAddonWorkLimit(new DOMException('Aborted', 'AbortError'), res);
+      }
+    });
+    const response = await request(app).get('/').timeout(1000);
+    expect(response.status).toBe(503);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.body.policy).toBe('addonWork');
+  });
+
+  it.each(['destroyed', 'headersSent'] as const)(
+    'does not send an admission response when the response is %s',
+    (state) => {
+      const res = {
+        [state]: true,
+        set: vi.fn(),
+        status: vi.fn(),
+        json: vi.fn(),
+      };
+      expect(sendAddonWorkLimit(new SharedAdmissionError(), res as never)).toBe(false);
+      expect(res.set).not.toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json).not.toHaveBeenCalled();
+    }
+  );
+
   it('reports shared admission failures as explicit uncacheable 503 responses', async () => {
     const app = express();
     app.get('/', (_req, res) => {

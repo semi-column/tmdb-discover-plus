@@ -71,10 +71,7 @@ export async function run() {
       tmdbId: 55555,
       type: 'series',
     });
-    assert(
-      result ===
-        'https://api.top-streaming.stream/test-api-key-123/tmdb/poster-default/series-55555.jpg?fallback=true'
-    );
+    assert(result === 'https://api.top-posters.com/test-api-key-123/tmdb/poster/series-55555.jpg');
   });
 
   await runTest(SUITE, 'should generate Top Posters logo URL with IMDb ID', async () => {
@@ -84,10 +81,7 @@ export async function run() {
       imdbId: 'tt0111161',
       type: 'movie',
     });
-    assert(
-      result ===
-        'https://api.top-streaming.stream/test-api-key-123/imdb/logo/tt0111161.png?fallback=true'
-    );
+    assert(result === 'https://api.top-posters.com/test-api-key-123/imdb/logo/tt0111161.png');
   });
 
   await runTest(
@@ -104,7 +98,7 @@ export async function run() {
       });
       assert(
         result ===
-          'https://api.top-streaming.stream/test-api-key-123/tmdb/thumbnail/series-1396/S1E1.jpg?fallback=true'
+          'https://api.top-posters.com/test-api-key-123/tmdb/thumbnail/series-1396/S1E1.jpg'
       );
     }
   );

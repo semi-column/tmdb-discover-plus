@@ -1,7 +1,6 @@
 import { createLogger } from '../../utils/logger.ts';
 import { applyArtworkOverrides, applyArtworkOverridesSync } from '../artworkService.ts';
 import type { ArtworkContext, NativeArtworkUrls } from '../artworkService.ts';
-import { getRpdbRating } from '../rpdb.ts';
 import {
   TMDB_IMAGE_BASE,
   POSTER_SIZE,
@@ -14,7 +13,6 @@ import { genreCache, staticGenreMap } from './genres.ts';
 import { usToLocalRatings } from './certificationMappings.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { DISPLAY, EXTERNAL_URLS, metahubUrl, buildStremioSearchUrl } from '../../constants.ts';
-import { config } from '../../config.ts';
 import type {
   ContentType,
   TmdbDetails,
@@ -27,7 +25,6 @@ import type {
   StremioMetaPreview,
   StremioVideo,
   ArtworkOptions,
-  PosterOptions,
   TmdbImage,
   GenreMap,
   StremioLink,
@@ -250,7 +247,6 @@ async function buildLinks({
   title,
   type,
   details,
-  posterOptions,
   manifestUrl,
   genreCatalogId,
 }: {
@@ -263,7 +259,6 @@ async function buildLinks({
   title: string;
   type: ContentType;
   details: AnyTmdbDetails;
-  posterOptions: PosterOptions | null;
   manifestUrl: string | null;
   genreCatalogId: string | null;
 }): Promise<{ links: StremioLink[]; actualImdbRating: string | null }> {
@@ -277,21 +272,6 @@ async function buildLinks({
       if (datasetRating) actualImdbRating = datasetRating;
     } catch (e) {
       logSwallowedError('stremioMeta:imdb-dataset-rating', e);
-    }
-  }
-
-  if (!actualImdbRating && effectiveImdbId) {
-    const rpdbKey =
-      posterOptions?.service === 'rpdb' && posterOptions.apiKey
-        ? posterOptions.apiKey
-        : config.rpdb.apiKey;
-    if (rpdbKey) {
-      try {
-        const realRating = await getRpdbRating(rpdbKey, effectiveImdbId);
-        if (realRating && realRating !== 'N/A') actualImdbRating = realRating;
-      } catch (e) {
-        logSwallowedError('stremioMeta:rpdb-rating', e);
-      }
     }
   }
 
@@ -447,7 +427,6 @@ export async function toStremioFullMeta(
   const certification = buildCertification(details, isMovie, targetLanguage, userRegion);
 
   const { trailer, trailerStreams, trailers } = buildTrailers(details, targetLanguage);
-  const posterOptions = artworkOptions?.poster || null;
   const { links, actualImdbRating } = await buildLinks({
     effectiveImdbId,
     genres,
@@ -458,7 +437,6 @@ export async function toStremioFullMeta(
     title,
     type,
     details,
-    posterOptions,
     manifestUrl,
     genreCatalogId,
   });
@@ -494,6 +472,7 @@ export async function toStremioFullMeta(
   };
   const artworkContext: ArtworkContext = {
     tmdbId: details.id,
+    tvdbId: details.external_ids?.tvdb_id,
     imdbId: effectiveImdbId ?? undefined,
     type,
     language: targetLanguage,
@@ -695,6 +674,7 @@ export async function toStremioMetaPreview(
 
   const artworkContext: ArtworkContext = {
     tmdbId: details.id,
+    tvdbId: details.external_ids?.tvdb_id,
     imdbId: effectiveImdbId ?? undefined,
     type,
     language: targetLanguage,
@@ -765,6 +745,7 @@ export async function toStremioMetaPreview(
   return {
     id: primaryId,
     tmdbId: details.id,
+    tvdbId: details.external_ids?.tvdb_id,
     imdbId: effectiveImdbId,
     imdb_id: effectiveImdbId,
     type: type === 'series' ? 'series' : 'movie',

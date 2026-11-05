@@ -36,3 +36,26 @@ it('keeps desktop previews inline without changing body scrolling', () => {
   expect(document.body.style.overflow).toBe(previous);
   expect(screen.getByText('No results found for the current filters.')).toBeInTheDocument();
 });
+
+it.each(['api.top-posters.com', 'api.top-streaming.stream'])(
+  'does not duplicate rating overlays on %s posters',
+  (host) => {
+    const { container } = render(
+      <CatalogPreview
+        loading={false}
+        data={{
+          metas: [
+            {
+              id: 'tt0137523',
+              name: 'Fight Club',
+              poster: `https://${host}/test-key/imdb/poster/tt0137523.jpg`,
+              imdbRating: '8.8',
+            },
+          ],
+        }}
+      />
+    );
+    expect(container.querySelector('.preview-card-overlay')).toBeNull();
+    expect(container.querySelector('img')).not.toBeNull();
+  }
+);

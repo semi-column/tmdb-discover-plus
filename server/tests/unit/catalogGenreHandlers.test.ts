@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
+import { get } from 'node:http';
 import request from 'supertest';
 
 const {
@@ -181,6 +182,7 @@ import { AppError, ErrorCodes } from '../../src/utils/AppError.ts';
 import { setLogSink } from '../../src/utils/logger.ts';
 import { requestIdMiddleware, abortRequestContext } from '../../src/utils/requestContext.ts';
 import { acquireAddonWork } from '../../src/utils/addonWork.ts';
+import { SharedAdmissionError } from '../../src/infrastructure/sharedAdmission.ts';
 import { config as serverConfig } from '../../src/config.ts';
 import {
   apiRateLimit,
@@ -240,6 +242,33 @@ beforeEach(() => {
 });
 
 describe.each(sourceHandlers)('$source catalog handler', ({ source, type, handler }) => {
+  it('sends 503 for internal admission cancellation instead of waiting for the request timeout', async () => {
+    mockGetUserConfig.mockResolvedValue({
+      preferences: {},
+      catalogs: [{ catalogId: `${source}-test`, type, filters: {} }],
+    });
+    const fetch = {
+      anilist: mockAnilistBrowse,
+      imdb: mockImdbAdvancedSearch,
+      kitsu: mockKitsuDiscover,
+      mal: mockMalDiscover,
+      simkl: mockSimklDiscover,
+    }[source];
+    fetch.mockImplementationOnce(async () => {
+      abortRequestContext(new SharedAdmissionError());
+      throw new DOMException('Aborted upstream work', 'AbortError');
+    });
+    const app = express();
+    app.use(requestIdMiddleware());
+    app.get('/', (_req, res) => handler('test-user', type, `${source}-test`, {}, res, {} as never));
+    const response = await request(app).get('/').timeout(1000);
+    expect(response.status).toBe(503);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers['retry-after']).toBe('5');
+    expect(response.body.policy).toBe('addonWork');
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('does not cache an empty error fallback as successful catalog data', async () => {
     mockGetUserConfig.mockResolvedValue({
       preferences: {},
@@ -547,6 +576,110 @@ describe('TMDB catalog route', () => {
     expect(response.status).toBe(503);
     expect(response.body.code).toBe('TMDB_UNAVAILABLE');
   });
+
+  it.each([
+    '/testuser/manifest.json',
+    '/testuser/catalog/movie/movies.json',
+    '/testuser/meta/movie/tmdb:550.json',
+  ])('responds promptly to an internal admission abort on %s', async (path) => {
+    let lookups = 0;
+    mockGetUserConfig.mockImplementation(async () => {
+      if (++lookups === 3 && path.includes('manifest'))
+        abortRequestContext(new SharedAdmissionError());
+      return {
+        preferences: {},
+        catalogs: [{ catalogId: 'movies', type: 'movie', filters: {} }],
+      };
+    });
+    const fetch = path.includes('catalog') ? mockTmdbDiscover : mockTmdbGetDetails;
+    if (!path.includes('manifest')) {
+      fetch.mockImplementationOnce(async () => {
+        abortRequestContext(new SharedAdmissionError());
+        throw new DOMException('Aborted upstream work', 'AbortError');
+      });
+    }
+    const app = express();
+    app.use(requestIdMiddleware(), addonRouter);
+    const response = await request(app).get(path).timeout(1000);
+    expect(response.status).toBe(503);
+    expect(response.body.policy).toBe('addonWork');
+    expect(response.headers['cache-control']).toBe('no-store');
+  });
+
+  it('preserves internal admission failures during key validation', async () => {
+    mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+    mockValidateApiKeyCached.mockImplementationOnce(async () => {
+      abortRequestContext(new SharedAdmissionError());
+      return { valid: true };
+    });
+    const app = express();
+    app.use(requestIdMiddleware(), addonRouter);
+    const response = await request(app).get('/testuser/manifest.json').timeout(1000);
+    expect(response.status).toBe(503);
+    expect(response.body.policy).toBe('addonWork');
+  });
+
+  it('still logs genuine key-validation exceptions and returns 503', async () => {
+    mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+    mockValidateApiKeyCached.mockRejectedValueOnce(new Error('Validation service failed'));
+    const errors: string[] = [];
+    setLogSink((level, _context, message) => {
+      if (level === 'error') errors.push(message);
+    });
+    const app = express();
+    app.use(requestIdMiddleware(), addonRouter);
+    const response = await request(app).get('/testuser/manifest.json');
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe('TMDB_UNAVAILABLE');
+    expect(errors).toContain('Addon API key validation failed');
+  });
+
+  it.each(['reject', 'resolve'])(
+    'does not log a validation error or send a response when a disconnected validation %ss',
+    async (outcome) => {
+      mockGetUserConfig.mockResolvedValue({ preferences: {}, catalogs: [] });
+      let complete!: () => void;
+      const completed = new Promise<void>((resolve) => {
+        complete = resolve;
+      });
+      const errors: string[] = [];
+      setLogSink((level, _context, message) => {
+        if (level === 'error') errors.push(message);
+      });
+      const app = express();
+      const end = vi.fn();
+      app.use(requestIdMiddleware());
+      app.use((_req, res, next) => {
+        const closed = new Promise<void>((resolve) => res.once('close', resolve));
+        mockValidateApiKeyCached.mockImplementationOnce(async () => {
+          client.destroy();
+          await closed;
+          if (outcome === 'reject') throw new DOMException('Client disconnected', 'AbortError');
+          return { valid: false, unavailable: true };
+        });
+        res.once('finish', end);
+        res.once('close', () => setImmediate(complete));
+        next();
+      });
+      app.use(addonRouter);
+      const server = app.listen(0, '127.0.0.1');
+      await new Promise<void>((resolve) => server.once('listening', resolve));
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Missing test server address');
+      const client = get(`http://127.0.0.1:${address.port}/testuser/manifest.json`);
+      client.on('error', () => {});
+      try {
+        await completed;
+        expect(errors).not.toContain('Addon API key validation failed');
+        expect(end).not.toHaveBeenCalled();
+      } finally {
+        client.destroy();
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve()))
+        );
+      }
+    }
+  );
 
   it('returns an explicit validation error on every request for an invalid collection', async () => {
     const warnings: Array<Record<string, unknown> | null> = [];

@@ -231,7 +231,7 @@ function ArtKindSelector({ contentType, artKind, artworkSettings, preferences, o
     if (service === 'topPosters') {
       return {
         name: 'Top Posters',
-        url: 'https://api.top-streaming.stream',
+        url: 'https://top-posters.com',
         requiresKey: true,
         note: 'Supports posters. Logos require Premium and must be enabled in the Top Posters dashboard. Premium also supports episode thumbnails.',
       };

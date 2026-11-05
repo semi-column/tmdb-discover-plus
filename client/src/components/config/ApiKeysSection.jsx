@@ -33,7 +33,7 @@ const API_KEY_PROVIDERS = [
     id: 'topPosters',
     name: 'Top Posters',
     desc: 'Required when using Top Posters artwork provider.',
-    keyUrl: 'https://api.top-streaming.stream',
+    keyUrl: 'https://top-posters.com',
     keyUrlLabel: 'Get API key from Top Posters',
   },
 ];

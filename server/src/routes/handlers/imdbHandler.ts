@@ -332,8 +332,9 @@ export async function handleImdbCatalogRequest(
       });
     }
   } catch (error) {
-    if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (res.headersSent || res.destroyed) return;
     if (sendAddonWorkLimit(error, res)) return;
+    if (isRequestAborted()) return;
     log.error('IMDb catalog error', {
       catalogId,
       type,

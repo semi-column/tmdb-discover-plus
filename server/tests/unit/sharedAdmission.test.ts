@@ -23,6 +23,7 @@ import {
   RedisAddonWork,
   ADDON_WORK_SCRIPT,
   AddonWorkLimitError,
+  sendAddonWorkLimit,
 } from '../../src/utils/addonWork.ts';
 import {
   getRequestSignal,
@@ -468,11 +469,12 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
       expect(signal.reason).toBeInstanceOf(SharedAdmissionError);
       await expect(work.acquire('next')).rejects.toBeInstanceOf(SharedAdmissionError);
       await expect(release()).resolves.toBeUndefined();
-      res.json({ ok: true });
+      expect(sendAddonWorkLimit(signal.reason, res)).toBe(true);
     });
-    const response = await request(app).get('/');
-    expect(response.status, response.text).toBe(200);
-    expect(response.body).toEqual({ ok: true });
+    const response = await request(app).get('/').timeout(1000);
+    expect(response.status, response.text).toBe(503);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.body.policy).toBe('addonWork');
     await sleep(150);
     expect(await inspector.keys(`${ADMISSION_PREFIX}addon:*`)).toEqual([]);
   });

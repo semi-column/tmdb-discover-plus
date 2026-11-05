@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as animeIdMap from '../../src/services/animeIdMap/index.ts';
 import {
   generatePosterUrl,
   generateBackdropUrl,
@@ -45,10 +46,10 @@ describe('generatePosterUrl', () => {
       tmdbId: 1399,
       type: 'series',
     });
-    expect(url).toContain('/tmdb/poster-default/series-1399.jpg');
+    expect(url).toBe('https://api.top-posters.com/key123/tmdb/poster/series-1399.jpg');
   });
 
-  it('preserves the working legacy Top Posters poster path without a native fallback URL', () => {
+  it('uses the canonical Top Posters route and prefers TMDB IDs', () => {
     expect(
       generatePosterUrl({
         apiKey: 'top-posters-key',
@@ -57,8 +58,40 @@ describe('generatePosterUrl', () => {
         type: 'movie',
         imdbId: 'tt0137523',
       })
-    ).toBe(
-      'https://api.top-streaming.stream/top-posters-key/imdb/poster-default/tt0137523.jpg?fallback=true'
+    ).toBe('https://api.top-posters.com/top-posters-key/tmdb/poster/movie-550.jpg');
+  });
+
+  it.each([
+    ['pt-BR', '?lang=pt'],
+    ['EN-us', '?lang=en'],
+    [undefined, ''],
+    ['invalid&fallback_url=bad', ''],
+  ])(
+    'normalizes Top Posters language %s without provider fallback redirects',
+    (language, query) => {
+      expect(
+        generatePosterUrl({
+          apiKey: 'top-key',
+          service: 'topPosters',
+          imdbId: 'tt0137523',
+          type: 'movie',
+          language,
+        })
+      ).toBe(`https://api.top-posters.com/top-key/imdb/poster/tt0137523.jpg${query}`);
+    }
+  );
+
+  it('keeps Top Posters artwork English when English-only artwork is selected', async () => {
+    const result = await applyArtworkOverrides(
+      { type: 'movie', imdbId: 'tt0137523', language: 'pt-BR' },
+      {},
+      {
+        englishArtOnly: true,
+        poster: { service: 'topPosters', apiKey: 'top-key' },
+      }
+    );
+    expect(result.poster).toBe(
+      'https://api.top-posters.com/top-key/imdb/poster/tt0137523.jpg?lang=en'
     );
   });
 
@@ -488,6 +521,105 @@ describe('checkPosterExists', () => {
       });
     });
 
+    it.each(['series', 'anime'] as const)(
+      'uses a TVDB ID for Fanart %s, sharing the response across kinds',
+      async (type) => {
+        fetchMock.mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            tvposter: [{ url: 'https://assets.fanart.tv/tv-poster.jpg', lang: 'en' }],
+            hdtvlogo: [{ url: 'https://assets.fanart.tv/tv-logo.png', lang: 'en' }],
+          }),
+        });
+        const provider = { service: 'fanart' as const, apiKey: 'fanart-tv-key' };
+        const result = await applyArtworkOverrides(
+          { tmdbId: 1399, imdbId: 'tt0944947', tvdbId: 121361, type, language: 'en' },
+          {},
+          { poster: provider, logo: provider }
+        );
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(fetchMock.mock.calls[0][0]).toBe(
+          'https://webservice.fanart.tv/v3/tv/121361?api_key=fanart-tv-key'
+        );
+        expect(result.poster).toBe('https://assets.fanart.tv/tv-poster.jpg');
+        expect(result.logo).toBe('https://assets.fanart.tv/tv-logo.png');
+      }
+    );
+
+    it.each([undefined, null, 0, -1, 'tt0944947', '1/../../movie', 'NaN'])(
+      'keeps native artwork without making Fanart TV requests for invalid/missing TVDB ID %s',
+      async (tvdbId) => {
+        const native = 'https://image.tmdb.org/t/p/w500/native.jpg';
+        const result = await applyArtworkOverrides(
+          { tmdbId: 1399, imdbId: 'tt0944947', tvdbId, type: 'series' },
+          { poster: native },
+          { poster: { service: 'fanart', apiKey: 'fanart-tv-key' } }
+        );
+        expect(result.poster).toBe(native);
+        expect(fetchMock).not.toHaveBeenCalled();
+      }
+    );
+
+    it('preserves the TVDB ID through the preview artwork pass', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          tvposter: [{ url: 'https://assets.fanart.tv/preview-tv.jpg', lang: 'en' }],
+        }),
+      });
+      const metas = [
+        {
+          id: 'tt0944947',
+          tmdbId: 1399,
+          tvdbId: 121361,
+          type: 'series' as const,
+          imdbId: 'tt0944947',
+          imdb_id: 'tt0944947',
+          name: 'Test',
+          slug: 'test',
+          poster: null,
+          posterShape: 'poster' as const,
+          background: null,
+          fanart: null,
+          landscapePoster: null,
+          description: '',
+          releaseInfo: '',
+          genres: [],
+          behaviorHints: {},
+        },
+      ];
+      const result = await applyArtworkOverridesToMetaPreviews(metas, {
+        poster: { service: 'fanart', apiKey: 'fanart-tv-key' },
+      });
+      expect(fetchMock.mock.calls[0][0]).toContain('/tv/121361?');
+      expect(result[0].poster).toBe('https://assets.fanart.tv/preview-tv.jpg');
+    });
+
+    it('reuses the existing anime ID map without adding mapping API calls', async () => {
+      const lookup = vi
+        .spyOn(animeIdMap, 'getEntryByPrefixedId')
+        .mockReturnValue({ thetvdb_id: 79824 });
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          tvposter: [{ url: 'https://assets.fanart.tv/anime-tv.jpg', lang: 'en' }],
+        }),
+      });
+      try {
+        const result = await applyArtworkOverrides(
+          { type: 'anime', imdbId: 'tt0988824', tmdbId: 31910 },
+          {},
+          { poster: { service: 'fanart', apiKey: 'fanart-anime-key' } }
+        );
+        expect(lookup).toHaveBeenCalledWith('tt0988824');
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(fetchMock.mock.calls[0][0]).toContain('/tv/79824?');
+        expect(result.poster).toBe('https://assets.fanart.tv/anime-tv.jpg');
+      } finally {
+        lookup.mockRestore();
+      }
+    });
+
     it('reuses TVDB lookup/artwork responses for all kinds', async () => {
       const fetch = vi.fn().mockImplementation(async (url: string) => ({
         ok: true,
@@ -653,14 +785,14 @@ describe('checkPosterExists', () => {
         artwork,
         { checkExistence: true }
       );
-      expect(result.poster).toContain(`/poster-default/${imdbId}.jpg`);
+      expect(result.poster).toContain(`/poster/${imdbId}.jpg`);
       expect(result.logo).toBe(nativeLogo);
     }
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('does not suppress other Top Posters logos after one item is missing', async () => {
-    const scope = 'https://api.top-streaming.stream/top-poster-logo-404/imdb/logo';
+    const scope = 'https://api.top-posters.com/top-poster-logo-404/imdb/logo';
     fetchMock.mockResolvedValueOnce({ ok: false, status: 404, headers: { get: () => null } });
     fetchMock.mockResolvedValueOnce({ ok: true, status: 200, headers: { get: () => 'image/png' } });
     expect(await checkPosterExists(`${scope}/tt101.png`)).toBe(false);

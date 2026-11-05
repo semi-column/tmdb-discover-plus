@@ -55,7 +55,9 @@ export const CatalogPreview = memo(function CatalogPreview({
 
     try {
       const hostname = new URL(posterUrl).hostname.toLowerCase();
-      return hostname === 'api.ratingposterdb.com' || hostname === 'api.top-streaming.stream';
+      return ['api.ratingposterdb.com', 'api.top-streaming.stream', 'api.top-posters.com'].includes(
+        hostname
+      );
     } catch {
       return false;
     }

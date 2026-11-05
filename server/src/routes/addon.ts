@@ -165,6 +165,8 @@ router.use('/:userId', async (req, res, next) => {
     if (!apiKey) return next();
 
     const validation = await tmdb.validateApiKeyCached(apiKey);
+    throwIfRequestAborted();
+    if (res.headersSent || res.destroyed) return;
     if (!validation.valid) {
       res.set('Cache-Control', 'no-store');
       return sendError(
@@ -177,6 +179,9 @@ router.use('/:userId', async (req, res, next) => {
 
     next();
   } catch (error) {
+    if (res.headersSent || res.destroyed) return;
+    if (sendAddonWorkLimit(error, res)) return;
+    if (isRequestAborted()) return;
     log.error('Addon API key validation failed', { error: (error as Error).message });
     res.set('Cache-Control', 'no-store');
     return sendError(res, 503, ErrorCodes.TMDB_UNAVAILABLE, 'Could not verify TMDB API key');
@@ -227,8 +232,9 @@ router.get('/:userId/manifest.json', async (req, res) => {
 
     if (!res.headersSent && !res.destroyed) res.etagJson(manifest, { extra: userId });
   } catch (error) {
-    if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (res.headersSent || res.destroyed) return;
     if (sendAddonWorkLimit(error, res)) return;
+    if (isRequestAborted()) return;
     if (tmdb.isInvalidApiKeyError(error)) {
       res.set('Cache-Control', 'no-store');
       return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
@@ -653,7 +659,8 @@ async function handleCatalogRequest(
         ? await fetchCatalogMetas()
         : await cache.wrap(catalogCacheKey, fetchCatalogMetas, serverTtl, { allowStale: true })
     ) as StremioMetaPreview[];
-    if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    throwIfRequestAborted();
+    if (res.headersSent || res.destroyed) return;
 
     const baseUrl = normalizeBaseUrl(config.baseUrl || getBaseUrl(req));
     const filteredMetas = filterUnknownGenreMetas(metas, !!resolvedFilters?.excludeUnknownGenres);
@@ -694,8 +701,9 @@ async function handleCatalogRequest(
       { extra: `${userId}:${catalogId}:${skip}` }
     );
   } catch (error) {
-    if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (res.headersSent || res.destroyed) return;
     if (sendAddonWorkLimit(error, res)) return;
+    if (isRequestAborted()) return;
     if (tmdb.isInvalidApiKeyError(error)) {
       res.set('Cache-Control', 'no-store');
       return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
@@ -944,8 +952,9 @@ async function handleMetaRequest(
       { extra: `${userId}:${id}` }
     );
   } catch (error) {
-    if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (res.headersSent || res.destroyed) return;
     if (sendAddonWorkLimit(error, res)) return;
+    if (isRequestAborted()) return;
     if (tmdb.isInvalidApiKeyError(error)) {
       res.set('Cache-Control', 'no-store');
       return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');

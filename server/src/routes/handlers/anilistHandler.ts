@@ -231,8 +231,9 @@ export async function handleAnilistCatalogRequest(
       staleRevalidate: randomize ? 0 : CACHE_TTLS.CATALOG_STALE_REVALIDATE,
     });
   } catch (err) {
-    if (res.headersSent || res.destroyed || isRequestAborted()) return;
+    if (res.headersSent || res.destroyed) return;
     if (sendAddonWorkLimit(err, res)) return;
+    if (isRequestAborted()) return;
     log.error('AniList catalog error', {
       catalogId,
       error: err,

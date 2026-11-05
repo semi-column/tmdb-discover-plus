@@ -8,6 +8,7 @@ import {
   throwIfRequestAborted,
 } from '../utils/requestContext.ts';
 import { createRejectedCredentials } from '../utils/rejectedCredentials.ts';
+import { getEntryByPrefixedId } from './animeIdMap/index.ts';
 import type {
   ContentType,
   PosterOptions,
@@ -33,6 +34,7 @@ export type ArtworkProviderConfig = PosterOptions;
 
 export interface ArtworkContext {
   tmdbId?: number | string;
+  tvdbId?: number | string | null;
   imdbId?: string | null;
   type: ContentType;
   language?: string | null;
@@ -60,7 +62,7 @@ interface ArtworkProviderDefinition {
 }
 
 const RPDB_BASE_URL = 'https://api.ratingposterdb.com';
-const TOP_POSTERS_BASE_URL = 'https://api.top-streaming.stream';
+const TOP_POSTERS_BASE_URL = 'https://api.top-posters.com';
 const TVDB_API_BASE_URL = 'https://api4.thetvdb.com/v4';
 const FANART_API_BASE_URL = 'https://webservice.fanart.tv/v3';
 
@@ -70,6 +72,7 @@ const ARTWORK_CHECK_MAX_CACHE = 2000;
 const ALLOWED_CHECK_HOSTS = new Set([
   'api.ratingposterdb.com',
   'api.top-streaming.stream',
+  'api.top-posters.com',
   'image.tmdb.org',
   'assets.fanart.tv',
 ]);
@@ -81,7 +84,11 @@ interface ArtworkCheckEntry {
 
 const artworkCheckCache = new Map<string, ArtworkCheckEntry>();
 /** Hosts whose first path segment is the user's API key. */
-const CREDENTIALED_CHECK_HOSTS = new Set(['api.ratingposterdb.com', 'api.top-streaming.stream']);
+const CREDENTIALED_CHECK_HOSTS = new Set([
+  'api.ratingposterdb.com',
+  'api.top-streaming.stream',
+  'api.top-posters.com',
+]);
 /** Keyed by URL minus the item segment: a 401/403 means this key can't use this asset type. */
 const rejectedArtworkScopes = createRejectedCredentials();
 
@@ -250,7 +257,7 @@ export async function checkArtworkExists(url: string): Promise<boolean> {
 function hasValidTmdbId(tmdbId: number | string | null | undefined): boolean {
   if (tmdbId === null || tmdbId === undefined) return false;
   const value = String(tmdbId).trim();
-  return value.length > 0 && value !== '0';
+  return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
 }
 
 function getTypePrefix(type: string): 'movie' | 'series' {
@@ -719,10 +726,13 @@ function getFanartLookupPaths(context: ArtworkContext): string[] {
   const imdbId = context.imdbId && context.imdbId.startsWith('tt') ? context.imdbId : null;
   const tmdbId = hasValidTmdbId(context.tmdbId) ? String(context.tmdbId).trim() : null;
   const isMovie = context.type === 'movie';
+  const tvdbId =
+    context.tvdbId ??
+    (!isMovie ? getEntryByPrefixedId(imdbId || `tmdb:${tmdbId}`)?.thetvdb_id : undefined);
 
   const candidates = isMovie
     ? [tmdbId ? `movies/${tmdbId}` : null, imdbId ? `movies/${imdbId}` : null]
-    : [imdbId ? `tv/${imdbId}` : null, tmdbId ? `tv/${tmdbId}` : null];
+    : [hasValidTmdbId(tvdbId) ? `tv/${String(tvdbId).trim()}` : null];
 
   return Array.from(new Set(candidates.filter((value): value is string => Boolean(value))));
 }
@@ -790,31 +800,22 @@ function resolveTopPostersUrl(
   kind: ArtworkKind,
   apiKey: string
 ): string | null {
-  const { tmdbId, imdbId, type, season, episode } = context;
+  const { tmdbId, imdbId, type, season, episode, language } = context;
   const hasImdb = Boolean(imdbId && typeof imdbId === 'string' && imdbId.startsWith('tt'));
   const hasTmdb = hasValidTmdbId(tmdbId);
   const tmdbIdStr = hasTmdb ? String(tmdbId).trim() : '';
+  const idType = hasTmdb ? 'tmdb' : hasImdb ? 'imdb' : null;
+  if (!idType) return null;
+  const mediaId = hasTmdb ? `${getTypePrefix(type)}-${tmdbIdStr}` : imdbId;
 
   if (kind === 'poster') {
-    if (hasImdb) {
-      return `${TOP_POSTERS_BASE_URL}/${apiKey}/imdb/poster-default/${imdbId}.jpg?fallback=true`;
-    }
-    if (hasTmdb) {
-      const prefix = getTypePrefix(type);
-      return `${TOP_POSTERS_BASE_URL}/${apiKey}/tmdb/poster-default/${prefix}-${tmdbIdStr}.jpg?fallback=true`;
-    }
-    return null;
+    const lang = (context.englishArtOnly ? 'en' : language)?.split('-')[0].toLowerCase();
+    const query = lang && /^[a-z]{2}$/.test(lang) ? `?lang=${lang}` : '';
+    return `${TOP_POSTERS_BASE_URL}/${apiKey}/${idType}/poster/${mediaId}.jpg${query}`;
   }
 
   if (kind === 'logo') {
-    if (hasImdb) {
-      return `${TOP_POSTERS_BASE_URL}/${apiKey}/imdb/logo/${imdbId}.png?fallback=true`;
-    }
-    if (hasTmdb) {
-      const prefix = getTypePrefix(type);
-      return `${TOP_POSTERS_BASE_URL}/${apiKey}/tmdb/logo/${prefix}-${tmdbIdStr}.png?fallback=true`;
-    }
-    return null;
+    return `${TOP_POSTERS_BASE_URL}/${apiKey}/${idType}/logo/${mediaId}.png`;
   }
 
   if (kind === 'episode') {
@@ -824,15 +825,7 @@ function resolveTopPostersUrl(
     if (seasonNum <= 0 || episodeNum <= 0) return null;
     if (type !== 'series' && type !== 'anime') return null;
 
-    if (hasImdb) {
-      return `${TOP_POSTERS_BASE_URL}/${apiKey}/imdb/thumbnail/${imdbId}/S${seasonNum}E${episodeNum}.jpg?fallback=true`;
-    }
-
-    if (hasTmdb) {
-      return `${TOP_POSTERS_BASE_URL}/${apiKey}/tmdb/thumbnail/series-${tmdbIdStr}/S${seasonNum}E${episodeNum}.jpg?fallback=true`;
-    }
-
-    return null;
+    return `${TOP_POSTERS_BASE_URL}/${apiKey}/${idType}/thumbnail/${mediaId}/S${seasonNum}E${episodeNum}.jpg`;
   }
 
   return null;
@@ -1478,6 +1471,7 @@ export async function applyArtworkOverridesToMetaPreviews(
     return metas.map((meta) => {
       const context: ArtworkContext = {
         tmdbId: inferTmdbIdFromMeta(meta),
+        tvdbId: meta.tvdbId,
         imdbId: inferImdbIdFromMeta(meta),
         type: meta.type,
       };
@@ -1517,6 +1511,7 @@ export async function applyArtworkOverridesToMetaPreviews(
     metas.map(async (meta) => {
       const context: ArtworkContext = {
         tmdbId: inferTmdbIdFromMeta(meta),
+        tvdbId: meta.tvdbId ?? getEntryByPrefixedId(meta.id)?.thetvdb_id,
         imdbId: inferImdbIdFromMeta(meta),
         type: meta.type,
       };

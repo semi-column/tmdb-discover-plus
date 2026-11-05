@@ -297,6 +297,9 @@ export async function withAddonWork<T>(userId: string, work: () => Promise<T>): 
 }
 
 export function sendAddonWorkLimit(error: unknown, res: Response): boolean {
+  if (res.headersSent || res.destroyed) return false;
+  const reason = getRequestSignal()?.reason;
+  if (reason instanceof SharedAdmissionError) error = reason;
   if (!(error instanceof SharedAdmissionError) && !(error instanceof AddonWorkLimitError))
     return false;
   log.warn('Addon work admission rejected', {

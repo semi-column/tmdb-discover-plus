@@ -100,6 +100,7 @@ export interface StremioMeta {
 export interface StremioMetaPreview {
   id: string;
   tmdbId: number;
+  tvdbId?: number | null;
   imdbId: string | null;
   imdb_id: string | null;
   type: ContentType;
