@@ -1,6 +1,6 @@
 {
   "id": "community.tmdb.discover.plus",
-  "version": "2.14.5",
+  "version": "2.14.6",
   "name": "TMDB Discover+",
   "description": "Create custom movie and TV catalogs for Stremio with powerful TMDB filters",
   "resources": [],

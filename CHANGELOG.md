@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.6](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.5...v2.14.6) (2026-11-06)
+
+
+### Bug Fixes
+
+* contain transient Redis admission timeouts ([af80f9d](https://github.com/semi-column/tmdb-discover-plus/commit/af80f9d10b83eaee4a81612306dc7c8c9daebcba))
+* distinguish local AniList queue and deadline exhaustion without caching it as an upstream rate-limit failure ([ea0f50c](https://github.com/semi-column/tmdb-discover-plus/commit/ea0f50c01eaad93394d969e071e236f9e419f68e))
+* expose expected and received episode counts without changing snapshot completeness or enrichment policy ([ea0f50c](https://github.com/semi-column/tmdb-discover-plus/commit/ea0f50c01eaad93394d969e071e236f9e419f68e))
+* preserve legacy Trakt collection and studio filters as TMDB projections and reject invalid publishable selections ([ea0f50c](https://github.com/semi-column/tmdb-discover-plus/commit/ea0f50c01eaad93394d969e071e236f9e419f68e))
+* prevent local admission cache poisoning and invalid installs ([ea0f50c](https://github.com/semi-column/tmdb-discover-plus/commit/ea0f50c01eaad93394d969e071e236f9e419f68e))
+* reject oversized TMDB search queries before cache and provider admission without truncating valid input ([ea0f50c](https://github.com/semi-column/tmdb-discover-plus/commit/ea0f50c01eaad93394d969e071e236f9e419f68e))
+* retain available admin cache information with explicit partial-history errors ([ea0f50c](https://github.com/semi-column/tmdb-discover-plus/commit/ea0f50c01eaad93394d969e071e236f9e419f68e))
+* return marketplace install validation errors without changing target data or install counters ([ea0f50c](https://github.com/semi-column/tmdb-discover-plus/commit/ea0f50c01eaad93394d969e071e236f9e419f68e))
+* reuse repeated artwork existence checks within each response while preserving retries and native fallback ([ea0f50c](https://github.com/semi-column/tmdb-discover-plus/commit/ea0f50c01eaad93394d969e071e236f9e419f68e))
+
 ## [2.14.5](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.4...v2.14.5) (2026-11-05)
 
 
