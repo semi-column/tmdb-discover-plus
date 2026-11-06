@@ -1104,6 +1104,7 @@ export async function applyArtworkOverrides(
   const shouldCheck = options?.checkExistence ?? false;
   const kinds: ArtworkKind[] = ['poster', 'backdrop', 'logo', 'landscape', 'episode'];
   const requests: ArtworkRequestCache = new Map();
+  const checks = new Map<string, boolean>();
 
   const result: ResolvedArtwork = {
     poster: null,
@@ -1159,7 +1160,11 @@ export async function applyArtworkOverrides(
           if (config!.service === 'customUrl') {
             url = overrideUrl;
           } else if (shouldCheck && service !== 'tvdb' && service !== 'fanart') {
-            const exists = await checkArtworkExists(overrideUrl);
+            let exists = checks.get(overrideUrl);
+            if (exists === undefined) {
+              exists = await checkArtworkExists(overrideUrl);
+              checks.set(overrideUrl, exists);
+            }
             if (exists) url = overrideUrl;
           } else {
             url = overrideUrl;

@@ -608,6 +608,7 @@ export function sanitizeFiltersForSource(
   filters: Record<string, unknown> | CatalogFilters
 ): Record<string, unknown> {
   if (!filters || typeof filters !== 'object') return {};
+  if (source === 'trakt') source = 'tmdb';
   const keysToStrip =
     ALL_SOURCE_SPECIFIC_KEYS[source] ||
     (source === 'tmdb' ? IMDB_ONLY_FILTER_KEYS : TMDB_ONLY_FILTER_KEYS);

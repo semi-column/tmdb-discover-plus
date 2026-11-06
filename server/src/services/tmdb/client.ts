@@ -16,6 +16,7 @@ import { CACHE_TTLS, tmdbResponseTtl } from '../../cacheTtls.ts';
 import { logSwallowedError } from '../../utils/helpers.ts';
 import { createRejectedCredentials } from '../../utils/rejectedCredentials.ts';
 import { computeApiKeyId } from '../../utils/security.ts';
+import { AppError, ErrorCodes } from '../../utils/AppError.ts';
 import {
   TMDB_API_ORIGIN,
   TMDB_API_BASE_PATH,
@@ -165,6 +166,17 @@ export async function tmdbFetch(
 ): Promise<unknown> {
   throwIfRequestAborted();
   const ep = normalizeEndpoint(endpoint);
+  if (ep.startsWith('/search/') && [...String(params.query ?? '')].length > 500) {
+    log.warn('Invalid TMDB search query length', {
+      classification: 'user_config',
+      code: ErrorCodes.VALIDATION_ERROR,
+    });
+    throw new AppError(
+      400,
+      ErrorCodes.VALIDATION_ERROR,
+      'Search query must not exceed 500 characters'
+    );
+  }
   const url = new URL(TMDB_API_ORIGIN);
   url.pathname = `${TMDB_API_BASE_PATH}${ep}`;
 

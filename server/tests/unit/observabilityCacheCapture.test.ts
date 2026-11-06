@@ -90,6 +90,37 @@ it('freezes read details at response finish rather than including later backgrou
       misses: 0,
       readErrors: 0,
     });
+    const caching = () =>
+      request(app)
+        .get('/api/admin/caching?range=1h')
+        .set('X-Admin-Request', '1')
+        .set('Cookie', `${ADMIN_COOKIE}=${token}`);
+    const analytics = vi
+      .spyOn(history, 'cacheStats')
+      .mockRejectedValue(new Error('statement timeout'));
+    const failedAnalytics = await caching().expect(200);
+    expect(failedAnalytics.body.analytics).toBeNull();
+    expect(failedAnalytics.body.history.storage.memory.requests).toBe(1);
+    expect(failedAnalytics.body.historyErrors).toHaveLength(1);
+    expect(failedAnalytics.body.ttls.length).toBeGreaterThan(0);
+    analytics.mockRestore();
+    const storage = vi
+      .spyOn(history, 'storageInfo')
+      .mockRejectedValue(new Error('storage query timeout'));
+    const failedStorage = await caching().expect(200);
+    expect(failedStorage.body.analytics.coverage.retainedRequests).toBe(1);
+    expect(failedStorage.body.history.storage).toBeNull();
+    expect(failedStorage.body.historyErrors).toHaveLength(1);
+    const failedAgain = vi
+      .spyOn(history, 'cacheStats')
+      .mockRejectedValue(new Error('statement timeout'));
+    const failedBoth = await caching().expect(200);
+    expect(failedBoth.body.analytics).toBeNull();
+    expect(failedBoth.body.history.storage).toBeNull();
+    expect(failedBoth.body.historyErrors).toHaveLength(2);
+    expect(failedBoth.body.ttls.length).toBeGreaterThan(0);
+    storage.mockRestore();
+    failedAgain.mockRestore();
   } finally {
     await stopObservability();
   }

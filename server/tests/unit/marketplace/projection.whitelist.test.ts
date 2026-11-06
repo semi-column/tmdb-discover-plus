@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import { toPublicProjection } from '../../../src/services/marketplace/projection.ts';
 import type { CatalogConfig } from '../../../src/types/config.ts';
+import { validateTmdbCatalogSelection } from '../../../src/utils/validation.ts';
 
 /**
  * Example-based unit tests for `toPublicProjection` covering the field
@@ -196,6 +197,44 @@ describe('toPublicProjection — field whitelist (Requirement 2.1)', () => {
 });
 
 describe('toPublicProjection — filter sanitization failure (Requirement 2.4)', () => {
+  it.each([
+    ['collection', 'collectionId', 'movie'],
+    ['studio', 'studioId', 'collection'],
+  ] as const)('preserves legacy Trakt %s selections as TMDB', (listType, idKey, type) => {
+    const filters = { listType, [idKey]: 42, watchRegion: 'US', imdbListId: 'ls123' };
+    const entry = toPublicProjection(USER_ID, makeCatalog({ source: 'trakt', type, filters }));
+    expect(entry.source).toBe('tmdb');
+    expect(entry.filters).toMatchObject({ listType, [idKey]: 42, watchRegion: 'US' });
+    expect(entry.filters).not.toHaveProperty('imdbListId');
+    expect(filters).toHaveProperty('imdbListId');
+    expect(() =>
+      validateTmdbCatalogSelection({
+        _id: 'catalog-abc',
+        name: entry.name,
+        source: entry.source,
+        type: entry.type,
+        filters: entry.filters,
+        enabled: true,
+      })
+    ).not.toThrow();
+  });
+
+  it.each(['tmdb', 'trakt'] as const)(
+    'does not publish invalid %s selections, including disabled origins',
+    (source) => {
+      expect(() =>
+        toPublicProjection(
+          USER_ID,
+          makeCatalog({
+            source,
+            enabled: false,
+            filters: { listType: 'collection' },
+          })
+        )
+      ).toThrow('A valid collection ID is required');
+    }
+  );
+
   it('rejects the entry when source-specific filter sanitization throws', () => {
     // A filters object whose property access throws causes
     // sanitizeFiltersForSource to fail while copying the filters, which must

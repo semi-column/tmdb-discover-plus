@@ -63,19 +63,20 @@ export class AnilistThrottle {
     if (opportunistic && this.queued > 0) {
       skipOpportunisticWork('AniList work is waiting');
     }
-    const exhausted = () =>
-      Object.assign(new Error('AniList API rate limited'), {
+    const exhausted = (reason: 'queue' | 'deadline') =>
+      Object.assign(new Error(`AniList local admission exhausted: ${reason}`), {
+        code: 'ANILIST_ADMISSION_EXHAUSTED',
         statusCode: 429,
         rateLimitExhausted: true,
       });
-    if (this.queued >= MAX_QUEUE) throw exhausted();
+    if (this.queued >= MAX_QUEUE) throw exhausted('queue');
     this.queued++;
     let command: Promise<number> | undefined;
     try {
       for (;;) {
         signal.throwIfAborted();
         const remaining = getRequestRemainingMs(TIMEOUTS.REQUEST_MS);
-        if (remaining <= 0) throw exhausted();
+        if (remaining <= 0) throw exhausted('deadline');
         let wait: number;
         if (this.redis) {
           command = this.redis.eval(
@@ -83,17 +84,17 @@ export class AnilistThrottle {
             [`${ADMISSION_PREFIX}anilist`],
             ['acquire', String(INTERVAL_MS)]
           );
-          wait = await admissionAwaitCommand(command, remaining, signal, exhausted());
+          wait = await admissionAwaitCommand(command, remaining, signal, exhausted('deadline'));
           command = undefined;
         } else {
           wait = Math.max(0, this.next - Date.now());
           if (!wait) this.next = Date.now() + INTERVAL_MS;
         }
         signal.throwIfAborted();
-        if (getRequestRemainingMs(TIMEOUTS.REQUEST_MS) <= 0) throw exhausted();
+        if (getRequestRemainingMs(TIMEOUTS.REQUEST_MS) <= 0) throw exhausted('deadline');
         if (!wait) return;
         if (opportunistic) skipOpportunisticWork('AniList budget is busy');
-        if (wait >= getRequestRemainingMs(TIMEOUTS.REQUEST_MS)) throw exhausted();
+        if (wait >= getRequestRemainingMs(TIMEOUTS.REQUEST_MS)) throw exhausted('deadline');
         await admissionDelay(Math.min(wait, 250), signal);
       }
     } finally {

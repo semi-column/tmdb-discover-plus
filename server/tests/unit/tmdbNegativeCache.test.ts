@@ -32,6 +32,41 @@ afterEach(() => {
 });
 
 describe('TMDB negative caching', () => {
+  it.each([
+    '/search/movie',
+    '/search/tv',
+    '/search/person',
+    '/search/company',
+    '/search/collection',
+    '/search/keyword',
+  ])('rejects oversized %s queries before cache, pacing or transport', async (endpoint) => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const read = vi.spyOn(state.cache!, 'wrap');
+    await expect(tmdbFetch(endpoint, 'test-key', { query: 'x'.repeat(501) })).rejects.toMatchObject(
+      {
+        code: 'VALIDATION_ERROR',
+        statusCode: 400,
+      }
+    );
+    expect(read).not.toHaveBeenCalled();
+    expect(state.acquire).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(['x'.repeat(500), '\u{1f600}'.repeat(500)])(
+    'preserves valid 500-character query boundaries',
+    async (query) => {
+      const fetch = vi.fn().mockResolvedValue(new Response('{"results":[]}'));
+      vi.stubGlobal('fetch', fetch);
+      await expect(tmdbFetch('/search/movie', 'test-key', { query }, 0)).resolves.toEqual({
+        results: [],
+      });
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(new URL(String(fetch.mock.calls[0][0])).searchParams.get('query')).toBe(query);
+    }
+  );
+
   it('restarts validation for a healthy waiter when its producer is cancelled', async () => {
     const started = Promise.withResolvers<void>();
     const cancel = Promise.withResolvers<void>();

@@ -123,6 +123,32 @@ describe('CacheWrapper edge cases', () => {
   });
 
   describe('error caching edge cases', () => {
+    it('does not cache local AniList exhaustion and retries successfully once capacity returns', async () => {
+      const failure = Object.assign(new Error('AniList local admission exhausted: deadline'), {
+        code: 'ANILIST_ADMISSION_EXHAUSTED',
+        statusCode: 429,
+        rateLimitExhausted: true,
+      });
+      const fetch = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce({ media: [] });
+      await expect(cache.wrap('local-admission', fetch, 300)).rejects.toBe(failure);
+      expect(await cache.getEntry('local-admission')).toBeNull();
+      await expect(cache.wrap('local-admission', fetch, 300)).resolves.toEqual({ media: [] });
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('still caches genuine provider rate-limit errors', async () => {
+      const failure = Object.assign(new Error('AniList API rate limited'), {
+        statusCode: 429,
+        rateLimitExhausted: true,
+      });
+      const fetch = vi.fn().mockRejectedValue(failure);
+      await expect(cache.wrap('provider-admission', fetch, 300)).rejects.toBe(failure);
+      await expect(cache.wrap('provider-admission', fetch, 300)).rejects.toBeInstanceOf(
+        CachedError
+      );
+      expect(fetch).toHaveBeenCalledOnce();
+    });
+
     it('different error types get different TTLs', async () => {
       await cache.setError('rate', 'RATE_LIMITED', 'rate limited');
       await cache.setError('notfound', 'NOT_FOUND', 'not found');

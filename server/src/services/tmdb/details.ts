@@ -140,7 +140,9 @@ export async function getSeasonDetails(
     if (options.expectedEpisodes !== undefined) {
       const episodes = (data as SeasonDetailsResult | null)?.episodes;
       if (!Array.isArray(episodes) || episodes.length !== options.expectedEpisodes) {
-        throw new Error('TMDB season response does not match the expected episode count');
+        throw new Error(
+          `TMDB season response does not match the expected episode count (expected ${options.expectedEpisodes}, received ${Array.isArray(episodes) ? episodes.length : 'missing episodes'})`
+        );
       }
     }
     try {
@@ -527,7 +529,7 @@ async function buildCanonicalSeriesEpisodes(
         ...(language ? { language } : {}),
       })) as Record<string, SeasonDetailsResult> | null;
       throwIfRequestAborted();
-      let missing = 0;
+      const missing: string[] = [];
       for (const season of batch) {
         const seasonData = data?.[`season/${season.season_number}`];
         if (
@@ -535,7 +537,9 @@ async function buildCanonicalSeriesEpisodes(
           (Number.isInteger(season.episode_count) &&
             seasonData.episodes.length !== season.episode_count)
         ) {
-          missing++;
+          missing.push(
+            `season ${season.season_number}: expected ${season.episode_count}, received ${Array.isArray(seasonData?.episodes) ? seasonData.episodes.length : 'missing episodes'}`
+          );
           continue;
         }
         seasonDataByNumber.set(season.season_number, seasonData);
@@ -550,10 +554,11 @@ async function buildCanonicalSeriesEpisodes(
               : CACHE_TTLS.DETAIL
         );
       }
-      if (missing) {
+      if (missing.length) {
         log.warn('Season batch omitted expected data; fetching seasons individually', {
           tmdbId,
-          missing,
+          missing: missing.length,
+          reason: missing.join('; '),
         });
       }
     } catch (error) {

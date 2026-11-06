@@ -6,7 +6,12 @@ import type { ContentType } from '../../types/common.ts';
 import type { MarketplaceEntry } from '../../types/marketplace.ts';
 import { AppError, ErrorCodes } from '../../utils/AppError.ts';
 import { stableStringify } from '../../utils/stableStringify.ts';
-import { isValidUserId, sanitizeFiltersForSource, sanitizeString } from '../../utils/validation.ts';
+import {
+  isValidUserId,
+  sanitizeFiltersForSource,
+  sanitizeString,
+  validateTmdbCatalogSelection,
+} from '../../utils/validation.ts';
 
 /**
  * Public projection of a catalog into a secret-free Marketplace_Entry.
@@ -228,7 +233,7 @@ export function toPublicProjection(userId: string, catalog: CatalogConfig): Mark
   // Legacy/most catalogs omit an explicit source and are implicitly TMDB, which
   // is how the rest of the app treats a missing source (getSource(source ||
   // 'tmdb')). Default it here so those catalogs can be projected and indexed.
-  const source = (catalog.source || 'tmdb') as SourceType;
+  const source: SourceType = catalog.source === 'trakt' ? 'tmdb' : catalog.source || 'tmdb';
 
   // Source-specific filter sanitization. A thrown error here means the entry is
   // rejected before any persistence (Requirement 2.4).
@@ -247,6 +252,15 @@ export function toPublicProjection(userId: string, catalog: CatalogConfig): Mark
 
   const projectedName = sanitizeName(catalog.name);
   const projectedType = catalog.type as ContentType;
+  // Installs enable the clone even when its origin was disabled.
+  validateTmdbCatalogSelection({
+    _id: catalog._id,
+    name: projectedName,
+    type: projectedType,
+    source,
+    filters,
+    enabled: true,
+  });
 
   const now = new Date();
   const entry: MarketplaceEntry = {

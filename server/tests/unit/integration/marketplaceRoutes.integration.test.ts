@@ -58,6 +58,7 @@ import marketplaceRouter from '../../../src/routes/marketplace.ts';
 import { saveUserConfig } from '../../../src/services/configService.ts';
 import { generateToken, computeApiKeyId } from '../../../src/utils/security.ts';
 import { getMarketplaceCache } from '../../../src/infrastructure/marketplaceCache.ts';
+import { getConfigCache } from '../../../src/infrastructure/configCache.ts';
 
 // --- Fixtures ---------------------------------------------------------------
 
@@ -315,6 +316,56 @@ describe('publish → search → preview(detail) → install → like flow', () 
 // --- Error body shape (Req 21.1, 21.2, 21.6) -------------------------------
 
 describe('error responses expose a category (code) + message (error)', () => {
+  it.each(['entry', 'target'] as const)(
+    'returns 400 without changing configuration or counters for an invalid %s collection',
+    async (invalid) => {
+      const adapter = refs.adapter.current!;
+      const originalEntry = await adapter.getMarketplaceEntry(publishedId);
+      if (!originalEntry) throw new Error('Expected published fixture');
+      const marketplaceId = crypto.randomUUID();
+      const originCatalogId = crypto.randomUUID();
+      await adapter.upsertMarketplaceEntry({
+        ...structuredClone(originalEntry),
+        marketplaceId,
+        provenance: { ...originalEntry.provenance, originCatalogId },
+        filters: invalid === 'entry' ? { listType: 'collection' } : {},
+        engagement: { installs: 0, likes: 0, views: 0 },
+      });
+      const originalConfig = await adapter.getUserConfig(OTHER_USER);
+      if (!originalConfig) throw new Error('Expected target fixture');
+      const target = structuredClone(originalConfig);
+      if (invalid === 'target')
+        target.catalogs.push({
+          _id: crypto.randomUUID(),
+          name: 'Invalid existing collection',
+          type: 'movie',
+          source: 'tmdb',
+          enabled: true,
+          filters: { listType: 'collection' },
+        });
+      await adapter.saveUserConfig(target);
+      getConfigCache().invalidate(OTHER_USER);
+      try {
+        const res = await request(app)
+          .post(`/marketplace/${marketplaceId}/install`)
+          .set('Authorization', auth(otherToken))
+          .send({ targetUserId: OTHER_USER });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe('VALIDATION_ERROR');
+        expect(res.body.error).toContain('A valid collection ID is required');
+        expect(await adapter.getUserConfig(OTHER_USER)).toEqual(target);
+        expect((await adapter.getMarketplaceEntry(marketplaceId))?.engagement.installs).toBe(0);
+      } finally {
+        await adapter.saveUserConfig(originalConfig);
+        getConfigCache().invalidate(OTHER_USER);
+        await adapter.deleteMarketplaceEntryByOrigin(
+          originalEntry.provenance.originUserId,
+          originCatalogId
+        );
+      }
+    }
+  );
+
   it('400 validation error names a category for a bad search facet', async () => {
     const res = await request(app).get('/marketplace/search').query({ source: 'not-a-source' });
 

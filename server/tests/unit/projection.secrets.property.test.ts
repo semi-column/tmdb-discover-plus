@@ -155,7 +155,13 @@ describe('projection secret leakage (Property 3)', () => {
           name: plan.name,
           type: plan.type,
           source: plan.source,
-          filters: { ...plan.base, ...entriesToObject(plan.filterSecrets) },
+          filters: {
+            ...plan.base,
+            ...(plan.type === 'collection' && ['tmdb', 'trakt'].includes(plan.source)
+              ? { listType: 'studio', studioId: 42 }
+              : {}),
+            ...entriesToObject(plan.filterSecrets),
+          },
           formState: { expandedSections: {}, ...entriesToObject(plan.formSecrets) },
           ...entriesToObject(plan.topSecrets),
         } as unknown as CatalogConfig;

@@ -121,7 +121,10 @@ describe('marketplaceService publish/unpublish round-trip (Property 8 — Req 4.
           name: draft.name,
           type: draft.type,
           source: draft.source,
-          filters: draft.filters,
+          filters:
+            draft.type === 'collection' && ['tmdb', 'trakt'].includes(draft.source)
+              ? { ...draft.filters, listType: 'studio', studioId: 42 }
+              : draft.filters,
           enabled: true,
           published: true,
         };

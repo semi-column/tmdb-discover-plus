@@ -327,14 +327,29 @@ router.get(
     if (by !== 'route' && by !== 'path') throw new RangeError('by must be route or path');
     const filter = parseRequestFilter(req.query);
     const history = getHistory();
-    const [analytics, storage, live] = await Promise.all([
-      history ? history.cacheStats(range, filter, by) : null,
-      history ? history.storageInfo() : null,
+    const [[analyticsResult, storageResult], live] = await Promise.all([
+      Promise.allSettled([
+        history ? history.cacheStats(range, filter, by) : Promise.resolve(null),
+        history ? history.storageInfo() : Promise.resolve(null),
+      ]),
       getLiveStore(),
     ]);
+    const historyErrors: string[] = [];
+    for (const [name, result] of [
+      ['Cache analytics', analyticsResult],
+      ['History storage information', storageResult],
+    ] as const) {
+      if (result.status === 'rejected') {
+        historyErrors.push(`${name} could not be loaded. Other available information is shown.`);
+        log.warn(`Admin caching ${name.toLowerCase()} failed`, { error: result.reason });
+      }
+    }
+    const analytics = analyticsResult.status === 'fulfilled' ? analyticsResult.value : null;
+    const storage = storageResult.status === 'fulfilled' ? storageResult.value : null;
     const cacheStatus = getCacheStatus();
     return {
       analytics,
+      historyErrors,
       history: {
         backend: history?.kind ?? null,
         cacheBackend: cacheStatus.driver,

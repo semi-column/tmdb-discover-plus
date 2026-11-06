@@ -80,6 +80,7 @@ export function Caching({ range, rangeParams = { range }, params = {} }) {
         onChange={(next) => navigate('caching', { ...rangeParams, ...next, by })}
       />
       <ErrorNote error={error} />
+      <ErrorNote error={data.historyErrors?.join(' ')} />
       {history && (
         <Panel title="History coverage">
           <p>

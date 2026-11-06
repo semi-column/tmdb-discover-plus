@@ -446,7 +446,11 @@ export async function reconcileMarketplaceEntries(
       let entry: MarketplaceEntry;
       try {
         entry = toPublicProjection(userId, catalog);
-      } catch {
+      } catch (error) {
+        log.warn('Skipping invalid marketplace catalog projection', {
+          catalogId,
+          error: error instanceof Error ? error.message : 'unknown error',
+        });
         continue;
       }
       // Hard invariant: a secret must never enter the index (Req 2.2, 2.6).
@@ -951,6 +955,15 @@ export async function installEntry(entryId: string, targetUserId: string): Promi
   try {
     await saveUserConfig(nextConfig);
   } catch (err) {
+    if (err instanceof AppError && err.code === ErrorCodes.VALIDATION_ERROR) {
+      log.warn('Marketplace install rejected by configuration validation', {
+        marketplaceId: entryId,
+        classification: 'user_config',
+        code: err.code,
+        error: err.message,
+      });
+      throw err;
+    }
     log.error('Install failed to persist cloned catalog', {
       marketplaceId: entryId,
       targetUserId,

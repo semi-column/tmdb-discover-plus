@@ -116,6 +116,10 @@ function toSlot(_: unknown) {
 
 function buildFilters(slot: ReturnType<typeof toSlot>): CatalogFilters {
   const filters: Record<string, unknown> = {};
+  if (slot.type === 'collection' && ['tmdb', 'trakt'].includes(slot.source)) {
+    filters.listType = 'studio';
+    filters.studioId = 42;
+  }
   if (slot.sortBy !== undefined) filters.sortBy = slot.sortBy;
   if (slot.genreNames !== undefined) filters.genreNames = slot.genreNames;
   return filters as CatalogFilters;
@@ -132,6 +136,35 @@ async function indexByCatalogId(adapter: MemoryAdapter): Promise<Map<string, Mar
 }
 
 describe('marketplaceService reconcile fidelity (Property 9 — Req 5.1, 5.4, 5.5)', () => {
+  it('retains an existing entry when its projection is invalid and still indexes valid siblings', async () => {
+    const adapter = new MemoryAdapter();
+    await adapter.connect();
+    refs.adapter.current = adapter;
+    getMarketplaceCache().clear();
+    const catalog: CatalogConfig = {
+      _id: crypto.randomUUID(),
+      name: 'Collection',
+      type: 'movie',
+      source: 'tmdb',
+      filters: { listType: 'collection', collectionId: 42 },
+      enabled: true,
+      published: true,
+    };
+    const prev: UserConfig = { userId: 'reconcileuser', catalogs: [catalog], preferences: {} };
+    await reconcileMarketplaceEntries(null, prev);
+    const [existing] = await adapter.searchMarketplaceEntries({});
+    const next: UserConfig = {
+      ...prev,
+      catalogs: [
+        { ...catalog, filters: { listType: 'collection' } },
+        { ...catalog, _id: crypto.randomUUID(), name: 'Valid sibling' },
+      ],
+    };
+    await reconcileMarketplaceEntries(prev, next);
+    expect(await adapter.getMarketplaceEntry(existing.marketplaceId)).toEqual(existing);
+    expect(await adapter.searchMarketplaceEntries({})).toHaveLength(2);
+  });
+
   it('index equals the published-and-present set of next; surviving counters preserved', async () => {
     await fc.assert(
       fc.asyncProperty(userIdArb, slotsArb, async (userId, rawSlots) => {

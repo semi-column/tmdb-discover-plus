@@ -394,6 +394,7 @@ export class CacheWrapper {
         (error as Error)?.name !== 'AbortError' &&
         (error as { code?: string })?.code !== 'VALIDATION_ERROR' &&
         (error as { code?: string })?.code !== 'SHARED_ADMISSION_UNAVAILABLE' &&
+        (error as { code?: string })?.code !== 'ANILIST_ADMISSION_EXHAUSTED' &&
         (error as { statusCode?: number })?.statusCode !== 401 &&
         (error as { statusCode?: number })?.statusCode !== 403 &&
         !(error instanceof AddonWorkLimitError) &&

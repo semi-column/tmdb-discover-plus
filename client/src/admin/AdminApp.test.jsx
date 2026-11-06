@@ -576,6 +576,19 @@ it('shows unavailable cache history without inventing zero rates and retains the
   expect(screen.queryByText('Lookup hit rate')).not.toBeInTheDocument();
 });
 
+it('shows partial history failures explicitly while retaining cache policy', async () => {
+  window.location.hash = '/caching?range=1h';
+  adminApi.caching.mockResolvedValue({
+    analytics: null,
+    historyErrors: ['Cache analytics could not be loaded. Other available information is shown.'],
+    ttls: [{ scope: 'Shared', name: 'DETAIL', seconds: 3600 }],
+  });
+  render(<AdminApp />);
+  expect(await screen.findByText(/Cache analytics could not be loaded/)).toBeInTheDocument();
+  expect(screen.getByText('DETAIL')).toBeInTheDocument();
+  expect(screen.queryByText('Lookup hit rate')).not.toBeInTheDocument();
+});
+
 it('shows no-lookup rates as unavailable and preserves custom cache time bounds', async () => {
   const from = Date.now() - 3_600_000;
   const to = Date.now();

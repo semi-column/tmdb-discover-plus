@@ -490,6 +490,22 @@ describe('checkPosterExists', () => {
   describe('artwork response reuse', () => {
     afterEach(() => vi.unstubAllGlobals());
 
+    it('checks the same failed backdrop once per response but retries on the next request', async () => {
+      fetchMock.mockRejectedValue(new DOMException('Timed out', 'TimeoutError'));
+      const option = { service: 'rpdb' as const, apiKey: 'request-reuse-key' };
+      const original = { backdrop: 'native-backdrop', landscape: 'native-landscape' };
+      const context = { type: 'movie' as const, tmdbId: 9912345 };
+      const overrides = { backdrop: option, landscape: option };
+      expect(
+        await applyArtworkOverrides(context, original, overrides, { checkExistence: true })
+      ).toMatchObject(original);
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(
+        await applyArtworkOverrides(context, original, overrides, { checkExistence: true })
+      ).toMatchObject(original);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
     it('fetches a Fanart payload once for all image kinds without losing language choices', async () => {
       const fetch = vi.fn().mockResolvedValue({
         ok: true,

@@ -2,6 +2,37 @@
 
 Date: 2026-11-01
 
+## Follow-up safeguards from the November 6 traces
+
+- Legacy Trakt catalogs use the existing TMDB filter rules and publish as TMDB,
+  preserving collection/studio IDs. Publication validates the enabled clone's
+  selection, including disabled origins. Reconciliation logs and skips invalid
+  projections without deleting existing entries. Already-damaged entries need
+  republishing from a valid original; missing IDs are never guessed.
+- Marketplace install validation returns `400 VALIDATION_ERROR`, not a storage
+  `500`. Invalid entries or existing target catalogs leave the target and install
+  counter unchanged. Genuine persistence failures still return `500`.
+- TMDB API search rejects queries longer than 500 Unicode code points before
+  cache lookup, pacing or HTTP. Valid queries are unchanged, not truncated.
+- AniList local queue/deadline exhaustion is identified separately from provider
+  `429`, and cannot create a 15-minute provider-error cache entry. Existing cached
+  errors expire normally. Shared pacing, provider cooldowns, wait budgets and
+  compatible degraded catalog responses remain unchanged.
+- Artwork existence checks reuse the same URL's outcome within one response.
+  Transient failure is retried on the next request; deadlines, fallback artwork,
+  credential scopes and cross-request negative caching are unchanged.
+- Season mismatch and batch-fallback warnings include expected/received counts.
+  Snapshot completeness, stale-season fallback, enrichment budgets and TTLs are
+  unchanged.
+- Admin caching analytics/storage failures are logged and returned as explicit
+  `historyErrors`; each available result and the TTL inventory remain visible.
+  Missing analytics are not represented as zero rates. Live-store failures
+  still fail explicitly; no database index or query-timeout changes were made.
+
+Invalid credentials/selections require user action. Provider timeouts, genuine
+quota exhaustion, changing episode counts and Redis/network delays remain
+external or unproven causes: these safeguards do not claim to eliminate them.
+
 ## Redis failover crash and shutdown follow-up (2026-11-04, not deployed)
 
 The request-rate Redis client had no `error` listener. A socket-close event

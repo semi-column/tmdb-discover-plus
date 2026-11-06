@@ -29,6 +29,32 @@ describe('anilistFetch rate-limit pause', () => {
     vi.unstubAllGlobals();
   });
 
+  it('retries a search after local exhaustion without retaining a provider-error cache entry', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response('{"data":{"Page":{"media":[],"pageInfo":{"hasNextPage":false}}}}')
+      );
+    vi.stubGlobal('fetch', fetch);
+    const { search } = await import('../../src/services/anilist/discover.ts');
+    const { getAnilistThrottle } = await import('../../src/infrastructure/anilistThrottle.ts');
+    const { withRequestAbortContext } = await import('../../src/utils/requestContext.ts');
+    await getAnilistThrottle().pause(60_000);
+    await expect(
+      withRequestAbortContext(() => search('local-exhaustion', 'anime', 1))
+    ).rejects.toMatchObject({
+      code: 'ANILIST_ADMISSION_EXHAUSTED',
+      statusCode: 429,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(61_000);
+    await expect(search('local-exhaustion', 'anime', 1)).resolves.toMatchObject({
+      media: [],
+      hasNextPage: false,
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('holds every queued request until Retry-After elapses', async () => {
     const fetchMock = vi
       .fn()
@@ -66,7 +92,12 @@ describe('anilistFetch rate-limit pause', () => {
       });
     });
 
-    expect(result).toMatchObject({ statusCode: 429, rateLimitExhausted: true });
+    expect(result).toMatchObject({
+      message: 'AniList local admission exhausted: deadline',
+      code: 'ANILIST_ADMISSION_EXHAUSTED',
+      statusCode: 429,
+      rateLimitExhausted: true,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(61_000);

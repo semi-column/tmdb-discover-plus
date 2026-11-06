@@ -140,7 +140,12 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     );
     controller.abort();
     await Promise.all(waiting);
-    await expect(throttle.acquire()).rejects.toMatchObject({ statusCode: 429 });
+    await expect(throttle.acquire()).rejects.toMatchObject({
+      message: 'AniList local admission exhausted: queue',
+      code: 'ANILIST_ADMISSION_EXHAUSTED',
+      statusCode: 429,
+      rateLimitExhausted: true,
+    });
     expect(evaluate).toHaveBeenCalledTimes(100);
     command.resolve(0);
     await command.promise;
