@@ -422,6 +422,7 @@ async function _tmdbFetchInner(
       endpoint: url.pathname.slice(0, 80),
       statusCode: 503,
       requestId: getRequestId(),
+      ...(lastError!.cause ? { error: lastError!.cause } : {}),
     });
   } else if (isRateLimiterTimeout) {
     log.warn('TMDB request skipped after local rate limiter timeout', {

@@ -15,6 +15,7 @@ export class SharedAdmissionError extends Error {
 }
 
 export const ADMISSION_RECOVERY_MS = 5000;
+const ADMISSION_COMMAND_WAIT_MS = 1000;
 
 const createAdmissionClient = (url: string) =>
   createClient({
@@ -77,7 +78,12 @@ export class AdmissionRedis {
     return this.shutdown.signal;
   }
 
-  async eval(script: string, keys: string[], args: string[], timeoutMs = 1000): Promise<number> {
+  async eval(
+    script: string,
+    keys: string[],
+    args: string[],
+    timeoutMs = 2 * ADMISSION_COMMAND_WAIT_MS
+  ): Promise<number> {
     this.getSignal();
     const client = this.client;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -164,6 +170,24 @@ export async function admissionAwait<T>(
     clearTimeout(timer);
     signal.removeEventListener('abort', onAbort);
   }
+}
+
+export function admissionAwaitCommand<T>(
+  operation: Promise<T>,
+  remainingMs: number,
+  signal: AbortSignal,
+  deadlineError: Error
+): Promise<T> {
+  const timeoutError =
+    remainingMs <= ADMISSION_COMMAND_WAIT_MS
+      ? deadlineError
+      : new SharedAdmissionError(undefined, new Error('Shared admission Redis command timeout'));
+  return admissionAwait(
+    operation,
+    Math.min(remainingMs, ADMISSION_COMMAND_WAIT_MS),
+    signal,
+    timeoutError
+  );
 }
 
 let instance: AdmissionRedis | undefined;

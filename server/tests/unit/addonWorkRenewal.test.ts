@@ -84,10 +84,12 @@ describe('addon work renewal context', () => {
   );
 
   it('reports shared admission failures as explicit uncacheable 503 responses', async () => {
+    const cause = new Error('Shared admission Redis command timeout');
+    logged.warn.mockClear();
     const app = express();
     app.get('/', (_req, res) => {
       expect(sendAddonWorkLimit(new Error('unrelated'), res)).toBe(false);
-      expect(sendAddonWorkLimit(new SharedAdmissionError(), res)).toBe(true);
+      expect(sendAddonWorkLimit(new SharedAdmissionError(undefined, cause), res)).toBe(true);
     });
     const response = await request(app).get('/');
     expect(response.status).toBe(503);
@@ -98,6 +100,10 @@ describe('addon work renewal context', () => {
       policy: 'addonWork',
       retryAfter: 5,
     });
+    expect(logged.warn).toHaveBeenCalledWith(
+      'Addon work admission rejected',
+      expect.objectContaining({ reason: 'redis-unavailable', error: cause })
+    );
   });
 
   it('aborts background upstream work on lease loss without a pre-existing request context', async () => {
@@ -178,7 +184,7 @@ describe('shared admission recovery', () => {
     expect(logged.error).not.toHaveBeenCalled();
   });
 
-  it('releases a work grant that arrives after the queue deadline', async () => {
+  it('releases a work grant that arrives after the command wait deadline', async () => {
     vi.useFakeTimers();
     const redis = new AdmissionRedis('redis://127.0.0.1:1');
     selected.redis = redis;
@@ -190,14 +196,41 @@ describe('shared admission recovery', () => {
       return args[0] === 'acquire' ? grant : Promise.resolve(1);
     });
     const waiting = new RedisAddonWork(redis).acquire('late-grant');
-    const rejection = expect(waiting).rejects.toBeInstanceOf(AddonWorkLimitError);
-    await vi.advanceTimersByTimeAsync(5000);
+    const rejection = expect(waiting).rejects.toBeInstanceOf(SharedAdmissionError);
+    await vi.advanceTimersByTimeAsync(1000);
     await rejection;
     expect(command.mock.calls.map((call) => call[2][0])).toEqual(['acquire']);
     resolveGrant(1);
     await vi.advanceTimersByTimeAsync(0);
     expect(command.mock.calls.map((call) => call[2][0])).toEqual(['acquire', 'release']);
     expect(redis.shutdown.signal.aborted).toBe(false);
+  });
+
+  it('counts timed-out work until its pending Redis commands settle', async () => {
+    vi.useFakeTimers();
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    let resolveGrant!: (value: number) => void;
+    const grant = new Promise<number>((resolve) => {
+      resolveGrant = resolve;
+    });
+    const command = vi.spyOn(redis, 'eval').mockReturnValue(grant);
+    const work = new RedisAddonWork(redis);
+    const waiting = Array.from({ length: 100 }, () =>
+      work.acquire('timed-out-user').catch((error: unknown) => error)
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      (await Promise.all(waiting)).every((error) => error instanceof SharedAdmissionError)
+    ).toBe(true);
+    await expect(work.acquire('timed-out-user')).rejects.toBeInstanceOf(AddonWorkLimitError);
+    expect(command).toHaveBeenCalledTimes(100);
+
+    resolveGrant(0);
+    await vi.advanceTimersByTimeAsync(0);
+    command.mockResolvedValue(1);
+    const release = await work.acquire('timed-out-user');
+    await release();
   });
 
   it('counts cancelled work until its pending Redis commands settle', async () => {

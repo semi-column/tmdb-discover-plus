@@ -15,7 +15,7 @@ import {
   ADMISSION_PREFIX,
   AdmissionRedis,
   SharedAdmissionError,
-  admissionAwait,
+  admissionAwaitCommand,
   admissionDelay,
   getAdmissionRedis,
   observeAdmissionMutation,
@@ -137,7 +137,7 @@ export class RedisAddonWork {
         const pending = command('acquire');
         let granted: number;
         try {
-          granted = await admissionAwait(
+          granted = await admissionAwaitCommand(
             pending,
             remaining,
             signal,
@@ -308,6 +308,7 @@ export function sendAddonWorkLimit(error: unknown, res: Response): boolean {
     reason: error instanceof AddonWorkLimitError ? error.reason : 'redis-unavailable',
     statusCode: error instanceof SharedAdmissionError ? 503 : 429,
     waitBudgetMs: WAIT_MS,
+    ...(error instanceof SharedAdmissionError && error.cause ? { error: error.cause } : {}),
   });
   res.set('Cache-Control', 'no-store');
   res.set('Retry-After', '5');

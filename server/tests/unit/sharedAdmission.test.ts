@@ -12,6 +12,7 @@ import {
   ADMISSION_RECOVERY_MS,
   AdmissionRedis,
   SharedAdmissionError,
+  admissionAwait,
   admissionDelay,
 } from '../../src/infrastructure/sharedAdmission.ts';
 import {
@@ -364,15 +365,98 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     expect(await inspector.zCard(`${ADMISSION_PREFIX}addon:global`)).toBe(1);
   });
 
-  it('bounds stalled Redis commands, never retries an ambiguous grant', async () => {
+  it('keeps the connection open when a caller stops waiting for a slow reply', async () => {
     const client = connection();
     await client.eval('return 1', [], []);
+    const signal = client.shutdown.signal;
     await inspector.sendCommand(['CLIENT', 'PAUSE', '300', 'ALL']);
+    const command = client.eval('return 1', [], []);
     const start = Date.now();
-    await expect(client.eval('return 1', [], [], 30)).rejects.toBeInstanceOf(SharedAdmissionError);
+    await expect(
+      admissionAwait(command, 30, signal, new SharedAdmissionError())
+    ).rejects.toBeInstanceOf(SharedAdmissionError);
     expect(Date.now() - start).toBeLessThan(200);
+    expect(signal.aborted).toBe(false);
+    expect(await command).toBe(1);
+    await expect(client.eval('return 1', [], [])).resolves.toBe(1);
+    expect(client.shutdown.signal).toBe(signal);
+  });
+
+  it('does not retain grants after transient Redis command timeouts', async () => {
+    const client = connection();
+    const peerClient = connection();
+    await client.eval('return 1', [], []);
+    await peerClient.eval('return 1', [], []);
+    const signal = client.shutdown.signal;
+    const work = new RedisAddonWork(client);
+    const peer = new RedisAddonWork(peerClient);
+    releases.push(await work.acquire('active'));
+    const evaluations = vi.spyOn(client, 'eval');
+    const peerEvaluations = vi.spyOn(peerClient, 'eval');
+    await inspector.sendCommand(['CLIENT', 'PAUSE', '1500', 'ALL']);
+    const attempts = Array.from({ length: 6 }, (_, index) =>
+      (index % 2 ? work : peer).acquire('timed-out')
+    );
+    await Promise.all(
+      attempts.map((attempt) => expect(attempt).rejects.toBeInstanceOf(SharedAdmissionError))
+    );
+    expect(signal.aborted).toBe(false);
+    await vi.waitFor(
+      async () => {
+        expect(evaluations.mock.calls.filter((call) => call[2][0] === 'release')).toHaveLength(3);
+        expect(peerEvaluations.mock.calls.filter((call) => call[2][0] === 'release')).toHaveLength(
+          3
+        );
+        expect(await inspector.zCard(`${ADMISSION_PREFIX}addon:global`)).toBe(1);
+      },
+      {
+        interval: 20,
+        timeout: 2000,
+      }
+    );
+    expect(evaluations.mock.calls.filter((call) => call[2][0] === 'acquire')).toHaveLength(3);
+    expect(peerEvaluations.mock.calls.filter((call) => call[2][0] === 'acquire')).toHaveLength(3);
+    releases.push(await peer.acquire('timed-out'));
+  });
+
+  it('keeps delayed provider commands bounded until Redis replies', async () => {
+    const client = connection();
+    await client.eval('return 1', [], []);
+    const signal = client.shutdown.signal;
+    const tmdb = bucket(client);
+    const anilist = new AnilistThrottle(client);
+    try {
+      await inspector.sendCommand(['CLIENT', 'PAUSE', '1500', 'ALL']);
+      const attempts = [tmdb.acquire(), anilist.acquire()];
+      await Promise.all(
+        attempts.map((attempt) => expect(attempt).rejects.toBeInstanceOf(SharedAdmissionError))
+      );
+      expect(signal.aborted).toBe(false);
+      expect(tmdb.getStats().queueDepth).toBe(1);
+      await vi.waitFor(() => expect(tmdb.getStats().queueDepth).toBe(0), {
+        interval: 20,
+        timeout: 2000,
+      });
+      await expect(tmdb.acquire()).resolves.toBeUndefined();
+    } finally {
+      anilist.destroy();
+    }
+  });
+
+  it('fails closed when a Redis command exceeds its hard deadline', async () => {
+    const client = connection();
+    await client.eval('return 1', [], []);
+    const signal = client.shutdown.signal;
+    await inspector.sendCommand(['CLIENT', 'PAUSE', '400', 'ALL']);
+    const command = client.eval('return 1', [], [], 80);
+    await expect(
+      admissionAwait(command, 30, signal, new SharedAdmissionError())
+    ).rejects.toBeInstanceOf(SharedAdmissionError);
+    expect(signal.aborted).toBe(false);
+    await expect(command).rejects.toBeInstanceOf(SharedAdmissionError);
+    expect(signal.aborted).toBe(true);
     await expect(client.eval('return 1', [], [])).rejects.toBeInstanceOf(SharedAdmissionError);
-    await sleep(350);
+    await sleep(450);
   });
 
   it('releases a grant whose Redis reply arrives after the requester aborted', async () => {
@@ -433,7 +517,7 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     expect(oldTmdbSignal.aborted).toBe(true);
   }, 10000);
 
-  it('recovers both limiters on one connection after a Redis command timeout', async () => {
+  it('recovers both limiters on one connection after a sustained Redis stall', async () => {
     const client = connection();
     const work = new RedisAddonWork(client);
     const throttle = bucket(client);
@@ -441,7 +525,7 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     await before();
     await throttle.acquire();
     const oldSignal = client.shutdown.signal;
-    await inspector.sendCommand(['CLIENT', 'PAUSE', '1200', 'ALL']);
+    await inspector.sendCommand(['CLIENT', 'PAUSE', '2500', 'ALL']);
     await expect(throttle.notifyRateLimited(1000)).rejects.toBeInstanceOf(SharedAdmissionError);
     expect(oldSignal.aborted).toBe(true);
     await expect(work.acquire('during-cooldown')).rejects.toBeInstanceOf(SharedAdmissionError);
@@ -453,7 +537,7 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     expect(client.shutdown.signal).not.toBe(oldSignal);
     expect(client.shutdown.signal.aborted).toBe(false);
     expect(oldSignal.aborted).toBe(true);
-  }, 10000);
+  }, 12000);
 
   it('aborts active request contexts when renewal loses a lease, without resurrecting it', async () => {
     const client = connection();

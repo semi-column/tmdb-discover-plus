@@ -10,6 +10,7 @@ import {
   AdmissionRedis,
   admissionDelay,
   admissionAwait,
+  admissionAwaitCommand,
   getAdmissionRedis,
   closeAdmissionRedis,
   observeAdmissionMutation,
@@ -312,7 +313,7 @@ export class RedisTokenBucket {
         const remaining = deadline - Date.now();
         if (remaining <= 0) throw timeoutError;
         command = this.command('acquire');
-        const wait = await admissionAwait(command, remaining, signal, timeoutError);
+        const wait = await admissionAwaitCommand(command, remaining, signal, timeoutError);
         command = undefined;
         signal.throwIfAborted();
         if (Date.now() >= deadline) throw timeoutError;

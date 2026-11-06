@@ -1,7 +1,7 @@
 import {
   ADMISSION_PREFIX,
   AdmissionRedis,
-  admissionAwait,
+  admissionAwaitCommand,
   admissionDelay,
   getAdmissionRedis,
 } from './sharedAdmission.ts';
@@ -83,7 +83,7 @@ export class AnilistThrottle {
             [`${ADMISSION_PREFIX}anilist`],
             ['acquire', String(INTERVAL_MS)]
           );
-          wait = await admissionAwait(command, Math.min(remaining, 1000), signal, exhausted());
+          wait = await admissionAwaitCommand(command, remaining, signal, exhausted());
           command = undefined;
         } else {
           wait = Math.max(0, this.next - Date.now());
