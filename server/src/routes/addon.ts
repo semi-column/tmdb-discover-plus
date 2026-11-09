@@ -544,7 +544,7 @@ async function handleCatalogRequest(
     const cache = getCache();
     const configVersion = config.updatedAt ? new Date(config.updatedAt).getTime() : 0;
     const catalogCacheKey = `catalog:${userId}:${catalogId}:${type}:${skip}:${extra.genre || ''}:${stremioExtraMode}:${displayLanguage || ''}:${configVersion}`;
-    const serverTtl = catalogServerTtl(listType);
+    const serverTtl = catalogServerTtl(listType, resolvedFilters || effectiveFilters);
 
     const computeCatalogMetas = async (): Promise<StremioMetaPreview[]> => {
       let result: { results?: unknown[] } | null = null;

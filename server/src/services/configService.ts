@@ -430,7 +430,6 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
     // before reconciliation so the cached config never diverges from storage.
     const configCache = getConfigCache();
     configCache.invalidate(safeUserId);
-    if (result) configCache.set(safeUserId, result);
 
     log.debug('Config saved to storage', {
       userId: result?.userId,

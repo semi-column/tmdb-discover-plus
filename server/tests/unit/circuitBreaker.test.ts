@@ -18,6 +18,7 @@ vi.mock('../../src/infrastructure/tmdbThrottle.ts', () => ({
 
 import {
   tmdbFetch,
+  tmdbWebsiteFetchJson,
   getCircuitBreakerState,
   resetCircuitBreaker,
 } from '../../src/services/tmdb/client.ts';
@@ -115,13 +116,13 @@ describe('TMDB Circuit Breaker', () => {
   it.each([
     ['/discover/movie', {}, CACHE_TTLS.CATALOG_SERVER_DISCOVER],
     ['/discover/tv', {}, CACHE_TTLS.CATALOG_SERVER_DISCOVER],
-    ['/trending/movie/day', {}, CACHE_TTLS.TMDB_API_RESPONSE],
+    ['/trending/movie/day', {}, CACHE_TTLS.CATALOG_SERVER_TRENDING],
     ['/movie/550', { release_date: '1999-10-15' }, CACHE_TTLS.DETAIL],
     ['/movie/551', { release_date: '2999-01-01' }, CACHE_TTLS.TMDB_RECENT_DETAIL],
     ['/movie/552', {}, CACHE_TTLS.TMDB_RECENT_DETAIL],
     ['/tv/1399', { status: 'Ended' }, CACHE_TTLS.DETAIL],
-    ['/tv/1400', { status: 'Returning Series' }, CACHE_TTLS.TMDB_API_RESPONSE],
-    ['/tv/1399/season/1', {}, CACHE_TTLS.TMDB_API_RESPONSE],
+    ['/tv/1400', { status: 'Returning Series' }, CACHE_TTLS.TMDB_ACTIVE_SERIES],
+    ['/tv/1399/season/1', {}, CACHE_TTLS.TMDB_RECENT_DETAIL],
     ['/movie/550/images', {}, CACHE_TTLS.LOGO],
     ['/configuration', {}, CACHE_TTLS.TMDB_REFERENCE],
     ['/genre/movie/list', {}, CACHE_TTLS.TMDB_REFERENCE],
@@ -130,6 +131,58 @@ describe('TMDB Circuit Breaker', () => {
     await tmdbFetch(endpoint, 'test-key', {}, 0);
     const cache = vi.mocked(getCache).mock.results.at(-1)!.value;
     expect(cache.set).toHaveBeenCalledWith(expect.any(String), data, ttl);
+  });
+
+  it('refreshes stale raw data and ignores it for cache-only reads', async () => {
+    const cache = new CacheWrapper(new MockCacheAdapter());
+    vi.mocked(getCache).mockReturnValueOnce(cache).mockReturnValueOnce(cache);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const key = 'https://api.themoviedb.org/3/tv/1400';
+    await cache.set(key, { id: 1400, status: 'Returning Series', number_of_episodes: 1 }, 60);
+    vi.advanceTimersByTime(61_000);
+    await expect(tmdbFetch('/tv/1400', 'test-key', {}, 0, { cacheOnly: true })).resolves.toBeNull();
+    expect(mockFetch).not.toHaveBeenCalled();
+    const updated = { id: 1400, status: 'Returning Series', number_of_episodes: 2 };
+    mockFetch.mockResolvedValue({ ok: true, json: async () => updated });
+    await expect(tmdbFetch('/tv/1400', 'test-key', {}, 0)).resolves.toEqual(updated);
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
+  it('bounds an existing longer-lived TV entry by the current active-series policy', async () => {
+    const cache = new CacheWrapper(new MockCacheAdapter());
+    vi.mocked(getCache).mockReturnValueOnce(cache);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    await cache.set(
+      'https://api.themoviedb.org/3/tv/1400',
+      {
+        id: 1400,
+        status: 'Returning Series',
+      },
+      86400
+    );
+    vi.advanceTimersByTime((CACHE_TTLS.TMDB_ACTIVE_SERIES + 1) * 1000);
+    await expect(tmdbFetch('/tv/1400', 'test-key', {}, 0, { cacheOnly: true })).resolves.toBeNull();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('refreshes stale website results and retains their short empty-result lifetime', async () => {
+    const cache = new CacheWrapper(new MockCacheAdapter());
+    vi.mocked(getCache).mockReturnValueOnce(cache);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    await cache.set(
+      'tmdb_site:https://www.themoviedb.org/search/person?query=test',
+      { results: [{ id: 1 }] },
+      60
+    );
+    vi.advanceTimersByTime(61_000);
+    mockFetch.mockResolvedValue({ ok: true, text: async () => JSON.stringify({ results: [] }) });
+    await expect(tmdbWebsiteFetchJson('/search/person', { query: 'test' })).resolves.toEqual({
+      results: [],
+    });
+    expect(mockFetch).toHaveBeenCalledOnce();
+    expect(
+      await cache.getEntry('tmdb_site:https://www.themoviedb.org/search/person?query=test')
+    ).toMatchObject({ __ttl: 60 });
   });
 
   it('shares and coalesces equivalent discovery recipes across API keys and filter order', async () => {

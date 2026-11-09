@@ -3,6 +3,7 @@ import { MemoryAdapter } from './MemoryAdapter.ts';
 import { createLogger } from '../../utils/logger.ts';
 import { config } from '../../config.ts';
 import type { IStorageAdapter } from '../../types/index.ts';
+import { synchronizeConfigWrites } from '../../infrastructure/configInvalidation.ts';
 
 const log = createLogger('StorageFactory');
 
@@ -51,6 +52,7 @@ export async function initStorage(): Promise<IStorageAdapter> {
   }
 
   await storageInstance.connect();
+  synchronizeConfigWrites(storageInstance);
   return storageInstance;
 }
 

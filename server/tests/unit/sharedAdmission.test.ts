@@ -337,6 +337,78 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     releases.push(await b.acquire('full'));
   });
 
+  it('coalesces 100 blocked configuration waiters to at most 15 probes in 550ms', async () => {
+    const a = new RedisAddonWork(connection());
+    const client = connection();
+    const b = new RedisAddonWork(client);
+    await occupy(a, 'contended', 6);
+    const evaluations = vi.spyOn(client, 'eval');
+    const controller = new AbortController();
+    const queued = Array.from({ length: 100 }, () =>
+      b.acquire('contended', controller.signal).catch((error: unknown) => error)
+    );
+    await sleep(550);
+    const acquireCalls = evaluations.mock.calls.filter((call) => call[2][0] === 'acquire');
+    expect(acquireCalls.length).toBeGreaterThan(0);
+    expect(acquireCalls.length).toBeLessThanOrEqual(15);
+    expect(await inspector.zCard(`${ADMISSION_PREFIX}addon:global`)).toBe(6);
+    controller.abort();
+    expect((await Promise.all(queued)).every((error) => error.name === 'AbortError')).toBe(true);
+    const release = releases.shift()!;
+    await release();
+    releases.push(await b.acquire('contended'));
+  });
+
+  it('coalesces global denial probes across configurations and progresses after peer release', async () => {
+    const a = new RedisAddonWork(connection());
+    const client = connection();
+    const b = new RedisAddonWork(client);
+    for (let i = 0; i < 10; i++) await occupy(a, `occupied-${i}`, 6);
+    const evaluations = vi.spyOn(client, 'eval');
+    const controller = new AbortController();
+    const queued = Array.from({ length: 100 }, (_, index) =>
+      b
+        .acquire(`global-waiter-${index}`, controller.signal)
+        .then((release) => {
+          releases.push(release);
+          return 'granted';
+        })
+        .catch((error: unknown) => error)
+    );
+    await sleep(550);
+    // At most one initial attempt per configuration, then one shared retry/tick.
+    expect(
+      evaluations.mock.calls.filter((call) => call[2][0] === 'acquire').length
+    ).toBeLessThanOrEqual(115);
+    const release = releases.shift()!;
+    await release();
+    await vi.waitFor(() => expect(releases).toHaveLength(60), { timeout: 1000 });
+    controller.abort();
+    const outcomes = await Promise.all(queued);
+    expect(outcomes.filter((outcome) => outcome === 'granted')).toHaveLength(1);
+    expect(await inspector.zCard(`${ADMISSION_PREFIX}addon:global`)).toBe(60);
+  });
+
+  it('serves queued work FIFO without letting a busy configuration block another', async () => {
+    const a = new RedisAddonWork(connection());
+    const b = new RedisAddonWork(connection());
+    await occupy(a, 'fifo', 6);
+    const order: number[] = [];
+    const controller = new AbortController();
+    const waiting = [0, 1, 2].map(async (index) => {
+      const release = await b.acquire('fifo', controller.signal);
+      order.push(index);
+      await release();
+    });
+    await sleep(100);
+    const other = await b.acquire('unblocked');
+    await other();
+    expect(order).toEqual([]);
+    await releases.shift()!();
+    await Promise.all(waiting);
+    expect(order).toEqual([0, 1, 2]);
+  });
+
   it('renews long-running work and reclaims slots after a replica disappears', async () => {
     const client = connection();
     const a = new RedisAddonWork(client, 300);
@@ -400,7 +472,7 @@ describe.skipIf(!available)('isolated Redis shared admission (two replicas)', ()
     const peerEvaluations = vi.spyOn(peerClient, 'eval');
     await inspector.sendCommand(['CLIENT', 'PAUSE', '1500', 'ALL']);
     const attempts = Array.from({ length: 6 }, (_, index) =>
-      (index % 2 ? work : peer).acquire('timed-out')
+      (index % 2 ? work : peer).acquire(`timed-out-${index}`)
     );
     await Promise.all(
       attempts.map((attempt) => expect(attempt).rejects.toBeInstanceOf(SharedAdmissionError))

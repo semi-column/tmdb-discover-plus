@@ -28,6 +28,7 @@ export interface RequestObsState {
 
 export type RequestStage =
   | 'addon_admission'
+  | 'addon_admission_redis'
   | 'cache_read'
   | 'episode_snapshot_read'
   | 'episode_snapshot_build'

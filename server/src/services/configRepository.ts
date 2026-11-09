@@ -52,7 +52,6 @@ export async function saveUserConfig(config: UserConfig): Promise<UserConfig> {
 
   const configCache = getConfigCache();
   configCache.invalidate(safeUserId);
-  if (result) configCache.set(safeUserId, result);
 
   log.debug('Config saved to storage', {
     userId: result?.userId,

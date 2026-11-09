@@ -2,6 +2,52 @@
 
 Date: 2026-11-01
 
+## Shared admission lifecycle and contention (November 7)
+
+The contention reproduction generated 1,100 acquisition EVALs in 551 ms with
+100 waiters for one full configuration. This proves polling amplification, not
+the cause of the two post-deployment admission timeouts.
+
+- Only the FIFO head for each configuration attempts Redis admission. Once
+  global exhaustion is observed, configurations rotate through a single shared
+  probe every 50 ms per process. Local queue changes/releases wake waiting work;
+  the bounded polling fallback observes releases by other replicas. No Pub/Sub
+  infrastructure or new dependency is needed. Queue bounds still include late
+  commands until cleanup settles, but cancelled callers that sent no command
+  free their local queue entries immediately.
+- Lua acquisition remains atomic against the same global/configuration keys.
+  Limits (60 global, 6/configuration), opportunistic reservations, five-second
+  wait budget, 30-second leases and fail-closed outage policy are unchanged.
+  Denial results distinguish global/configuration capacity for rejection logs;
+  HTTP response shapes are unchanged. Acquisition-command duration is recorded
+  separately as `addon_admission_redis`. No new Redis commands or ACL permissions
+  are required.
+- A permit's conservative local validity uses a monotonic clock from command
+  start, minus a 1% margin. Delayed grants are released, not used. Expiry aborts
+  active work even while renewal is pending; renewal cannot revive locally lost
+  ownership. Completion also checks expiry before returning, covering delayed
+  timer execution after a process pause.
+- Cleanup-only shared-admission errors are explicitly logged without replacing
+  the work's result or original error. Raw release callers still see rejection;
+  orphaned capacity expires under the existing lease. Lease loss during work,
+  including provider-masked aborts, still rejects the result.
+
+Caller timeout is not proof of command cancellation: transmitted node-redis
+commands can execute later. Late-grant cleanup and the existing hard deadline
+are retained; ambiguous acquisitions are never replayed. Mixed application
+versions use identical keys and grant semantics; an older client treats the new
+global-denial code as a denial too.
+
+These are load-control leases, not durable exclusive-write locks. Redis state
+loss/eviction or failover can lose permits. Local FIFO/rotation is not a global
+distributed fairness guarantee. The underlying production Redis delay still
+requires server/network evidence; no limits or timeouts were raised to hide it.
+
+Sources: [Redis production guidance](https://redis.io/docs/latest/develop/clients/nodejs/produsage/),
+[node-redis command cancellation](https://github.com/redis/node-redis/blob/redis@6.0.0/docs/command-options.md),
+[Redis lease validity](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/),
+[expiring semaphore permits](https://redisson.pro/docs/data-and-services/locks-and-synchronizers/#permitexpirablesemaphore).
+
 ## Follow-up safeguards from the November 6 traces
 
 - Legacy Trakt catalogs use the existing TMDB filter rules and publish as TMDB,

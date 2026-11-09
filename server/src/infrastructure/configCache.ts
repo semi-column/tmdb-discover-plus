@@ -69,13 +69,15 @@ export class ConfigCache {
     }
 
     // Start a new load
-    const loadPromise = loader()
+    const loadPromise: Promise<unknown> = Promise.resolve()
+      .then(loader)
       .then((value) => {
+        if (this.pendingLoads.get(key) !== loadPromise) return this.getOrLoad(key, loader);
         this._put(key, value);
         return value;
       })
       .finally(() => {
-        this.pendingLoads.delete(key);
+        if (this.pendingLoads.get(key) === loadPromise) this.pendingLoads.delete(key);
       });
 
     this.pendingLoads.set(key, loadPromise);
@@ -86,6 +88,7 @@ export class ConfigCache {
    * Directly set a value in the cache (e.g., after a save).
    */
   set(key: string, value: unknown): void {
+    this.pendingLoads.delete(key);
     this._put(key, value);
   }
 
@@ -94,6 +97,7 @@ export class ConfigCache {
    */
   invalidate(key: string): void {
     this.cache.delete(key);
+    this.pendingLoads.delete(key);
     log.debug('Config cache invalidated', { key });
   }
 

@@ -366,15 +366,19 @@ export function Caching({ range, rangeParams = { range }, params = {} }) {
           Read-only runtime values, not the policy at the selected historical time. Cache lookups
           above do not measure every layer listed here. HEADER and STALE entries control HTTP
           freshness; other entries describe server caches. TMDB configuration/genres: reference TTL;
-          movie details older than one year and ended/canceled TV: detail TTL; newer movies: recent
-          detail TTL; other TMDB responses: API response TTL. LOGO applies to images.
+          movies released more than six calendar months ago and ended/canceled TV: detail TTL;
+          movies released 31 days to six months ago: movie detail TTL; upcoming, newly released or
+          undated movies: recent detail TTL; active/unknown TV: active series TTL. Season batches
+          and individual seasons use recent detail TTL. Other TMDB responses use API response TTL.
+          LOGO applies to images. Raw TMDB reads refresh expired data rather than serving it stale.
         </p>
         <p className="adm-muted">
           Catalog server TTL selects TRENDING for
           trending/now-playing/upcoming/on-the-air/popular/airing-today lists, otherwise DISCOVER.
-          IMDb advanced search uses search TTL divided by{' '}
-          {data.lifecycle?.imdbAdvancedSearchDivisor}. Empty results and failures use their separate
-          TTLs below.
+          TMDB discovery uses stable discovery TTL only for stable sort orders without date filters;
+          popularity, latest-first, date-filtered and unknown sorts retain trending TTL. IMDb
+          advanced search uses search TTL divided by {data.lifecycle?.imdbAdvancedSearchDivisor}.
+          Empty results and failures use their separate TTLs below.
         </p>
         <p className="adm-muted">
           Wrapped entries are stored for {data.lifecycle?.wrapperRetentionMultiplier}× fresh TTL;

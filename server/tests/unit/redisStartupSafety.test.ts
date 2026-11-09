@@ -228,6 +228,101 @@ describe.skipIf(!available || process.platform === 'win32')(
       if (failures.length) throw new AggregateError(failures, 'Private test cleanup failed');
     });
 
+    it('invalidates configuration caches across processes and reconciles lost subscriptions', async () => {
+      directory = mkdtempSync(join(tmpdir(), 'tmdb-config-sync-'));
+      const port = await freePort();
+      await startRedis(port);
+      const syncModule = pathToFileURL(resolve('src/infrastructure/configInvalidation.ts')).href;
+      const cacheModule = pathToFileURL(resolve('src/infrastructure/configCache.ts')).href;
+      const script = `
+        import { ConfigInvalidation } from ${JSON.stringify(syncModule)};
+        import { getConfigCache } from ${JSON.stringify(cacheModule)};
+        const sync = new ConfigInvalidation(${JSON.stringify(`redis://127.0.0.1:${port}`)}, 'isolated-config-storage');
+        await sync.connect();
+        process.on('message', async ({ action }) => {
+          try {
+            if (action === 'set') getConfigCache().set('isolated-user', { revision: 1 });
+            if (action === 'invalidate') await sync.invalidate('isolated-user');
+            const value = await getConfigCache().getOrLoad('isolated-user', async () => null);
+            process.send({ value });
+          } catch (error) {
+            process.send({ error: error.message });
+          }
+        });
+        console.log('sync-ready');
+      `;
+      const peers = Array.from({ length: 2 }, () => {
+        const child = spawn(
+          process.execPath,
+          ['--experimental-strip-types', '--input-type=module', '-e', script],
+          {
+            cwd: directory,
+            env: {
+              PATH: process.env.PATH || '',
+              HOME: directory,
+              NODE_ENV: 'test',
+              LOG_LEVEL: 'silent',
+            },
+            stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+          }
+        );
+        extraApps.push(child);
+        return child;
+      });
+      await Promise.all(
+        peers.map(async (child) => {
+          let output = '';
+          child.stdout?.on('data', (data) => {
+            output += data.toString();
+          });
+          child.stderr?.on('data', (data) => {
+            output += data.toString();
+          });
+          await waitFor(() => output.includes('sync-ready'), 'config subscription ready');
+          expect(child.exitCode, output).toBeNull();
+        })
+      );
+      const command = (child: ChildProcess, action: string) =>
+        new Promise<{ value: unknown; error?: string }>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('Config peer IPC timed out')), 3_000);
+          child.once('message', (value: { value: unknown; error?: string }) => {
+            clearTimeout(timer);
+            if (value.error) reject(new Error(value.error));
+            else resolve(value);
+          });
+          child.send({ action });
+        });
+      await command(peers[1], 'set');
+      expect((await command(peers[1], 'get')).value).toEqual({ revision: 1 });
+      await command(peers[0], 'invalidate');
+      await waitFor(
+        async () => (await command(peers[1], 'get')).value === null,
+        'peer invalidation'
+      );
+      await command(peers[1], 'set');
+      expect(
+        await inspector!.sendCommand(['CLIENT', 'KILL', 'TYPE', 'pubsub', 'SKIPME', 'yes'])
+      ).toBe(2);
+      await waitFor(
+        async () => (await command(peers[1], 'get')).value === null,
+        'reconnect cache reconciliation'
+      );
+      await waitFor(async () => {
+        const channels = await inspector!.sendCommand([
+          'PUBSUB',
+          'CHANNELS',
+          'config:invalidate:*',
+        ]);
+        return Array.isArray(channels) && channels.length > 0;
+      }, 'subscriptions restored');
+      await command(peers[1], 'set');
+      await command(peers[0], 'invalidate');
+      await waitFor(
+        async () => (await command(peers[1], 'get')).value === null,
+        'post-reconnect invalidation'
+      );
+    }, 30_000);
+
     it('starts against a stalled Redis socket, stays fail-closed, and recovers', async () => {
       directory = mkdtempSync(join(tmpdir(), 'tmdb-redis-startup-'));
       const redisPort = await blockRedis();

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConfigCache } from '../../src/infrastructure/configCache.ts';
 
 describe('ConfigCache', () => {
@@ -102,5 +102,54 @@ describe('ConfigCache', () => {
     });
     expect(result).toBe('new');
     expect(loadCount).toBe(1);
+  });
+
+  it('does not let an old pending load overwrite a newly saved value', async () => {
+    let resolveOld!: (value: unknown) => void;
+    const loader = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        })
+    );
+    const old = cache.getOrLoad('key', loader);
+    await Promise.resolve();
+    cache.invalidate('key');
+    cache.set('key', { revision: 2 });
+    resolveOld({ revision: 1 });
+    expect(await old).toEqual({ revision: 2 });
+    expect(await cache.getOrLoad('key', loader)).toEqual({ revision: 2 });
+    expect(loader).toHaveBeenCalledOnce();
+  });
+
+  it('reloads after deletion during an in-flight read and preserves the replacement load', async () => {
+    let resolveOld!: (value: unknown) => void;
+    let resolveNew!: (value: unknown) => void;
+    const loader = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOld = resolve;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNew = resolve;
+          })
+      );
+    const old = cache.getOrLoad('key', loader);
+    await Promise.resolve();
+    cache.invalidate('key');
+    const current = cache.getOrLoad('key', loader);
+    await Promise.resolve();
+    resolveOld({ revision: 1 });
+    await Promise.resolve();
+    resolveNew(null);
+    expect(await old).toBeNull();
+    expect(await current).toBeNull();
+    expect(await cache.getOrLoad('key', loader)).toBeNull();
+    expect(loader).toHaveBeenCalledTimes(2);
   });
 });

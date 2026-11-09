@@ -279,9 +279,11 @@ async function _tmdbFetchInner(
 
   if (!skipCache) {
     try {
-      const cached = (await cache.getEntry(cacheKey)) as Record<string, unknown> | null;
+      const cached = (await cache.getEntry(cacheKey, (data) =>
+        tmdbResponseTtl(url.pathname.slice(TMDB_API_BASE_PATH.length), data, url.searchParams)
+      )) as Record<string, unknown> | null;
       throwIfRequestAborted();
-      if (cached !== null && cached !== undefined) {
+      if (cached !== null && cached !== undefined && !cached.__isStale) {
         if (cached.__errorType) {
           if (cacheOnly) return null;
           throw new CachedError(
@@ -370,7 +372,7 @@ async function _tmdbFetchInner(
           await cache.set(
             cacheKey,
             data,
-            tmdbResponseTtl(url.pathname.slice(TMDB_API_BASE_PATH.length), data)
+            tmdbResponseTtl(url.pathname.slice(TMDB_API_BASE_PATH.length), data, url.searchParams)
           );
         } catch (cacheErr) {
           log.warn('Failed to cache TMDB response', {
@@ -534,8 +536,11 @@ export async function tmdbWebsiteFetchJson(
   const cache = getCache();
 
   try {
-    const cached = await cache.get(cacheKey);
-    if (cached) return cached;
+    const cached = await cache.getEntry(cacheKey, (data) =>
+      tmdbResponseTtl(url.pathname, data, url.searchParams)
+    );
+    if (cached && !cached.__isStale && !cached.__errorType)
+      return cached.__cacheWrapper ? cached.data : cached;
   } catch (err) {
     logSwallowedError('tmdb-client:cache-get', err);
   }
@@ -565,7 +570,7 @@ export async function tmdbWebsiteFetchJson(
   const data: unknown = trimmed ? JSON.parse(trimmed) : null;
 
   try {
-    await cache.set(cacheKey, data, CACHE_TTLS.TMDB_API_RESPONSE);
+    await cache.set(cacheKey, data, tmdbResponseTtl(url.pathname, data, url.searchParams));
   } catch (err) {
     log.warn('Failed to cache TMDB website response', {
       key: cacheKey,

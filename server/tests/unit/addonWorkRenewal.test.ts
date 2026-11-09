@@ -40,6 +40,118 @@ afterEach(() => {
 });
 
 describe('addon work renewal context', () => {
+  it.each(['success', 'failure'] as const)(
+    'preserves the work %s when only release fails',
+    async (outcome) => {
+      const redis = new AdmissionRedis('redis://127.0.0.1:1');
+      selected.redis = redis;
+      vi.spyOn(redis, 'eval').mockImplementation(async (_script, _keys, args) => {
+        if (args[0] === 'release') throw new SharedAdmissionError();
+        return 1;
+      });
+      logged.warn.mockClear();
+      const workError = new Error('original work failed');
+      const result = withAddonWork('cleanup-failure', async () => {
+        if (outcome === 'failure') throw workError;
+        return 'completed';
+      });
+      if (outcome === 'success') await expect(result).resolves.toBe('completed');
+      else await expect(result).rejects.toBe(workError);
+      expect(logged.warn).toHaveBeenCalledWith(
+        'Addon work release failed after execution; lease will expire',
+        { error: expect.any(SharedAdmissionError) }
+      );
+    }
+  );
+
+  it('does not return success if a provider masks active lease loss', async () => {
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    vi.spyOn(redis, 'eval').mockResolvedValue(1);
+    await expect(
+      withAddonWork('masked-abort', async () => {
+        redis.fail(new Error('lost ownership'));
+        return 'provider fallback';
+      })
+    ).rejects.toBeInstanceOf(SharedAdmissionError);
+  });
+
+  it('rejects completed work after a pause even before its expiry timer runs', async () => {
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    vi.spyOn(redis, 'eval').mockResolvedValue(1);
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    try {
+      await expect(
+        withAddonWork('paused-work', async () => {
+          now.mockReturnValue(30000);
+          return 'expired result';
+        })
+      ).rejects.toBeInstanceOf(SharedAdmissionError);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('rejects a grant whose response used up its lease validity', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance'],
+    });
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    const evalMock = vi.spyOn(redis, 'eval').mockImplementation(async (_script, _keys, args) => {
+      if (args[0] === 'acquire') await new Promise((resolve) => setTimeout(resolve, 300));
+      return 1;
+    });
+    const pending = new RedisAddonWork(redis, 300).acquire('delayed-grant');
+    const rejected = expect(pending).rejects.toThrow('lease expired before acquisition');
+    await vi.advanceTimersByTimeAsync(300);
+    await rejected;
+    expect(evalMock.mock.calls.map((call) => call[2][0])).toEqual(['acquire', 'release']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('aborts at lease validity even when a renewal reply is still pending', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance'],
+    });
+    const redis = new AdmissionRedis('redis://127.0.0.1:1');
+    selected.redis = redis;
+    let renew!: (result: number) => void;
+    const evalMock = vi.spyOn(redis, 'eval').mockImplementation((_script, _keys, args) => {
+      return args[0] === 'renew'
+        ? new Promise<number>((resolve) => {
+            renew = resolve;
+          })
+        : Promise.resolve(1);
+    });
+    const app = express();
+    app.use(requestIdMiddleware());
+    let start!: () => void;
+    const started = new Promise<void>((resolve) => {
+      start = resolve;
+    });
+    app.get('/', async (_req, res) => {
+      const release = await new RedisAddonWork(redis, 300).acquire('delayed-renewal');
+      const signal = getRequestSignal()!;
+      start();
+      await admissionDelay(1000, signal).catch((error) => {
+        expect(error).toBeInstanceOf(SharedAdmissionError);
+      });
+      renew(1);
+      await release();
+      expect(signal.aborted).toBe(true);
+      res.end();
+    });
+    const response = request(app)
+      .get('/')
+      .then((response) => response);
+    await started;
+    await vi.advanceTimersByTimeAsync(300);
+    await response;
+    expect(evalMock.mock.calls.map((call) => call[2][0])).toEqual(['acquire', 'renew', 'release']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('responds promptly when Redis fails during an active build', async () => {
     const redis = new AdmissionRedis('redis://127.0.0.1:1');
     selected.redis = redis;
@@ -219,12 +331,11 @@ describe('shared admission recovery', () => {
     const waiting = Array.from({ length: 100 }, () =>
       work.acquire('timed-out-user').catch((error: unknown) => error)
     );
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(
-      (await Promise.all(waiting)).every((error) => error instanceof SharedAdmissionError)
-    ).toBe(true);
-    await expect(work.acquire('timed-out-user')).rejects.toBeInstanceOf(AddonWorkLimitError);
-    expect(command).toHaveBeenCalledTimes(100);
+    await vi.advanceTimersByTimeAsync(5000);
+    const outcomes = await Promise.all(waiting);
+    expect(outcomes[0]).toBeInstanceOf(SharedAdmissionError);
+    expect(outcomes.slice(1).every((error) => error instanceof AddonWorkLimitError)).toBe(true);
+    expect(command).toHaveBeenCalledOnce();
 
     resolveGrant(0);
     await vi.advanceTimersByTimeAsync(0);
@@ -253,8 +364,15 @@ describe('shared admission recovery', () => {
         (error) => error instanceof Error && error.name === 'AbortError'
       )
     ).toBe(true);
+    expect(command).toHaveBeenCalledOnce();
+
+    const queuedAbort = new AbortController();
+    const queued = Array.from({ length: 99 }, () =>
+      work.acquire('cancelled-user', queuedAbort.signal).catch((error: unknown) => error)
+    );
     await expect(work.acquire('cancelled-user')).rejects.toBeInstanceOf(AddonWorkLimitError);
-    expect(command).toHaveBeenCalledTimes(100);
+    queuedAbort.abort();
+    await Promise.all(queued);
 
     resolveGrant(0);
     await vi.advanceTimersByTimeAsync(0);

@@ -238,8 +238,65 @@ IMDb cache overrides are in **seconds**:
 | `IMDB_CACHE_TTL_LIST`      | `21600`   |
 | `IMDB_CACHE_TTL_REFERENCE` | `2592000` |
 
-Most other TTLs are constants in
-[`cacheTtls.ts`](../server/src/cacheTtls.ts), not environment settings.
+### Shared cache TTL overrides
+
+Every shared-cache / HTTP policy in
+[`cacheTtls.ts`](../server/src/cacheTtls.ts) accepts `CACHE_TTL_<POLICY_NAME>`.
+Values are integer seconds from `1` to `31536000`; malformed, empty, zero,
+negative or excessive values fail startup explicitly. Restart all replicas
+with matching values. Process-local TTLs, cached-error TTLs and retention
+multipliers are not changed by these variables.
+
+| Variable                            | Default seconds | Applies to                                                                        |
+| ----------------------------------- | --------------- | --------------------------------------------------------------------------------- |
+| `CACHE_TTL_TMDB_API_RESPONSE`       | `86400`         | Other public TMDB responses, including search and positive raw find results       |
+| `CACHE_TTL_DETAIL`                  | `86400`         | Movies released more than six calendar months ago; ended/canceled TV              |
+| `CACHE_TTL_TMDB_MOVIE_DETAIL`       | `86400`         | Movies released more than 30 days ago, through six months                         |
+| `CACHE_TTL_TMDB_RECENT_DETAIL`      | `21600`         | Upcoming/newly released/undated movies; raw individual seasons and season batches |
+| `CACHE_TTL_TMDB_ACTIVE_SERIES`      | `21600`         | Active or unknown-status TV details                                               |
+| `CACHE_TTL_TMDB_DISCOVER_STABLE`    | `86400`         | Stable TMDB discovery sorts without date filters, raw and rendered                |
+| `CACHE_TTL_CATALOG_SERVER_TRENDING` | `10800`         | Trending, changing lists and dynamic/unknown TMDB discovery sorts                 |
+| `CACHE_TTL_TMDB_API_KEY_STATUS`     | `60`            | Credential validity, separate from public configuration data                      |
+
+The six-month cutoff uses UTC calendar months, clamping month-end dates.
+The 30-day release window is an elapsed-time freshness exception, not a
+provider guarantee. Missing/invalid release dates take the shorter TTL.
+Stable discovery sorts are title, oldest-first release/air date and revenue;
+popularity, rating/vote sorts, newest-first, unknown sorts and date-filtered
+queries remain short. Other providers retain their existing catalog defaults.
+Randomized/search catalogs still bypass the rendered catalog cache.
+
+Raw TMDB reads no longer serve expired data as fresh: a stale read triggers
+a coalesced foreground fetch; cache-only reads return a miss. Existing entries
+keep their stored TTLs; a shorter current policy also bounds reads, while
+longer policies apply on subsequent writes. Empty raw search/find responses
+use the existing short empty-result lifetime. Higher-level stale serving and
+episode completeness checks remain unchanged; layered caches can still delay
+upstream changes. Do not flush the namespace to apply new settings.
+
+Physical retention remains 2.5 times the fresh TTL (stale eligibility up to
+2 times where allowed). For a one-day TTL this means 60 hours of retention,
+not 60 hours of freshness. Monitor Redis memory, eviction and provider calls
+before extending more policies. Public-data TTLs are not credential validity:
+extending `TMDB_API_KEY_STATUS` delays revocation detection.
+
+### Configuration cache consistency
+
+Saved configs do not expire. Their bounded process-local cache retains its
+five-minute safety TTL and 1,000-entry LRU limit. When shared database storage
+and Redis are configured, every successful adapter save/delete publishes
+invalidation to peer replicas, including automatic repairs and marketplace
+installs. The notification channel is scoped to the configured database URI.
+Redis requires `PUBLISH`/`SUBSCRIBE` access for this channel. Subscriber
+reconnection clears local configs to reconcile missed events; failures are
+logged and the TTL remains the recovery backstop. Publication failure does
+not turn an already committed save/delete into a failed user operation.
+
+In-flight loads invalidated by a write cannot repopulate old data, and writes
+do not cache a potentially superseded returned snapshot. This is bounded
+eventual consistency, not atomic database/cache transactions. Removing the
+TTL would require stronger recovery guarantees; it is intentionally retained.
+
 The admin Caching tab lists effective runtime values and distinguishes HTTP
 freshness, stale serving, and physical retention.
 
