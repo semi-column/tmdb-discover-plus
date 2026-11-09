@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.7](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.6...v2.14.7) (2026-11-09)
+
+
+### Bug Fixes
+
+* add validated cache TTL overrides and a six-month movie cutoff ([a894557](https://github.com/semi-column/tmdb-discover-plus/commit/a89455711ff3d944c4e2667caf91f01c05b32118))
+* coordinate addon admission probes without raising provider limits ([a894557](https://github.com/semi-column/tmdb-discover-plus/commit/a89455711ff3d944c4e2667caf91f01c05b32118))
+* enforce lease validity and preserve completed work on cleanup failures ([a894557](https://github.com/semi-column/tmdb-discover-plus/commit/a89455711ff3d944c4e2667caf91f01c05b32118))
+* extend stable TMDB caching while preserving active-content freshness ([a894557](https://github.com/semi-column/tmdb-discover-plus/commit/a89455711ff3d944c4e2667caf91f01c05b32118))
+* invalidate config caches across replicas and reject obsolete pending loads ([a894557](https://github.com/semi-column/tmdb-discover-plus/commit/a89455711ff3d944c4e2667caf91f01c05b32118))
+* reduce admission contention and safely extend cache reuse ([a894557](https://github.com/semi-column/tmdb-discover-plus/commit/a89455711ff3d944c4e2667caf91f01c05b32118))
+* refresh expired raw responses and keep empty-result lifetimes short ([a894557](https://github.com/semi-column/tmdb-discover-plus/commit/a89455711ff3d944c4e2667caf91f01c05b32118))
+* simplify discovery TTL checks and reject malformed movie release dates ([a894557](https://github.com/semi-column/tmdb-discover-plus/commit/a89455711ff3d944c4e2667caf91f01c05b32118))
+
 ## [2.14.6](https://github.com/semi-column/tmdb-discover-plus/compare/v2.14.5...v2.14.6) (2026-11-06)
 
 
