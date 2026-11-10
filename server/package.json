@@ -29,7 +29,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.9.5",
+    "mongoose": "^9.11.4",
     "node-cache": "^5.1.2",
     "pg": "^8.23.0",
     "rate-limit-redis": "^6.0.1",
