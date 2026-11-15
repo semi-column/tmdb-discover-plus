@@ -30,6 +30,7 @@ interface WatchResponse {
   results: Record<string, Offers>;
 }
 
+/** Keep well-formed provider records, deduplicated by their exact service/tier ID. */
 function providers(value: unknown): Provider[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<number>();
@@ -47,6 +48,7 @@ function providers(value: unknown): Provider[] {
   });
 }
 
+/** Build a trusted viewing-page URL from a validated title identity and region. */
 function watchUrl(title: WatchTitle, country: string): string {
   // TMDB's documented watch/providers API has no provider deep links. Use its
   // exact title/region watch page, never guess a Netflix/Prime/etc. title URL.
@@ -55,6 +57,7 @@ function watchUrl(title: WatchTitle, country: string): string {
     : `https://www.imdb.com/title/${title.imdbId}/`;
 }
 
+/** Offer manual lookup without implying that any subscription has the title. */
 function checkStreams(title: WatchTitle, regions: WatchRegion[]): StremioStream[] {
   return regions.map(({ country }) => ({
     name: 'CHECK · Where to watch',
@@ -106,6 +109,11 @@ export function buildWatchStreams(
   });
 }
 
+/**
+ * Resolve exact title availability for the configured countries and subscriptions.
+ * Temporary lookup failures return uncached manual links; invalid credentials and
+ * request cancellation remain errors for the route's existing error handling.
+ */
 export async function getWatchStreams(
   userConfig: UserConfig,
   apiKey: string,

@@ -51,6 +51,7 @@ export function getWatchLinkRegions(userConfig: UserConfig | null): WatchRegion[
   return [...regions.values()];
 }
 
+/** Accept exact IMDb/TMDB IDs, with optional season/episode components for series. */
 export function parseWatchTitle(type: string, id: string): WatchTitle | null {
   if (type !== 'movie' && type !== 'series') return null;
   const match = /^(tt\d{5,12}|tmdb:([1-9]\d{0,11}))(?::(\d{1,4}):([1-9]\d{0,3}))?$/.exec(id);
