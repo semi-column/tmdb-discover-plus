@@ -46,6 +46,7 @@ export const CACHE_TTLS = Object.freeze(
     TMDB_DISCOVER_STABLE: 86_400,
     TMDB_REFERENCE: 604_800,
     TMDB_WATCH_PROVIDERS: 86_400,
+    WATCH_LINKS: 300,
     TMDB_DISCOVER_TOTAL_PAGES: 86_400,
     CATALOG_SERVER_DISCOVER: 10_800,
     CATALOG_SERVER_TRENDING: 10_800,
@@ -213,6 +214,7 @@ export function tmdbResponseTtl(
     return CACHE_TTLS.TMDB_REFERENCE;
   }
   if (/^\/(movie|tv)\/\d+\/images$/.test(endpoint)) return CACHE_TTLS.LOGO;
+  if (/^\/(movie|tv)\/\d+\/watch\/providers$/.test(endpoint)) return CACHE_TTLS.WATCH_LINKS;
   if (/^\/movie\/\d+$/.test(endpoint)) {
     const releasedAt =
       typeof details.release_date === 'string' ? Date.parse(details.release_date) : NaN;

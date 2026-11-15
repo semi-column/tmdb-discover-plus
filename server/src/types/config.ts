@@ -57,6 +57,7 @@ export interface UserPreferences {
   disableMalSearch?: boolean;
   disableKitsuSearch?: boolean;
   disableSimklSearch?: boolean;
+  enableWatchLinks?: boolean;
   includeAdult?: boolean;
   region?: string;
   countries?: string;

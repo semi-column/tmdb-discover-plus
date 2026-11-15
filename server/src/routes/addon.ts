@@ -63,6 +63,7 @@ import {
   checkInvalidAddonRateLimit,
 } from '../utils/rateLimit.ts';
 import { withAddonWork, sendAddonWorkLimit } from '../utils/addonWork.ts';
+import { getWatchStreams } from '../services/watchLinks.ts';
 
 const log = createLogger('addon');
 
@@ -246,6 +247,39 @@ router.get('/:userId/manifest.json', async (req, res) => {
     }
     log.error('Manifest error', { error });
     sendError(res, 500, ErrorCodes.INTERNAL_ERROR, 'Failed to load manifest');
+  }
+});
+
+router.get('/:userId/stream/:type/:id.json', async (req, res) => {
+  try {
+    const { userId, type, id } = req.params;
+    const userConfig = await getUserConfig(userId);
+    throwIfRequestAborted();
+    if (!userConfig) {
+      res.set('Cache-Control', 'no-store');
+      return res.status(404).json({ streams: [] });
+    }
+    const apiKey = getApiKeyFromConfig(userConfig);
+    const result = apiKey
+      ? await withAddonWork(userId, () => getWatchStreams(userConfig, apiKey, type, id))
+      : { streams: [], cacheMaxAge: 0 };
+    throwIfRequestAborted();
+    if (res.headersSent || res.destroyed) return;
+    res.set(
+      'Cache-Control',
+      result.cacheMaxAge > 0 ? `public, max-age=${result.cacheMaxAge}` : 'no-store'
+    );
+    res.etagJson(result, { extra: userId });
+  } catch (error) {
+    if (res.headersSent || res.destroyed) return;
+    if (sendAddonWorkLimit(error, res)) return;
+    if (isRequestAborted()) return;
+    res.set('Cache-Control', 'no-store');
+    if (tmdb.isInvalidApiKeyError(error)) {
+      return sendError(res, 401, ErrorCodes.INVALID_API_KEY, 'Invalid TMDB API key');
+    }
+    log.error('Watch links error', { error });
+    return sendError(res, 503, ErrorCodes.TMDB_UNAVAILABLE, 'Could not load viewing options');
   }
 });
 

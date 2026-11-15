@@ -12,7 +12,7 @@ export default defineConfig({
         target: 'http://localhost:7000',
         changeOrigin: true,
       },
-      '^/[A-Za-z0-9_-]+/(manifest\\.json|catalog/|meta/)': {
+      '^/[A-Za-z0-9_-]+/(manifest\\.json|catalog/|meta/|stream/)': {
         target: 'http://localhost:7000',
         changeOrigin: true,
       },

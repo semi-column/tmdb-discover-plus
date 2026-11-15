@@ -248,6 +248,51 @@ export function SettingsModal({
           </CollapsibleSection>
 
           <CollapsibleSection
+            title="Where to Watch"
+            icon={ExternalLink}
+            isExpanded={expandedSection === 'watchLinks'}
+            onToggle={() => toggleSection('watchLinks')}
+          >
+            <div className="settings-card">
+              <div className="settings-row">
+                <div className="settings-row-info">
+                  <label className="settings-label" htmlFor="enable-watch-links">
+                    Show viewing links in Stremio
+                  </label>
+                  <span className="settings-desc">
+                    Separate included subscriptions, free offers, and rent/buy options. Links open
+                    TMDB&apos;s viewing options, powered by JustWatch.
+                  </span>
+                </div>
+                <div className="settings-row-control align-right">
+                  <div className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      id="enable-watch-links"
+                      aria-label="Show viewing links in Stremio"
+                      checked={preferences?.enableWatchLinks === true}
+                      onChange={(e) =>
+                        onPreferencesChange({
+                          ...preferences,
+                          enableWatchLinks: e.target.checked,
+                        })
+                      }
+                      className="toggle-checkbox"
+                    />
+                    <div className="toggle-slider"></div>
+                  </div>
+                </div>
+              </div>
+              <p className="settings-desc" style={{ padding: '0 20px 16px' }}>
+                Uses the streaming countries from your enabled TMDB catalogs. Only providers in
+                catalogs filtered to Subscription alone count as your included services. Select the
+                plans you pay for in those catalogs, then save and reinstall the add-on. Playback
+                and sign-in happen on the provider&apos;s website or app.
+              </p>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
             title="API Keys"
             icon={KeyRound}
             isExpanded={expandedSection === 'apiKeys'}

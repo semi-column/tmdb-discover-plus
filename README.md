@@ -24,9 +24,11 @@
   </a>
 </p>
 
-TMDB Discover+ is a **catalog and metadata addon**, not a streaming provider.
-Build and preview catalogs, save multiple configurations, and install the
-configured addon in Stremio. You need separate stream addons to watch content.
+TMDB Discover+ is a **catalog and metadata addon**. Build and preview catalogs,
+save multiple configurations, and install the configured addon in Stremio.
+Optional viewing links help you find official services through TMDB's
+JustWatch-powered availability pages. Playback happens on those services;
+playing video within Stremio requires a separate stream addon.
 
 <p align="center">
   <img src="docs/screenshot.png" alt="TMDB Discover+ configuration interface" width="800" />
@@ -96,6 +98,17 @@ optional source services and credentials.
 Filters are source-specific: not every TMDB option exists for every source.
 IMDb ID support and metadata integration help catalogs work with other Stremio
 addons.
+
+### Find where to watch
+
+Enable **Global Settings → Where to Watch → Show viewing links in Stremio**
+to see separate **Included**, **Free**, and **Rent/Buy** choices on movie and
+series pages. This uses streaming countries from your enabled TMDB catalogs;
+only providers in subscription-only catalogs count as your included services.
+
+Links open the title's TMDB viewing-options page, where you can choose the
+provider. See [viewing links](docs/watch-links.md) for setup, plan matching,
+series limitations, and availability refresh behavior.
 
 ### Operate your own instance
 

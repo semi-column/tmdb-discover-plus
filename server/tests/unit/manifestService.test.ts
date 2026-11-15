@@ -119,6 +119,32 @@ describe('buildManifest', () => {
     vi.clearAllMocks();
   });
 
+  it('advertises watch-link streams only after opt-in with a streaming country', () => {
+    const config = {
+      userId: 'watch-link-test',
+      preferences: { enableWatchLinks: false, disableSearch: true },
+      catalogs: [
+        {
+          _id: 'included',
+          name: 'Included',
+          type: 'movie' as const,
+          filters: { watchRegion: 'US', watchProviders: [8], watchMonetizationTypes: ['flatrate'] },
+        },
+      ],
+    };
+    const original = buildManifest(config, baseUrl);
+    config.preferences.enableWatchLinks = true;
+    const enabled = buildManifest(config, baseUrl);
+    expect(enabled.resources).toEqual([
+      'catalog',
+      'meta',
+      { name: 'stream', types: ['movie', 'series'], idPrefixes: ['tt', 'tmdb:'] },
+    ]);
+    expect(enabled.version).not.toBe(original.version);
+    expect(enabled.catalogs).toEqual(original.catalogs);
+    config.catalogs = [];
+    expect(buildManifest(config, baseUrl).resources).toEqual(['catalog', 'meta']);
+  });
   it('requires configuration and advertises no unsupported root resources', () => {
     const root = JSON.parse(
       readFileSync(new URL('../../../client/public/manifest.json', import.meta.url), 'utf8')
