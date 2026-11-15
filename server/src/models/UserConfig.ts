@@ -158,6 +158,7 @@ const userConfigSchema = new mongoose.Schema({
     showAdultContent: { type: Boolean, default: false },
     defaultLanguage: { type: String, default: 'en' },
     shuffleCatalogs: { type: Boolean, default: false },
+    enableWatchLinks: { type: Boolean, default: false },
     apiKeysEncrypted: {
       type: Map,
       of: String,

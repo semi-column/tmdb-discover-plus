@@ -7,6 +7,11 @@ afterEach(() => {
 });
 
 describe('selective cache policy', () => {
+  it('refreshes per-title viewing offers before long-lived provider reference data', () => {
+    expect(tmdbResponseTtl('/movie/123/watch/providers', {})).toBe(300);
+    expect(tmdbResponseTtl('/tv/456/watch/providers', {})).toBe(300);
+    expect(CACHE_TTLS.WATCH_LINKS).toBeLessThan(CACHE_TTLS.TMDB_WATCH_PROVIDERS);
+  });
   it('uses a strict six-calendar-month cutoff, including month-end clamping', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-31T00:00:00Z'));

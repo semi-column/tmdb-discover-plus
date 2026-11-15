@@ -16,6 +16,7 @@ import { getApiKeyFromConfig } from './configService.ts';
 import { config } from '../config.ts';
 import { throwIfRequestAborted } from '../utils/requestContext.ts';
 import { SORT_OPTIONS } from './tmdb/referenceData.ts';
+import { getWatchLinkRegions } from '../utils/watchLinkConfig.ts';
 import type { UserConfig, StremioManifest, ManifestCatalog, TmdbGenre } from '../types/index.ts';
 
 const log = createLogger('manifestService');
@@ -257,6 +258,10 @@ export function buildManifest(userConfig: UserConfig | null, baseUrl: string): S
   const addonName = userConfig?.configName
     ? `${BASE_ADDON_NAME} - ${userConfig.configName}`
     : BASE_ADDON_NAME;
+  const resources: StremioManifest['resources'] = userConfig ? ['catalog', 'meta'] : [];
+  if (getWatchLinkRegions(userConfig).length) {
+    resources.push({ name: 'stream', types: ['movie', 'series'], idPrefixes: ['tt', 'tmdb:'] });
+  }
   const catalogs: ManifestCatalog[] = (userConfig?.catalogs || [])
     .filter((c) => c.enabled !== false && !DISABLED_SOURCES.has(c.source ?? 'tmdb'))
     .map((catalog) => {
@@ -322,7 +327,7 @@ export function buildManifest(userConfig: UserConfig | null, baseUrl: string): S
     version: buildManifestVersion(userConfig),
     logo: `${resolvedBaseUrl.replace(/\/$/, '')}/logo.png`,
     idPrefixes: userConfig ? SUPPORTED_ID_PREFIXES : [],
-    resources: userConfig ? ['catalog', 'meta'] : [],
+    resources,
     types: userConfig ? ['movie', 'series', 'anime'] : [],
     catalogs,
     behaviorHints: {

@@ -3,6 +3,12 @@
 All endpoints are served from the Express server. API rate limits are per IP;
 configured addon routes also have a separate per-configuration budget.
 
+The optional configured `/:userId/stream/:type/:id.json` route returns external
+viewing links when `preferences.enableWatchLinks` is enabled and a streaming
+country is set on an enabled TMDB Discover catalog. See
+[viewing links](watch-links.md) for the response categories, supported IDs,
+country/provider selection, and five-minute availability cache.
+
 ## Auth
 
 | Method | Path               | Rate Limit | Auth                    |

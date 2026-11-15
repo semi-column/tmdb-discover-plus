@@ -59,6 +59,8 @@ vi.mock('../../src/services/configService.ts', () => ({
   getSimklKeyFromConfig: () => null,
 }));
 
+vi.mock('../../src/services/watchLinks.ts', () => ({ getWatchStreams: vi.fn() }));
+
 vi.mock('../../src/services/artworkService.ts', () => ({
   createArtworkOptions: () => null,
   resolveContentType: (type: string) => type,

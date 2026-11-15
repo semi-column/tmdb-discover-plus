@@ -3,6 +3,16 @@ import { UserConfig } from '../../src/models/UserConfig.ts';
 import type { SourceType } from '../../src/types/config.ts';
 
 describe('UserConfig preferences schema', () => {
+  it('keeps viewing links opt-in and preserves the saved preference', () => {
+    const original = new UserConfig({ userId: 'watch-link-test', catalogs: [] });
+    expect(original.preferences.enableWatchLinks).toBe(false);
+    const enabled = new UserConfig({
+      userId: 'watch-link-test',
+      catalogs: [],
+      preferences: { enableWatchLinks: true },
+    });
+    expect(enabled.toObject().preferences.enableWatchLinks).toBe(true);
+  });
   it('includes per-source search disable fields', () => {
     const paths = [
       'preferences.disableTmdbSearch',

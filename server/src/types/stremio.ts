@@ -18,6 +18,12 @@ export interface TrailerStream {
   lang: string;
 }
 
+export interface StremioStream {
+  name: string;
+  description: string;
+  externalUrl: string;
+}
+
 export interface StremioVideo {
   id: string;
   season: number;
@@ -146,7 +152,7 @@ export interface StremioManifest {
   version: string;
   logo: string;
   idPrefixes: string[];
-  resources: string[];
+  resources: Array<string | { name: string; types: ContentType[]; idPrefixes: string[] }>;
   types: ContentType[];
   catalogs: ManifestCatalog[];
   behaviorHints: ManifestBehaviorHints;
