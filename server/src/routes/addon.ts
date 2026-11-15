@@ -174,6 +174,14 @@ router.use('/:userId', async (req, res, next) => {
     throwIfRequestAborted();
     if (res.headersSent || res.destroyed) return;
     if (!validation.valid) {
+      // Viewing links can still offer uncached manual lookup during a TMDB outage.
+      if (
+        !validation.invalidApiKey &&
+        (req.method === 'GET' || req.method === 'HEAD') &&
+        /^\/stream\/[^/]+\/[^/]+\.json\/?$/i.test(req.path)
+      ) {
+        return next();
+      }
       res.set('Cache-Control', 'no-store');
       return sendError(
         res,

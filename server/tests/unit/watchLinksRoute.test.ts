@@ -24,7 +24,7 @@ vi.mock('../../src/services/tmdb/client.ts', () => ({
 
 import { addonRouter } from '../../src/routes/addon.ts';
 import { getUserConfig } from '../../src/services/configService.ts';
-import { tmdbFetch } from '../../src/services/tmdb/client.ts';
+import { tmdbFetch, validateApiKeyCached } from '../../src/services/tmdb/client.ts';
 import type { UserConfig } from '../../src/types/config.ts';
 
 const config: UserConfig = {
@@ -57,6 +57,7 @@ afterAll(
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getUserConfig).mockResolvedValue(structuredClone(config));
+  vi.mocked(validateApiKeyCached).mockResolvedValue({ valid: true });
   vi.mocked(tmdbFetch).mockResolvedValue({
     id: 123,
     results: { US: { flatrate: [{ provider_id: 8, provider_name: 'Netflix' }] } },
@@ -109,11 +110,62 @@ it('does not cache a lookup outage as missing or included availability', async (
   expect(response.headers['cache-control']).toBe('no-store');
 });
 
-it('retains the existing invalid-key response', async () => {
-  vi.mocked(tmdbFetch).mockRejectedValue(
-    Object.assign(new Error('Invalid API key'), { invalidApiKey: true })
-  );
+it.each([
+  ['tmdb:123', 'https://www.themoviedb.org/movie/123/watch?locale=US'],
+  ['tt1234567', 'https://www.imdb.com/title/tt1234567/'],
+])(
+  'retains uncached manual lookup for %s during a cold credential-cache outage',
+  async (id, url) => {
+    vi.mocked(validateApiKeyCached).mockResolvedValue({ valid: false, unavailable: true });
+    vi.mocked(tmdbFetch).mockRejectedValue(new Error('TMDB temporarily unavailable'));
+    const response = await request(server).get(`/watch-links-route-test/stream/movie/${id}.json`);
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      streams: [
+        {
+          name: 'CHECK · Where to watch',
+          description: expect.stringContaining('Availability could not be confirmed'),
+          externalUrl: url,
+        },
+      ],
+      cacheMaxAge: 0,
+    });
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(validateApiKeyCached).toHaveBeenCalledWith('test-api-key');
+    expect(tmdbFetch).toHaveBeenCalledOnce();
+  }
+);
+
+it.each(['manifest.json', 'catalog/movie/included.json', 'meta/movie/tmdb:123.json'])(
+  'preserves unavailable credential validation for %s',
+  async (path) => {
+    vi.mocked(validateApiKeyCached).mockResolvedValue({ valid: false, unavailable: true });
+    const response = await request(server).get(`/watch-links-route-test/${path}`);
+    expect(response.status).toBe(503);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(tmdbFetch).not.toHaveBeenCalled();
+  }
+);
+
+it('rejects a confirmed invalid key before looking up viewing options', async () => {
+  vi.mocked(validateApiKeyCached).mockResolvedValue({ valid: false, invalidApiKey: true });
   const response = await request(server).get('/watch-links-route-test/stream/movie/tmdb:123.json');
   expect(response.status).toBe(401);
   expect(response.headers['cache-control']).toBe('no-store');
+  expect(tmdbFetch).not.toHaveBeenCalled();
 });
+
+it.each([{ valid: true }, { valid: false, unavailable: true }])(
+  'retains the invalid-key response from the viewing-options lookup after validation %j',
+  async (validation) => {
+    vi.mocked(validateApiKeyCached).mockResolvedValue(validation);
+    vi.mocked(tmdbFetch).mockRejectedValue(
+      Object.assign(new Error('Invalid API key'), { invalidApiKey: true })
+    );
+    const response = await request(server).get(
+      '/watch-links-route-test/stream/movie/tmdb:123.json'
+    );
+    expect(response.status).toBe(401);
+    expect(response.headers['cache-control']).toBe('no-store');
+  }
+);
